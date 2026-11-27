@@ -1220,6 +1220,16 @@ func revisarCorte(k CorteDeMostrador) string {
 	return ""
 }
 
+// soloElCorte: la venta no lleva mercadería fuera de la del corte.
+func soloElCorte(v VentaPedida) bool {
+	for _, l := range v.Lineas {
+		if l.VariantID != nil && l.Corte == nil {
+			return false
+		}
+	}
+	return true
+}
+
 func insertarCorte(ctx context.Context, tx pgx.Tx, v VentaPedida, k *CorteDeMostrador, pedido, usuario string) error {
 	// El que ya estaba en la cola sin venta se ata a esta: sus piezas son
 	// las de su ficha (con ellas se armó lo que se cobra).
@@ -1236,6 +1246,22 @@ func insertarCorte(ctx context.Context, tx pgx.Tx, v VentaPedida, k *CorteDeMost
 		// «Lo retira el» aunque el corte lo tenía (mes simulado, PED-1155).
 		_, err = tx.Exec(ctx, `UPDATE orders o SET entregar_el = co.retira_el FROM cutting_orders co
 			WHERE o.id = $2 AND co.id = $1 AND o.entregar_el IS NULL AND co.retira_el IS NOT NULL`, *k.Existente, pedido)
+		if err != nil {
+			return err
+		}
+		// La venta que solo cobra el corte: a nombre del cliente del corte
+		// (figuraba «Consumidor final»), y se retira donde está el corte, no
+		// en la caja que cobró (mes simulado 2: un corte del Aserradero se
+		// daba por entregado en Casa Central sin traslado). La plata entra
+		// igual al turno que la cobró.
+		if soloElCorte(v) {
+			_, err = tx.Exec(ctx, `UPDATE orders o SET
+				  contacto_nombre = CASE WHEN o.customer_id IS NULL AND lower(o.contacto_nombre) = 'consumidor final' THEN co.contacto_nombre ELSE o.contacto_nombre END,
+				  contacto_telefono = coalesce(o.contacto_telefono, co.contacto_telefono),
+				  customer_id = coalesce(o.customer_id, co.customer_id),
+				  branch_id = coalesce(co.branch_id, o.branch_id)
+				FROM cutting_orders co WHERE o.id = $2 AND co.id = $1`, *k.Existente, pedido)
+		}
 		return err
 	}
 	numero, err := numeracion.Corte(ctx, tx)

@@ -25,6 +25,7 @@ export const OPCIONES_DE_REGLAS = {
   redondeo_efectivo: ["no", "al_peso"],
   cae_en_compras: ["opcional", "exigido"],
   deuda_sin_comprobante: ["circuito_b", "saldo_inicial"],
+  entregar_sin_cobrar: ["deposito", "fuera_de_la_cuenta"],
 } as const;
 
 

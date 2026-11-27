@@ -22,7 +22,9 @@ import (
 	"mjbj/internal/bitacora"
 	"mjbj/internal/catalogo"
 	"mjbj/internal/cola"
+	"mjbj/internal/entregas"
 	"mjbj/internal/jsmath"
+	"mjbj/internal/numeracion"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
@@ -623,6 +625,11 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 			return "", err
 		}
 	}
+	if sig == "retirado" && !sinCargo && pedido != nil {
+		if err := s.entregadoConElCorte(ctx, ses, id, numero); err != nil {
+			return "", err
+		}
+	}
 	texto := map[string]string{"en-proceso": "en la máquina", "terminado": "terminado", "retirado": "retirado"}[sig]
 	return numero + " quedó " + texto + ".", nil
 }
@@ -667,6 +674,92 @@ func (s *Servicio) listoConElCorte(ctx context.Context, ses *auth.Sesion, corte,
 	})
 }
 
+// noEstaListoSinElCorte deshace lo que hizo listoConElCorte (mes simulado
+// 2, M2S3-020): el corte que vuelve a la máquina deja su pedido otra vez
+// «preparando» (seguía «Listo para retirar», con «Avisarle» y «Preparar
+// remito» de piezas que no existían), y el historial lo dice, con el aviso
+// al cliente si ya había salido. Solo si nada salió todavía.
+func (s *Servicio) noEstaListoSinElCorte(ctx context.Context, ses *auth.Sesion, corte, numero string) error {
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var pedido, estado string
+		err := tx.QueryRow(ctx, `SELECT o.id::text, o.estado::text FROM cutting_orders c JOIN orders o ON o.id = c.order_id
+			WHERE c.id = $1 FOR UPDATE OF o`, corte).Scan(&pedido, &estado)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil || estado != "listo" {
+			return err
+		}
+		var salio, avisado bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM deliveries WHERE order_id = $1 AND estado <> 'anulada'),
+			EXISTS (SELECT 1 FROM notifications_log WHERE entidad_id = $1::uuid AND evento IN ('listo', 'pedido_listo') AND estado::text = 'enviada')`,
+			pedido).Scan(&salio, &avisado); err != nil {
+			return err
+		}
+		if salio {
+			return nil
+		}
+		nota := "Corte " + numero + " volvió a la máquina"
+		if avisado {
+			nota += " · el aviso de listo ya había salido"
+		}
+		var usuario *string
+		if ses != nil {
+			usuario = &ses.UserID
+		}
+		if _, err := tx.Exec(ctx, `UPDATE orders SET estado = 'preparando', updated_at = now() WHERE id = $1`, pedido); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, 'preparando', $2, $3)`,
+			pedido, nota, usuario)
+		return err
+	})
+}
+
+// entregadoConElCorte: el pedido que solo cobró el corte queda entregado
+// cuando el corte se retira (mes simulado 2, M2S2-055: seguía «Preparando»
+// con «Marcar listo», y cerrarlo pedía dos toques y dos campos), con el
+// remito de las piezas para firmar.
+func (s *Servicio) entregadoConElCorte(ctx context.Context, ses *auth.Sesion, corte, numero string) error {
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := numeracion.BloquearRemitos(ctx, tx); err != nil {
+			return err
+		}
+		var pedido, estado string
+		var sucursal *string
+		err := tx.QueryRow(ctx, `SELECT o.id::text, o.estado::text, o.branch_id::text FROM cutting_orders c JOIN orders o ON o.id = c.order_id
+			WHERE c.id = $1 FOR UPDATE OF o`, corte).Scan(&pedido, &estado, &sucursal)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil || estado == "entregado" || estado == "cancelado" {
+			return err
+		}
+		solo, err := entregas.SoloElCorte(ctx, tx, pedido)
+		if err != nil || !solo {
+			return err
+		}
+		var faltan int
+		if err := tx.QueryRow(ctx, `SELECT count(*)::int FROM cutting_orders WHERE order_id = $1 AND NOT sin_cargo
+			AND estado NOT IN ('retirado', 'cancelado')`, pedido).Scan(&faltan); err != nil || faltan > 0 {
+			return err
+		}
+		var usuario *string
+		if ses != nil {
+			usuario = &ses.UserID
+		}
+		if _, err := entregas.RemitoDelCorte(ctx, tx, pedido, sucursal, usuario, entregas.Receptor{}); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE orders SET estado = 'entregado', updated_at = now() WHERE id = $1`, pedido); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, 'entregado', $2, $3)`,
+			pedido, "Corte "+numero+" retirado", usuario)
+		return err
+	})
+}
+
 // esDelTaller es quien no decide en la cola (roles.DecidenEnLaCola): el
 // aserradero empieza y termina, pero urgencias y entregas son del mostrador.
 func esDelTaller(ses *auth.Sesion) bool {
@@ -704,6 +797,11 @@ func (s *Servicio) Volver(ctx context.Context, ses *auth.Sesion, id, desde strin
 		return "", yaCambio(numero, ahora)
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCambiarEstado, "corte", id, numero+": "+estado+" → "+anterior+" (deshecho)", nil)
+	if estado == "terminado" {
+		if err := s.noEstaListoSinElCorte(ctx, ses, id, numero); err != nil {
+			return "", err
+		}
+	}
 	texto := map[string]string{"en-cola": "volvió a la cola", "en-proceso": "volvió a la máquina"}[anterior]
 	return numero + " " + texto + ".", nil
 }

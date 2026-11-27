@@ -346,9 +346,15 @@ export default async function FichaCortePage({
                   {pedido && corte.orderId && (
                     <span className="text-muted-foreground">
                       reposición de{" "}
-                      <Link href={`/admin/pedidos/${corte.orderId}`} className="codigo hover:text-brand-orange">
-                        {pedido.numero}
-                      </Link>
+                      {/* El aserradero no abre pedidos: el enlace lo llevaba
+                          a «Esta pantalla no cargó» (mes simulado 2). */}
+                      {vePedidos ? (
+                        <Link href={`/admin/pedidos/${corte.orderId}`} className="codigo hover:text-brand-orange">
+                          {pedido.numero}
+                        </Link>
+                      ) : (
+                        <span className="codigo">{pedido.numero}</span>
+                      )}
                     </span>
                   )}
                 </p>

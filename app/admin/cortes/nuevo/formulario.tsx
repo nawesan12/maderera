@@ -112,9 +112,12 @@ export function FormularioCorte({
   clienteInicial,
   sierraEditable = false,
   puedeReponer = false,
+  reponer = false,
   preguntarSucursal = false,
   corregir,
 }: {
+  /** Llega de «Reponer una pieza»: la reposición sin cargo, ya marcada. */
+  reponer?: boolean;
   /** Regla «Dónde se corta un corte suelto» en «Se elige siempre» (H045). */
   preguntarSucursal?: boolean;
   /**
@@ -267,7 +270,7 @@ export function FormularioCorte({
   );
   /** Las piezas que alguien mandó a mano a una placa. */
   const [fijadas, setFijadas] = useState<PiezaFijada[]>([]);
-  const [sinCargo, setSinCargo] = useState(corregir?.sinCargo ?? false);
+  const [sinCargo, setSinCargo] = useState(corregir?.sinCargo ?? (reponer && puedeReponer));
   /** Confirmado que el corte del pedido va en otra placa (H280). */
   const [otraPlaca, setOtraPlaca] = useState(false);
   const placasDelPedidoLista = desdePedido?.placas ?? [];

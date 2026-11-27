@@ -993,6 +993,15 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   font-weight: 600;
 }
 
+/* El remito: la cantidad con su unidad en un renglón, y el corte debajo del
+   producto (mes simulado 2). */
+.comprobante-hoja .remito-detalle .remito-cantidad {
+  white-space: nowrap;
+}
+.comprobante-hoja .remito-detalle .remito-corte {
+  display: block;
+}
+
 /* Detalle */
 .comprobante-hoja .detalle {
   width: 100%;
@@ -1218,6 +1227,21 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   .comprobante-hoja .detalle td.fecha {
     font-size: 0.75rem;
     color: var(--tinta-suave);
+  }
+  /* El remito a 375: el producto a todo el ancho con la cantidad grande al
+     lado, y la nota del corte debajo del producto. */
+  .comprobante-hoja .remito-detalle tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.75rem;
+    align-items: baseline;
+  }
+  .comprobante-hoja .remito-detalle td {
+    display: block;
+  }
+  .comprobante-hoja .remito-detalle .remito-cantidad {
+    font-size: 1rem;
+    font-weight: 600;
   }
   .comprobante-hoja .marca-agua {
     font-size: 3rem;

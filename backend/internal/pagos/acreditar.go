@@ -25,6 +25,7 @@ import (
 
 	"mjbj/internal/cobros"
 	"mjbj/internal/cola"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
@@ -275,6 +276,24 @@ func (s *Servicio) Acreditar(ctx context.Context, pagoID string, r *PagoRemoto) 
 				estado = "reintegrado"
 			}
 			if _, err := tx.Exec(ctx, `UPDATE orders SET estado_pago = $2::estado_pago, updated_at = now() WHERE id = $1`, *p.orderID, estado); err != nil {
+				return err
+			}
+		}
+		// El cobro en el historial del pedido, con quién lo acreditó (mes
+		// simulado 2: el pedido web quedaba «Pagado» sin decir quién ni
+		// cuándo). El cobro en línea no lleva recibo: el pago es la
+		// constancia, y un recibo encima lo contaría dos veces en el cierre.
+		if p.orderID != nil && acredita {
+			como := "Mercado Pago"
+			if p.proveedor == "transferencia" {
+				como = "Transferencia acreditada"
+				if p.medio != nil && *p.medio == "deposito" {
+					como = "Depósito acreditado"
+				}
+			}
+			if _, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id)
+				SELECT id, estado, $2, $3 FROM orders WHERE id = $1`, *p.orderID,
+				"Cobro "+formato.Importe(nuestro)+" · "+como, r.ConciliadoPor); err != nil {
 				return err
 			}
 		}

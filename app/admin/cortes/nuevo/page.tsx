@@ -46,6 +46,8 @@ export default async function NuevoCortePage({
     corregir?: string;
     volver?: string;
     telefono?: string;
+    /** Llega de «Reponer una pieza» del pedido entregado. */
+    reponer?: string;
   }>;
 }) {
   const usuario = await requireStaff();
@@ -273,6 +275,7 @@ export default async function NuevoCortePage({
         anchoSierra={sierra}
         sierraEditable={usuario.staffRole === "admin"}
         puedeReponer={decide}
+        reponer={sp.reponer === "1"}
         corregir={deCorregir}
         clienteInicial={
           cliente

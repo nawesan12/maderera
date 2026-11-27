@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/entregas"
+	"mjbj/internal/fiscal"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/precios"
 	"mjbj/internal/ventas"
@@ -455,6 +456,23 @@ type PedidoListado struct {
 	Facturado bool `json:"facturado"`
 	// Acopio: se retira de a partes (sqlAcopio).
 	Acopio bool `json:"acopio"`
+	// ALlevar es lo que falta llevar de un envío sin entregar: la tarjeta
+	// del reparto decía solo el total, y para saber qué cargar había que
+	// entrar al pedido (mes simulado 2). Vacío en un retiro.
+	ALlevar []PorEntregar `json:"aLlevar,omitempty"`
+	// EnElCamion son los remitos de envío sin firmar, con lo que lleva cada
+	// uno: la tarjeta «En camino» mostraba lo que quedó en el galpón.
+	EnElCamion []RemitoEnElCamion `json:"enElCamion,omitempty"`
+	// FleteACotizar: un envío a una zona «a cotizar» sin flete cargado (se
+	// despachaba y se entregaba sin que nadie lo cotizara).
+	FleteACotizar bool `json:"fleteACotizar,omitempty"`
+}
+
+// RemitoEnElCamion es un remito de envío que salió y no se firmó.
+type RemitoEnElCamion struct {
+	Numero     string        `json:"numero"`
+	FirmaToken string        `json:"firmaToken"`
+	Lineas     []PorEntregar `json:"lineas"`
 }
 
 // sqlAcopio: el pedido `o` es un acopio en curso, de los que se retiran de
@@ -477,6 +495,9 @@ type PorEntregar struct {
 // en parte: son pocos, y el saldo es la misma cuenta de la ficha
 // (entregas.SaldoDeAcopio).
 func (s *Servicio) completarListado(ctx context.Context, out []PedidoListado, enParte map[string]bool) error {
+	if err := s.completarEnvios(ctx, out); err != nil {
+		return err
+	}
 	for i := range out {
 		out[i].PorEntregar = []PorEntregar{}
 		if !enParte[out[i].ID] {
@@ -497,6 +518,77 @@ func (s *Servicio) completarListado(ctx context.Context, out []PedidoListado, en
 		}
 	}
 	return nil
+}
+
+// completarEnvios suma a cada envío sin entregar lo que falta llevar, lo
+// que va en el camión y si el flete está por cotizar (el reparto).
+func (s *Servicio) completarEnvios(ctx context.Context, out []PedidoListado) error {
+	var ids []string
+	donde := map[string]int{}
+	for i, p := range out {
+		if p.TipoEntrega == "envio" && p.Estado != "entregado" && p.Estado != "cancelado" {
+			ids = append(ids, p.ID)
+			donde[p.ID] = i
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	for _, id := range ids {
+		saldo, err := entregas.SaldoDeAcopio(ctx, s.pool, id)
+		if err != nil {
+			return err
+		}
+		i := donde[id]
+		out[i].ALlevar = []PorEntregar{}
+		for _, r := range entregas.SoloPendientes(saldo) {
+			out[i].ALlevar = append(out[i].ALlevar, PorEntregar{Descripcion: r.Descripcion, Unidad: r.Unidad, Pendiente: r.Pendiente})
+		}
+	}
+	filas, err := s.pool.Query(ctx, `
+		SELECT d.order_id::text, d.numero, coalesce(d.firma_token, ''), oi.descripcion, oi.unidad, di.cantidad::float8
+		FROM deliveries d JOIN delivery_items di ON di.delivery_id = d.id JOIN order_items oi ON oi.id = di.order_item_id
+		WHERE d.order_id = ANY($1::uuid[]) AND d.tipo = 'envio' AND d.estado = 'preparada'
+		ORDER BY d.created_at, di.orden`, ids)
+	if err != nil {
+		return err
+	}
+	for filas.Next() {
+		var pedido, numero, token string
+		var l PorEntregar
+		if err := filas.Scan(&pedido, &numero, &token, &l.Descripcion, &l.Unidad, &l.Pendiente); err != nil {
+			filas.Close()
+			return err
+		}
+		i := donde[pedido]
+		n := len(out[i].EnElCamion)
+		if n == 0 || out[i].EnElCamion[n-1].Numero != numero {
+			out[i].EnElCamion = append(out[i].EnElCamion, RemitoEnElCamion{Numero: numero, FirmaToken: token})
+			n++
+		}
+		out[i].EnElCamion[n-1].Lineas = append(out[i].EnElCamion[n-1].Lineas, l)
+	}
+	filas.Close()
+	if err := filas.Err(); err != nil {
+		return err
+	}
+	filas, err = s.pool.Query(ctx, `
+		SELECT o.id::text FROM orders o
+		WHERE o.id = ANY($1::uuid[]) AND o.costo_envio = 0 AND (o.zona_envio ~* 'a cotizar'
+		  OR EXISTS (SELECT 1 FROM shipping_zones z WHERE z.a_cotizar AND lower(z.nombre) = lower(trim(o.zona_envio))))`, ids)
+	if err != nil {
+		return err
+	}
+	for filas.Next() {
+		var id string
+		if err := filas.Scan(&id); err != nil {
+			filas.Close()
+			return err
+		}
+		out[donde[id]].FleteACotizar = true
+	}
+	filas.Close()
+	return filas.Err()
 }
 
 // EstadoSinCobrar es el filtro del historial que lleva el renglón «N
@@ -632,6 +724,32 @@ type ItemDePedido struct {
 	CostoUnitario  *string `json:"costoUnitario"`
 	AlicuotaIva    *string `json:"alicuotaIva"`
 	Orden          int     `json:"orden"`
+	// Devuelto es lo que volvió de este renglón (mes simulado 2, M2S1-082:
+	// la ficha seguía mostrando las 3 placas con una devuelta).
+	Devuelto float64 `json:"devuelto"`
+}
+
+// DevolucionEnLaFicha es una devolución del pedido, con su nota de crédito
+// si la tuvo (M2S1-082, M3S2-049: la ficha no la mostraba y no había cómo
+// llegar a la nota).
+type DevolucionEnLaFicha struct {
+	ID        string    `json:"id"`
+	Importe   float64   `json:"importe"`
+	Destino   string    `json:"destino"`
+	Motivo    string    `json:"motivo"`
+	NotaID    *string   `json:"notaId"`
+	Nota      *string   `json:"nota"`
+	Quien     *string   `json:"quien"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+// ComprobanteDelPedido es una factura o nota del pedido, para quien no entra
+// a Facturación (M2S3-027: el vendedor no veía ni el número de la factura).
+type ComprobanteDelPedido struct {
+	ID       string `json:"id"`
+	Etiqueta string `json:"etiqueta"`
+	Tipo     string `json:"tipo"`
+	Estado   string `json:"estado"`
 }
 
 // PasoDelPedido es una fila de order_status_history.
@@ -722,7 +840,9 @@ type FichaDePedido struct {
 	EfectivoRecibido *float64 `json:"efectivoRecibido"`
 	// FacturaID: la factura viva de la venta, si tiene: el papel que vale es
 	// ese y no el ticket (M2S1-083).
-	FacturaID *string `json:"facturaId"`
+	FacturaID    *string                `json:"facturaId"`
+	Devoluciones []DevolucionEnLaFicha  `json:"devoluciones"`
+	Comprobantes []ComprobanteDelPedido `json:"comprobantes"`
 }
 
 // ReciboDelPedido es un recibo que cobró el pedido.
@@ -872,6 +992,83 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 	filas.Close()
 	if err := filas.Err(); err != nil {
 		return nil, err
+	}
+
+	filas, err = s.pool.Query(ctx, `
+		SELECT d.id::text, d.importe::float8, d.destino, d.motivo, n.id::text, n.tipo::text, n.punto_venta::int8, n.numero::int8,
+		       u.name, d.created_at
+		FROM devoluciones d LEFT JOIN invoices n ON n.id = d.nota_id LEFT JOIN "user" u ON u.id = d.created_by_user_id
+		WHERE d.order_id = $1 ORDER BY d.created_at, d.id`, id)
+	if err != nil {
+		return nil, err
+	}
+	p.Devoluciones = []DevolucionEnLaFicha{}
+	for filas.Next() {
+		var d DevolucionEnLaFicha
+		var tipo *string
+		var pv, n *int64
+		if err := filas.Scan(&d.ID, &d.Importe, &d.Destino, &d.Motivo, &d.NotaID, &tipo, &pv, &n, &d.Quien, &d.CreatedAt); err != nil {
+			filas.Close()
+			return nil, err
+		}
+		if tipo != nil && pv != nil && n != nil {
+			x := fiscal.NombreComprobante(*tipo) + " " + fiscal.NumeroFormateado(*pv, *n)
+			d.Nota = &x
+		}
+		p.Devoluciones = append(p.Devoluciones, d)
+	}
+	filas.Close()
+	if err := filas.Err(); err != nil {
+		return nil, err
+	}
+
+	filas, err = s.pool.Query(ctx, `
+		SELECT id::text, tipo::text, punto_venta, numero, estado::text FROM invoices
+		WHERE order_id = $1 AND estado <> 'borrador' ORDER BY created_at, id`, id)
+	if err != nil {
+		return nil, err
+	}
+	p.Comprobantes = []ComprobanteDelPedido{}
+	for filas.Next() {
+		var c ComprobanteDelPedido
+		var pv, n int64
+		if err := filas.Scan(&c.ID, &c.Tipo, &pv, &n, &c.Estado); err != nil {
+			filas.Close()
+			return nil, err
+		}
+		c.Etiqueta = fiscal.NombreComprobante(c.Tipo) + " " + fiscal.NumeroFormateado(pv, n)
+		p.Comprobantes = append(p.Comprobantes, c)
+	}
+	filas.Close()
+	if err := filas.Err(); err != nil {
+		return nil, err
+	}
+
+	{
+		devueltos := map[string]float64{}
+		filas, err = s.pool.Query(ctx, `
+			SELECT di.order_item_id::text, sum(di.cantidad)::float8
+			FROM devolucion_items di JOIN devoluciones d ON d.id = di.devolucion_id
+			WHERE d.order_id = $1 AND di.order_item_id IS NOT NULL GROUP BY di.order_item_id`, id)
+		if err != nil {
+			return nil, err
+		}
+		for filas.Next() {
+			var item string
+			var c float64
+			if err := filas.Scan(&item, &c); err != nil {
+				filas.Close()
+				return nil, err
+			}
+			devueltos[item] = c
+		}
+		filas.Close()
+		if err := filas.Err(); err != nil {
+			return nil, err
+		}
+		for i := range p.Items {
+			p.Items[i].Devuelto = devueltos[p.Items[i].ID]
+		}
 	}
 
 	if conMargen {

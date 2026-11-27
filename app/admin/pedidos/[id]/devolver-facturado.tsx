@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cantidadConUnidad, formatearMonto } from "@/lib/formato";
+import { Opciones } from "@/components/admin/opciones";
 
 /** Un renglón de la factura del pedido, con lo que queda por devolver. */
 export interface RenglonFacturado {
@@ -27,22 +28,27 @@ function leerCantidad(texto: string): number {
 /**
  * La devolución de un pedido facturado, desde el pedido (H279): sale la nota
  * de crédito sobre su factura, lo traído vuelve al stock y la plata baja lo
- * que falta cobrar o va a la cuenta corriente. El importe lo calcula Go (con
- * los tributos) y se confirma ese: si cambia, no se hace.
+ * que falta cobrar o va a la cuenta corriente; lo ya cobrado vuelve por la
+ * caja o por el banco (mes simulado 2: cobrado, no había salida). El importe
+ * lo calcula Go (con los tributos) y se confirma ese: si cambia, no se hace.
  */
 export function DevolverFacturado({
   id,
   numero,
   factura,
-  destino,
   tope,
+  caja,
+  afuera,
+  cajaAbierta,
   renglones,
 }: {
   id: string;
   numero: string;
   factura: string;
-  destino: "cuenta" | "deuda";
   tope: number;
+  caja: number;
+  afuera: number;
+  cajaAbierta: boolean;
   renglones: RenglonFacturado[];
 }) {
   const router = useRouter();
@@ -50,6 +56,7 @@ export function DevolverFacturado({
   const [cantidades, setCantidades] = useState<Record<string, string>>({});
   const [motivo, setMotivo] = useState("");
   const [clave, setClave] = useState("");
+  const [plata, setPlata] = useState<"caja" | "afuera" | null>(null);
   // Lo que contestó Go para estas cantidades (clave: las cantidades).
   const [calculo, setCalculo] = useState<{ clave: string; importe: number | null; error: string | null } | null>(null);
   const [pendiente, startTransition] = useTransition();
@@ -85,7 +92,15 @@ export function DevolverFacturado({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [abierto, mal, clavePedido, id]);
 
-  const pasa = importe !== null && importe > tope + 0.005;
+  // Lo que no entra en la cuenta o en la deuda ya se cobró: vuelve por la
+  // caja o por el banco, hasta lo que entró por cada uno.
+  const cobrado = importe !== null && importe > tope + 0.005;
+  const opciones = [
+    { valor: "caja" as const, texto: "De la caja", deshabilitada: !cajaAbierta || importe === null || caja + 0.005 < importe },
+    { valor: "afuera" as const, texto: "Por el banco", deshabilitada: importe === null || afuera + 0.005 < importe },
+  ];
+  const elegido = cobrado ? (opciones.find((o) => o.valor === plata && !o.deshabilitada)?.valor ?? null) : null;
+  const pasa = cobrado && opciones.every((o) => o.deshabilitada);
 
   function abrir(v: boolean) {
     if (v && !abierto) {
@@ -94,6 +109,7 @@ export function DevolverFacturado({
       setCantidades({});
       setMotivo("");
       setCalculo(null);
+      setPlata(null);
     }
     setAbierto(v);
   }
@@ -106,12 +122,16 @@ export function DevolverFacturado({
         motivo.trim(),
         clave,
         importe,
+        elegido ?? undefined,
       );
       if (r.error) {
         toast.error(r.error);
         return;
       }
-      toast.success(r.ok ?? "Devolución registrada.");
+      const nota = r.notaId;
+      toast.success(r.ok ?? "Devolución registrada.", {
+        action: nota ? { label: "Ver la nota", onClick: () => window.open(`/api/comprobantes/${nota}/pdf`, "_blank") } : undefined,
+      });
       setAbierto(false);
       router.refresh();
     });
@@ -133,14 +153,8 @@ export function DevolverFacturado({
             <DialogTitle>
               Devolución de <span className="tabular whitespace-nowrap">{numero}</span>
             </DialogTitle>
-            <p className="flex flex-wrap gap-x-2 text-sm text-muted-foreground">
-              <span>
-                Nota de crédito · <span className="tabular whitespace-nowrap">{factura}</span>
-              </span>
-              <span className="whitespace-nowrap">
-                {destino === "cuenta" ? "A la cuenta" : "Baja la deuda"} · hasta{" "}
-                <span className="tabular">{formatearMonto(tope)}</span>
-              </span>
+            <p className="text-sm text-muted-foreground">
+              Nota de crédito · <span className="tabular whitespace-nowrap">{factura}</span>
             </p>
           </DialogHeader>
           <div className="space-y-2">
@@ -177,9 +191,15 @@ export function DevolverFacturado({
             </label>
             <Textarea id="motivo-devolucion-f" value={motivo} onChange={(e) => setMotivo(e.target.value)} maxLength={300} rows={2} />
           </div>
+          {cobrado && !pasa && (
+            <div className="space-y-2">
+              <p className="text-base font-medium">La plata</p>
+              <Opciones etiqueta="Por dónde vuelve la plata" valor={elegido} alCambiar={setPlata} opciones={opciones} />
+            </div>
+          )}
           {(error || pasa) && (
             <p role="alert" className="estado-problema text-sm">
-              {error ?? `Pasa lo que se puede devolver desde acá (${formatearMonto(tope)}).`}
+              {error ?? `Pasa lo que se cobró por cada medio.`}
             </p>
           )}
           <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
@@ -188,7 +208,7 @@ export function DevolverFacturado({
             </button>
             <button
               type="button"
-              disabled={pendiente || mal || elegidos.length === 0 || !motivo.trim() || importe === null || pasa || !!error}
+              disabled={pendiente || mal || elegidos.length === 0 || !motivo.trim() || importe === null || pasa || !!error || (cobrado && !elegido)}
               onClick={devolver}
               className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-50"
             >

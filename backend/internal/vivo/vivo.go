@@ -72,6 +72,12 @@ type Evento struct {
 	ID     string `json:"id,omitempty"`
 	Numero string `json:"numero,omitempty"`
 	Estado string `json:"estado,omitempty"`
+	// Nuevo y Origen, en «pedidos»: un pedido recién creado y de dónde vino.
+	// El tablero se refresca con cualquier pedido nuevo o que cambia de
+	// estado; el aviso «Entró un pedido web», solo con los de la tienda
+	// (mes simulado 2: un pedido del panel no aparecía en otra pantalla).
+	Nuevo  bool   `json:"nuevo,omitempty"`
+	Origen string `json:"origen,omitempty"`
 }
 
 // Lo que se encola por pantalla antes de empezar a descartar: una pantalla

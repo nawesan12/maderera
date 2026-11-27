@@ -141,12 +141,16 @@ export function paraEntregar(
     createdAt: Date;
   }[],
   tope = 5,
-): { renglones: RenglonParaEntregar[]; total: number } {
+): { renglones: RenglonParaEntregar[]; total: number; enAcopio: number } {
+  // El saldo de un acopio es mercadería guardada a nombre del cliente que
+  // nadie pidió retirar hoy: va aparte, no arriba con el botón naranja (mes
+  // simulado 2).
   const listos = pedidos
-    .filter((p) => p.estado === "listo")
+    .filter((p) => p.estado === "listo" && !p.acopio)
     .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   return {
     total: listos.length,
+    enAcopio: pedidos.filter((p) => p.acopio && !["entregado", "cancelado"].includes(p.estado)).length,
     renglones: listos.slice(0, tope).map((p) => ({
       id: p.id,
       numero: p.numero,

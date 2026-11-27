@@ -22,6 +22,7 @@ import (
 	"mjbj/internal/numeracion"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/precios"
+	"mjbj/internal/reglas"
 	"mjbj/internal/reservas"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
@@ -55,6 +56,10 @@ type Resultado struct {
 	ID     string `json:"id,omitempty"`
 	Numero string `json:"numero,omitempty"`
 	Estado string `json:"estado,omitempty"`
+	// FirmaToken: el enlace de firma del remito que salió al avanzar. En
+	// un retiro el cliente está presente: la pantalla va derecho a la firma
+	// (mes simulado 2: quedaba «Sin firmar», un paso aparte que se olvidaba).
+	FirmaToken string `json:"firmaToken,omitempty"`
 }
 
 // NotaEntregadoSinCobrar encabeza la nota del historial de un pedido que se
@@ -218,8 +223,40 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 				return err
 			}
 			usuario := ses.UserID
+			saldo, err := entregas.SaldoDeAcopio(ctx, tx, id)
+			if err != nil {
+				return err
+			}
+			if len(entregas.SoloPendientes(saldo)) > 0 {
+				// El documento primero: es lo que se corrige en el lugar.
+				if p.tipoEntrega != "envio" {
+					if campo, msj := quien.Revisar(); msj != "" {
+						return plataforma.Invalido(map[string]string{campo: msj})
+					}
+				}
+				if _, err := entregas.AutorizarSinCobrar(ctx, tx, s.aut, ses, id, quien.SinCobrar); err != nil {
+					return err
+				}
+			}
 			if remito, err = entregas.RemitoPorLoQueQueda(ctx, tx, id, sucursal, p.tipoEntrega, &usuario, quien); err != nil {
 				return err
+			}
+			// Sin mercadería, el pedido que solo lleva el corte sale con el
+			// remito de sus piezas, con quien retira, para firmar (mes
+			// simulado 2: se entregaba sin firma ni constancia).
+			if remito == nil && siguiente == "entregado" && p.tipoEntrega != "envio" {
+				solo, err := entregas.SoloElCorte(ctx, tx, id)
+				if err != nil {
+					return err
+				}
+				if solo {
+					if campo, msj := quien.Revisar(); msj != "" {
+						return plataforma.Invalido(map[string]string{campo: msj})
+					}
+					if remito, err = entregas.RemitoDelCorte(ctx, tx, id, sucursal, &usuario, quien); err != nil {
+						return err
+					}
+				}
 			}
 		}
 		// Entregar sin cobrar se puede (existe el pago contra entrega), pero
@@ -267,7 +304,11 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 	if remito != nil {
 		ok = p.numero + " quedó " + texto + ": la mercadería salió con el remito " + remito.Numero + ", que queda para firmar."
 	}
-	return &Resultado{Ok: ok, Numero: p.numero, Estado: siguiente}, nil
+	out := &Resultado{Ok: ok, Numero: p.numero, Estado: siguiente}
+	if remito != nil {
+		out.FirmaToken = remito.FirmaToken
+	}
+	return out, nil
 }
 
 // Cancelar cancela el pedido y libera lo reservado (el físico no se toca:
@@ -814,6 +855,40 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 			}
 			aCuenta = true
 		}
+		// El descuento por forma de pago, como en el mostrador (mes simulado
+		// 2, M2S1-080: el presupuesto prometía «10 % en efectivo o
+		// transferencia» y el pedido cobraba la lista): sobre lo que se vende
+		// del catálogo (con la regla descuento_al_flete, también lo cargado a
+		// mano), con el pedido entero por un solo medio. Los renglones quedan
+		// a lista y el descuento va al pedido, como el de la tienda.
+		var descuento float64
+		var motivoDescuento *string
+		if ent.MedioPago != nil && !aCuenta {
+			esc, err := s.q.WithTx(tx).EscalasDePago(ctx)
+			if err != nil {
+				return err
+			}
+			escalas := make([]ventas.EscalaDePago, len(esc))
+			for i, f := range esc {
+				escalas[i] = ventas.EscalaDePago{Medio: string(f.Medio), DesdeMonto: f.DesdeMonto.F(), Porcentaje: f.Porcentaje.F(), Etiqueta: f.Etiqueta}
+			}
+			alFlete := reglas.Es(ctx, tx, reglas.DescuentoAlFlete, "si")
+			base := 0.0
+			for _, l := range lineas {
+				if l.variantID != nil || alFlete {
+					base += jsmath.Numero(l.subt)
+				}
+			}
+			base = ventas.ACentavos(base)
+			if e := ventas.DescuentoPorMedioDePago(escalas, *ent.MedioPago, base); e != nil {
+				descuento = ventas.MontoDelDescuentoDePago(base, e.Porcentaje)
+				if e.Etiqueta != "" {
+					m := e.Etiqueta
+					motivoDescuento = &m
+				}
+				totalPedido = ventas.ACentavos(totalPedido - descuento)
+			}
+		}
 		deuda := totalPedido
 		if partido != nil {
 			deuda = jsmath.Numero(*partido)
@@ -848,13 +923,20 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 			        CASE WHEN $13::tipo_entrega = 'retiro'
 			             THEN coalesce($7::uuid, (SELECT id FROM branches WHERE active ORDER BY sort_order LIMIT 1))
 			             ELSE $7::uuid END,
-			        'pendiente', 'presupuesto', $8::numeric, $9::numeric + $14::numeric, $10, $11, $12,
+			        'pendiente', 'presupuesto', $8::numeric, $9::numeric + $14::numeric - $22::numeric, $10, $11, $12,
 			        $13::tipo_entrega, $15, $16, $14::numeric, $17::medio_pago,
 			        coalesce($18::date, (SELECT (necesita_para AT TIME ZONE 'America/Argentina/Buenos_Aires')::date FROM quotes WHERE id = $3)),
 			        $19::numeric, $20, $21::numeric)
 			RETURNING id`, numero, q.customerID, quoteID, q.nombre, q.email, q.telefono, q.branchID, q.subtotal, q.total, q.notas,
-			q.sellerID, ses.UserID, tipo, costo, direccion, zona, ent.MedioPago, entregarEl, jsmath.Fijo2(dejado), autorizadoPor, partido).Scan(&pedidoID); err != nil {
+			q.sellerID, ses.UserID, tipo, costo, direccion, zona, ent.MedioPago, entregarEl, jsmath.Fijo2(dejado), autorizadoPor, partido,
+			jsmath.Fijo2(descuento)).Scan(&pedidoID); err != nil {
 			return err
+		}
+		if descuento > 0 {
+			if _, err := tx.Exec(ctx, `UPDATE orders SET descuento = $2::numeric, descuento_motivo = $3 WHERE id = $1`,
+				pedidoID, jsmath.Fijo2(descuento), motivoDescuento); err != nil {
+				return err
+			}
 		}
 
 		var variantes []string

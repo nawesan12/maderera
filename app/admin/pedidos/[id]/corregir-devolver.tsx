@@ -3,13 +3,17 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, PencilLine, Undo2 } from "lucide-react";
+import { Loader2, PencilLine, Undo2, X } from "lucide-react";
 import { corregirPedido, devolverPedido } from "@/app/admin/ventas-actions";
 import { CampoPin, type Autorizacion } from "@/components/autorizacion/campo-pin";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cantidadConUnidad, formatearMonto, importeParaElCampo, parsearImporte } from "@/lib/formato";
+import { Opciones } from "@/components/admin/opciones";
+import type { DatosDeDevolucion } from "@/lib/dal/admin/ventas";
+import { BuscadorDeProductos, type Linea } from "@/app/admin/presupuestos/nuevo/formulario";
+import type { ZonaParaPedido } from "@/app/admin/presupuestos/acciones";
 
 /** Un renglón del pedido, como lo necesitan los dos diálogos. */
 export interface RenglonDelPedido {
@@ -32,26 +36,53 @@ const claseQuieta =
 
 /**
  * Devolver lo que el cliente trae (o deja) de un pedido sin factura. Lo que
- * sigue en acopio baja la reserva y lo que se llevó vuelve al stock; la plata
- * baja lo que falta cobrar. Con factura, se devuelve desde la factura (mes
- * simulado: no había camino, y el pedido seguía cobrando lo devuelto).
+ * sigue en acopio baja la reserva y lo que se llevó vuelve al stock. La
+ * plata baja lo que falta cobrar o va a la cuenta corriente; si ya está
+ * cobrado, vuelve por donde entró: la caja o el banco (mes simulado 2: se
+ * frenaba sin otra salida).
  */
-export function DevolverPedido({ id, numero, renglones }: { id: string; numero: string; renglones: RenglonDelPedido[] }) {
+export function DevolverPedido({
+  id,
+  numero,
+  renglones,
+  datos,
+}: {
+  id: string;
+  numero: string;
+  renglones: RenglonDelPedido[];
+  datos: DatosDeDevolucion | null;
+}) {
   const router = useRouter();
   const [abierto, setAbierto] = useState(false);
   const [cantidades, setCantidades] = useState<Record<string, string>>({});
   const [motivo, setMotivo] = useState("");
   const [clave, setClave] = useState("");
+  const [destino, setDestino] = useState<"caja" | "afuera" | null>(null);
   const [pendiente, startTransition] = useTransition();
 
-  const elegidos = renglones
+  // Lo que queda de cada renglón: con dos ya devueltas decía «de 8 u.».
+  const queda = new Map(datos?.renglones.map((r) => [r.orderItemId, r.queda]) ?? []);
+  const disponibles = renglones
+    .map((r) => ({ ...r, queda: queda.get(r.id) ?? r.cantidad }))
+    .filter((r) => r.queda > 0);
+  const elegidos = disponibles
     .map((r) => ({ r, cantidad: leerCantidad(cantidades[r.id] ?? "") }))
     .filter((x) => Number.isFinite(x.cantidad) && x.cantidad > 0);
   const total = elegidos.reduce((s, x) => s + Math.round((x.r.subtotal * x.cantidad * 100) / x.r.cantidad) / 100, 0);
-  const mal = renglones.some((r) => {
+  const mal = disponibles.some((r) => {
     const c = leerCantidad(cantidades[r.id] ?? "");
-    return !Number.isFinite(c) || c < 0 || c > r.cantidad;
+    return !Number.isFinite(c) || c < 0 || c > r.queda;
   });
+  // Ya cobrado: la plata sale por la caja o por el banco, hasta lo que entró
+  // por cada uno.
+  const cobrado = Boolean(datos && !datos.aCuenta && total > datos.deuda + 0.005);
+  const opciones = datos
+    ? [
+        { valor: "caja" as const, texto: "De la caja", deshabilitada: !datos.cajaAbierta || datos.caja + 0.005 < total },
+        { valor: "afuera" as const, texto: "Por el banco", deshabilitada: datos.afuera + 0.005 < total },
+      ]
+    : [];
+  const elegido = cobrado ? (opciones.find((o) => o.valor === destino && !o.deshabilitada)?.valor ?? null) : null;
 
   function abrir(v: boolean) {
     if (v && !abierto) {
@@ -59,6 +90,7 @@ export function DevolverPedido({ id, numero, renglones }: { id: string; numero: 
       setClave(crypto.randomUUID());
       setCantidades({});
       setMotivo("");
+      setDestino(null);
     }
     setAbierto(v);
   }
@@ -70,6 +102,7 @@ export function DevolverPedido({ id, numero, renglones }: { id: string; numero: 
         elegidos.map((x) => ({ orderItemId: x.r.id, cantidad: x.cantidad })),
         motivo.trim(),
         clave,
+        elegido ?? undefined,
       );
       if (r.error) {
         toast.error(r.error);
@@ -80,6 +113,8 @@ export function DevolverPedido({ id, numero, renglones }: { id: string; numero: 
       router.refresh();
     });
   }
+
+  if (disponibles.length === 0) return null;
 
   return (
     <>
@@ -95,11 +130,11 @@ export function DevolverPedido({ id, numero, renglones }: { id: string; numero: 
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-2">
-            {renglones.map((r) => (
+            {disponibles.map((r) => (
               <div key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <label htmlFor={`devuelve-${r.id}`} className="min-w-0 flex-1 basis-48 text-base">
                   {r.descripcion}
-                  <span className="block text-sm text-muted-foreground">de {cantidadConUnidad(r.cantidad, r.unidad, r.descripcion)}</span>
+                  <span className="block text-sm text-muted-foreground">de {cantidadConUnidad(r.queda, r.unidad, r.descripcion)}</span>
                 </label>
                 <Input
                   id={`devuelve-${r.id}`}
@@ -107,12 +142,18 @@ export function DevolverPedido({ id, numero, renglones }: { id: string; numero: 
                   placeholder="0"
                   value={cantidades[r.id] ?? ""}
                   onChange={(e) => setCantidades((c) => ({ ...c, [r.id]: e.target.value }))}
-                  aria-invalid={leerCantidad(cantidades[r.id] ?? "") > r.cantidad || undefined}
+                  aria-invalid={leerCantidad(cantidades[r.id] ?? "") > r.queda || undefined}
                   className="tabular h-11 w-24 text-right text-base"
                 />
               </div>
             ))}
           </div>
+          {cobrado && (
+            <div className="space-y-2">
+              <p className="text-base font-medium">La plata</p>
+              <Opciones etiqueta="Por dónde vuelve la plata" valor={elegido} alCambiar={setDestino} opciones={opciones} />
+            </div>
+          )}
           <div className="space-y-1.5">
             <label htmlFor="motivo-devolucion" className="text-base font-medium">
               Por qué
@@ -125,7 +166,7 @@ export function DevolverPedido({ id, numero, renglones }: { id: string; numero: 
             </button>
             <button
               type="button"
-              disabled={pendiente || mal || elegidos.length === 0 || !motivo.trim()}
+              disabled={pendiente || mal || elegidos.length === 0 || !motivo.trim() || (cobrado && !elegido)}
               onClick={devolver}
               className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-50"
             >
@@ -152,6 +193,10 @@ export function CorregirPedido({
   costoEnvio,
   conEnvio,
   descuento,
+  entrega,
+  zonas = [],
+  branchId = null,
+  customerId = null,
 }: {
   id: string;
   numero: string;
@@ -159,6 +204,11 @@ export function CorregirPedido({
   costoEnvio: number;
   conEnvio: boolean;
   descuento: number;
+  /** Cómo se entrega hoy; null si ya salió algo (no se cambia). */
+  entrega?: { tipo: "retiro" | "envio"; direccion: string; zona: string } | null;
+  zonas?: ZonaParaPedido[];
+  branchId?: string | null;
+  customerId?: string | null;
 }) {
   const router = useRouter();
   const [abierto, setAbierto] = useState(false);
@@ -167,6 +217,13 @@ export function CorregirPedido({
   const [motivo, setMotivo] = useState("");
   const [pidePin, setPidePin] = useState<Autorizacion | null>(null);
   const [pendiente, startTransition] = useTransition();
+  // Lo que se suma y cómo se entrega (mes simulado 2: la corrección solo
+  // tocaba cantidades y precios, y un retiro no pasaba a envío).
+  const [nuevos, setNuevos] = useState<Linea[]>([]);
+  const [tipo, setTipo] = useState<"retiro" | "envio">(entrega?.tipo ?? (conEnvio ? "envio" : "retiro"));
+  const [direccion, setDireccion] = useState(entrega?.direccion ?? "");
+  const [zona, setZona] = useState(entrega?.zona ?? "");
+  const conEnvioAhora = tipo === "envio";
 
   function abrir(v: boolean) {
     if (v && !abierto) {
@@ -178,6 +235,10 @@ export function CorregirPedido({
       setFlete(importeParaElCampo(costoEnvio));
       setMotivo("");
       setPidePin(null);
+      setNuevos([]);
+      setTipo(entrega?.tipo ?? (conEnvio ? "envio" : "retiro"));
+      setDireccion(entrega?.direccion ?? "");
+      setZona(entrega?.zona ?? "");
     }
     setAbierto(v);
   }
@@ -188,9 +249,24 @@ export function CorregirPedido({
   });
   const fleteLeido = flete.trim() === "" ? 0 : parsearImporte(flete);
   const mal =
-    leidos.some((x) => !(x.cantidad > 0) || !Number.isFinite(x.precio) || x.precio < 0) || !Number.isFinite(fleteLeido) || fleteLeido < 0;
+    leidos.some((x) => !(x.cantidad > 0) || !Number.isFinite(x.precio) || x.precio < 0) ||
+    nuevos.some((n) => !(n.cantidad > 0) || !Number.isFinite(n.precioUnitario) || n.precioUnitario < 0) ||
+    !Number.isFinite(fleteLeido) ||
+    fleteLeido < 0 ||
+    (conEnvioAhora && !direccion.trim());
   const total =
-    leidos.reduce((s, x) => s + Math.round(x.cantidad * x.precio * 100) / 100, 0) + (conEnvio ? fleteLeido : costoEnvio) - descuento;
+    leidos.reduce((s, x) => s + Math.round(x.cantidad * x.precio * 100) / 100, 0) +
+    nuevos.reduce((s, n) => s + Math.round(n.cantidad * n.precioUnitario * 100) / 100, 0) +
+    (conEnvioAhora ? fleteLeido : 0) -
+    descuento;
+
+  function elegirZona(nombre: string) {
+    cambiar(() => {
+      setZona(nombre);
+      const z = zonas.find((x) => x.nombre === nombre);
+      if (z && !z.aCotizar && z.costo > 0) setFlete(importeParaElCampo(z.costo));
+    });
+  }
 
   /*
    * El PIN firma estos números: cambiar uno lo deja sin efecto y vuelve
@@ -204,9 +280,22 @@ export function CorregirPedido({
 
   function guardar(pin?: string) {
     startTransition(async () => {
+      const cambiaEntrega = entrega != null && tipo !== entrega.tipo;
       const r = await corregirPedido(id, {
         renglones: leidos.map((x) => ({ orderItemId: x.r.id, cantidad: x.cantidad, precioUnitario: x.precio })),
-        ...(conEnvio ? { costoEnvio: fleteLeido } : {}),
+        ...(conEnvioAhora ? { costoEnvio: fleteLeido } : {}),
+        ...(nuevos.length > 0
+          ? {
+              nuevos: nuevos.map((n) => ({
+                variantId: n.variantId ?? "",
+                descripcion: n.descripcion,
+                unidad: n.unidad,
+                cantidad: n.cantidad,
+                precioUnitario: n.precioUnitario,
+              })),
+            }
+          : {}),
+        ...(cambiaEntrega ? { entrega: tipo, ...(tipo === "envio" ? { direccion: direccion.trim(), zona: zona || undefined } : {}) } : {}),
         motivo: motivo.trim(),
         ...(pin ? { pin } : {}),
       });
@@ -263,7 +352,84 @@ export function CorregirPedido({
                 </div>
               </fieldset>
             ))}
-            {conEnvio && (
+            {nuevos.map((n, i) => (
+              <fieldset key={`nuevo-${i}`} className="space-y-1.5">
+                <legend className="flex w-full items-center justify-between gap-2 text-base">
+                  <span className="min-w-0">{n.descripcion}</span>
+                  <button
+                    type="button"
+                    onClick={() => cambiar(() => setNuevos((xs) => xs.filter((_, j) => j !== i)))}
+                    aria-label={`Sacar ${n.descripcion}`}
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-hundida"
+                  >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </legend>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    inputMode="decimal"
+                    aria-label="Cantidad"
+                    value={String(n.cantidad).replace(".", ",")}
+                    onChange={(e) =>
+                      cambiar(() => setNuevos((xs) => xs.map((x, j) => (j === i ? { ...x, cantidad: leerCantidad(e.target.value) } : x))))
+                    }
+                    className="tabular h-11 text-right text-base"
+                  />
+                  <Input
+                    inputMode="decimal"
+                    aria-label="Precio"
+                    defaultValue={importeParaElCampo(n.precioUnitario)}
+                    onChange={(e) =>
+                      cambiar(() => setNuevos((xs) => xs.map((x, j) => (j === i ? { ...x, precioUnitario: parsearImporte(e.target.value) } : x))))
+                    }
+                    className="tabular h-11 text-right text-base"
+                  />
+                </div>
+              </fieldset>
+            ))}
+            {branchId && (
+              <BuscadorDeProductos
+                branchId={branchId}
+                customerId={customerId}
+                onAgregar={(l) => cambiar(() => setNuevos((xs) => [...xs, l]))}
+              />
+            )}
+            {/* Cómo se entrega, antes de que salga algo. */}
+            {entrega && (
+              <div className="space-y-2">
+                <p className="text-base font-medium">Entrega</p>
+                <Opciones
+                  etiqueta="Entrega"
+                  valor={tipo}
+                  alCambiar={(v) => cambiar(() => setTipo(v))}
+                  opciones={[
+                    { valor: "retiro", texto: "Lo retira" },
+                    { valor: "envio", texto: "Se lo llevamos" },
+                  ]}
+                />
+                {conEnvioAhora && tipo !== entrega.tipo && (
+                  <>
+                    <Input
+                      aria-label="Dirección"
+                      placeholder="Dirección"
+                      value={direccion}
+                      onChange={(e) => cambiar(() => setDireccion(e.target.value))}
+                      maxLength={300}
+                      className="h-11 text-base"
+                    />
+                    {zonas.length > 0 && (
+                      <Opciones
+                        etiqueta="Zona"
+                        valor={zona || null}
+                        alCambiar={elegirZona}
+                        opciones={zonas.map((z) => ({ valor: z.nombre, texto: z.nombre }))}
+                      />
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+            {conEnvioAhora && (
               <label className="block space-y-1 text-base font-medium">
                 Flete
                 <Input

@@ -326,6 +326,11 @@ func TestBotTopeDeMensajes(t *testing.T) {
 	salen(7, "panel", "enviado")
 	salen(5, "telefono", "enviado")
 	salen(5, "bot", "fallido")
+	// Mes simulado 2: lo de la demostración tampoco (el tope corría igual).
+	if _, err := b.pool.Exec(ctx, `insert into whatsapp_mensajes (conversacion_id, direccion, tipo, cuerpo, estado, origen, ocurrido_at, wa_message_id)
+		select $1, 'saliente', 'text', 'x', 'enviado', 'panel', now() - interval '13 hours', 'demo-' || g from generate_series(1, 5) g`, conv.ID); err != nil {
+		t.Fatal(err)
+	}
 	u, err := b.wa.UsoDelMes(ctx, b.wa.ahora())
 	if err != nil || u.Usados != 7 || u.Tope != 10 || u.Ahorro {
 		t.Fatalf("uso: %+v %v", u, err)

@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { VolverAlPedido } from "./volver";
 import { Check, Eraser, Loader2, TriangleAlert } from "lucide-react";
 import { firmarRemito, type EstadoFirma } from "./actions";
@@ -42,6 +43,19 @@ export function Pizarra({
   const dibujando = useRef(false);
   const [hayTrazo, setHayTrazo] = useState(false);
   const [estado, firmar, enviando] = useActionState(firmarRemito, inicial);
+  const router = useRouter();
+  // El nombre de quien firma: si no es el del mostrador, el DNI enmascarado
+  // es de otra persona y se pide de nuevo (mes simulado 2: la constancia
+  // quedaba a nombre de Hugo con el DNI de Martín).
+  const [nombre, setNombre] = useState(nombreSugerido ?? "");
+  // «Juan» del mostrador y «Juan Pérez» al firmar son la misma persona.
+  const antes = (nombreSugerido ?? "").trim().toLowerCase();
+  const ahora = nombre.trim().toLowerCase();
+  const otraPersona = Boolean(documentoSugerido) && antes !== "" && !ahora.startsWith(antes) && !antes.startsWith(ahora);
+  // Ya estaba firmado: la página vuelve a leerse y muestra la constancia.
+  useEffect(() => {
+    if (estado.yaFirmado) router.refresh();
+  }, [estado.yaFirmado, router]);
 
   function preparar(canvas: HTMLCanvasElement) {
     const escala = window.devicePixelRatio || 1;
@@ -125,17 +139,19 @@ export function Pizarra({
     formData.set("firma", plano.toDataURL("image/png"));
   }
 
-  if (estado.numero) {
+  if (estado.numero || estado.yaFirmado) {
     return (
       <div className="p-1 text-center">
         <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-brand-green">
           <Check className="h-6 w-6 text-white" strokeWidth={3} />
         </span>
         <p className="text-lg font-semibold">Listo, quedó firmado</p>
-        <p className="mt-1 text-muted-foreground">
-          Guardamos la constancia del remito {estado.numero}. Te la mandamos
-          por correo.
-        </p>
+        {estado.numero && (
+          <p className="mt-1 text-muted-foreground">
+            Guardamos la constancia del remito {estado.numero}. Te la mandamos
+            por correo.
+          </p>
+        )}
         {/* Firmado en la tablet del mostrador, se vuelve al pedido. */}
         <VolverAlPedido />
       </div>
@@ -160,7 +176,8 @@ export function Pizarra({
         <input
           id="receptorNombre"
           name="receptorNombre"
-          defaultValue={nombreSugerido ?? ""}
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
           autoComplete="name"
           required
           className="mt-1 h-12 w-full rounded-lg border bg-background px-3 text-base"
@@ -171,16 +188,17 @@ export function Pizarra({
           va por correo. Sin tocarlo se conserva el del mostrador; «Cambiar»
           es para cuando firma otra persona. La frase «escribilo solo si no
           es el tuyo» no se entendía (mes simulado). */}
-      {cambiarDni ? (
+      {cambiarDni || otraPersona ? (
         <div>
           <label htmlFor="receptorDocumento" className="block font-medium">
-            DNI {!documentoSugerido && <span className="font-normal text-muted-foreground">(opcional)</span>}
+            DNI {!documentoSugerido && !otraPersona && <span className="font-normal text-muted-foreground">(opcional)</span>}
           </label>
           <input
             id="receptorDocumento"
             name="receptorDocumento"
             inputMode="numeric"
-            autoFocus={Boolean(documentoSugerido)}
+            required={otraPersona}
+            autoFocus={cambiarDni && Boolean(documentoSugerido)}
             className="tabular mt-1 h-12 w-full rounded-lg border bg-background px-3 text-base"
           />
         </div>

@@ -141,7 +141,8 @@ export interface paths {
             };
             cookie?: never;
         };
-        get?: never;
+        /** Lo que queda por devolver de cada renglón y por dónde puede volver la plata. */
+        get: operations["DatosDeDevolucionDelPedido"];
         put?: never;
         /** La devolución de un pedido sin factura: baja lo que falta cobrar (o la cuenta corriente) y lo que vuelve al stock queda atado a ella. Con factura, se devuelve desde la factura. */
         post: operations["DevolverPedido"];
@@ -332,6 +333,8 @@ export interface components {
             numero?: string;
             /** @description El estado al que llegó el pedido */
             estado?: string;
+            /** @description El enlace de firma del remito que salió al avanzar */
+            firmaToken?: string;
         };
         PlazoDelPresupuesto: {
             texto: string;
@@ -443,6 +446,16 @@ export interface components {
             porEntregar: components["schemas"]["PorEntregar"][];
             /** @description Los cortes del pedido en cola o en la máquina */
             cortesSinTerminar: string[];
+            /** @description Lo que falta llevar de un envío sin entregar (vacío en un retiro) */
+            aLlevar?: components["schemas"]["PorEntregar"][];
+            /** @description Los remitos de envío sin firmar, con lo que lleva cada uno */
+            enElCamion?: {
+                numero: string;
+                firmaToken: string;
+                lineas: components["schemas"]["PorEntregar"][];
+            }[];
+            /** @description Un envío a una zona a cotizar sin flete cargado */
+            fleteACotizar?: boolean;
             /**
              * @description Con qué salió la venta del mostrador
              * @enum {string|null}
@@ -515,6 +528,31 @@ export interface components {
             costoUnitario: string | null;
             alicuotaIva: string | null;
             orden: number;
+            /**
+             * Format: double
+             * @description Lo que volvió de este renglón
+             */
+            devuelto?: number;
+        };
+        DevolucionEnLaFicha: {
+            id: string;
+            /** Format: double */
+            importe: number;
+            /** @enum {string} */
+            destino: "caja" | "cuenta" | "afuera" | "deuda";
+            motivo: string;
+            notaId: string | null;
+            /** @description «Nota de crédito B 0015-00000003» */
+            nota: string | null;
+            quien: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ComprobanteDelPedido: {
+            id: string;
+            etiqueta: string;
+            tipo: string;
+            estado: string;
         };
         PasoDelPedido: {
             id: string;
@@ -582,6 +620,8 @@ export interface components {
             efectivoRecibido?: number | null;
             /** @description la factura viva de la venta: el papel que vale */
             facturaId?: string | null;
+            devoluciones: components["schemas"]["DevolucionEnLaFicha"][];
+            comprobantes: components["schemas"]["ComprobanteDelPedido"][];
             /** @description Se retira de a partes (ya salió algo */
             acopio: boolean;
             /**
@@ -796,6 +836,9 @@ export interface operations {
                 "application/json": {
                     receptorNombre?: string;
                     receptorDocumento?: string;
+                    /** @description el PIN de un admin para soltar lo que no se cobró (422 en pin) */
+                    pin?: string;
+                    ficha?: string;
                 };
             };
         };
@@ -856,6 +899,45 @@ export interface operations {
             422: components["responses"]["Problema"];
         };
     };
+    DatosDeDevolucionDelPedido: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los datos del diálogo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        renglones: {
+                            orderItemId: string;
+                            /** Format: double */
+                            queda: number;
+                        }[];
+                        /** Format: double */
+                        deuda: number;
+                        aCuenta: boolean;
+                        /** Format: double */
+                        caja: number;
+                        /** Format: double */
+                        afuera: number;
+                        cajaAbierta: boolean;
+                    };
+                };
+            };
+            401: components["responses"]["Problema"];
+            403: components["responses"]["Problema"];
+            404: components["responses"]["Problema"];
+        };
+    };
     DevolverPedido: {
         parameters: {
             query?: never;
@@ -876,6 +958,11 @@ export interface operations {
                     motivo: string;
                     /** @description la del intento: un reintento devuelve la misma devolución */
                     clave: string;
+                    /**
+                     * @description lo ya cobrado vuelve por la caja o por afuera; sin él, baja lo que falta cobrar o va a la cuenta
+                     * @enum {string}
+                     */
+                    destino?: "caja" | "afuera";
                 };
             };
         };
@@ -921,6 +1008,24 @@ export interface operations {
                     }[];
                     /** Format: double */
                     costoEnvio?: number;
+                    /** @description Los renglones que se suman */
+                    nuevos?: {
+                        variantId: string;
+                        descripcion: string;
+                        unidad?: string;
+                        /** Format: double */
+                        cantidad: number;
+                        /** Format: double */
+                        precioUnitario: number;
+                    }[];
+                    /**
+                     * @description para cambiar cómo se entrega (antes de que salga algo)
+                     * @enum {string}
+                     */
+                    entrega?: "retiro" | "envio";
+                    direccion?: string;
+                    zona?: string;
+                    sinCargo?: boolean;
                     motivo: string;
                     pin?: string;
                     ficha?: string;

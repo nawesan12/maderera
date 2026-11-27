@@ -343,6 +343,24 @@ func (e DevolucionDesdeElPedido200JSONResponseBodyDestino) Valid() bool {
 	}
 }
 
+// Defines values for DevolverDesdeElPedidoJSONBodyDestino.
+const (
+	DevolverDesdeElPedidoJSONBodyDestinoAfuera DevolverDesdeElPedidoJSONBodyDestino = "afuera"
+	DevolverDesdeElPedidoJSONBodyDestinoCaja   DevolverDesdeElPedidoJSONBodyDestino = "caja"
+)
+
+// Valid indicates whether the value is a known member of the DevolverDesdeElPedidoJSONBodyDestino enum.
+func (e DevolverDesdeElPedidoJSONBodyDestino) Valid() bool {
+	switch e {
+	case DevolverDesdeElPedidoJSONBodyDestinoAfuera:
+		return true
+	case DevolverDesdeElPedidoJSONBodyDestinoCaja:
+		return true
+	default:
+		return false
+	}
+}
+
 // CobroDeComprobante defines model for CobroDeComprobante.
 type CobroDeComprobante struct {
 	CreatedAt       time.Time               `json:"createdAt"`
@@ -968,11 +986,17 @@ type DevolucionDesdeElPedido200JSONResponseBodyDestino string
 
 // DevolverDesdeElPedidoJSONBody defines parameters for DevolverDesdeElPedido.
 type DevolverDesdeElPedidoJSONBody struct {
-	Clave     string                      `json:"clave"`
-	Importe   *float64                    `json:"importe,omitempty"`
-	Motivo    string                      `json:"motivo"`
-	Renglones RenglonesDelPedidoADevolver `json:"renglones"`
+	Clave string `json:"clave"`
+
+	// Destino lo ya cobrado vuelve por la caja de la sucursal del pedido o por afuera; sin él, a la cuenta o a la deuda
+	Destino   *DevolverDesdeElPedidoJSONBodyDestino `json:"destino,omitempty"`
+	Importe   *float64                              `json:"importe,omitempty"`
+	Motivo    string                                `json:"motivo"`
+	Renglones RenglonesDelPedidoADevolver           `json:"renglones"`
 }
+
+// DevolverDesdeElPedidoJSONBodyDestino defines parameters for DevolverDesdeElPedido.
+type DevolverDesdeElPedidoJSONBodyDestino string
 
 // CalcularDevolucionDelPedidoJSONBody defines parameters for CalcularDevolucionDelPedido.
 type CalcularDevolucionDelPedidoJSONBody struct {
@@ -3211,11 +3235,19 @@ type DevolucionDesdeElPedidoResponseObject interface {
 }
 
 type DevolucionDesdeElPedido200JSONResponse struct {
-	Destino   DevolucionDesdeElPedido200JSONResponseBodyDestino `json:"destino"`
-	Factura   string                                            `json:"factura"`
-	FacturaId string                                            `json:"facturaId"`
-	Renglones RenglonesDevolvibles                              `json:"renglones"`
-	Tope      float64                                           `json:"tope"`
+	// Afuera lo cobrado por los demás medios que todavía no volvió
+	Afuera float64 `json:"afuera"`
+
+	// Caja lo cobrado en efectivo que todavía no volvió
+	Caja float64 `json:"caja"`
+
+	// CajaAbierta la sucursal del pedido tiene la caja abierta
+	CajaAbierta bool                                              `json:"cajaAbierta"`
+	Destino     DevolucionDesdeElPedido200JSONResponseBodyDestino `json:"destino"`
+	Factura     string                                            `json:"factura"`
+	FacturaId   string                                            `json:"facturaId"`
+	Renglones   RenglonesDevolvibles                              `json:"renglones"`
+	Tope        float64                                           `json:"tope"`
 }
 
 func (response DevolucionDesdeElPedido200JSONResponse) VisitDevolucionDesdeElPedidoResponse(w http.ResponseWriter) error {
@@ -5123,20 +5155,22 @@ var swaggerSpec = []string{
 	"4+WPlCB0RXktA/bA4555Ywgy2EqbNcgaPC4qRFiPf3jyfVdeRuXCf1515GPKrveGxu8uo5gYNPDFMvrw",
 	"7Pliky04sIH+OiLlG2bNGMZFKWWV6kA4VReb97fvUvlTr7itHVwhEjVD79CHSXwtvUy6sdv8f7tiMW5p",
 	"mxt/CndSs6hyPEOtWQNczNsVsT6/nV7MvpvCMJoT2eehWGJTn8I/aSAZ9g1dhaa4W/S5yXDJjk8RYwZ9",
-	"BS1ohqO+f9eiTak9NecPZpcVrH2GeVtOHe8FOQ23l9+q3Yjy5HUqO+Swh1PXfjrpK4nds8Es5w1vCbQE",
-	"vk6uphlWM/w4x+yPf45lov4qqJVO9ndAJ6yB0RVJIFX6F0iSHZq8nz5Cq/RvqLwGcGWW+qxB9ZXnI8JS",
-	"PiHMR6I+3RAS4z/4i782/mJgaf3koBdutUVrNILC6KMophmNPpiiVpNPFVUxQY//A6+4PfU4j68S+IBK",
-	"0ZbTsF3Y6hJ+pByiq+djczLrUPZwSz0ArNetQ8HuD5H9aFUInxDUOJOqvh9+S1jjyHo1kkDh79tEHBgr",
-	"xtOCPpvRGtZfLJuhXHHJQVFIFp+cVBbitoo7wJs7Ke7w0x2fnugRLR1ZaTx6fy8xqM0fEguStZzy5uBw",
-	"m6M9WMC2gG7U2J8Bqxdlf/7yqsZGYnGvFShtF0dX3stDXYoKNv+WdlMhjZKZ3VHvEpkq55U6FVOPwP6T",
-	"g5F3GcVJfS69RPWCMPfnKNmnH7Xpw0dWxflUWQFBsPjeHUvEqTgrzueJg5/ETXNdZyePPwsm4g5+qAra",
-	"aIq1BQZyLreLgeGxce2O+lvvvKli0efXN0x3Sqt90PJa1k1nt1Bda7aKt6zuOSIbIlTFIAvciUrXvmYC",
-	"uBKG6Ii4W+ntCvHStbKoQQXhEJHN2dj/OuSLPbj0a0sPp6pZD5FxV5X+4u+klc1TDVnwt2uzwBc73Foe",
-	"MO0OQrfCmctuAyffX63gObaMrl/nnJYIMOISs1+l1Aa1I/IfJ9G//dEnbvw32LtOONkX7rq4873kcNX5",
-	"kaq5k7aPRebE3EW7EOfly0U7HCBydPP+rkXqkyrhQhPlVBKCPEdGUxVaYjH91Aq13D638Xj4oD3Hp/+s",
-	"wNYtU8zl9GprMIfQT9sdTdtPta5tm1WvLd0bM3cKEGvbh5qwg1cLjQMkXB/RGxNjufgeVgW2m54QBIiL",
-	"HNyFKNURlm2LkM0v+zso2tJEwHZpF5xQ6brWd+eiGeZyNNOFLlLq5uKLu1l9UjfHfrzaL2GuCen4J0LT",
-	"bfnU64nA27f/PQA=",
+	"BS1ohqO+f9eiTak9NecPZpcVrH2GeVtOHe8FOQ23l9+q3WhuPGxTj8uQCfe4fEsF3CO7a5Hb53CEJJa4",
+	"DO92nnF14uA3QRA4B6w7ePMvRVcAdj5Ia0BNfMm3Y5lNfdpgD/Vvp+5Wj1AGNRAgIACGE/9eGNIXOrtn",
+	"gzniG96xaMXzOpmuZljN8OMMvT8861EQNfghpv549v6vggjqZNYH7I013rrqJ8Z2aOqa/6zB/PTv+cyI",
+	"PY5Pg/a4GFWQX6fAjiXXwAnNslZrUH1b9SmigLiM6BUAmDHV/DGHhHWI6fkIQ9KbdzwjMdek+ytU3elg",
+	"hNyrnzokKFG+cAio8x94zl8bnjPgeX1yyByns2hQR0A6fZDNNCPXx9rUavKpgm4m6PF/0De3px7n8U0T",
+	"H1Ap2nIadpNbdwwfKcXsyj3ZlN06VMXcUi4Cy7nrUM/9QyTHWgXkJ8S8zqQK6b5tUa8jjo4BFP46VoQJ",
+	"smI8a+yTXa1h/cWSXcrVHh0UhWRt0klVQ26r9ge8uZPaHz/d8eGaHtHSgbdmU+KvrQa1+UNivbrWbqM5",
+	"V97maA81si3eHzX2RwTrRdkfz72qobNY+20FStvF0VV/80ioooLNv3GzJI2SmQ247BKZqvaWOjRVj8D+",
+	"k4ORdxnkS30uvUT1YnT35yjZpx/U66OLVsX5VFkBQbA24x1LxKk4K87niYOfxE1ToWcnjz8LJuIed6hI",
+	"3mgGvoUVcy53HW/ToF0lCOudN0VO+vz6hulO5b0PWn3NuunsFoqvzVbxltU9R+BLBLoZZIE7cOva10wA",
+	"V+ESHZFzduFXiJeulQWVKghnzGxKz/7XAaPsubZfW3o4Vc16gJ27KgQZfyetbJ5qyIK/XZsFvhbm1uqR",
+	"aXcQugXwHPgBOPn+agXPsWV0Oz/ntET8GZeYHC2lNqgdkf84if7tjz5x47/B3nXCwc9wFcqd7yWHLyUY",
+	"Kao8aftYZE7MXbQLg4C+mriDiSJHN+/vWqQ+qQo/NFFtJyHIc2Q0VcAnFtNPrY7P7XMbqwcM2nN8+s8K",
+	"bFk7xVzKt7YGcwj9tN3RtP1U61a/WeX80r0xc6f4wbZ9qAk7ePPUOH7G9RG9MTGWi+9h0Wi76QlBgLgG",
+	"xl2IUh1h2bYIWfiBv6KkLU0EbJd2wQmF0Gt9dy6aYYrOW4EipW7uRbmb1Sd1sfDHKw0U5pqQjn/iyQVb",
+	"Xfd6IvD27X8PAA==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

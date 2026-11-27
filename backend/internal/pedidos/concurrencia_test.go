@@ -190,6 +190,7 @@ func TestAvanzarALaVezNoRepiteEstados(t *testing.T) {
 	_, ses := e.staff(t, "deposito@prueba.test", sqlc.StaffRoleDeposito)
 	_, ven := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
 	id := e.pedido(t, ven, 1)
+	e.exec(t, `update orders set estado_pago = 'pagado' where id = $1`, id)
 	aLaVez(3, func(int) {
 		if _, err := e.s.Avanzar(context.Background(), ses, id, "", retira); err != nil {
 			t.Errorf("avanzar: %v", err)

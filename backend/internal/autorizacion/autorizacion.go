@@ -80,6 +80,9 @@ const (
 	// Cheque: registrar el rechazo de un cheque de un cliente sin ser admin
 	// (mes simulado, H272): vuelve la deuda con una nota de débito.
 	Cheque Motivo = "cheque"
+	// SinCobrar: soltar mercadería de un pedido que no se cobró (mes
+	// simulado 2: el depósito entregaba $ 836.680 con un toque).
+	SinCobrar Motivo = "sin_cobrar"
 )
 
 // Los topes de errores.
@@ -379,6 +382,8 @@ func QueSeAutoriza(motivo Motivo, monto, credito float64) string {
 		t = "anular un remito firmado"
 	case Cheque:
 		t = "rechazar un cheque de " + m
+	case SinCobrar:
+		t = "entregar " + m + " sin cobrar"
 	default:
 		t = m + " abajo del precio"
 	}

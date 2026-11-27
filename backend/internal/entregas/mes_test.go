@@ -145,6 +145,7 @@ func TestAnularUnRemitoFirmadoPideMotivoYPin(t *testing.T) {
 	dep, _ := e.staff(t, "deposito@prueba.test", sqlc.StaffRoleDeposito)
 	adm, _ := e.staff(t, "admin@prueba.test", sqlc.StaffRoleAdmin)
 	pedido, r1, _ := e.pedido(t, "PED-2005", "listo", nil)
+	e.exec(t, `update orders set estado_pago = 'pagado' where id = $1`, pedido)
 	if c, b := pedir(t, dep, "POST", e.srv.URL+"/api/v1/admin/remitos", map[string]any{"orderId": pedido, "tipo": "retiro",
 		"receptorDocumento": "20111222", "cantidades": cantidades(r1, "10")}); c != 200 {
 		t.Fatalf("%d %s", c, b)
@@ -181,7 +182,7 @@ func TestElRemitoDiceSiFueParcialYQueSeCorto(t *testing.T) {
 		values ('CRT-13', $1, 'Marta', 'Tirante', 'terminado', $2, 8)`, pedido, e.variante)
 	u := e.srv.URL + "/api/v1/admin/remitos"
 	for _, c := range [][]map[string]string{cantidades(r2, "4"), cantidades(r1, "10")} {
-		if st, b := pedir(t, ven, "POST", u, map[string]any{"orderId": pedido, "tipo": "retiro", "receptorDocumento": "1", "cantidades": c}); st != 200 {
+		if st, b := pedir(t, ven, "POST", u, map[string]any{"orderId": pedido, "tipo": "retiro", "receptorDocumento": "20111222", "cantidades": c}); st != 200 {
 			t.Fatalf("%d %s", st, b)
 		}
 	}
@@ -216,6 +217,8 @@ func TestUnaVisitaDosAcopiosUnaFirma(t *testing.T) {
 	a, a1, _ := e.pedido(t, "PED-1018", "listo", &cliente)
 	b, b1, _ := e.pedido(t, "PED-1115", "listo", &cliente)
 	ajeno, x1, _ := e.pedido(t, "PED-1116", "listo", &otroCliente)
+	// Lo de otro pedido sale junto si está cobrado (mes simulado 2).
+	e.exec(t, `update orders set estado_pago = 'pagado'`)
 
 	otros, err := e.s.OtrosAcopios(context.Background(), a)
 	if err != nil || len(otros) != 1 || otros[0].Numero != "PED-1115" || len(otros[0].Renglones) != 2 {
@@ -312,7 +315,7 @@ func TestElRemitoAnuladoSigueDiciendoLoQueFue(t *testing.T) {
 	ven, ses := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
 	pedido, r1, r2 := e.pedido(t, "PED-2010", "listo", nil)
 	if c, b := pedir(t, ven, "POST", e.srv.URL+"/api/v1/admin/remitos", map[string]any{"orderId": pedido, "tipo": "retiro",
-		"receptorDocumento": "1", "cantidades": cantidades(r1, "10", r2, "4")}); c != 200 {
+		"receptorDocumento": "20111222", "cantidades": cantidades(r1, "10", r2, "4")}); c != 200 {
 		t.Fatalf("%d %s", c, b)
 	}
 	if err := e.s.AnularEntrega(context.Background(), ses, e.uno(t, `select id::text from deliveries where numero = 'REM-0001'`)); err != nil {
@@ -324,7 +327,7 @@ func TestElRemitoAnuladoSigueDiciendoLoQueFue(t *testing.T) {
 	}
 	// El siguiente, que se lleva una parte, sí es parcial.
 	if c, b := pedir(t, ven, "POST", e.srv.URL+"/api/v1/admin/remitos", map[string]any{"orderId": pedido, "tipo": "retiro",
-		"receptorDocumento": "1", "cantidades": cantidades(r1, "3")}); c != 200 {
+		"receptorDocumento": "20111222", "cantidades": cantidades(r1, "3")}); c != 200 {
 		t.Fatalf("%d %s", c, b)
 	}
 	remitos, _ = e.s.RemitosDelPedido(context.Background(), pedido)
@@ -338,7 +341,7 @@ func TestElAcopioRetiradoEnParteQuedaListo(t *testing.T) {
 	ven, _ := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
 	pedido, r1, _ := e.pedido(t, "PED-2011", "pendiente", nil)
 	if c, b := pedir(t, ven, "POST", e.srv.URL+"/api/v1/admin/remitos", map[string]any{"orderId": pedido, "tipo": "retiro",
-		"receptorDocumento": "1", "cantidades": cantidades(r1, "3")}); c != 200 {
+		"receptorDocumento": "20111222", "cantidades": cantidades(r1, "3")}); c != 200 {
 		t.Fatalf("%d %s", c, b)
 	}
 	if estado, nota := e.estadoYNota(t, pedido); estado != "listo" || nota != "Remito REM-0001: se retiró una parte" {
@@ -349,7 +352,7 @@ func TestElAcopioRetiradoEnParteQuedaListo(t *testing.T) {
 	e.exec(t, `insert into cutting_orders (numero, order_id, contacto_nombre, material_descripcion, estado)
 		values ('CRT-21', $1, 'Marta', 'Melamina 18', 'en-cola')`, otro)
 	if c, b := pedir(t, ven, "POST", e.srv.URL+"/api/v1/admin/remitos", map[string]any{"orderId": otro, "tipo": "retiro",
-		"receptorDocumento": "1", "cantidades": cantidades(o1, "1")}); c != 200 {
+		"receptorDocumento": "20111222", "cantidades": cantidades(o1, "1")}); c != 200 {
 		t.Fatalf("%d %s", c, b)
 	}
 	if estado := e.uno(t, `select estado::text from orders where id = $1`, otro); estado != "pendiente" {
@@ -378,7 +381,7 @@ func TestAnularElEnvioFirmadoEsUnSoloRenglon(t *testing.T) {
 		t.Errorf("renglones del historial: %s → %s", antes, despues)
 	}
 	if estado, nota := e.estadoYNota(t, pedido); estado != "listo" ||
-		!strings.HasPrefix(nota, "Remito REM-0001 firmado, anulado: Volvió roto") || !strings.HasSuffix(nota, "vuelve a quedar mercadería por llevar") {
+		!strings.HasPrefix(nota, "Remito REM-0001 firmado, anulado: Volvió roto") || strings.Contains(nota, "vuelve a quedar") {
 		t.Fatalf("anulado: %q %q", estado, nota)
 	}
 }
@@ -396,7 +399,7 @@ func TestElRemitoSinFirmarDiceLoQueFaltaHoy(t *testing.T) {
 	pedido, r1, r2 := e.pedido(t, "PED-2012", "listo", nil)
 	u := e.srv.URL + "/api/v1/admin/remitos"
 	for _, c := range [][]map[string]string{cantidades(r1, "4"), cantidades(r1, "6", r2, "4")} {
-		if st, b := pedir(t, ven, "POST", u, map[string]any{"orderId": pedido, "tipo": "retiro", "receptorDocumento": "1", "cantidades": c}); st != 200 {
+		if st, b := pedir(t, ven, "POST", u, map[string]any{"orderId": pedido, "tipo": "retiro", "receptorDocumento": "20111222", "cantidades": c}); st != 200 {
 			t.Fatalf("%d %s", st, b)
 		}
 	}

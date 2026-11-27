@@ -70,6 +70,11 @@ const (
 	// del sistema anterior, una nota de débito sin comprobante): al circuito
 	// B, como hasta ahora, o al archivo del estudio contra Saldos iniciales.
 	DeudaSinComprobante = "deuda_sin_comprobante"
+	// Mes simulado 2 (M2S1-018): quién pide el PIN de un admin para soltar
+	// mercadería sin cobrar. «deposito»: solo el depósito, que no cobra;
+	// «fuera_de_la_cuenta»: también quien vende, si el cliente no tiene
+	// cuenta corriente o la deuda pasa su límite.
+	EntregarSinCobrar = "entregar_sin_cobrar"
 )
 
 // Opciones son los valores posibles de cada regla, el de arranque primero.
@@ -93,6 +98,7 @@ var Opciones = map[string][]string{
 	RedondeoEfectivo:            {"no", "al_peso"},
 	CaeEnCompras:                {"opcional", "exigido"},
 	DeudaSinComprobante:         {"circuito_b", "saldo_inicial"},
+	EntregarSinCobrar:           {"deposito", "fuera_de_la_cuenta"},
 }
 
 // Arranque es el valor de una regla cuando la fila no está o tiene algo que

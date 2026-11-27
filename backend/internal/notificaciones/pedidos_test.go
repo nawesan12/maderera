@@ -150,6 +150,12 @@ func TestCambioDeEstado(t *testing.T) {
 	if r := e.registro(t, "entregado"); r != "email:omitida" {
 		t.Errorf("registro apagado: %s", r)
 	}
+	// Mes simulado 2: un envío listo no recibe «listo para retirar».
+	envio := e.pedido(t, "PED-000201", "ana@prueba.test", "envio")
+	antes = e.correos()
+	if err := e.s.CambioDeEstado(ctx, envio, "listo"); err != nil || e.correos() != antes {
+		t.Errorf("envío listo: %v, %d correos", err, e.correos()-antes)
+	}
 }
 
 func TestResultadoDePago(t *testing.T) {
@@ -381,5 +387,22 @@ func TestPorLaCola(t *testing.T) {
 		if got := e.registro(t, ev); !strings.Contains(got, "email:enviada") {
 			t.Errorf("%s: %s", ev, got)
 		}
+	}
+}
+
+// Mes simulado 2 (M2S1-054): la factura sin CAE no le manda el PDF al
+// cliente (el número puede correrse con una baja); con el CAE, sí.
+func TestLaFacturaSinCaeNoSaleSola(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	cliente := e.uno(t, `insert into customers (nombre, email) values ('Sim Empresa', 'sim.empresa@prueba.test') returning id::text`)
+	factura := e.uno(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, customer_id, total) values ('factura_a', 15, 11, 'Sim Empresa', $1, 1000) returning id::text`, cliente)
+	antes := e.correos()
+	if err := e.s.Factura(ctx, factura); err != nil || e.correos() != antes {
+		t.Fatalf("sin CAE: %v, %d correos", err, e.correos()-antes)
+	}
+	e.uno(t, `update invoices set cae = '12345678901234', cae_vencimiento = now() + interval '10 days' where id = $1 returning 'ok'`, factura)
+	if err := e.s.Factura(ctx, factura); err != nil || e.correos() != antes+1 {
+		t.Fatalf("con CAE: %v, %d correos", err, e.correos()-antes)
 	}
 }

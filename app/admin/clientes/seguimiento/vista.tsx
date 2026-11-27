@@ -11,7 +11,7 @@ import {
 } from "@/components/admin/elegir-cliente";
 import type { GestionListada } from "@/lib/dal/admin/seguimiento";
 import { crearGestion, moverGestion } from "./actions";
-import { fechaCorta, plural } from "@/lib/formato";
+import { fechaCorta, formatearMonto, plural } from "@/lib/formato";
 import { CampoFecha } from "@/components/ui/campo-fecha";
 
 /** Las cuatro etapas, con el color de estado que les corresponde. */
@@ -38,21 +38,88 @@ const ETAPAS = [
   },
 ];
 
+export interface Deudor {
+  id: string;
+  nombre: string;
+  saldo: number;
+  vencido: number;
+  dias: number | null;
+  razonSocial: string | null;
+  cuit: string | null;
+  seguido: boolean;
+}
+
 export function TableroDeSeguimiento({
   gestiones,
   nueva,
+  deudores = [],
 }: {
   gestiones: GestionListada[];
   /** Llegando desde lo que se debe: el cliente y el asunto ya puestos. */
   nueva?: { cliente: ClienteElegido; asunto: string };
+  /** Los que deben, del de más prioridad al de menos. */
+  deudores?: Deudor[];
 }) {
+  const atraso = new Map(deudores.map((d) => [d.id, d]));
+  // A quién llamar primero: los que deben y nadie sigue.
+  const sinSeguir = deudores.filter((d) => !d.seguido);
   return (
     <>
       <NuevaGestion cliente={nueva?.cliente} asunto={nueva?.asunto} abierto={Boolean(nueva)} />
 
+      {sinSeguir.length > 0 && (
+        <section>
+          <h2 className="mb-2.5 text-base font-semibold">
+            Deben y nadie los sigue <span className="tabular font-normal text-muted-foreground">{sinSeguir.length}</span>
+          </h2>
+          <ul className="tarjeta divide-y divide-linea-suave overflow-hidden">
+            {sinSeguir.slice(0, 8).map((d) => (
+              <li key={d.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
+                <span className="min-w-0 flex-1 basis-48">
+                  <Link href={`/admin/clientes/${d.id}`} className="block truncate text-base font-medium hover:text-brand-orange">
+                    {d.nombre}
+                  </Link>
+                  <Deuda saldo={d.saldo} vencido={d.vencido} dias={d.dias} />
+                </span>
+                <Link
+                  href={`/admin/clientes/seguimiento?cliente=${d.id}`}
+                  className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-hundida px-3 text-base font-medium hover:bg-muted"
+                >
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  Seguir
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <Tablero>
         {ETAPAS.map((etapa) => {
           const suyas = gestiones.filter((g) => g.etapa === etapa.valor);
+          // Lo cerrado, plegado: las últimas tres en un renglón, sin botón
+          // (mes simulado 2: crecía con cada gestión cerrada).
+          if (etapa.valor === "cerrado") {
+            return (
+              <ColumnaTablero key={etapa.valor} titulo={etapa.titulo} cantidad={suyas.length} estado={etapa.estado}>
+                {suyas.length > 0 && (
+                  <ul className="tarjeta-hundida divide-y divide-linea-suave rounded-xl text-sm">
+                    {suyas.slice(0, 3).map((g) => (
+                      <li key={g.id} className="truncate px-3 py-2">
+                        <Link href={`/admin/clientes/${g.customerId}`} className="hover:text-foreground">
+                          <span className="font-medium">{g.cliente}</span>
+                          <span className="text-muted-foreground"> · {g.asunto}</span>
+                        </Link>
+                      </li>
+                    ))}
+                    {suyas.length > 3 && (
+                      <li className="px-3 py-2 text-muted-foreground">{plural(suyas.length - 3, "más", "más")}</li>
+                    )}
+                  </ul>
+                )}
+              </ColumnaTablero>
+            );
+          }
 
           return (
             <ColumnaTablero
@@ -67,7 +134,7 @@ export function TableroDeSeguimiento({
               }
             >
               {suyas.map((gestion) => (
-                <Tarjeta key={gestion.id} gestion={gestion} />
+                <Tarjeta key={gestion.id} gestion={gestion} deuda={atraso.get(gestion.customerId) ?? null} />
               ))}
             </ColumnaTablero>
           );
@@ -77,17 +144,40 @@ export function TableroDeSeguimiento({
   );
 }
 
-function Tarjeta({ gestion }: { gestion: GestionListada }) {
+/** Lo que debe y cuánto hace: el saldo, lo vencido y los días. */
+function Deuda({ saldo, vencido, dias }: { saldo: number; vencido: number; dias: number | null }) {
+  if (!(saldo > 0.004)) return null;
+  return (
+    <span className="block text-sm">
+      <span className="tabular font-semibold text-saldo-debe">{formatearMonto(saldo)}</span>
+      {vencido > 0.004 && dias != null && (
+        <span className="text-muted-foreground"> · {plural(dias, "día", "días")} de atraso</span>
+      )}
+    </span>
+  );
+}
+
+function Tarjeta({ gestion, deuda }: { gestion: GestionListada; deuda: Deudor | null }) {
   const [abierta, setAbierta] = useState(false);
   const [nota, setNota] = useState("");
   const [cuando, setCuando] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const [trabajando, empezar] = useTransition();
+  // «Prometió» es para cuándo, y una vencida que se sigue moviendo necesita
+  // la fecha nueva: sin ella seguía «Vencía el 26/11» (mes simulado 2).
+  const faltaFecha = (etapa: GestionListada["etapa"]) =>
+    etapa !== "cerrado" && !cuando && (etapa === "promesa" || gestion.vencida);
 
   function mover(etapa: GestionListada["etapa"]) {
     empezar(async () => {
-      await moverGestion(gestion.id, etapa, nota || undefined, cuando || undefined);
+      const r = await moverGestion(gestion.id, etapa, nota || undefined, cuando || undefined);
+      if (r.error) {
+        setError(r.error);
+        return;
+      }
       setNota("");
       setCuando("");
+      setError(null);
       setAbierta(false);
     });
   }
@@ -104,6 +194,7 @@ function Tarjeta({ gestion }: { gestion: GestionListada }) {
       >
         {gestion.cliente}
       </Link>
+      <Deuda saldo={deuda?.saldo ?? gestion.saldo ?? 0} vencido={deuda?.vencido ?? 0} dias={deuda?.dias ?? null} />
 
       {gestion.proximaAccionAt && (
         <p
@@ -135,16 +226,21 @@ function Tarjeta({ gestion }: { gestion: GestionListada }) {
             Volver el
             <CampoFecha
               value={cuando}
-              onChange={(e) => setCuando(e.target.value)}
+              onChange={(e) => {
+                setCuando(e.target.value);
+                setError(null);
+              }}
+              aria-invalid={Boolean(error) || undefined}
               className="tabular h-10 flex-1 rounded-lg border border-linea bg-background px-2 text-base"
             />
           </label>
+          {error && <p role="alert" className="estado-problema text-sm font-medium">{error}</p>}
           <div className="flex flex-wrap gap-1.5">
             {ETAPAS.filter((e) => e.valor !== gestion.etapa).map((e) => (
               <button
                 key={e.valor}
                 type="button"
-                disabled={trabajando}
+                disabled={trabajando || faltaFecha(e.valor)}
                 onClick={() => mover(e.valor)}
                 className="h-9 rounded-lg border border-linea px-2.5 text-sm font-medium transition-colors hover:bg-hundida disabled:opacity-50"
               >

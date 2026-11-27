@@ -349,7 +349,7 @@ func (s *Servicio) EmitirManual(ctx context.Context, ses *auth.Sesion, c map[str
 		// cancela la compra de arriba; el efectivo entra a la caja abierta.
 		if comoPaga == "contado" {
 			r, err := cobrarConRecibo(ctx, tx, ses, id, customerID, nombre, sucursal, et,
-				[]cobros.Parte{{Medio: medio, Importe: jsmath.Numero(total)}})
+				[]cobros.Parte{{Medio: medio, Importe: jsmath.Numero(total)}}, false)
 			if err != nil {
 				return err
 			}

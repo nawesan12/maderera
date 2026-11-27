@@ -903,7 +903,11 @@ func (a *API) DevolverDesdeElPedido(ctx context.Context, r facturacionapi.Devolv
 		return nil, err
 	}
 	b := r.Body
-	d, err := a.s.DevolverDesdeElPedido(ctx, ses.UserID, r.Id.String(), b.Clave, b.Motivo, renglonesDelPedido(b.Renglones), b.Importe)
+	plata := ""
+	if b.Destino != nil {
+		plata = string(*b.Destino)
+	}
+	d, err := a.s.DevolverDesdeElPedidoPor(ctx, ses.UserID, r.Id.String(), b.Clave, b.Motivo, renglonesDelPedido(b.Renglones), b.Importe, plata)
 	if err != nil {
 		return nil, comoProblema(err)
 	}

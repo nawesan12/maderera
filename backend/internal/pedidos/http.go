@@ -162,6 +162,7 @@ func (a *API) AvanzarPedido(ctx context.Context, r ventasapi.AvanzarPedidoReques
 	var quien entregas.Receptor
 	if r.Body != nil {
 		quien = entregas.NuevoReceptor(r.Body.ReceptorNombre, r.Body.ReceptorDocumento)
+		quien.SinCobrar = entregas.SalidaSinCobrar{PIN: texto(r.Body.Pin), Ficha: texto(r.Body.Ficha)}
 	}
 	v, err := a.s.Avanzar(ctx, ses, r.Id.String(), desde, quien)
 	if err != nil {
@@ -237,7 +238,27 @@ func (a *API) DevolverPedido(ctx context.Context, r ventasapi.DevolverPedidoRequ
 	for _, x := range r.Body.Renglones {
 		renglones = append(renglones, RenglonDevuelto{OrderItemID: x.OrderItemId, Cantidad: x.Cantidad})
 	}
-	v, err := a.s.DevolverSinFactura(ctx, ses, r.Id.String(), renglones, r.Body.Motivo, r.Body.Clave)
+	plata := ""
+	if r.Body.Destino != nil {
+		plata = string(*r.Body.Destino)
+	}
+	v, err := a.s.DevolverSinFacturaPor(ctx, ses, r.Id.String(), renglones, r.Body.Motivo, r.Body.Clave, plata)
+	if err != nil {
+		return nil, err
+	}
+	return ok(v), nil
+}
+
+func (o respuesta) VisitDatosDeDevolucionDelPedidoResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+
+// DatosDeDevolucionDelPedido: el diálogo de la devolución sin factura.
+func (a *API) DatosDeDevolucionDelPedido(ctx context.Context, r ventasapi.DatosDeDevolucionDelPedidoRequestObject) (ventasapi.DatosDeDevolucionDelPedidoResponseObject, error) {
+	if _, err := auth.Exigir(ctx, roles.ManejanPlata...); err != nil {
+		return nil, err
+	}
+	v, err := a.s.DatosDeDevolucion(ctx, r.Id.String())
 	if err != nil {
 		return nil, err
 	}
@@ -251,9 +272,22 @@ func (a *API) CorregirPedido(ctx context.Context, r ventasapi.CorregirPedidoRequ
 	if err != nil {
 		return nil, err
 	}
-	c := Correccion{Motivo: r.Body.Motivo, CostoEnvio: r.Body.CostoEnvio, PIN: texto(r.Body.Pin), Ficha: texto(r.Body.Ficha)}
+	c := Correccion{Motivo: r.Body.Motivo, CostoEnvio: r.Body.CostoEnvio, PIN: texto(r.Body.Pin), Ficha: texto(r.Body.Ficha),
+		Direccion: texto(r.Body.Direccion), Zona: texto(r.Body.Zona)}
+	if r.Body.Entrega != nil {
+		c.Entrega = string(*r.Body.Entrega)
+	}
+	if r.Body.SinCargo != nil {
+		c.SinCargo = *r.Body.SinCargo
+	}
 	for _, x := range r.Body.Renglones {
 		c.Renglones = append(c.Renglones, RenglonCorregido{OrderItemID: x.OrderItemId, Cantidad: x.Cantidad, PrecioUnitario: x.PrecioUnitario})
+	}
+	if r.Body.Nuevos != nil {
+		for _, x := range *r.Body.Nuevos {
+			c.Nuevos = append(c.Nuevos, RenglonNuevo{VariantID: x.VariantId, Descripcion: x.Descripcion, Unidad: texto(x.Unidad),
+				Cantidad: x.Cantidad, PrecioUnitario: x.PrecioUnitario})
+		}
 	}
 	v, err := a.s.Corregir(ctx, ses, r.Id.String(), c)
 	if err != nil {
@@ -368,7 +402,7 @@ func (a *API) ConvertirPresupuestoEnPedido(ctx context.Context, r ventasapi.Conv
 	}
 	var ent Entrega
 	if b := r.Body; b != nil {
-		ent.Envio = b.TipoEntrega != nil && *b.TipoEntrega == ventasapi.Envio
+		ent.Envio = b.TipoEntrega != nil && *b.TipoEntrega == ventasapi.ConvertirPresupuestoEnPedidoJSONBodyTipoEntregaEnvio
 		ent.Direccion = texto(b.Direccion)
 		ent.Zona = texto(b.Zona)
 		if b.CostoEnvio != nil {

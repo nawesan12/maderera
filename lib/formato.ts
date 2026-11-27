@@ -353,6 +353,7 @@ export function formatearUnidad(unidad: string | null): string {
 
 /** La unidad en plural: «placas», «rollos», «pares»; lo abreviado no cambia. */
 export function unidadEnPlural(unidad: string): string {
+  if (unidad === "media placa") return "medias placas";
   if (/[.²\s]/.test(unidad) || unidad.length <= 2 || /s$/i.test(unidad)) return unidad;
   return /[aeiouáéíóú]$/i.test(unidad) ? `${unidad}s` : `${unidad}es`;
 }
@@ -370,6 +371,10 @@ export function unidadDeVenta(unidad: string | null, descripcion: string | null 
   if ((unidad === "litro" || unidad === "kg") && /\d\s*(l|lts?|litros?|kg|kilos?)\b/i.test(descripcion ?? "")) {
     return "unidad";
   }
+  // La media placa se cuenta en medias: el remito firmado decía «1 placa» de
+  // una media (mes simulado 2). La descripción la nombra
+  // (ventas.DescripcionConPresentacion).
+  if (unidad === "placa" && /\bmedia placa\b/i.test(descripcion ?? "")) return "media_placa";
   return unidad;
 }
 

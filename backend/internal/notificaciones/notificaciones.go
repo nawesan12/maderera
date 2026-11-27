@@ -293,6 +293,12 @@ func (s *Servicio) Factura(ctx context.Context, id string) error {
 	if c.CustomerID == nil {
 		return nil
 	}
+	// Sin CAE el número todavía no es definitivo: una baja anterior lo corre
+	// y el cliente se quedaba con el PDF de un número que ya no existe (mes
+	// simulado 2). Sale con el CAE (AvisarFactura, al autorizar).
+	if c.Cae == nil || *c.Cae == "" {
+		return nil
+	}
 	cl, err := s.cliente(ctx, *c.CustomerID)
 	if err != nil || cl == nil || cl.email == nil || *cl.email == "" {
 		return err

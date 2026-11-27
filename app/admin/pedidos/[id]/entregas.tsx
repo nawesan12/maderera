@@ -1,6 +1,7 @@
 "use client";
 
-import { startTransition, useActionState, useEffect, useRef, useState } from "react";
+import { startTransition, useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -34,7 +35,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { DialogoCobro } from "@/components/cobros/dialogo-cobro";
 import type { MedioDeCobro } from "@/lib/cobros/partes";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 
 const inicial: EstadoEntrega = {};
 
@@ -116,7 +116,10 @@ export function Entregas({
   // hasta que firma quien recibe (decía «Todo entregado» con el pedido en
   // camino, mes simulado).
   const enLaCalle = envio && estado === "en-camino";
-  const [ultimo, ...anteriores] = remitos;
+  // El último vigente arriba y los anulados al fondo, plegados: la tarjeta
+  // destacada era un remito anulado y el firmado quedaba escondido.
+  const ordenados = [...vivos, ...remitos.filter((r) => r.estado === "anulada")];
+  const [ultimo, ...anteriores] = ordenados;
 
   // Un pedido cancelado sin remitos no tiene nada que mostrar acá.
   if (cancelado && remitos.length === 0) return null;
@@ -207,7 +210,6 @@ export function Entregas({
             whatsapp={whatsapp}
             aviso={avisos[ultimo.id] ?? null}
             destacado={recien === ultimo.numero || seOfreceLaFirma(ultimo)}
-            envio={envio}
           />
         </ul>
       )}
@@ -226,7 +228,6 @@ export function Entregas({
                 orderId={orderId}
                 whatsapp={whatsapp}
                 aviso={avisos[remito.id] ?? null}
-                envio={envio}
               />
             ))}
           </ul>
@@ -300,8 +301,16 @@ function FormularioDeRemito({
   alGenerar: (numero: string) => void;
 }) {
   const [estado, preparar, preparando] = useActionState(prepararRemito, inicial);
+  const router = useRouter();
+  // Arranca en lo que queda, o en lo que hay en el galpón si no alcanza
+  // (mes simulado 2: proponía 4 lacas con 3 en el estante, y salía igual).
   const [cantidades, setCantidades] = useState<Record<string, string>>(() =>
-    Object.fromEntries(conSaldo.map((p) => [p.orderItemId, String(p.pendiente)])),
+    Object.fromEntries(
+      conSaldo.map((p) => [
+        p.orderItemId,
+        String(p.enElGalpon !== undefined && p.enElGalpon < p.pendiente ? Math.max(Math.floor(p.enElGalpon * 1000) / 1000, 0) : p.pendiente),
+      ]),
+    ),
   );
   // Lo de los otros acopios arranca en cero: se suma lo que se lleva.
   const [deOtros, setDeOtros] = useState<Record<string, string>>({});
@@ -321,16 +330,32 @@ function FormularioDeRemito({
     if (estado.ok && estado.numero) {
       toast.success(estado.ok);
       alGenerar(estado.numero);
+      // En un retiro quien se lleva la mercadería está ahí: lo que sigue
+      // es la firma, en la misma pantalla (mes simulado 2: quedaba «Sin
+      // firmar» y la firma se olvidaba).
+      if (tipoEntrega !== "envio" && estado.linkFirma) {
+        router.push(`${estado.linkFirma}?volver=${encodeURIComponent(`/admin/pedidos/${orderId}`)}`);
+      }
     }
-  }, [estado, alGenerar]);
+  }, [estado, alGenerar, tipoEntrega, orderId, router]);
 
   const conDecimales = (p: RenglonPendiente, valor: string) =>
     Boolean(p.enteros) && llevaDecimales(valor) && valor !== String(p.pendiente);
   const malEscritos = conSaldo.filter((p) => conDecimales(p, cantidades[p.orderItemId] ?? ""));
+  // Más de lo que hay en el galpón no sale: Go lo frena igual.
+  const pasaElGalpon = (p: RenglonPendiente, valor: string) =>
+    p.enElGalpon !== undefined && Number(valor.replace(",", ".")) > Math.max(p.enElGalpon, 0) + 0.0005;
+  const sinStock = [
+    ...conSaldo.filter((p) => pasaElGalpon(p, cantidades[p.orderItemId] ?? "")),
+    ...otros.flatMap((o) => o.renglones.filter((p) => pasaElGalpon(p, deOtros[`otro-${o.orderId}-${p.orderItemId}`] ?? ""))),
+  ];
+  // El PIN de un admin para soltar lo que no se cobró, cuando Go lo pide.
+  const [pin, setPin] = useState<{ visto: EstadoEntrega; abierto: boolean }>({ visto: inicial, abierto: false });
+  if (estado.autorizacion && pin.visto !== estado) setPin({ visto: estado, abierto: true });
 
   function enviar(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (preparando || malEscritos.length > 0) return;
+    if (preparando || malEscritos.length > 0 || sinStock.length > 0) return;
     if (debe) {
       setPreguntando(true);
       return;
@@ -338,8 +363,9 @@ function FormularioDeRemito({
     generar();
   }
 
-  function generar() {
+  function generar(conPin?: string) {
     const datos = new FormData();
+    if (conPin) datos.set("pin", conPin);
     datos.set("orderId", orderId);
     datos.set("tipo", tipoEntrega);
     for (const [id, valor] of Object.entries(cantidades)) datos.set(`cantidad-${id}`, valor);
@@ -360,6 +386,7 @@ function FormularioDeRemito({
             valor={cantidades[p.orderItemId] ?? ""}
             alCambiar={(v) => setCantidades((c) => ({ ...c, [p.orderItemId]: v }))}
             mal={conDecimales(p, cantidades[p.orderItemId] ?? "")}
+            sinStock={pasaElGalpon(p, cantidades[p.orderItemId] ?? "")}
           />
         ))}
       </div>
@@ -382,6 +409,7 @@ function FormularioDeRemito({
                 placeholder="0"
                 alCambiar={(v) => setDeOtros((c) => ({ ...c, [clave]: v }))}
                 mal={conDecimales(p, deOtros[clave] ?? "")}
+                sinStock={pasaElGalpon(p, deOtros[clave] ?? "")}
               />
             );
           })}
@@ -426,7 +454,7 @@ function FormularioDeRemito({
         )}
       </div>
 
-      {estado.error && (
+      {estado.error && !estado.autorizacion && (
         <p role="alert" className="flex items-start gap-2 text-base text-destructive">
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
           {estado.error}
@@ -436,11 +464,11 @@ function FormularioDeRemito({
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="submit"
-          disabled={preparando || malEscritos.length > 0}
+          disabled={preparando || malEscritos.length > 0 || sinStock.length > 0}
           className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-60"
         >
           {preparando && <Loader2 className="h-4 w-4 animate-spin" />}
-          Generar remito
+          {sinStock.length > 0 ? "No alcanza el galpón" : "Generar remito"}
         </button>
         <button
           type="button"
@@ -505,6 +533,22 @@ function FormularioDeRemito({
         </Dialog>
       )}
 
+      {estado.autorizacion && (
+        <Dialog open={pin.abierto} onOpenChange={(v) => !preparando && setPin((x) => ({ ...x, abierto: v }))}>
+          <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
+            <DialogHeader>
+              <DialogTitle>{sinCobrar ? `${sinCobrar.numero} sin cobrar` : "Sin cobrar"}</DialogTitle>
+            </DialogHeader>
+            <CampoPin
+              autorizacion={estado.autorizacion}
+              enviando={preparando}
+              onEnviar={(clave) => generar(clave)}
+              onCancelar={() => setPin((x) => ({ ...x, abierto: false }))}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
+
       {debe && sinCobrar && cobro && (
         <DialogoCobro
           sinBoton
@@ -515,7 +559,7 @@ function FormularioDeRemito({
           aCobrar={sinCobrar.monto}
           medio={cobro.medio}
           pedido={{ id: orderId, numero: cobro.numero }}
-          alCobrar={generar}
+          alCobrar={() => generar()}
         />
       )}
     </>
@@ -529,6 +573,7 @@ function RenglonACantidad({
   valor,
   alCambiar,
   mal,
+  sinStock = false,
   placeholder,
 }: {
   id: string;
@@ -537,6 +582,8 @@ function RenglonACantidad({
   alCambiar: (v: string) => void;
   /** Lo que no se fracciona va entero (T4, hallazgo 21). */
   mal: boolean;
+  /** Pasa lo que hay en el galpón. */
+  sinStock?: boolean;
   placeholder?: string;
 }) {
   return (
@@ -544,13 +591,19 @@ function RenglonACantidad({
       <label htmlFor={id} className="min-w-0 flex-1 basis-48 text-base">
         {p.descripcion}
         <span className="block text-muted-foreground">
-          Quedan {cantidadConUnidad(p.pendiente, p.unidad, p.descripcion)}
+          {p.pendiente === 1 ? "Queda" : "Quedan"} {cantidadConUnidad(p.pendiente, p.unidad, p.descripcion)}
           {/* Lo que hay en el estante, para no prometer lo que no está (mes
               simulado, H218). */}
+          {/* De una media placa, el galpón en placas, como en Stock: «66 en
+              el galpón» eran 33 placas (mes simulado 2). */}
           {p.enElGalpon !== undefined && (
             <span className={`tabular ${p.enElGalpon < p.pendiente ? "font-medium text-destructive" : ""}`}>
               {" "}
-              · {formatearCantidad(Math.max(p.enElGalpon, 0))} en el galpón
+              ·{" "}
+              {p.galponEnStock !== undefined
+                ? cantidadConUnidad(Math.max(p.galponEnStock, 0), "placa")
+                : formatearCantidad(Math.max(p.enElGalpon, 0))}{" "}
+              en el galpón
             </span>
           )}
         </span>
@@ -564,7 +617,7 @@ function RenglonACantidad({
         value={valor}
         placeholder={placeholder}
         onChange={(e) => alCambiar(e.target.value)}
-        aria-invalid={mal || undefined}
+        aria-invalid={mal || sinStock || undefined}
         aria-describedby={mal ? `${id}-entero` : undefined}
         className="tabular h-11 w-28 text-right text-base"
       />
@@ -583,7 +636,6 @@ function FilaRemito({
   whatsapp,
   aviso,
   destacado = false,
-  envio,
 }: {
   remito: RemitoListado;
   orderId: string;
@@ -591,7 +643,6 @@ function FilaRemito({
   aviso: AvisoManualListo | null;
   /** El último, sin firmar o recién hecho: «Firmar» es lo principal. */
   destacado?: boolean;
-  envio: boolean;
 }) {
   const anulado = remito.estado === "anulada";
   const firmable = seOfreceLaFirma(remito);
@@ -608,7 +659,9 @@ function FilaRemito({
               ? `Reposición sin cargo · ${remito.reposicion}`
               : remito.parcial
                 ? "Entrega parcial"
-                : "Entrega total"}
+                : remito.final
+                  ? "Completa el pedido"
+                  : "Entrega total"}
           </span>
         </span>
         {anulado ? (
@@ -658,7 +711,7 @@ function FilaRemito({
           PDF
         </a>
         {whatsapp && !anulado && <MandarPorWhatsapp tipo="remito" id={remito.id} compacto />}
-        {!anulado && <AnularRemito remito={remito} orderId={orderId} envio={envio} />}
+        {!anulado && <AnularRemito remito={remito} orderId={orderId} />}
       </div>
 
       {aviso && <AvisarPorWhatsapp aviso={aviso} compacto />}
@@ -672,66 +725,69 @@ function FilaRemito({
  * devuelve la mercadería al stock (mes simulado: el depósito lo anulaba con
  * un toque).
  */
-function AnularRemito({ remito, orderId, envio }: { remito: RemitoListado; orderId: string; envio: boolean }) {
-  const [estado, anular, anulando] = useActionState(anularRemito, inicial);
+function AnularRemito({ remito, orderId }: { remito: RemitoListado; orderId: string }) {
+  const router = useRouter();
+  const [estado, setEstado] = useState<EstadoEntrega>(inicial);
+  const [anulando, startAnular] = useTransition();
   const [abierto, setAbierto] = useState(false);
   const [motivo, setMotivo] = useState("");
   const firmado = Boolean(remito.firmadoAt);
-
-  // Anulado, el diálogo se cierra (ajuste al renderizar) y avisa.
-  const [visto, setVisto] = useState(estado);
-  if (estado !== visto) {
-    setVisto(estado);
-    if (estado.ok) setAbierto(false);
-  }
-  useEffect(() => {
-    if (estado.ok) toast.success(estado.ok);
-  }, [estado]);
 
   function mandar(pin?: string) {
     const datos = new FormData();
     datos.set("deliveryId", remito.id);
     datos.set("orderId", orderId);
-    if (motivo.trim()) datos.set("motivo", motivo.trim());
+    datos.set("motivo", motivo.trim());
     if (pin) datos.set("pin", pin);
-    startTransition(() => anular(datos));
+    startAnular(async () => {
+      const r = await anularRemito(inicial, datos);
+      setEstado(r);
+      if (r.ok || !r.error) {
+        // El aviso sale acá: con el efecto del estado, el remito se movía
+        // al fondo al refrescar y el aviso salía vacío (mes simulado 2).
+        toast.success(r.ok || `Remito ${remito.numero} anulado.`);
+        setAbierto(false);
+        setMotivo("");
+        router.refresh();
+      }
+    });
   }
 
   return (
     <>
       <button
         type="button"
-        onClick={() => setAbierto(true)}
+        onClick={() => {
+          setEstado(inicial);
+          setAbierto(true);
+        }}
         className="ml-auto inline-flex h-10 items-center rounded-lg px-3 text-base font-medium text-muted-foreground hover:bg-hundida hover:text-foreground"
       >
         Anular
       </button>
       <Dialog open={abierto} onOpenChange={(v) => !anulando && setAbierto(v)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>
               Anular el remito <span className="tabular whitespace-nowrap">{remito.numero}</span>
             </DialogTitle>
           </DialogHeader>
-          <p className="text-base text-muted-foreground">
-            {envio ? "La mercadería vuelve al depósito." : "La mercadería vuelve al depósito y el pedido la vuelve a esperar."}
-          </p>
-          {firmado && (
-            <div className="space-y-1.5">
-              <label htmlFor={`motivo-${remito.id}`} className="text-base font-medium">
-                Por qué
-              </label>
-              <Textarea
-                id={`motivo-${remito.id}`}
-                value={motivo}
-                onChange={(e) => setMotivo(e.target.value)}
-                maxLength={300}
-                rows={2}
-                autoFocus
-                aria-invalid={estado.campo === "motivo" || undefined}
-              />
-            </div>
-          )}
+          {/* El motivo siempre: queda en el historial del pedido. */}
+          <div className="space-y-1.5">
+            <label htmlFor={`motivo-${remito.id}`} className="text-base font-medium">
+              Por qué
+            </label>
+            <Input
+              id={`motivo-${remito.id}`}
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              maxLength={300}
+              autoFocus
+              autoComplete="off"
+              className="h-11 text-base"
+              aria-invalid={estado.campo === "motivo" || undefined}
+            />
+          </div>
           {estado.error && !estado.autorizacion && (
             <p role="alert" className="text-base text-destructive">
               {estado.error}
@@ -745,17 +801,10 @@ function AnularRemito({ remito, orderId, envio }: { remito: RemitoListado; order
               onCancelar={() => setAbierto(false)}
             />
           ) : (
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex justify-end pt-2">
               <button
                 type="button"
-                onClick={() => setAbierto(false)}
-                className="h-11 rounded-lg px-4 text-base font-medium hover:bg-hundida"
-              >
-                Mejor no
-              </button>
-              <button
-                type="button"
-                disabled={anulando || (firmado && !motivo.trim())}
+                disabled={anulando || motivo.trim().length < 3 || (firmado && !motivo.trim())}
                 onClick={() => mandar()}
                 className="inline-flex h-11 items-center gap-2 rounded-lg bg-destructive px-4 text-base font-medium text-white disabled:opacity-50"
               >

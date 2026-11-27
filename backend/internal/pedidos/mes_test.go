@@ -17,7 +17,7 @@ func TestNoSeMarcaListoConElCorteEnCola(t *testing.T) {
 	e := armar(t)
 	dep, ses := e.staff(t, "deposito@prueba.test", sqlc.StaffRoleDeposito)
 	pedido := e.pedido(t, ses, 1)
-	e.exec(t, `update orders set estado = 'preparando' where id = $1`, pedido)
+	e.exec(t, `update orders set estado = 'preparando', estado_pago = 'pagado' where id = $1`, pedido)
 	corte := e.id(t, `insert into cutting_orders (numero, order_id, contacto_nombre, material_descripcion, estado)
 		values ('CRT-3', $1, 'Marta', 'Melamina 18', 'en-cola') returning id`, pedido)
 	u := e.srv.URL + "/api/v1/admin/pedidos/" + pedido + "/avanzar"
@@ -44,7 +44,7 @@ func TestElEnvioSaleConRemitoAlDespachar(t *testing.T) {
 	e := armar(t)
 	dep, ses := e.staff(t, "deposito@prueba.test", sqlc.StaffRoleDeposito)
 	pedido := e.pedido(t, ses, 2)
-	e.exec(t, `update orders set tipo_entrega = 'envio', estado = 'preparando' where id = $1`, pedido)
+	e.exec(t, `update orders set tipo_entrega = 'envio', estado = 'preparando', estado_pago = 'pagado' where id = $1`, pedido)
 	u := e.srv.URL + "/api/v1/admin/pedidos/" + pedido + "/avanzar"
 
 	if c, b := pedir(t, dep, "POST", u+"?desde=preparando", nil); c != 200 || !strings.Contains(b, "listo para despachar") {

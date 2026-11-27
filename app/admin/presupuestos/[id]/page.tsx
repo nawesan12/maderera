@@ -16,6 +16,9 @@ import { obtenerPresupuesto } from "@/lib/dal/admin/ventas";
 import { obtenerCliente } from "@/lib/dal/admin/clientes";
 import { AccionesPresupuesto, EnviarAlCliente } from "../acciones";
 import { zonasParaPedido } from "../zonas";
+import { escalasDePago } from "@/lib/dal/descuentos-pago";
+import { ajustesDelSitio } from "@/lib/dal/contenido";
+import { valorDeRegla } from "@/lib/reglas";
 
 /**
  * La ficha de un presupuesto.
@@ -37,11 +40,13 @@ export default async function FichaPresupuestoPage({
   const { id } = await params;
   const { pasar } = await searchParams;
   if (!esUuid(id)) notFound();
-  const [usuario, p, aviso, zonas] = await Promise.all([
+  const [usuario, p, aviso, zonas, escalas, ajustes] = await Promise.all([
     requireStaff(),
     obtenerPresupuesto(id),
     avisoManual("presupuesto_listo", { tipo: "quote", id }),
     zonasParaPedido(),
+    escalasDePago(),
+    ajustesDelSitio(),
   ]);
 
   if (!p) notFound();
@@ -56,6 +61,10 @@ export default async function FichaPresupuestoPage({
   // Un presupuesto rechazado o ya hecho pedido no se va a vender a ese
   // precio: el aviso del costo no tiene a quién servirle (mes simulado).
   const bajoCosto = abierto && !p.pedidoId ? p.items.filter((i) => i.bajoCosto).length : 0;
+  // Sobre qué va el descuento por forma de pago (lo mismo que Go): lo del
+  // catálogo, y con la regla, también lo cargado a mano.
+  const alFlete = valorDeRegla(ajustes, "descuento_al_flete") === "si";
+  const baseEscala = p.items.filter((i) => alFlete || i.variantId).reduce((t, i) => t + Number(i.subtotal), 0);
   const empresa = p.empresa && p.empresa !== p.cliente ? p.empresa : null;
 
   return (
@@ -119,6 +128,8 @@ export default async function FichaPresupuestoPage({
           abrirPasar={pasar === "1"}
           credito={credito}
           bajoCosto={bajoCosto}
+          escalas={escalas}
+          baseEscala={baseEscala}
         />
       </section>
 

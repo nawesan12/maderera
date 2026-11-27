@@ -128,7 +128,7 @@ func (a *API) DevolucionSinFacturaDeMostrador(ctx context.Context, r mostradorap
 		// La de siempre: a la cuenta corriente, o baja lo que falta cobrar.
 		porDonde = ""
 	}
-	d, err := pedidos.Nuevo(a.s.pool, a.s.log).DevolverSinFacturaPor(ctx, ses, r.Id, renglones, b.Motivo, b.Clave, porDonde)
+	d, err := pedidos.Nuevo(a.s.pool, a.s.log).DevolverSinFacturaDesde(ctx, ses, r.Id, renglones, b.Motivo, b.Clave, porDonde, true)
 	if err != nil {
 		return nil, err
 	}

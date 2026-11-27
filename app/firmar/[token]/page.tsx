@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { existe } from "@/lib/dal/existencia";
-import { Check, PackageCheck } from "lucide-react";
+import { Ban, Check, PackageCheck } from "lucide-react";
 import { remitoPorToken } from "@/lib/dal/admin/entregas";
 import { cantidadConUnidad } from "@/lib/formato";
 import { fechaHoraDeFirma } from "@/lib/entregas/fecha";
@@ -71,6 +71,9 @@ async function Firma({ token }: { token: string }) {
   // El link sigue sirviendo después de firmar, pero ya no para firmar: muestra
   // la constancia. Es lo que el cliente quiere ver cuando lo vuelve a abrir.
   const firmado = remito.estado !== "preparada";
+  // Anulado no es una constancia: no se puede tomar como prueba de entrega
+  // (mes simulado 2: decía «Constancia de entrega» con un tilde verde).
+  const anulado = remito.estado === "anulada";
   // En un envío firma quien recibe en la obra, no quien retira (mes
   // simulado: decía «Confirmá lo que retirás» al que recibía el camión).
   const envio = remito.tipo === "envio";
@@ -79,6 +82,16 @@ async function Firma({ token }: { token: string }) {
     { numero: remito.numero, pedidoNumero: remito.pedidoNumero, lineas: remito.lineas },
     ...remito.visita,
   ];
+  const titulo = anulado
+    ? grupos.length > 1
+      ? "Remitos anulados"
+      : "Remito anulado"
+    : firmado
+      ? "Constancia de entrega"
+      : envio
+        ? "Confirmá lo que recibís"
+        : "Confirmá lo que retirás";
+  const queSeLleva = firmado ? (envio ? "Qué se entregó" : "Qué se retiró") : envio ? "Qué recibís" : "Qué te llevás";
 
   // Los colores del tema, no blanco fijo: con el modo oscuro del sistema la
   // tarjeta quedaba blanca con el texto casi blanco y no se leía qué se
@@ -88,54 +101,72 @@ async function Firma({ token }: { token: string }) {
     <div className="min-h-screen bg-background px-4 py-8 text-foreground">
       <div className="mx-auto max-w-lg space-y-5">
         <header className="text-center">
-          <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-brand-orange/10">
-            <PackageCheck className="h-6 w-6 text-brand-orange" />
+          <span
+            className={`mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full ${anulado ? "bg-hundida" : "bg-brand-orange/10"}`}
+          >
+            {anulado ? (
+              <Ban className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
+            ) : (
+              <PackageCheck className="h-6 w-6 text-brand-orange" aria-hidden="true" />
+            )}
           </span>
-          <h1 className="text-2xl font-bold tracking-tight">
-            {firmado ? "Constancia de entrega" : envio ? "Confirmá lo que recibís" : "Confirmá lo que retirás"}
-          </h1>
+          <h1 className="text-2xl font-bold tracking-tight">{titulo}</h1>
+          {/* Con varios remitos, los nombra a todos (decía solo el primero). */}
           <p className="mt-1 text-muted-foreground">
-            Remito <span className="tabular">{remito.numero}</span> · pedido{" "}
-            <span className="tabular">{remito.pedidoNumero}</span>
+            {grupos.length > 1 ? (
+              <>
+                {grupos.length} remitos ·{" "}
+                <span className="tabular">{grupos.map((g) => g.numero).join(", ")}</span>
+              </>
+            ) : (
+              <>
+                Remito <span className="tabular">{remito.numero}</span> · pedido{" "}
+                <span className="tabular">{remito.pedidoNumero}</span>
+              </>
+            )}
           </p>
         </header>
 
-        {grupos.map((g, n) => (
-          <section key={g.numero} className="tarjeta overflow-hidden">
-            <h2 className="flex flex-wrap items-baseline justify-between gap-x-3 border-b px-5 py-3 font-medium">
-              {firmado ? (envio ? "Qué se entregó" : "Qué se retiró") : envio ? "Qué recibís" : "Qué te llevás"}
+        {/* Un solo título y, adentro, un grupo por remito con el mismo
+            encabezado (se repetía «Qué te llevás» en cada tarjeta y la
+            primera no decía su remito). Anulado, sin «qué se retiró» y con
+            las cantidades tachadas. */}
+        <section className={`tarjeta overflow-hidden ${anulado ? "opacity-80" : ""}`}>
+          {!anulado && <h2 className="border-b px-5 py-3 font-medium">{queSeLleva}</h2>}
+          {grupos.map((g) => (
+            <div key={g.numero} className="border-b last:border-0">
               {grupos.length > 1 && (
-                <span className="tabular text-sm font-normal text-muted-foreground">
-                  {n === 0 ? "" : `Remito ${g.numero} · `}pedido {g.pedidoNumero}
-                </span>
+                <p className="bg-hundida/60 px-5 py-2 text-sm text-muted-foreground">
+                  <span className="tabular">{g.numero}</span> · pedido <span className="tabular">{g.pedidoNumero}</span>
+                </p>
               )}
-            </h2>
-            <ul className="divide-y">
-              {g.lineas.map((linea, i) => (
-                <li key={i} className="px-5 py-3">
-                  <span className="flex justify-between gap-4">
-                    <span className="min-w-0">{linea.descripcion}</span>
-                    <span className="tabular shrink-0 font-semibold">{cantidadConUnidad(linea.cantidad, linea.unidad, linea.descripcion)}</span>
-                  </span>
-                  {/* Lo que sale cortado y según qué corte: si falta una
-                      pieza, la firma tiene que servir de constancia. */}
-                  {linea.corte && <span className="mt-0.5 block text-sm text-muted-foreground">{linea.corte}</span>}
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
+              <ul className="divide-y">
+                {g.lineas.map((linea, i) => (
+                  <li key={i} className="px-5 py-3">
+                    <span className="flex justify-between gap-4">
+                      <span className={`min-w-0 ${anulado ? "text-muted-foreground line-through" : ""}`}>{linea.descripcion}</span>
+                      <span className={`tabular shrink-0 font-semibold ${anulado ? "text-muted-foreground line-through" : ""}`}>
+                        {cantidadConUnidad(linea.cantidad, linea.unidad, linea.descripcion)}
+                      </span>
+                    </span>
+                    {/* Lo que sale cortado y según qué corte: si falta una
+                        pieza, la firma tiene que servir de constancia. */}
+                    {linea.corte && !anulado && <span className="mt-0.5 block text-sm text-muted-foreground">{linea.corte}</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </section>
 
-        {firmado ? (
+        {anulado ? (
+          <VolverAlPedido />
+        ) : firmado ? (
           <section className="tarjeta p-6 text-center">
             <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-brand-green">
               <Check className="h-6 w-6 text-white" strokeWidth={3} />
             </span>
-            <p className="text-lg font-semibold">
-              {remito.estado === "anulada"
-                ? "Este remito fue anulado"
-                : "Entrega confirmada"}
-            </p>
+            <p className="text-lg font-semibold">Entrega confirmada</p>
             {remito.estado !== "anulada" && (
               <p className="mt-1 text-muted-foreground">
                 Firmado

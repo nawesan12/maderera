@@ -12,6 +12,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { formatearMonto } from "@/components/admin/formato";
 import type { MedioDeCobro } from "@/lib/cobros/partes";
+import { CampoPin, type Autorizacion } from "@/components/autorizacion/campo-pin";
+
+type ResultadoDeAvance = { ok?: string; error?: string; autorizacion?: Autorizacion; firmaToken?: string; campo?: string };
 
 const SIGUIENTE: Record<string, string> = {
   pendiente: "Preparar",
@@ -34,6 +37,7 @@ export function AccionesPedido({
   enLaFicha = false,
   porLlevar = false,
   firmar = null,
+  sinAvance = false,
 }: {
   id: string;
   estado: string;
@@ -83,6 +87,11 @@ export function AccionesPedido({
   porLlevar?: boolean;
   /** La firma del remito de envío que está en la calle (la ficha la tiene). */
   firmar?: string | null;
+  /**
+   * En la ficha, cuando lo que sigue es el remito (que va arriba con su
+   * «Preparar remito»): el encabezado deja solo el cobro.
+   */
+  sinAvance?: boolean;
 }) {
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
@@ -93,6 +102,12 @@ export function AccionesPedido({
   // documento es obligatorio como en el remito a mano.
   const [receptorNombre, setReceptorNombre] = useState(pedido?.nombre ?? "");
   const [receptorDocumento, setReceptorDocumento] = useState("");
+  // El error del documento, recién después de intentar (mes simulado 2: se
+  // veía apenas se abría el diálogo, antes de tipear nada).
+  const [intento, setIntento] = useState(false);
+  const [errorDocumento, setErrorDocumento] = useState<string | null>(null);
+  // El PIN de un admin para soltar lo que no se cobró, cuando Go lo pide.
+  const [pidePin, setPidePin] = useState<Autorizacion | null>(null);
 
   // Un pedido de retiro no se despacha: el cliente lo busca.
   const etiqueta =
@@ -100,13 +115,33 @@ export function AccionesPedido({
       ? "Marcar entregado"
       : SIGUIENTE[estado];
 
-  function accion(fn: () => Promise<{ ok?: string; error?: string }>) {
+  const entregaUnRetiro = estado === "listo" && tipoEntrega === "retiro";
+  const despacha = etiqueta === "Despachar";
+
+  function accion(fn: () => Promise<ResultadoDeAvance>) {
     startTransition(async () => {
       const resultado = await fn();
+      if (resultado.autorizacion) {
+        setPidePin(resultado.autorizacion);
+        setConfirmando(true);
+        return;
+      }
+      if (resultado.campo === "receptorDocumento") {
+        setErrorDocumento(resultado.error ?? null);
+        setConfirmando(true);
+        return;
+      }
       if (resultado.error) toast.error(resultado.error);
       else {
         setConfirmando(false);
+        setPidePin(null);
         toast.success(resultado.ok ?? "Listo.");
+        // En un retiro el cliente está ahí: lo que sigue es la firma, en la
+        // misma pantalla (mes simulado 2: quedaba «Sin firmar» y se olvidaba).
+        if (entregaUnRetiro && resultado.firmaToken) {
+          router.push(`/firmar/${resultado.firmaToken}?volver=${encodeURIComponent(`/admin/pedidos/${id}`)}`);
+          return;
+        }
       }
       // También con error: si fue un 409 («ya estaba en la máquina»), la
       // pantalla tiene que mostrar el estado de verdad.
@@ -114,7 +149,6 @@ export function AccionesPedido({
     });
   }
 
-  const entregaUnRetiro = estado === "listo" && tipoEntrega === "retiro";
   const esperaCorte =
     cortesSinTerminar.length > 0 && ["Marcar listo", "Despachar", "Marcar entregado"].includes(etiqueta ?? "");
   // Un acopio que ya empezó a salir se atiende de a remitos, esté como esté
@@ -123,20 +157,28 @@ export function AccionesPedido({
   const preparaRemito = acopio && tipoEntrega === "retiro" && ["pendiente", "preparando", "listo"].includes(estado);
   // El envío en camino con algo por llevar: se firma el remito del camión.
   const esperaFirma = estado === "en-camino" && porLlevar;
-  const debe = etiqueta === "Marcar entregado" && sinCobrar != null && sinCobrar.monto > 0;
-  // «Marcar entregado» emite el remito y no tiene vuelta: siempre pregunta,
-  // también cuando no hay nada que cobrar ni documento que pedir.
-  const preguntar = debe || entregaUnRetiro || etiqueta === "Marcar entregado";
+  // Lo que falta cobrar se pregunta cuando la mercadería sale: al entregar
+  // un retiro y al despachar un envío (mes simulado 2: despachar no
+  // preguntaba nada). En camino ya salió.
+  const debe = (entregaUnRetiro || despacha) && sinCobrar != null && sinCobrar.monto > 0;
+  // El envío en camino con el remito sin firmar: firmarlo es lo principal y
+  // entregar sin firma queda al lado (el diálogo venía vacío). Sin remito
+  // pendiente, se confirma en el lugar.
+  const firmaDelCamion = estado === "en-camino" && !porLlevar && firmar ? firmar : null;
+  const preguntar = debe || entregaUnRetiro || firmaDelCamion != null;
   const numero = pedido?.numero ?? sinCobrar?.numero ?? cobro?.numero;
   const faltaDocumento = entregaUnRetiro && receptorDocumento.trim() === "";
 
-  function avanzar() {
-    return avanzarPedido(
-      id,
-      estado,
-      entregaUnRetiro ? { receptorNombre: receptorNombre.trim(), receptorDocumento: receptorDocumento.trim() } : undefined,
-    );
+  function avanzar(pin?: string) {
+    return avanzarPedido(id, estado, {
+      ...(entregaUnRetiro ? { receptorNombre: receptorNombre.trim(), receptorDocumento: receptorDocumento.trim() } : {}),
+      ...(pin ? { pin } : {}),
+    });
   }
+
+  const sinCobrarEtiqueta = despacha ? "Despachar sin cobrar" : "Entregar sin cobrar";
+  const cobrarEtiqueta = despacha ? "y despachar" : "y entregar";
+  const ancho = compacto ? "min-w-0 flex-1 basis-0" : "";
 
   return (
     <div className={`flex items-center gap-2 ${compacto ? "w-full" : ""}`}>
@@ -148,14 +190,14 @@ export function AccionesPedido({
           medio={cobro.medio}
           pedido={{ id, numero: cobro.numero }}
           etiqueta="Cobrar"
-          claseBoton={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
+          claseBoton={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted ${ancho}`}
         />
       )}
 
-      {preparaRemito ? (
+      {sinAvance ? null : preparaRemito ? (
         <Link
           href={enLaFicha ? "?remito=1#remito" : `/admin/pedidos/${id}?remito=1#remito`}
-          className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
+          className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium ${ancho}`}
         >
           <FileText className="h-5 w-5" />
           Preparar remito
@@ -164,7 +206,7 @@ export function AccionesPedido({
         firmar || !enLaFicha ? (
           <Link
             href={firmar ?? `/admin/pedidos/${id}#remito`}
-            className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
+            className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium ${ancho}`}
           >
             <PenLine className="h-5 w-5" aria-hidden="true" />
             Firmar
@@ -172,16 +214,22 @@ export function AccionesPedido({
         ) : null
       ) : esperaCorte ? (
         <span
-          className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-hundida px-3 text-base font-medium text-muted-foreground ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
+          className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-hundida px-3 text-base font-medium text-muted-foreground ${ancho}`}
         >
           <Scissors className="h-5 w-5 shrink-0" aria-hidden="true" />
           <span className="truncate">{cortesSinTerminar.join(", ")}</span>
         </span>
       ) : etiqueta && (
         <button
-          onClick={() => (preguntar ? setConfirmando(true) : accion(avanzar))}
+          onClick={() => {
+            if (!preguntar) return accion(() => avanzar());
+            setIntento(false);
+            setErrorDocumento(null);
+            setPidePin(null);
+            setConfirmando(true);
+          }}
           disabled={pendiente}
-          className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium transition-colors disabled:opacity-50 ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
+          className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium transition-colors disabled:opacity-50 ${ancho}`}
         >
           {pendiente ? (
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -208,112 +256,150 @@ export function AccionesPedido({
                 )}
               </DialogTitle>
             </DialogHeader>
-            {/* En camino, el remito ya salió con el camión. */}
-            {!debe && !entregaUnRetiro && estado !== "en-camino" && (
-              <p className="text-base text-muted-foreground">Sale el remito. No se puede deshacer.</p>
-            )}
-            {/* Un <form>: Enter hace lo principal (entregar, o cobrar y
-                entregar si se debe). */}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (pendiente || faltaDocumento) return;
-                if (debe && sinCobrar && cobro) {
+            {pidePin ? (
+              <CampoPin
+                autorizacion={pidePin}
+                enviando={pendiente}
+                onEnviar={(pin) => accion(() => avanzar(pin))}
+                onCancelar={() => {
+                  setPidePin(null);
                   setConfirmando(false);
-                  setCobrandoParaEntregar(true);
-                } else accion(avanzar);
-              }}
-              className="space-y-3"
-            >
-            {entregaUnRetiro && (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="grid gap-1.5 text-base font-medium">
-                  Nombre
-                  <Input
-                    name="receptorNombre"
-                    value={receptorNombre}
-                    onChange={(e) => setReceptorNombre(e.target.value)}
-                    maxLength={120}
-                    autoComplete="off"
-                    // Vacío, se empieza por el nombre; precargado con el del
-                    // contacto, lo que falta es el documento.
-                    autoFocus={!receptorNombre}
-                  />
-                </label>
-                <label className="grid gap-1.5 text-base font-medium">
-                  Documento
-                  {/* Texto y sin teclado numérico: un pasaporte o una cédula
-                      extranjera llevan letras. */}
-                  <Input
-                    name="receptorDocumento"
-                    value={receptorDocumento}
-                    onChange={(e) => setReceptorDocumento(e.target.value)}
-                    maxLength={30}
-                    required
-                    autoFocus={Boolean(receptorNombre)}
-                    autoComplete="off"
-                    aria-describedby="falta-documento"
-                  />
-                </label>
-                {faltaDocumento && (
-                  <p id="falta-documento" className="text-sm text-muted-foreground sm:col-span-2">
-                    Falta el documento de quien retira.
-                  </p>
-                )}
-              </div>
-            )}
-            <div className="flex flex-wrap justify-end gap-2 pt-2">
-              {/* Quien no cobra (el depósito) tiene dos caminos con peso: no
-                  soltar la mercadería, que es lo que queda a mano, o
-                  entregarla igual, que deja su nombre en el historial (mes
-                  simulado: era un solo botón de texto, sin jerarquía). */}
-              {debe && !cobro && (
+                }}
+              />
+            ) : firmaDelCamion ? (
+              <div className="flex flex-wrap justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  autoFocus={!entregaUnRetiro}
-                  onClick={() => setConfirmando(false)}
-                  className="inline-flex h-11 items-center rounded-lg px-4 text-base font-medium hover:bg-hundida"
-                >
-                  Mejor no
-                </button>
-              )}
-              {debe ? (
-                <button
-                  type={cobro ? "button" : "submit"}
-                  disabled={pendiente || faltaDocumento}
-                  onClick={cobro ? () => accion(avanzar) : undefined}
-                  className={`inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-50 ${
-                    cobro ? "hover:bg-hundida" : "estado-problema border"
-                  }`}
-                >
-                  {pendiente && !cobro && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Entregar sin cobrar
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  disabled={pendiente || faltaDocumento}
-                  className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-50"
+                  disabled={pendiente}
+                  onClick={() => accion(() => avanzar())}
+                  className="inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium hover:bg-hundida disabled:opacity-50"
                 >
                   {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Entregar
+                  Entregar sin firma
                 </button>
-              )}
-              {/* Cobrar ahí mismo, con recibo: antes había que cerrar, buscar
-                  «Cobrar» en la tarjeta y volver a entregar. Quien no cobra no
-                  ve el cobro. */}
-              {debe && sinCobrar && cobro && (
-                <button
-                  type="submit"
-                  autoFocus={!entregaUnRetiro}
-                  disabled={pendiente || faltaDocumento}
-                  className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-50"
+                <Link
+                  href={firmaDelCamion}
+                  autoFocus
+                  className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium"
                 >
-                  Cobrar <span className="tabular">{formatearMonto(sinCobrar.monto)}</span> y entregar
-                </button>
-              )}
-            </div>
-            </form>
+                  <PenLine className="h-5 w-5" aria-hidden="true" />
+                  Firmar el remito
+                </Link>
+              </div>
+            ) : (
+              /* Un <form>: Enter hace lo principal (entregar, o cobrar y
+                 entregar si se debe). */
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setIntento(true);
+                  if (pendiente || faltaDocumento) return;
+                  if (debe && sinCobrar && cobro) {
+                    setConfirmando(false);
+                    setCobrandoParaEntregar(true);
+                  } else accion(() => avanzar());
+                }}
+                className="space-y-3"
+                noValidate
+              >
+                {entregaUnRetiro && (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="grid gap-1.5 text-base font-medium">
+                      Nombre
+                      <Input
+                        name="receptorNombre"
+                        value={receptorNombre}
+                        onChange={(e) => setReceptorNombre(e.target.value)}
+                        maxLength={120}
+                        autoComplete="off"
+                        // Vacío, se empieza por el nombre; precargado con el
+                        // del contacto, lo que falta es el documento.
+                        autoFocus={!receptorNombre}
+                      />
+                    </label>
+                    <label className="grid gap-1.5 text-base font-medium">
+                      Documento
+                      {/* Texto y sin teclado numérico: un pasaporte o una
+                          cédula extranjera llevan letras. */}
+                      <Input
+                        name="receptorDocumento"
+                        value={receptorDocumento}
+                        onChange={(e) => {
+                          setReceptorDocumento(e.target.value);
+                          setErrorDocumento(null);
+                        }}
+                        maxLength={30}
+                        autoFocus={Boolean(receptorNombre)}
+                        autoComplete="off"
+                        aria-invalid={(intento && faltaDocumento) || Boolean(errorDocumento) || undefined}
+                        aria-describedby="falta-documento"
+                      />
+                    </label>
+                    {((intento && faltaDocumento) || errorDocumento) && (
+                      <p id="falta-documento" role="alert" className="estado-problema text-sm font-medium sm:col-span-2">
+                        {errorDocumento ?? "Falta el documento de quien retira."}
+                      </p>
+                    )}
+                  </div>
+                )}
+                <div className="flex flex-wrap justify-end gap-2 pt-2">
+                  {/* Quien no cobra (el depósito) tiene dos caminos con peso:
+                      no soltar la mercadería, que es lo que queda a mano, o
+                      soltarla con el PIN de un admin. */}
+                  {debe && !cobro && (
+                    <button
+                      type="button"
+                      autoFocus={!entregaUnRetiro}
+                      onClick={() => setConfirmando(false)}
+                      className="inline-flex h-11 items-center rounded-lg px-4 text-base font-medium hover:bg-hundida"
+                    >
+                      Mejor no
+                    </button>
+                  )}
+                  {debe ? (
+                    <button
+                      type={cobro ? "button" : "submit"}
+                      disabled={pendiente}
+                      onClick={
+                        cobro
+                          ? () => {
+                              setIntento(true);
+                              if (!faltaDocumento) accion(() => avanzar());
+                            }
+                          : undefined
+                      }
+                      className={`inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-50 ${
+                        cobro ? "hover:bg-hundida" : "estado-problema border"
+                      }`}
+                    >
+                      {pendiente && !cobro && <Loader2 className="h-4 w-4 animate-spin" />}
+                      {sinCobrarEtiqueta}
+                    </button>
+                  ) : (
+                    <button
+                      type="submit"
+                      disabled={pendiente}
+                      className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-50"
+                    >
+                      {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}
+                      Entregar y firmar
+                    </button>
+                  )}
+                  {/* Cobrar ahí mismo, con recibo. Quien no cobra no ve el
+                      cobro. */}
+                  {debe && sinCobrar && cobro && (
+                    <button
+                      type="submit"
+                      autoFocus={!entregaUnRetiro}
+                      disabled={pendiente}
+                      className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-50"
+                    >
+                      Cobrar <span className="tabular">{formatearMonto(sinCobrar.monto)}</span> {cobrarEtiqueta}
+                    </button>
+                  )}
+                </div>
+              </form>
+            )}
           </DialogContent>
         </Dialog>
       )}
@@ -328,7 +414,7 @@ export function AccionesPedido({
           aCobrar={sinCobrar.monto}
           medio={cobro.medio}
           pedido={{ id, numero: cobro.numero }}
-          alCobrar={() => accion(avanzar)}
+          alCobrar={() => accion(() => avanzar())}
         />
       )}
     </div>

@@ -919,3 +919,23 @@ func TestLaVentaCuentaAlEntregarseOFacturarse(t *testing.T) {
 		t.Fatalf("facturado en noviembre: octubre %v, noviembre %v", o, n)
 	}
 }
+
+// Mes 23: el desglose del cierre sumaba un centavo menos que el «Vendido
+// sin IVA» de arriba. 1210,03 con costo y 121,03 sin costo: sin IVA,
+// 1000,0248 y 100,0248. Arriba, 1100,05 − 100,02 = 1000,03; redondeando
+// solo lo costeado daba 1000,02.
+func TestElDesgloseDelCierreCierraAlCentavo(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	placa, tirante := e.catalogo(t)
+	e.pedido(t, "V-1", e.central, "entregado", "mostrador", time.Date(2026, 10, 5, 12, 0, 0, 0, Argentina), nil,
+		[4]any{placa, 1.0, 1210.03, 600.0}, [4]any{tirante, 1.0, 121.03, nil})
+	_, cuerpo, _ := pedir(t, adm, e.u+"cierre/resumen?periodo=2026-10")
+	var r ResumenDelMes
+	_ = json.Unmarshal([]byte(cuerpo), &r)
+	arriba := jsmath.Redondear2(r.Resultado.Actual.VentasNetas - r.Resultado.Actual.VentasSinCosto)
+	partes := jsmath.Redondear2(r.Vendido.Facturado.Total + r.Vendido.SinCae.Total + r.Vendido.Interno.Total + r.Vendido.SinFactura.Total)
+	if arriba != 1000.03 || r.Vendido.Total != arriba || partes != arriba {
+		t.Errorf("arriba %v, total %v, partes %v", arriba, r.Vendido.Total, partes)
+	}
+}

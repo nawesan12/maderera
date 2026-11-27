@@ -1918,14 +1918,15 @@ type VendidoDelMes struct {
 
 func (s *Servicio) vendidoDelMes(ctx context.Context, idesde, ihasta time.Time) (VendidoDelMes, error) {
 	var v VendidoDelMes
-	var total, facturado, sinCae, interno jsmath.Num
+	var total, sinCosto, facturado, sinCae, interno jsmath.Num
 	conDescuento := s.ajuste(ctx, "ganancia_descuento", "no") == "si"
 	// Sobre lo vendido con costo: lo vendido sin costo va aparte en el
 	// resultado, y así las partes suman la línea de arriba (mes simulado,
 	// M3S1-020).
 	const neto = "coalesce(margenes.neto_costeado, 0)"
 	err := s.lectura.QueryRow(ctx, `
-		SELECT `+ventasNetas(conDescuento, neto)+`,
+		SELECT `+ventasNetas(conDescuento, "coalesce(margenes.neto, 0)")+`,
+		  `+ventasNetas(conDescuento, "(coalesce(margenes.neto, 0) - "+neto+")")+`,
 		  `+ventasNetas(conDescuento, neto, "o.papel = 'facturado'")+`, coalesce(sum(o.operaciones) FILTER (WHERE o.papel = 'facturado'), 0)::int,
 		  `+ventasNetas(conDescuento, neto, "o.papel = 'sin-cae'")+`, coalesce(sum(o.operaciones) FILTER (WHERE o.papel = 'sin-cae'), 0)::int,
 		  `+ventasNetas(conDescuento, neto, "o.papel = 'interno'")+`, coalesce(sum(o.operaciones) FILTER (WHERE o.papel = 'interno'), 0)::int,
@@ -1937,7 +1938,7 @@ func (s *Servicio) vendidoDelMes(ctx context.Context, idesde, ihasta time.Time) 
 		             WHEN o.origen = 'mostrador' AND NOT EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id) THEN 'interno'
 		             ELSE 'sin-factura' END AS papel
 		      FROM `+hechosDeVenta+` o WHERE o.fecha >= $1 AND o.fecha < $2) o `+margenesDe("o.fecha >= $1 AND o.fecha < $2"),
-		idesde, ihasta).Scan(&total, &facturado, &v.Facturado.Cantidad, &sinCae, &v.SinCae.Cantidad, &interno, &v.Interno.Cantidad, &v.SinFactura.Cantidad)
+		idesde, ihasta).Scan(&total, &sinCosto, &facturado, &v.Facturado.Cantidad, &sinCae, &v.SinCae.Cantidad, &interno, &v.Interno.Cantidad, &v.SinFactura.Cantidad)
 	if err != nil {
 		return v, err
 	}
@@ -1947,7 +1948,11 @@ func (s *Servicio) vendidoDelMes(ctx context.Context, idesde, ihasta time.Time) 
 	}
 	v.Facturado.Cantidad += m.conCae.Cantidad
 	v.SinCae.Cantidad += m.sinCae.Cantidad
-	v.Total = jsmath.Redondear2(float64(float64(total.F()+m.conCae.Total) + m.sinCae.Total))
+	// El total con el mismo redondeo que el resultado (ResultadoEntre):
+	// todo lo vendido redondeado menos lo sin costo redondeado. Sumar solo lo
+	// costeado y redondear una vez daba un centavo distinto del «Vendido sin
+	// IVA» de arriba (mes 23).
+	v.Total = jsmath.Redondear2(jsmath.Redondear2(float64(float64(total.F()+m.conCae.Total)+m.sinCae.Total)) - jsmath.Redondear2(sinCosto.F()))
 	v.Facturado.Total, v.Interno.Total = jsmath.Redondear2(facturado.F()+m.conCae.Total), jsmath.Redondear2(interno.F())
 	v.SinCae.Total = jsmath.Redondear2(sinCae.F() + m.sinCae.Total)
 	v.SinFactura.Total = jsmath.Redondear2(float64(float64(v.Total-v.Facturado.Total)-v.SinCae.Total) - v.Interno.Total)

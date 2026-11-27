@@ -110,7 +110,9 @@ export function BuscadorGlobal() {
         // El retardo deja que el clic sobre un resultado llegue antes de que
         // el panel se cierre; sin él, el blur lo desmonta primero.
         onBlur={() => setTimeout(() => setCerrado(true), 150)}
-        placeholder="Buscar cliente, pedido, comprobante, producto…"
+        // Corto: a 375 px la promesa larga se cortaba en «Buscar cliente,
+        // ped», y al aserradero le prometía lo que no ve (M2S4-050).
+        placeholder="Buscar"
         aria-label="Buscar en el panel"
         className="h-10 w-full rounded-lg border border-linea bg-card pl-10 pr-14 text-[15px] outline-none transition-colors placeholder:text-texto-3 focus:border-accion/50"
       />

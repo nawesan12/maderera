@@ -147,7 +147,11 @@ function Fila({
   );
 
   return (
-    <li className={`px-5 py-3.5 ${anulado ? "opacity-70" : ""}`}>
+    <li
+      // El buscador del encabezado lleva a este renglón («REC-0005»).
+      id={m.recibo ? `recibo-${m.recibo.numero}` : undefined}
+      className={`scroll-mt-24 px-5 py-3.5 target:bg-hundida ${anulado ? "opacity-70" : ""}`}
+    >
       {/* Si la etiqueta y un importe de siete cifras no entran en un renglón,
           el importe baja, alineado a la derecha, en vez de montarse sobre la
           etiqueta (H212, medido a 375 px). */}

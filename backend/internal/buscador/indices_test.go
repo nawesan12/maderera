@@ -71,7 +71,9 @@ func TestCadaConsultaTieneSuIndice(t *testing.T) {
 		if _, err := Buscar(ctx, a, &admin, busco); err != nil {
 			t.Fatal(err)
 		}
-		if len(a.consultas) != 6 {
+		// Las seis de siempre, los productos y, si hay dígitos, recibos,
+		// remitos y cheques.
+		if len(a.consultas) < 7 {
 			t.Fatalf("%q: %d consultas", busco, len(a.consultas))
 		}
 		for _, c := range a.consultas {

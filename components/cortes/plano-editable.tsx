@@ -356,7 +356,11 @@ function Dibujo({
       />
 
       {placa.piezas.map((p, i) => {
-        const medida = `${p.ancho}×${p.alto}`;
+        // Como el plano de solo lectura (PlanoSimple): largo × ancho de la
+        // planilla y el nombre arriba si entra. Rotulaba la medida como queda
+        // en la placa («400×800» para una pieza de 800 × 400) y sin nombre
+        // (mes 23).
+        const medida = `${p.largoOriginal}×${p.anchoOriginal}`;
         // Angosta y alta, la medida va parada: acostada corría de una pieza a
         // la otra («350×900350×900», H194). Un dígito ocupa ~0,6 del cuerpo.
         const parada = p.alto > p.ancho * 1.4;
@@ -365,6 +369,15 @@ function Dibujo({
           parada ? p.ancho * 0.55 : p.alto * 0.38,
           ((parada ? p.alto : p.ancho) * 0.85) / (medida.length * 0.6),
         );
+        const largoDisponible = (parada ? p.alto : p.ancho) * 0.85;
+        const altoDisponible = parada ? p.ancho : p.alto;
+        const cuerpoNombre = p.etiqueta
+          ? Math.min(cuerpo * 0.8, largoDisponible / (p.etiqueta.length * 0.55))
+          : 0;
+        const conNombre = cuerpo >= 44 && cuerpoNombre >= 22 && altoDisponible >= cuerpo * 1.2 + cuerpoNombre * 1.6;
+        const cx = p.x + p.ancho / 2;
+        const cy = p.y + p.alto / 2;
+        const giro = parada ? `rotate(-90 ${cx} ${cy})` : undefined;
         const aMano = movidas.has(claveDe(p));
 
         return (
@@ -414,16 +427,30 @@ function Dibujo({
               strokeWidth={claveDe(p) === elegida ? 14 : aMano ? 9 : 5}
               strokeDasharray={aMano ? "34 20" : undefined}
             />
+            {conNombre && (
+              <text
+                x={cx}
+                y={cy - cuerpo * 0.35}
+                fontSize={cuerpoNombre}
+                textAnchor="middle"
+                className="fill-muted-foreground"
+                pointerEvents="none"
+                transform={giro}
+              >
+                {p.etiqueta}
+              </text>
+            )}
             {cuerpo >= 44 && (
               <text
-                x={p.x + p.ancho / 2}
-                y={p.y + p.alto / 2 + cuerpo * 0.35}
+                x={cx}
+                y={conNombre ? cy + cuerpo * 0.95 : cy + cuerpo * 0.35}
                 fontSize={cuerpo}
+                fontWeight={600}
                 textAnchor="middle"
                 fill="currentColor"
                 opacity={0.75}
                 pointerEvents="none"
-                transform={parada ? `rotate(-90 ${p.x + p.ancho / 2} ${p.y + p.alto / 2})` : undefined}
+                transform={giro}
               >
                 {medida}
               </text>

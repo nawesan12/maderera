@@ -127,9 +127,13 @@ export default async function CajaPage({
 
       <section className="grid gap-3 sm:grid-cols-2">
         {sucursales.map((s) => (
-          // En el teléfono el botón baja a su propio renglón: al lado, el
-          // nombre, el turno y el cambio fijo quedaban partidos en tres.
-          <article key={s.id} className="tarjeta flex flex-wrap items-center gap-3.5 p-4 lg:flex-nowrap">
+          // El nombre, el turno y «Ir al mostrador» arriba; abajo, a todo el
+          // ancho, lo que hay en el cajón, el cambio fijo y la caja fuerte.
+          // Al lado del botón, «$ 141.000 en efectivo» se partía en dos
+          // renglones a 1280 px, y la tarjeta más alta dejaba un hueco
+          // arriba por el centrado (mes 23). En el teléfono el botón baja
+          // al final, a todo el ancho.
+          <article key={s.id} className="tarjeta flex flex-wrap items-start gap-x-3.5 gap-y-3 p-4">
             <span
               className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
                 s.turnoId
@@ -139,20 +143,29 @@ export default async function CajaPage({
             >
               <Banknote className="h-5 w-5" />
             </span>
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 self-center">
               <p className="text-base font-semibold">{s.nombre}</p>
               <p className="text-sm text-muted-foreground">
                 {s.turnoId && s.abiertaAt
                   ? `Abierta ${haceCuanto(new Date(s.abiertaAt))}`
                   : "Sin turno abierto"}
               </p>
+            </div>
+            <Link
+              href="/mostrador"
+              className="order-last inline-flex h-10 w-full shrink-0 items-center justify-center gap-1.5 rounded-lg border border-linea px-3.5 text-sm font-medium transition-colors hover:bg-hundida sm:order-none sm:w-auto"
+            >
+              <Store className="h-4 w-4" />
+              Ir al mostrador
+            </Link>
+            <div className="basis-full">
               {/* Lo que tendría que haber ahora en el cajón: la suma de los
                   movimientos del turno, el mismo número que va a pedir el
                   arqueo. Es la pregunta del dueño cuando pasa por la caja. */}
               {s.esperado != null && (
-                <p className="tabular mt-1 text-2xl font-bold leading-tight">
+                <p className="tabular text-2xl font-bold leading-tight">
                   {formatearImporte(s.esperado)}
-                  <span className="ml-2 text-base font-medium text-muted-foreground">
+                  <span className="ml-2 whitespace-nowrap text-base font-medium text-muted-foreground">
                     en efectivo
                   </span>
                 </p>
@@ -161,13 +174,6 @@ export default async function CajaPage({
               <FondoBase branchId={s.id} valor={Number(s.fondoBase)} />
               <CajaFuerte branchId={s.id} saldo={saldoFuerte.get(s.id) ?? 0} />
             </div>
-            <Link
-              href="/mostrador"
-              className="inline-flex h-10 w-full shrink-0 items-center justify-center gap-1.5 rounded-lg border border-linea px-3.5 text-sm font-medium transition-colors hover:bg-hundida lg:w-auto"
-            >
-              <Store className="h-4 w-4" />
-              Ir al mostrador
-            </Link>
           </article>
         ))}
       </section>

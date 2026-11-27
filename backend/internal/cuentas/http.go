@@ -226,7 +226,7 @@ func (a *API) RegistrarMovimiento(ctx context.Context, r cuentasapi.RegistrarMov
 	if err != nil {
 		return nil, err
 	}
-	if err := a.clientes.Movimiento(ctx, ses, r.Id, r.Body.Tipo, r.Body.Monto, texto(r.Body.Detalle)); err != nil {
+	if err := a.clientes.Movimiento(ctx, ses, r.Id, r.Body.Tipo, r.Body.Monto, texto(r.Body.Detalle), texto(r.Body.Fecha)); err != nil {
 		return nil, err
 	}
 	return mensaje("Movimiento registrado."), nil

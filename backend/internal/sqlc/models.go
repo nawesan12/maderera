@@ -5117,20 +5117,21 @@ type ConfiguracionFiscal struct {
 }
 
 type ConsultasCorte struct {
-	ID               string             `json:"id"`
-	Token            string             `json:"token"`
-	VariantID        *string            `json:"variantId"`
-	Material         string             `json:"material"`
-	PlacaLargoMm     jsmath.Num         `json:"placaLargoMm"`
-	PlacaAnchoMm     jsmath.Num         `json:"placaAnchoMm"`
-	Mitad            *string            `json:"mitad"`
-	CantoDescripcion *string            `json:"cantoDescripcion"`
-	Piezas           json.RawMessage    `json:"piezas"`
-	AnchoSierraMm    jsmath.Num         `json:"anchoSierraMm"`
-	BranchID         *string            `json:"branchId"`
-	Ip               *string            `json:"ip"`
-	CuttingOrderID   *string            `json:"cuttingOrderId"`
-	CreatedAt        pgtype.Timestamptz `json:"createdAt"`
+	ID                     string             `json:"id"`
+	Token                  string             `json:"token"`
+	VariantID              *string            `json:"variantId"`
+	Material               string             `json:"material"`
+	PlacaLargoMm           jsmath.Num         `json:"placaLargoMm"`
+	PlacaAnchoMm           jsmath.Num         `json:"placaAnchoMm"`
+	Mitad                  *string            `json:"mitad"`
+	CantoDescripcion       *string            `json:"cantoDescripcion"`
+	Piezas                 json.RawMessage    `json:"piezas"`
+	AnchoSierraMm          jsmath.Num         `json:"anchoSierraMm"`
+	BranchID               *string            `json:"branchId"`
+	Ip                     *string            `json:"ip"`
+	CuttingOrderID         *string            `json:"cuttingOrderId"`
+	CreatedAt              pgtype.Timestamptz `json:"createdAt"`
+	WhatsappConversacionID *string            `json:"whatsappConversacionId"`
 }
 
 type ConsultasCorteGrupo struct {
@@ -6580,6 +6581,9 @@ type WhatsappConversacione struct {
 	BotDerivadaAt        pgtype.Timestamptz `json:"botDerivadaAt"`
 	BotPendiente         json.RawMessage    `json:"botPendiente"`
 	BotCerradoHasta      pgtype.Timestamptz `json:"botCerradoHasta"`
+	BotDevueltoAt        pgtype.Timestamptz `json:"botDevueltoAt"`
+	BotDerivacionToken   *string            `json:"botDerivacionToken"`
+	BotDerivacionTexto   *string            `json:"botDerivacionTexto"`
 }
 
 type WhatsappMensaje struct {

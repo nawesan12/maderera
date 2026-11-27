@@ -108,6 +108,7 @@ paths:
                 tipo: { type: string }
                 monto: { type: string }
                 detalle: { type: string }
+                fecha: { type: string, description: "AAAA-MM-DD, si es de otro día; vacío es hoy" }
       responses:
         "200": { $ref: "#/components/responses/Ok" }
         "422": { $ref: "#/components/responses/Problema" }

@@ -4,7 +4,7 @@ import { FileText } from "lucide-react";
 import type { ClaseDeMovimiento, MovimientoDelCliente } from "@/lib/dal/historial-cliente";
 // Los centavos solo cuando los hay, como en el resto de la ficha (mes simulado:
 // «$ 339.100,00» acá y «$ 339.100» en Pedidos).
-import { formatearMonto } from "@/lib/formato";
+import { claveDeMesAR, diaYMesAR, formatearMonto, mesYAnioAR } from "@/lib/formato";
 
 /**
  * Los movimientos de un cliente, agrupados por mes.
@@ -36,8 +36,11 @@ const ESTILO: Record<ClaseDeMovimiento, { etiqueta: string; familia: string }> =
   cheque_rechazado: { etiqueta: "Cheque rechazado", familia: "estado-problema" },
 };
 
-const MES = new Intl.DateTimeFormat("es-AR", { month: "long", year: "numeric" });
-const DIA = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit" });
+// En hora argentina: el servidor corre en UTC y lo de después de las 21 h
+// figuraba al día siguiente, y lo del 30 a la noche en el mes siguiente
+// (M2S2-023, M2S2-037, M2S2-068, M3S3-040).
+const MES = mesYAnioAR;
+const DIA = diaYMesAR;
 
 type ReciboDelMovimiento = NonNullable<MovimientoDelCliente["recibo"]>;
 type ChequeDelMovimiento = NonNullable<MovimientoDelCliente["cheques"]>[number];
@@ -71,7 +74,7 @@ export function LineaDeTiempo({
   // Agrupados por mes, en el orden en que llegan (lo más nuevo arriba).
   const meses: { clave: string; titulo: string; filas: MovimientoDelCliente[] }[] = [];
   for (const m of movimientos) {
-    const clave = `${m.fecha.getFullYear()}-${m.fecha.getMonth()}`;
+    const clave = claveDeMesAR(m.fecha);
     const ultimo = meses.at(-1);
     if (ultimo?.clave === clave) ultimo.filas.push(m);
     else {

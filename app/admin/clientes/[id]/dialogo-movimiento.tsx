@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CampoFecha } from "@/components/ui/campo-fecha";
+import { hoyEnArgentina } from "@/lib/formato";
 import { Opciones, Seccion } from "@/components/admin/formulario";
 import { registrarMovimiento, type EstadoCliente } from "../actions";
 
@@ -51,6 +53,7 @@ export function DialogoMovimiento({
   nombre: string;
 }) {
   const [abierto, setAbierto] = useState(false);
+  const hoy = hoyEnArgentina();
   const [tipo, setTipo] = useState("nota_credito");
   const [, accion, pendiente] = useAccionDeDialogo(
     registrarMovimiento,
@@ -90,16 +93,31 @@ export function DialogoMovimiento({
             </Seccion>
 
             <Seccion titulo="Importe" icono={Banknote} columnas={1}>
-              <div className="space-y-2">
-                <Label htmlFor="monto">Importe</Label>
-                <Input
-                  id="monto"
-                  name="monto"
-                  inputMode="decimal"
-                  placeholder="150000"
-                  required
-                  autoFocus
-                />
+              {/* La fecha junto al importe: una deuda vieja que se carga hoy
+                  lleva la suya, y el seguimiento la cuenta atrasada
+                  (M3S3-017). */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="min-w-0 space-y-2">
+                  <Label htmlFor="monto">Importe</Label>
+                  <Input
+                    id="monto"
+                    name="monto"
+                    inputMode="decimal"
+                    placeholder="150000"
+                    required
+                    autoFocus
+                  />
+                </div>
+                <div className="min-w-0 space-y-2">
+                  <Label htmlFor="fecha-movimiento">Fecha</Label>
+                  <CampoFecha
+                    id="fecha-movimiento"
+                    name="fecha"
+                    defaultValue={hoy}
+                    max={hoy}
+                    Entrada={Input}
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="detalle">Detalle</Label>

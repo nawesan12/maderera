@@ -53,7 +53,12 @@ export async function guardarCliente(_previo: EstadoCliente, formData: FormData)
 export async function registrarMovimiento(_previo: EstadoCliente, formData: FormData): Promise<EstadoCliente> {
   const r = await (await api()).POST("/api/v1/admin/clientes/{id}/movimientos", {
     params: { path: { id: campo(formData, "customerId") ?? "" } },
-    body: { tipo: campo(formData, "tipo") ?? "", monto: campo(formData, "monto") ?? "", detalle: campo(formData, "detalle") },
+    body: {
+      tipo: campo(formData, "tipo") ?? "",
+      monto: campo(formData, "monto") ?? "",
+      detalle: campo(formData, "detalle"),
+      fecha: campo(formData, "fecha"),
+    },
   });
   if (r.data) revalidatePath("/admin/clientes");
   return resultado(r, "Revisá los datos.");

@@ -1092,6 +1092,8 @@ export interface operations {
                     tipo: string;
                     monto: string;
                     detalle?: string;
+                    /** @description AAAA-MM-DD, si es de otro día; vacío es hoy */
+                    fecha?: string;
                 };
             };
         };

@@ -204,3 +204,34 @@ func TestReglaDelAltaDeProducto(t *testing.T) {
 		t.Errorf("bitácora: %q", descs)
 	}
 }
+
+// M2S3-020: qué pedido pasa solo a «listo» con su último corte es una
+// regla: arranca en «mostrador», va a «todos» y vuelve, con la bitácora.
+func TestReglaDeListoConElCorte(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	adm := e.cliente(t, "admin@prueba.test", "admin")
+	u := e.srv.URL + "/api/v1/admin/contenido/ajustes/listo_con_el_corte"
+	if v, _ := reglasdel.Valor(ctx, e.pool, reglasdel.ListoConElCorte); v != "mostrador" {
+		t.Fatalf("arranca en %q", v)
+	}
+	for _, valor := range []string{"todos", "mostrador"} {
+		if c, b := pedir(t, adm, "PUT", u, map[string]string{"valor": valor}); c != 204 {
+			t.Fatalf("%s: %d %s", valor, c, b)
+		}
+		if !reglasdel.Es(ctx, e.pool, reglasdel.ListoConElCorte, valor) {
+			t.Errorf("no quedó en %s", valor)
+		}
+	}
+	var descs []string
+	rs, _ := e.pool.Query(ctx, `select descripcion from audit_log where entidad = 'regla' and entidad_id = 'listo_con_el_corte' order by created_at`)
+	for rs.Next() {
+		var d string
+		_ = rs.Scan(&d)
+		descs = append(descs, d)
+	}
+	rs.Close()
+	if strings.Join(descs, "|") != "Con el último corte terminado, pasa solo a «Listo»: La venta del mostrador → Cualquier pedido|Con el último corte terminado, pasa solo a «Listo»: Cualquier pedido → La venta del mostrador" {
+		t.Errorf("bitácora: %q", descs)
+	}
+}

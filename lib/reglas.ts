@@ -32,6 +32,7 @@ export const OPCIONES_DE_REGLAS = {
   retencion_en_el_cobro: ["admin", "quien_cobra"],
   escala_con_lista: ["si", "no"],
   alta_de_producto: ["activo", "inactivo"],
+  listo_con_el_corte: ["mostrador", "todos"],
 } as const;
 
 

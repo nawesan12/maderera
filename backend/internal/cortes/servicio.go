@@ -26,6 +26,7 @@ import (
 	"mjbj/internal/jsmath"
 	"mjbj/internal/numeracion"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/reglas"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas/fragmentos"
@@ -656,8 +657,12 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 // listoConElCorte: la venta del mostrador que lleva un corte queda en curso
 // hasta que el corte sale de la máquina (mes simulado); con el último corte
 // terminado pasa sola a «listo», con el aviso al cliente. Los pedidos de
-// otro origen los marca listos el depósito, que sabe qué más falta.
+// otro origen los marca listos el depósito, que sabe qué más falta, salvo
+// que la regla «listo_con_el_corte» diga «todos» (M2S3-020). Al que no
+// pasa solo, el historial le anota igual «Corte X terminado»: el depósito
+// no se enteraba.
 func (s *Servicio) listoConElCorte(ctx context.Context, ses *auth.Sesion, corte, numero string) error {
+	todos := reglas.Es(ctx, s.pool, reglas.ListoConElCorte, "todos")
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var pedido, origen, estado string
 		err := tx.QueryRow(ctx, `
@@ -669,20 +674,26 @@ func (s *Servicio) listoConElCorte(ctx context.Context, ses *auth.Sesion, corte,
 		if err != nil {
 			return err
 		}
-		if origen != "mostrador" || (estado != "pendiente" && estado != "preparando") {
+		if estado != "pendiente" && estado != "preparando" {
 			return nil
-		}
-		var faltan int
-		if err := tx.QueryRow(ctx, `SELECT count(*)::int FROM cutting_orders WHERE order_id = $1 AND estado IN ('en-cola', 'en-proceso')`,
-			pedido).Scan(&faltan); err != nil || faltan > 0 {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `UPDATE orders SET estado = 'listo', updated_at = now() WHERE id = $1`, pedido); err != nil {
-			return err
 		}
 		var usuario *string
 		if ses != nil {
 			usuario = &ses.UserID
+		}
+		var faltan int
+		if err := tx.QueryRow(ctx, `SELECT count(*)::int FROM cutting_orders WHERE order_id = $1 AND estado IN ('en-cola', 'en-proceso')`,
+			pedido).Scan(&faltan); err != nil {
+			return err
+		}
+		if faltan > 0 || (origen != "mostrador" && !todos) {
+			// Sigue en su estado, con el renglón en el historial.
+			_, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, $2::estado_pedido, $3, $4)`,
+				pedido, estado, "Corte "+numero+" terminado", usuario)
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE orders SET estado = 'listo', updated_at = now() WHERE id = $1`, pedido); err != nil {
+			return err
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, 'listo', $2, $3)`,
 			pedido, "Corte "+numero+" terminado", usuario); err != nil {

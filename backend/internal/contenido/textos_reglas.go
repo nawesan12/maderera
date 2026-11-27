@@ -39,6 +39,7 @@ var textoDeRegla = map[string]struct {
 	"exportar_sicore":       {"Las retenciones del mes también en TXT para SICORE", map[string]string{"no": "No, solo el CSV", "si": "Sí"}},
 	"cae_en_compras":        {"La factura A de compra sin CAE", map[string]string{"opcional": "Entra igual", "exigido": "No entra sin CAE"}},
 	"alta_de_producto":      {"Un producto nuevo arranca", map[string]string{"activo": "Activo", "inactivo": "Inactivo, hasta prenderlo"}},
+	"listo_con_el_corte":    {"Con el último corte terminado, pasa solo a «Listo»", map[string]string{"mostrador": "La venta del mostrador", "todos": "Cualquier pedido"}},
 }
 
 // DescripcionDeRegla es el renglón de la bitácora del cambio de una regla.

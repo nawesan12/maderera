@@ -94,6 +94,10 @@ const (
 	// un producto. «activo» es lo de siempre (apagado, tampoco lo encuentra
 	// el mostrador); «inactivo», para no publicar uno a medio cargar.
 	AltaDeProducto = "alta_de_producto"
+	// M2S3-020 (00454): qué pedido pasa solo a «listo» con su último corte
+	// terminado. «mostrador» es lo de siempre (los de otro origen los marca
+	// listos el depósito, que sabe qué más falta); «todos», cualquiera.
+	ListoConElCorte = "listo_con_el_corte"
 )
 
 // Opciones son los valores posibles de cada regla, el de arranque primero.
@@ -124,6 +128,7 @@ var Opciones = map[string][]string{
 	RetencionEnElCobro:          {"admin", "quien_cobra"},
 	EscalaConLista:              {"si", "no"},
 	AltaDeProducto:              {"activo", "inactivo"},
+	ListoConElCorte:             {"mostrador", "todos"},
 }
 
 // Arranque es el valor de una regla cuando la fila no está o tiene algo que

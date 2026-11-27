@@ -229,6 +229,14 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
         ],
       },
       {
+        clave: "listo_con_el_corte",
+        pregunta: "Con el último corte terminado, pasa solo a «Listo»",
+        opciones: [
+          { valor: "mostrador", texto: "La venta del mostrador" },
+          { valor: "todos", texto: "Cualquier pedido" },
+        ],
+      },
+      {
         clave: "sucursal_del_corte_suelto",
         pregunta: "Dónde se corta un corte suelto",
         opciones: [

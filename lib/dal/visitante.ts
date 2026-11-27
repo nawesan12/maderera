@@ -44,6 +44,8 @@ export interface EstadoDelVisitante {
      * /contacto, no el del usuario web (mes simulado). Null si no tiene ficha.
      */
     firma: string | null;
+    /** Si su ficha es de profesional: la portada no le ofrece pedir la cuenta. */
+    profesional: boolean;
   } | null;
   cantidadItems: number;
   /**
@@ -82,7 +84,7 @@ export async function estadoDelVisitante(): Promise<EstadoDelVisitante> {
       const cliente = sesion && !esStaff ? await degradar("la ficha de quien mira", clienteDeLaSesion, null) : null;
       return {
         sesion: sesion
-          ? { nombre: sesion.name, esStaff, firma: cliente?.nombre ?? null }
+          ? { nombre: sesion.name, esStaff, firma: cliente?.nombre ?? null, profesional: cliente?.tipo === "profesional" }
           : null,
         cantidadItems: carrito.cantidadItems,
         senal,

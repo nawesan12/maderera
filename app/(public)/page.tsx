@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { BotonProfesional } from "@/components/sitio/boton-profesional";
 import Image from "next/image";
 import { FondoDeRubro } from "@/components/catalogo/fondo-de-rubro";
 import { TONOS, tonoDePlaca } from "@/lib/catalogo/placa";
@@ -648,12 +649,7 @@ function BannerProfesionales({ tiendaActiva }: { tiendaActiva: boolean }) {
                 {bajada}
               </p>
 
-              <Link
-                href="/profesionales"
-                className="mt-5 flex h-12 w-fit items-center rounded-[10px] bg-accion px-[22px] text-[15.5px] font-semibold text-white transition-colors hover:bg-accion-hover"
-              >
-                Solicitar cuenta profesional
-              </Link>
+              <BotonProfesional />
             </div>
           </article>
 

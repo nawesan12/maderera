@@ -36,6 +36,7 @@ export function UnirAFicha({
   total,
   contacto,
   ficha,
+  delPanel = false,
 }: {
   que: "pedido" | "presupuesto";
   id: string;
@@ -43,6 +44,11 @@ export function UnirAFicha({
   total: number;
   contacto: { nombre: string; telefono: string | null };
   ficha: { id: string; nombre: string; telefono?: string | null; unible: boolean };
+  /**
+   * Lo armó alguien del panel con ese correo: no «llegó sin entrar a su
+   * cuenta» (M3S1-068).
+   */
+  delPanel?: boolean;
 }) {
   const router = useRouter();
   const [pendiente, empezar] = useTransition();
@@ -66,11 +72,11 @@ export function UnirAFicha({
   return (
     <div className="estado-espera mt-3 space-y-2 rounded-lg bg-[var(--estado-fondo)] px-3 py-2.5 text-base">
       <p className="text-sm">
-        Llegó con el correo de{" "}
+        {delPanel ? "Con el correo de " : "Llegó con el correo de "}
         <Link href={`/admin/clientes/${ficha.id}`} className="font-semibold underline-offset-2 hover:underline">
           {ficha.nombre}
         </Link>
-        , sin entrar a su cuenta. El correo no está verificado.
+        {delPanel ? "." : ", sin entrar a su cuenta. El correo no está verificado."}
       </p>
       {ficha.unible ? (
         <button

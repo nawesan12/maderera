@@ -82,6 +82,7 @@ func (s *Servicio) Registrar(c *cola.Cola) {
 	c.Registrar(checkout.TrabajoPedidoRecibido, porID("orderId", s.PedidoRecibido))
 	c.Registrar(checkout.TrabajoPresupuestoRecibido, porID("quoteId", s.PresupuestoRecibido))
 	c.Registrar(pedidos.TrabajoPresupuestoEnviado, porID("quoteId", s.PresupuestoEnviado))
+	c.Registrar(pedidos.TrabajoPresupuestoPorCorreo, porID("quoteId", s.PresupuestoPorCorreo))
 	c.Registrar(entregas.TrabajoRemitoParaFirmar, porID("deliveryId", s.RemitoParaFirmar))
 	c.Registrar(entregas.TrabajoRemitoFirmado, porID("deliveryId", s.RemitoFirmado))
 	c.Registrar(pedidos.TrabajoCambioDeEstado, s.manejador(func(ctx context.Context, crudo json.RawMessage) error {

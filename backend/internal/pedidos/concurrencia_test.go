@@ -375,3 +375,82 @@ var retira = func() entregas.Receptor {
 	d := "30111222"
 	return entregas.Receptor{Documento: &d}
 }()
+
+// M2S1-098: «Por correo» de un presupuesto que ya salió (por WhatsApp) manda
+// solo el correo, una vez, y no cambia el estado. M2S4-066: con el pedido
+// cancelado se puede rechazar; con uno vivo, no.
+func TestPorCorreoDeUnoEnviadoYRechazarSinPedidoVivo(t *testing.T) {
+	e := armar(t)
+	_, ses := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	id := e.presupuesto(t, ses, 1)
+	ctx := context.Background()
+	correos := func() float64 {
+		return e.numero(t, `select count(*) from trabajos where tipo = 'presupuesto.correo' and carga->>'quoteId' = $1`, id)
+	}
+	if _, err := e.s.CambiarEstadoPresupuesto(ctx, ses, id, "enviado"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.s.CambiarEstadoPresupuesto(ctx, ses, id, "enviado"); err != nil || correos() != 0 {
+		t.Fatalf("un segundo «enviado» mandó correo: %v %v", err, correos())
+	}
+	for range 2 {
+		r, err := e.s.CambiarEstadoPresupuestoConMotivo(ctx, ses, id, "enviado", MotivoPorCorreo)
+		if err != nil || r.Estado != "enviado" {
+			t.Fatalf("por correo: %+v %v", r, err)
+		}
+	}
+	if n := correos(); n != 1 {
+		t.Fatalf("dos clics en «Por correo»: %v correos", n)
+	}
+
+	pedido := e.id(t, `insert into orders (numero, contacto_nombre, estado, total, quote_id) values ('PED-9001', 'x', 'pendiente', 1, $1) returning id`, id)
+	if _, err := e.s.CambiarEstadoPresupuestoConMotivo(ctx, ses, id, "rechazado", "Otro"); err == nil {
+		t.Fatal("se rechazó con un pedido vivo")
+	}
+	e.exec(t, `update orders set estado = 'cancelado' where id = $1`, pedido)
+	if _, err := e.s.CambiarEstadoPresupuestoConMotivo(ctx, ses, id, "rechazado", "Ya no lo necesita"); err != nil {
+		t.Fatalf("con el pedido cancelado no se rechaza: %v", err)
+	}
+	p, err := e.s.Presupuesto(ctx, id)
+	if err != nil || len(p.PedidosCancelados) != 1 || p.PedidosCancelados[0].Numero != "PED-9001" {
+		t.Fatalf("pedidos cancelados: %+v %v", p, err)
+	}
+}
+
+// M2S1-089: el presupuesto dice cuánto hay de cada renglón en cada
+// sucursal, y al pasarlo a pedido se elige de dónde sale.
+func TestPasarAPedidoDesdeOtraSucursal(t *testing.T) {
+	e := armar(t)
+	_, ses := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	ctx := context.Background()
+	aserradero := e.id(t, `insert into branches (slug, name, sort_order) values ('aserradero', 'Aserradero', 2) returning id`)
+	e.exec(t, `update inventory set qty = 0 where variant_id = $1 and branch_id = $2`, e.placa, e.sucursal)
+	e.exec(t, `insert into inventory (variant_id, branch_id, qty) values ($1, $2, 30)`, e.placa, aserradero)
+	id := e.presupuesto(t, ses, 20)
+	p, err := e.s.Presupuesto(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var central, otro float64 = -1, -1
+	for _, d := range p.Items[0].Disponible {
+		switch d.Sucursal {
+		case "casa-central":
+			central = d.Disponible
+		case "aserradero":
+			otro = d.Disponible
+		}
+	}
+	if central != 0 || otro != 30 || len(p.Items[1].Disponible) != 0 {
+		t.Fatalf("disponible: %+v", p.Items)
+	}
+	r, err := e.s.ConvertirConEntrega(ctx, ses, id, Entrega{Sucursal: "aserradero"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := e.numero(t, `select count(*) from orders where id = $1 and branch_id = $2`, r.ID, aserradero); got != 1 {
+		t.Fatal("el pedido no salió del aserradero")
+	}
+	if got := e.numero(t, `select reservado::float8 from inventory where variant_id = $1 and branch_id = $2`, e.placa, aserradero); got != 20 {
+		t.Fatalf("reservado en el aserradero: %v", got)
+	}
+}

@@ -872,7 +872,7 @@ components:
       type: object
       required: [canal, estado, texto, atencion]
       properties:
-        canal: { type: string, enum: [whatsapp, whatsapp_manual, email] }
+        canal: { type: string, enum: [whatsapp, whatsapp_manual, email, whatsapp_pdf] }
         estado: { type: string }
         texto: { type: string }
         atencion: { type: boolean }

@@ -238,6 +238,13 @@ func TestPresupuestoEnviado(t *testing.T) {
 		!strings.Contains(texto, "https://mjbj.com.ar/mi-cuenta/presupuestos") {
 		t.Errorf("correo: %s %q %q", para, asunto, texto)
 	}
+	// Con el PDF adjunto (M2S1-195).
+	e.b.mu.Lock()
+	adj := e.b.recibidos[len(e.b.recibidos)-1].Adjuntos
+	e.b.mu.Unlock()
+	if len(adj) != 1 || adj[0].Nombre != "P-2026-0050.pdf" || !strings.HasPrefix(string(adj[0].Contenido), "%PDF") {
+		t.Errorf("el correo salió sin el PDF: %d adjuntos", len(adj))
+	}
 	// El WhatsApp (simulado: proveedor de demostración), con la plantilla y
 	// el PDF del presupuesto pegado.
 	if r := e.registro(t, "presupuesto_listo"); r != "whatsapp:simulada,email:enviada" {

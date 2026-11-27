@@ -268,6 +268,18 @@ func (s *Servicio) historiaDelAviso(ctx context.Context, evento, entidadID strin
 			out = append(out, HistoriaDelAviso{canal, f.estado, t, !salio})
 		}
 	}
+	// El papel mandado por WhatsApp con el PDF desde el sistema (la ficha o
+	// «Documento» del chat) queda en la bandeja, no en el registro de
+	// avisos: también se dice acá, como la línea del correo (M2S1-098,
+	// M2S4-067).
+	var cuando *time.Time
+	if err := s.pool.QueryRow(ctx, `select max(ocurrido_at) from whatsapp_mensajes where direccion = 'saliente'
+		and estado <> 'fallido' and datos->'documento'->>'id' = $1`, entidadID).Scan(&cuando); err != nil {
+		return nil, false, err
+	}
+	if cuando != nil {
+		out = append(out, HistoriaDelAviso{"whatsapp_pdf", "enviada", "WhatsApp con el PDF: " + FechaHora(*cuando) + ".", false})
+	}
 	return out, manual, nil
 }
 

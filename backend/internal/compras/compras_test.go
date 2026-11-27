@@ -313,6 +313,8 @@ func TestRecepcionesSimultaneasNoPierdenLaMezcla(t *testing.T) {
 	adm := e.staff(t, "admin@prueba.test", "admin")
 	ctx := context.Background()
 	_, _ = e.pool.Exec(ctx, `insert into variant_costs (variant_id, cantidad_base, costo_promedio) values ($1, 10, 100)`, e.placa)
+	// El promedio se pondera contra el stock (M3S2-007): las 10 a 100 están en el galpón.
+	_, _ = e.pool.Exec(ctx, `insert into inventory (variant_id, branch_id, qty) values ($1, $2, 10)`, e.placa, e.central)
 	crear := func(sucursal string, costo float64) string {
 		_, b := pedir(t, adm, "POST", e.u+"recepciones", map[string]any{"supplierId": e.proveedor, "branchId": sucursal,
 			"lineas": []any{map[string]any{"variantId": e.placa, "cantidad": 10, "costoUnitario": costo, "alicuotaIva": 21}}})

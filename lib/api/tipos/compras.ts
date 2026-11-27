@@ -1135,7 +1135,14 @@ export interface components {
                 costoAnterior: string | null;
                 costoResultante: string | null;
                 orden: number;
+                unidad?: string | null;
+                /** @description lo pedido en el renglón de la orden */
+                pedido?: string | null;
+                /** @description lo que ya llegó de ese renglón de la orden */
+                yaRecibido?: string | null;
             }[];
+            purchaseOrderId?: string | null;
+            ordenNumero?: string | null;
         };
         RenglonLibro: {
             id: string;
@@ -2106,6 +2113,13 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
+                        /** @description lo que falta de una orden de la que llegó una parte, en unidades */
+                        faltantes?: {
+                            descripcion: string;
+                            /** Format: double */
+                            cantidad: number;
+                            unidad: string | null;
+                        }[];
                         id: string;
                         numero: string;
                         estado: string;

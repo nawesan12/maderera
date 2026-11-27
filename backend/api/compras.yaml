@@ -375,6 +375,16 @@ paths:
                   type: object
                   required: [id, numero, estado, proveedor, sucursal, fechaPrometida, pendientes, lineas]
                   properties:
+                    faltantes:
+                      type: array
+                      description: lo que falta de una orden de la que llegó una parte, en unidades
+                      items:
+                        type: object
+                        required: [descripcion, cantidad, unidad]
+                        properties:
+                          descripcion: { type: string }
+                          cantidad: { type: number, format: double }
+                          unidad: { type: string, nullable: true }
                     id: { type: string }
                     numero: { type: string }
                     estado: { type: string }
@@ -1149,6 +1159,11 @@ components:
               costoAnterior: { type: string, nullable: true }
               costoResultante: { type: string, nullable: true }
               orden: { type: integer }
+              unidad: { type: string, nullable: true }
+              pedido: { type: string, nullable: true, description: lo pedido en el renglón de la orden }
+              yaRecibido: { type: string, nullable: true, description: lo que ya llegó de ese renglón de la orden }
+        purchaseOrderId: { type: string, nullable: true }
+        ordenNumero: { type: string, nullable: true }
     RenglonLibro:
       type: object
       required: [id, fechaEmision, tipo, puntoVenta, numero, proveedor, cuit, neto, iva21, iva105, iva27, exento, percepciones, total, cae]

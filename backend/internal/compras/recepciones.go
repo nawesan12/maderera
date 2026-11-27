@@ -72,6 +72,13 @@ type LineaDeRecepcion struct {
 	CostoAnterior    *string `json:"costoAnterior"`
 	CostoResultante  *string `json:"costoResultante"`
 	Orden            int32   `json:"orden"`
+	// Unidad es la del producto («20 u.», «5 placas»: decía «20 ·»,
+	// M3S4-037). Pedido y YaRecibido son los del renglón de la orden, si la
+	// recepción salió de una: el borrador dice «Vino [20] de 30» y la
+	// confirmada «16 de 20 · faltan 4» (M2S1-077, M3S3-026).
+	Unidad     *string `json:"unidad"`
+	Pedido     *string `json:"pedido"`
+	YaRecibido *string `json:"yaRecibido"`
 }
 
 // Recepcion es una recepción con sus líneas.
@@ -88,6 +95,9 @@ type Recepcion struct {
 	BranchID     string             `json:"branchId"`
 	Sucursal     *string            `json:"sucursal"`
 	Items        []LineaDeRecepcion `json:"items"`
+	// La orden de la que salió, para reclamar desde ahí.
+	PurchaseOrderID *string `json:"purchaseOrderId"`
+	OrdenNumero     *string `json:"ordenNumero"`
 }
 
 // ObtenerRecepcion es obtenerRecepcion.
@@ -97,10 +107,12 @@ func (s *Servicio) ObtenerRecepcion(ctx context.Context, id string) (*Recepcion,
 	}
 	var r Recepcion
 	err := s.pool.QueryRow(ctx, `
-		SELECT r.id, r.numero_remito, r.fecha, r.estado::text, r.gastos::text, r.notas, r.confirmada_at, r.supplier_id, s.nombre, r.branch_id, b.name
+		SELECT r.id, r.numero_remito, r.fecha, r.estado::text, r.gastos::text, r.notas, r.confirmada_at, r.supplier_id, s.nombre, r.branch_id, b.name,
+		  r.purchase_order_id, o.numero
 		FROM goods_receipts r JOIN suppliers s ON s.id = r.supplier_id LEFT JOIN branches b ON b.id = r.branch_id
+		LEFT JOIN purchase_orders o ON o.id = r.purchase_order_id
 		WHERE r.id = $1`, id).Scan(&r.ID, &r.NumeroRemito, &r.Fecha, &r.Estado, &r.Gastos, &r.Notas, &r.ConfirmadaAt, &r.SupplierID,
-		&r.Proveedor, &r.BranchID, &r.Sucursal)
+		&r.Proveedor, &r.BranchID, &r.Sucursal, &r.PurchaseOrderID, &r.OrdenNumero)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -109,10 +121,14 @@ func (s *Servicio) ObtenerRecepcion(ctx context.Context, id string) (*Recepcion,
 	}
 	filas, err := s.pool.Query(ctx, `
 		SELECT i.id, i.variant_id, p.name, v.label, v.sku, i.cantidad::text, i.costo_unitario::text, i.alicuota_iva::text,
-		  i.costo_con_gastos::text, i.cantidad_anterior::text, i.costo_anterior::text, i.costo_resultante::text, i.orden
+		  i.costo_con_gastos::text, i.cantidad_anterior::text, i.costo_anterior::text, i.costo_resultante::text, i.orden,
+		  p.unit::text, oi.cantidad::text, oi.cantidad_recibida::text
 		FROM goods_receipt_items i
+		JOIN goods_receipts r ON r.id = i.receipt_id
 		LEFT JOIN product_variants v ON v.id = i.variant_id
 		LEFT JOIN products p ON p.id = v.product_id
+		LEFT JOIN LATERAL (SELECT x.cantidad, x.cantidad_recibida FROM purchase_order_items x
+		  WHERE x.purchase_order_id = r.purchase_order_id AND x.variant_id = i.variant_id ORDER BY x.orden LIMIT 1) oi ON true
 		WHERE i.receipt_id = $1 ORDER BY i.orden`, id)
 	if err != nil {
 		return nil, err
@@ -401,9 +417,16 @@ func (s *Servicio) ConfirmarRecepcion(ctx context.Context, ses *auth.Sesion, id 
 		var deuda float64
 		neto, deuda, err = CuentaDeRecepcion(recibidas, float64(c.gastos),
 			func(v string) (EstadoDeCosto, error) {
+				// El promedio se pondera contra el stock que hay (en todas las
+				// sucursales, antes de que entre esta línea), no contra todo lo
+				// que entró en la historia: cantidad_base solo crecía con las
+				// recepciones y ninguna venta la bajaba, así que una laca sin
+				// stock quedaba con un costo más bajo que el que se pagó
+				// (M3S2-007). Sin stock, el costo nuevo es el que se pagó.
 				var e EstadoDeCosto
 				var base, costo jsmath.Num
-				err := tx.QueryRow(ctx, `SELECT cantidad_base, costo_promedio FROM variant_costs WHERE variant_id = $1`, v).Scan(&base, &costo)
+				err := tx.QueryRow(ctx, `SELECT greatest(coalesce((SELECT sum(qty) FROM inventory WHERE variant_id = $1), 0), 0), costo_promedio
+					FROM variant_costs WHERE variant_id = $1`, v).Scan(&base, &costo)
 				e.CantidadBase, e.CostoPromedio = float64(base), float64(costo)
 				antesDeMezclar(v)
 				return e, err

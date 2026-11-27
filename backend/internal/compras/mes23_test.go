@@ -431,3 +431,30 @@ func TestOrdenCerradaConFaltante(t *testing.T) {
 }
 
 func jsmathNum(s string) float64 { return jsmath.Numero(s) }
+
+// M3S2-007: con el galpón en cero, el costo nuevo es el que se pagó; con
+// stock, se pondera contra lo que hay y no contra todo lo que entró.
+func TestCostoPromedioContraElStock(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	ctx := context.Background()
+	// Entraron 20 en la historia a 40.700, pero el galpón tiene 0.
+	_, _ = e.pool.Exec(ctx, `insert into variant_costs (variant_id, cantidad_base, costo_promedio) values ($1, 20, 40700)`, e.placa)
+	recibir := func(cantidad, costo float64) {
+		_, b := pedir(t, adm, "POST", e.u+"recepciones", map[string]any{"supplierId": e.proveedor, "branchId": e.central,
+			"lineas": []any{map[string]any{"variantId": e.placa, "cantidad": cantidad, "costoUnitario": costo, "alicuotaIva": 21}}})
+		if c, b := pedir(t, adm, "POST", e.u+"recepciones/"+idDe(t, b)+"/confirmar", nil); c != 200 {
+			t.Fatalf("confirmar: %d %s", c, b)
+		}
+	}
+	recibir(12, 41500)
+	if c := e.numero(t, `select costo_promedio::float8 from variant_costs where variant_id = $1`, e.placa); c != 41500 {
+		t.Errorf("sin stock, el costo es el pagado: %v", c)
+	}
+	// Se venden 8: quedan 4 a 41.500. Entran 4 a 43.500: 42.500.
+	_, _ = e.pool.Exec(ctx, `update inventory set qty = 4 where variant_id = $1`, e.placa)
+	recibir(4, 43500)
+	if c := e.numero(t, `select costo_promedio::float8 from variant_costs where variant_id = $1`, e.placa); c != 42500 {
+		t.Errorf("con 4 en el galpón: %v", c)
+	}
+}

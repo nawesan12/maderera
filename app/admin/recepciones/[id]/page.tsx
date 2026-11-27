@@ -6,7 +6,9 @@ import { ArrowLeft } from "lucide-react";
 import { requireStaff } from "@/lib/dal/session";
 import { puedeEntrar } from "@/lib/roles";
 import { obtenerRecepcion } from "@/lib/dal/admin/recepciones";
-import { fechaCorta, formatearMonto } from "@/lib/formato";
+import { cantidadConUnidad, fechaCorta, formatearMonto } from "@/lib/formato";
+import { Tags } from "lucide-react";
+import { escribirPedidoDeEtiquetas } from "@/lib/etiquetas-de-medidas";
 import { AnularRecepcion, BorradorDeRecepcion } from "./acciones";
 
 export const metadata: Metadata = { title: "Recepción" };
@@ -71,6 +73,15 @@ export default async function RecepcionPage({ params }: { params: Promise<{ id: 
                 .filter(Boolean)
                 .join(" · ")}
             </p>
+            {/* La orden de la que salió, para reclamar desde ahí (M3S3-026). */}
+            {recepcion.purchaseOrderId && recepcion.ordenNumero && (
+              <Link
+                href={`/admin/compras/ordenes/${recepcion.purchaseOrderId}`}
+                className="codigo mt-1 inline-block text-base font-medium hover:underline"
+              >
+                {recepcion.ordenNumero}
+              </Link>
+            )}
           </div>
           <span
             className={`${estado.clase} inline-flex items-center rounded-lg bg-[var(--estado-fondo)] px-3 py-1.5 text-base font-semibold`}
@@ -91,42 +102,63 @@ export default async function RecepcionPage({ params }: { params: Promise<{ id: 
             sku: i.sku,
             cantidad: Number(i.cantidad),
             costoUnitario: Number(i.costoUnitario || 0),
+            // Lo que faltaba de la orden: «Vino [20] de 30» (M2S1-077).
+            pendiente: i.pedido != null ? Number(i.pedido) - Number(i.yaRecibido ?? 0) : null,
+            unidad: i.unidad ?? null,
           }))}
         />
       ) : (
         <section className="tarjeta @container overflow-hidden">
           <ul className="divide-y divide-linea">
-            {recepcion.items.map((i) => (
-              <li key={i.id} className="space-y-1.5 px-4 py-3 @3xl:grid @3xl:grid-cols-[minmax(0,1fr)_auto] @3xl:items-baseline @3xl:gap-6 @3xl:space-y-0">
-                <div className="min-w-0">
-                  <p className="text-base font-medium">
-                    {i.producto} {i.variante}
-                  </p>
-                  <p className="tabular text-base text-muted-foreground">
-                    {cantidad(Number(i.cantidad))}
-                    {veCostos && ` × ${formatearMonto(Number(i.costoUnitario))} · IVA ${Number(i.alicuotaIva)}%`}
-                    {/* El separador va afuera del código: adentro quedaba
-                        en la pastilla y pegado al dato anterior. */}
-                    {i.sku && (
-                      <>
-                        {" · "}
-                        <span className="codigo">{i.sku}</span>
-                      </>
-                    )}
-                  </p>
-                </div>
-                {veCostos && recepcion.estado === "confirmada" && (
-                  // En el teléfono, un dato por renglón con su rótulo al
-                  // lado: en tres columnas de 104 px los importes quedaban a
-                  // 3 px uno del otro (mes simulado, H063).
-                  <dl className="tabular space-y-0.5 @md:grid @md:grid-cols-3 @md:gap-3 @md:space-y-0 @md:text-right @3xl:w-[26rem]">
-                    <Dato nombre="Con flete" valor={i.costoConGastos} />
-                    <Dato nombre="Venía a" valor={i.costoAnterior} apagado />
-                    <Dato nombre="Quedó en" valor={i.costoResultante} fuerte />
-                  </dl>
-                )}
-              </li>
-            ))}
+            {recepcion.items.map((i) => {
+              const descripcion = [i.producto, i.variante].filter(Boolean).join(" ");
+              const vino = Number(i.cantidad);
+              const pedido = i.pedido != null ? Number(i.pedido) : null;
+              const faltan = pedido !== null ? pedido - Number(i.yaRecibido ?? 0) : 0;
+              // Los tres costos, solo los que dicen algo: con el mismo
+              // $ 7.560 en los tres renglones no se leía nada (M3S3-026).
+              const conFlete = i.costoConGastos && Number(i.costoConGastos) !== Number(i.costoUnitario) ? i.costoConGastos : null;
+              const venia = i.costoAnterior && Number(i.costoAnterior) !== Number(i.costoResultante) ? i.costoAnterior : null;
+              return (
+                <li key={i.id} className="space-y-1.5 px-4 py-3 @3xl:grid @3xl:grid-cols-[minmax(0,1fr)_auto] @3xl:items-baseline @3xl:gap-6 @3xl:space-y-0">
+                  <div className="min-w-0">
+                    <p className="flex items-baseline justify-between gap-3">
+                      <span className="text-base font-medium">{descripcion}</span>
+                      {/* La cantidad con su unidad y a la derecha, como en el
+                          remito y el stock: decía «20 ·» (M3S4-037). */}
+                      <span className="tabular shrink-0 text-base font-semibold">
+                        {cantidadConUnidad(vino, i.unidad ?? null, descripcion)}
+                        {pedido !== null && pedido !== vino && (
+                          <span className="font-normal text-muted-foreground"> de {cantidad(pedido)}</span>
+                        )}
+                      </span>
+                    </p>
+                    <p className="text-base text-muted-foreground">
+                      {i.sku && <span className="codigo text-sm">{i.sku}</span>}
+                      {veCostos && (
+                        <span className="tabular">
+                          {i.sku ? " · " : ""}
+                          {formatearMonto(Number(i.costoUnitario))} · IVA {Number(i.alicuotaIva)}%
+                        </span>
+                      )}
+                      {recepcion.estado === "confirmada" && faltan > 0 && (
+                        <span className="font-semibold text-saldo-debe"> · faltan {cantidad(faltan)}</span>
+                      )}
+                    </p>
+                  </div>
+                  {veCostos && recepcion.estado === "confirmada" && (
+                    // En el teléfono, un dato por renglón con su rótulo al
+                    // lado: en tres columnas de 104 px los importes quedaban a
+                    // 3 px uno del otro (mes simulado, H063).
+                    <dl className="tabular space-y-0.5 @md:grid @md:grid-cols-3 @md:gap-3 @md:space-y-0 @md:text-right @3xl:w-[26rem]">
+                      {conFlete ? <Dato nombre="Con flete" valor={conFlete} /> : <span className="hidden @md:block" />}
+                      {venia ? <Dato nombre="Venía a" valor={venia} apagado /> : <span className="hidden @md:block" />}
+                      <Dato nombre="Quedó en" valor={i.costoResultante} fuerte />
+                    </dl>
+                  )}
+                </li>
+              );
+            })}
           </ul>
           {veCostos && (
             <dl className="tabular space-y-1 border-t border-linea px-4 py-3 text-base">
@@ -148,6 +180,20 @@ export default async function RecepcionPage({ params }: { params: Promise<{ id: 
       )}
 
       {recepcion.notas && <p className="text-base text-muted-foreground">{recepcion.notas}</p>}
+
+      {/* Lo que bajó del camión, con sus cantidades, listo para etiquetar
+          (M2S3-041): había que buscar cada código en Stock › Etiquetas. */}
+      {recepcion.estado === "confirmada" && (
+        <Link
+          href={`/admin/stock/etiquetas?m=${escribirPedidoDeEtiquetas(
+            recepcion.items.map((i) => ({ id: i.variantId, cantidad: Math.max(1, Math.round(Number(i.cantidad))) })),
+          )}`}
+          className="tarjeta-hundida inline-flex h-11 items-center gap-2 rounded-xl px-4 text-base font-medium"
+        >
+          <Tags className="h-4 w-4" aria-hidden="true" />
+          Etiquetas
+        </Link>
+      )}
 
       {veCostos && recepcion.estado !== "anulada" && <AnularRecepcion id={recepcion.id} />}
     </div>

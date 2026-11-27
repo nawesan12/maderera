@@ -2,6 +2,8 @@ package reportes
 
 import (
 	"context"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -58,6 +60,12 @@ func (s *Servicio) Sistema(ctx context.Context) (EstadoDelSistema, error) {
 	if out.Trabajos, err = pgx.CollectRows(rs, pgx.RowToStructByPos[TrabajoDelSistema]); err != nil {
 		return out, err
 	}
+	for i := range out.Trabajos {
+		if e := out.Trabajos[i].UltimoError; e != nil {
+			x := ErrorLegible(*e)
+			out.Trabajos[i].UltimoError = &x
+		}
+	}
 	rs, err = s.pool.Query(ctx, `
 		SELECT DISTINCT ON (tarea) tarea, periodo, estado::text, error, iniciada_at, terminada_at
 		FROM tareas_corridas ORDER BY tarea, iniciada_at DESC`)
@@ -77,4 +85,21 @@ func (s *Servicio) ReintentarTrabajo(ctx context.Context, id string) (bool, erro
 	tag, err := s.pool.Exec(ctx, `UPDATE trabajos SET estado = 'pendiente', intentos = 0, proximo_intento_at = now(),
 		tomado_hasta = NULL, terminado_at = NULL WHERE id = $1 AND estado = 'fallido'`, id)
 	return tag.RowsAffected() == 1, err
+}
+
+var nextContesto = regexp.MustCompile(`^Next contestó (\d+):\s*`)
+
+// ErrorLegible es el error guardado como lo dice hoy revalidar.Manejador:
+// los trabajos que fallaron con el worker de antes decían «Next contestó
+// 404:» sin nada después de los dos puntos (mes 23).
+func ErrorLegible(e string) string {
+	m := nextContesto.FindStringSubmatchIndex(e)
+	if m == nil {
+		return e
+	}
+	codigo, resto := e[m[2]:m[3]], strings.TrimSpace(e[m[1]:])
+	if resto == "" {
+		return "El sitio contestó " + codigo + "."
+	}
+	return "El sitio contestó " + codigo + ": " + resto
 }

@@ -79,6 +79,15 @@ type RenglonDelPedido struct {
 	Orden          int32   `json:"orden"`
 }
 
+// entregadoConLaFirma es, sobre la fila `h` del historial, cuándo pasó: el
+// «entregado» de la venta del mostrador se escribe al cobrar, y el cliente
+// se la lleva cuando firma el retiro. PED-1125 decía «Entregado 17:00» con
+// el remito firmado a las 17:42 y el pedido en «Para firmar» hasta entonces
+// (mes 23).
+const entregadoConLaFirma = `CASE WHEN h.estado = 'entregado' THEN greatest(h.created_at,
+	  (SELECT max(df.firmado_at) FROM deliveries df WHERE df.order_id = h.order_id AND df.tipo = 'retiro' AND df.estado = 'entregada'))
+	  ELSE h.created_at END`
+
 // Seguir devuelve el pedido si quien pregunta lo puede ver.
 func (s *Servicio) Seguir(ctx context.Context, ses *auth.Sesion, numero, token string) (*Seguimiento, error) {
 	var p Seguimiento
@@ -87,7 +96,7 @@ func (s *Servicio) Seguir(ctx context.Context, ses *auth.Sesion, numero, token s
 		  o.direccion_entrega, o.zona_envio, o.costo_envio::text, o.subtotal::text, o.total::text, o.medio_pago::text,
 		  o.estado_pago::text, `+fragmentos.EstadoParaElCliente+`, b.name, b.slug, o.created_at,
 		  coalesce(o.descuento, 0)::float8, `+fragmentos.MotivoDelDescuento+`, coalesce(`+fragmentos.SinCobrarDelPedido+`, 0)::float8,
-		  CASE WHEN `+fragmentos.EstadoParaElCliente+` = 'entregado' THEN (SELECT max(h.created_at) FROM order_status_history h
+		  CASE WHEN `+fragmentos.EstadoParaElCliente+` = 'entregado' THEN (SELECT max(`+entregadoConLaFirma+`) FROM order_status_history h
 		    WHERE h.order_id = o.id AND h.estado = 'entregado') END,
 		  EXISTS (SELECT 1 FROM customers c WHERE c.id = o.customer_id AND c.user_id IS NOT NULL)
 		FROM orders o LEFT JOIN branches b ON b.id = o.branch_id
@@ -264,8 +273,8 @@ func (s *Servicio) MiPedido(ctx context.Context, c *Cliente, numero string) (*Pe
 	if p.Items, err = pgx.CollectRows(filas, pgx.RowToStructByPos[RenglonDelPedido]); err != nil {
 		return nil, err
 	}
-	filas, err = s.pool.Query(ctx, `SELECT id, estado::text, nota, created_at FROM order_status_history
-		WHERE order_id = $1 ORDER BY created_at DESC`, p.ID)
+	filas, err = s.pool.Query(ctx, `SELECT h.id, h.estado::text, h.nota, `+entregadoConLaFirma+` AS cuando FROM order_status_history h
+		WHERE h.order_id = $1 ORDER BY cuando DESC, h.created_at DESC`, p.ID)
 	if err != nil {
 		return nil, err
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
+	"time"
 )
 
 // El seguimiento público dice en qué está el pedido (mes simulado,
@@ -66,7 +67,7 @@ func TestElRetiroSinFirmarEsListo(t *testing.T) {
 		returning id`, cliente).Scan(&pedido); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.pool.Exec(ctx, `insert into order_status_history (order_id, estado) values ($1, 'entregado')`, pedido); err != nil {
+	if _, err := e.pool.Exec(ctx, `insert into order_status_history (order_id, estado, created_at) values ($1, 'entregado', '2026-11-27T20:00:00Z')`, pedido); err != nil {
 		t.Fatal(err)
 	}
 	var remito string
@@ -97,10 +98,18 @@ func TestElRetiroSinFirmarEsListo(t *testing.T) {
 	if l, d, h := estado(); l != "por-firmar" || d != "por-firmar" || h != 0 {
 		t.Errorf("sin firmar: lista %s, detalle %s, %d «entregado» en el historial", l, d, h)
 	}
-	if _, err := e.pool.Exec(ctx, `update deliveries set estado = 'entregada' where id = $1`, remito); err != nil {
+	if _, err := e.pool.Exec(ctx, `update deliveries set estado = 'entregada', firmado_at = '2026-11-27T20:42:00Z' where id = $1`, remito); err != nil {
 		t.Fatal(err)
 	}
 	if l, d, h := estado(); l != "entregado" || d != "entregado" || h != 1 {
 		t.Errorf("firmado: lista %s, detalle %s, %d «entregado» en el historial", l, d, h)
+	}
+	// «Entregado» es cuando firmó, no cuando se cobró la venta (PED-1125).
+	_, det := pedir(t, web, "GET", e.srv.URL+"/api/v1/cuenta/pedidos/PED-1139", nil)
+	var p PedidoPropio
+	_ = json.Unmarshal([]byte(det), &p)
+	firma := time.Date(2026, 11, 27, 20, 42, 0, 0, time.UTC)
+	if len(p.Historial) != 1 || !p.Historial[0].CreatedAt.Equal(firma) {
+		t.Errorf("el entregado va con la firma: %+v", p.Historial)
 	}
 }

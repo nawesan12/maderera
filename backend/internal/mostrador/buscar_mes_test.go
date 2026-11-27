@@ -64,3 +64,25 @@ func TestPedidosSinCobrarDelCliente(t *testing.T) {
 		t.Fatalf("sin cobrar: %+v %v", ps, err)
 	}
 }
+
+// M2S3-028: «2x4», «tirante 2x4» y «pino 2x4» encuentran el tirante de
+// 2" x 4": la medida se tipea de corrido.
+func TestBuscarMedidaDeCorrido(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	cat := e.txt(t, `select id::text from categories limit 1`)
+	prod := e.txt(t, `insert into products (slug, name, category_id, description, unit) values ('tirante', 'Tirante Pino Tratado', $1, '', 'unidad') returning id::text`, cat)
+	v := e.txt(t, `insert into product_variants (product_id, sku, label, sort_order) values ($1, 'TIR-2X4', '2" x 4" x 3.60m', 1) returning id::text`, prod)
+	if _, err := e.pool.Exec(ctx, `insert into price_list_items (price_list_id, variant_id, price) values ($1, $2, 1000)`, e.general, v); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{"2x4", "tirante 2x4", "pino 2x4"} {
+		r, err := e.svc.Buscar(ctx, q, e.central, nil)
+		if err != nil || len(r) == 0 || r[0].VariantID != v {
+			t.Errorf("%q: %+v %v", q, r, err)
+		}
+	}
+	if r, err := e.svc.Buscar(ctx, "2x6", e.central, nil); err != nil || len(r) != 0 {
+		t.Errorf("2x6 trajo %+v %v", r, err)
+	}
+}

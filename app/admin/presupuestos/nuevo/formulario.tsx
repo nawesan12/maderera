@@ -25,6 +25,7 @@ import { buscarClientes, buscarEnMostrador } from "@/app/mostrador/actions";
 import { formatearMonto } from "@/components/admin/formato";
 import { importeDelCampo, importeIlegible, importeParaElCampo } from "@/lib/formato";
 import { formatearCantidad, formatearUnidadLarga, formatearUnidadPlural } from "@/lib/unidades";
+import { unidadDeVenta } from "@/lib/formato";
 import type { TarifaDeCorte } from "@/lib/cortes/tipos";
 import {
   BarraGuardar,
@@ -348,7 +349,21 @@ function Formulario({
                     <div className="min-w-0 basis-full sm:min-w-48 sm:flex-1 sm:basis-auto">
                       <p className="font-medium">{linea.descripcion}</p>
                       <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
-                        {linea.cantidad === 1 ? formatearUnidadLarga(linea.unidad) : formatearUnidadPlural(linea.unidad)}
+                        {/* La misma unidad que el presupuesto guardado: la lata
+                            de 4 litros es «u.», no «litros» (M2S2-136). */}
+                        {(() => {
+                          const u = unidadDeVenta(linea.unidad, linea.descripcion) ?? linea.unidad;
+                          return linea.cantidad === 1 ? formatearUnidadLarga(u) : formatearUnidadPlural(u);
+                        })()}
+                        {/* Sin precio no se guarda: el motivo junto al campo
+                            (M2S3-026: los botones quedaban grises sin decir
+                            por qué). */}
+                        {cero && (
+                          <span className="estado-problema inline-flex items-center gap-1 font-medium text-[var(--estado-tinta)]">
+                            <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+                            Sin precio
+                          </span>
+                        )}
                         {bajo && (
                           <span className="estado-problema inline-flex items-center gap-1 font-medium text-[var(--estado-tinta)]">
                             <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
@@ -822,9 +837,15 @@ function BuscadorDeProductos({
   // El cliente entra en la clave: cambiar de cliente cambia los precios, y los
   // resultados de antes ya no valen.
   const clave = `${consulta}|${branchId}|${customerId ?? ""}`;
-  const resultados =
-    consulta.length >= 2 && traidos.clave === clave ? traidos.items : [];
+  // Lo que hay en la sucursal primero; lo que no, al final (M2S3-029: el
+  // Fenólico de 18 sin stock salía primero y se cargaba sin aviso).
+  const resultados = (consulta.length >= 2 && traidos.clave === clave ? traidos.items : [])
+    .map((r, i) => ({ r, i }))
+    .sort((a, b) => Number(!(a.r.stock > 0)) - Number(!(b.r.stock > 0)) || a.i - b.i)
+    .map((x) => x.r);
   const buscando = consulta.length >= 2 && traidos.clave !== clave;
+  // Uno sin stock se agrega con un segundo toque.
+  const [confirmar, setConfirmar] = useState<string | null>(null);
 
   useEffect(() => {
     if (consulta.length < 2 || !branchId) return;
@@ -873,6 +894,11 @@ function BuscadorDeProductos({
                 <button
                   type="button"
                   onClick={() => {
+                    if (sinStock && confirmar !== r.variantId) {
+                      setConfirmar(r.variantId);
+                      return;
+                    }
+                    setConfirmar(null);
                     onAgregar({
                       variantId: r.variantId,
                       descripcion: `${r.producto} — ${r.medida}`,
@@ -883,7 +909,10 @@ function BuscadorDeProductos({
                     });
                     setTexto("");
                   }}
-                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-muted"
+                  aria-pressed={sinStock ? confirmar === r.variantId : undefined}
+                  className={`flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-muted ${
+                    sinStock && confirmar !== r.variantId ? "opacity-70" : ""
+                  }`}
                 >
                   <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 flex-1">
@@ -896,14 +925,23 @@ function BuscadorDeProductos({
                       {bajo && " · bajo costo"}
                     </span>
                   </span>
-                  <span className="tabular shrink-0 font-semibold">
-                    {r.precio > 0 ? formatearMonto(r.precio) : "A cotizar"}
-                  </span>
+                  {sinStock && confirmar === r.variantId ? (
+                    <span className="boton-accion shrink-0 rounded-lg px-3 py-1.5 text-sm font-semibold">Agregar igual</span>
+                  ) : (
+                    <span className="tabular shrink-0 font-semibold">
+                      {r.precio > 0 ? formatearMonto(r.precio) : "A cotizar"}
+                    </span>
+                  )}
                 </button>
               </li>
             );
           })}
         </ul>
+      )}
+      {/* Sin nada que mostrar, se dice (M2S3-028: la lista quedaba vacía y no
+          se sabía si estaba buscando). */}
+      {consulta.length >= 2 && !buscando && resultados.length === 0 && (
+        <p className="tarjeta-hundida rounded-lg px-4 py-3 text-base text-muted-foreground">Sin resultados</p>
       )}
     </div>
   );

@@ -890,14 +890,15 @@ components:
         orden: { type: integer }
     CobroDeComprobante:
       type: object
-      required: [id, invoiceId, medio, monto, referencia, receiptId, fecha, createdByUserId, createdAt]
+      required: [id, invoiceId, medio, monto, referencia, receiptId, recibo, fecha, createdByUserId, createdAt]
       properties:
         id: { type: string }
         invoiceId: { type: string }
-        medio: { type: string, enum: [efectivo, transferencia, mercado_pago, tarjeta, cheque, cuenta_corriente] }
+        medio: { type: string, enum: [efectivo, transferencia, mercado_pago, tarjeta, cheque, cuenta_corriente, deposito, echeq, retencion] }
         monto: { type: string }
         referencia: { type: string, nullable: true }
         receiptId: { type: string, nullable: true }
+        recibo: { type: string, nullable: true, description: el número del recibo (REC-0041) }
         fecha: { type: string, format: date-time }
         createdByUserId: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }

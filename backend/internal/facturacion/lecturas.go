@@ -21,7 +21,7 @@ import (
 // «tarjeta» es como queda en invoice_payments (medio_cobro) un cobro con
 // débito o crédito: sin ella, una factura cobrada con tarjeta no salía en el
 // filtro de contado. «debito» y «credito» no existen en el enum.
-var MediosDeContado = []string{"efectivo", "transferencia", "tarjeta", "debito", "credito", "mercado_pago", "cheque"}
+var MediosDeContado = []string{"efectivo", "transferencia", "tarjeta", "debito", "credito", "mercado_pago", "cheque", "deposito", "echeq"}
 
 // Listado es ComprobanteListado.
 type Listado struct {
@@ -310,6 +310,9 @@ type CobroDeFactura struct {
 	Monto           string    `json:"monto"`
 	Referencia      *string   `json:"referencia"`
 	ReceiptID       *string   `json:"receiptId"`
+	// Recibo es el número del recibo: la manual cobrada decía «recibo» sin
+	// número y la de un pedido «REC-0035» (M2S3-090).
+	Recibo          *string   `json:"recibo"`
 	Fecha           time.Time `json:"fecha"`
 	CreatedByUserID *string   `json:"createdByUserId"`
 	CreatedAt       time.Time `json:"createdAt"`
@@ -484,14 +487,15 @@ func (s *Servicio) Obtener(ctx context.Context, id string) (*Completo, error) {
 		c.Items = append(c.Items, i)
 	}
 	filas.Close()
-	filas, err = s.pool.Query(ctx, `SELECT id, invoice_id, medio::text, monto::text, referencia, receipt_id, fecha, created_by_user_id,
-		created_at FROM invoice_payments WHERE invoice_id = $1 ORDER BY fecha DESC`, id)
+	filas, err = s.pool.Query(ctx, `SELECT p.id, p.invoice_id, p.medio::text, p.monto::text, p.referencia, p.receipt_id, r.numero, p.fecha,
+		p.created_by_user_id, p.created_at FROM invoice_payments p LEFT JOIN receipts r ON r.id = p.receipt_id
+		WHERE p.invoice_id = $1 ORDER BY p.fecha DESC`, id)
 	if err != nil {
 		return nil, err
 	}
 	for filas.Next() {
 		var p CobroDeFactura
-		if err := filas.Scan(&p.ID, &p.InvoiceID, &p.Medio, &p.Monto, &p.Referencia, &p.ReceiptID, &p.Fecha, &p.CreatedByUserID,
+		if err := filas.Scan(&p.ID, &p.InvoiceID, &p.Medio, &p.Monto, &p.Referencia, &p.ReceiptID, &p.Recibo, &p.Fecha, &p.CreatedByUserID,
 			&p.CreatedAt); err != nil {
 			filas.Close()
 			return nil, err

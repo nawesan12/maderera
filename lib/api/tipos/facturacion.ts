@@ -825,10 +825,12 @@ export interface components {
             id: string;
             invoiceId: string;
             /** @enum {string} */
-            medio: "efectivo" | "transferencia" | "mercado_pago" | "tarjeta" | "cheque" | "cuenta_corriente";
+            medio: "efectivo" | "transferencia" | "mercado_pago" | "tarjeta" | "cheque" | "cuenta_corriente" | "deposito" | "echeq" | "retencion";
             monto: string;
             referencia: string | null;
             receiptId: string | null;
+            /** @description el número del recibo (REC-0041) */
+            recibo: string | null;
             /** Format: date-time */
             fecha: string;
             createdByUserId: string | null;

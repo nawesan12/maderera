@@ -341,6 +341,9 @@ export const medioCobro = pgEnum("medio_cobro", [
   "tarjeta",
   "cheque",
   "cuenta_corriente",
+  "deposito",
+  "echeq",
+  "retencion",
 ]);
 
 /**

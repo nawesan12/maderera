@@ -495,9 +495,9 @@ export default async function FichaComprobantePage({
                           href={`/api/recibos/${cobro.receiptId}/pdf`}
                           target="_blank"
                           rel="noopener"
-                          className="ml-2 text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                          className="codigo ml-2 text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
                         >
-                          recibo
+                          {cobro.recibo ?? "recibo"}
                         </a>
                       )}
                     </span>

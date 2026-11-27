@@ -21,8 +21,10 @@ import (
 // medioDeFactura es MEDIO_DE_FACTURA: cómo se anota cada medio del recibo en
 // los cobros de la factura (que tienen su propia lista, más corta).
 var medioDeFactura = map[cobros.Medio]string{
-	"efectivo": "efectivo", "transferencia": "transferencia", "deposito": "transferencia", "cheque": "cheque", "echeq": "cheque",
-	"tarjeta_debito": "tarjeta", "tarjeta_credito": "tarjeta", "mercado_pago": "mercado_pago", "retencion": "transferencia",
+	// El depósito, el e-Cheq y la retención con su nombre (00360): la factura
+	// decía «Transferencia» de un depósito (M3S2-039).
+	"efectivo": "efectivo", "transferencia": "transferencia", "deposito": "deposito", "cheque": "cheque", "echeq": "echeq",
+	"tarjeta_debito": "tarjeta", "tarjeta_credito": "tarjeta", "mercado_pago": "mercado_pago", "retencion": "retencion",
 }
 
 // ResultadoDeCobro es el EstadoFactura del cobro.

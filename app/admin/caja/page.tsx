@@ -416,13 +416,17 @@ export default async function CajaPage({
         <summary className="flex cursor-pointer list-none flex-wrap items-baseline justify-between gap-3 border-b border-linea px-5 py-4 [&::-webkit-details-marker]:hidden">
           <h2 className="inline-flex items-center gap-2 text-base font-semibold">
             Emitido en el mostrador
-            <span className="tabular font-normal text-muted-foreground">{resumenEmitido.cantidad}</span>
+            {/* Las vendidas, sin las anuladas: «27 · $ 0» eran 27 anuladas
+                (mes 23). La cantidad con las anuladas es la del paginador. */}
+            <span className="tabular font-normal text-muted-foreground">{resumenEmitido.cantidad - resumenEmitido.anuladas}</span>
             <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
           </h2>
           {/* Lo vendido en el mes, sin las anuladas, a la derecha; las
               anuladas en gris abajo: «68 · $ 1.250.422,60» parecía lo vendido
               y era lo anulado (M2S2-096). */}
-          <span className="tabular text-base font-semibold">{formatearImporte(resumenEmitido.importe)}</span>
+          <span className={`tabular text-base font-semibold ${resumenEmitido.importe === 0 ? "text-muted-foreground" : ""}`}>
+            {formatearImporte(resumenEmitido.importe)}
+          </span>
           {/* Quién anuló y cuánto, sin contar a ojo: cinco anulaciones por
               semana de la misma persona se ven acá antes que en la bitácora. */}
           {anulaciones.length > 0 && (

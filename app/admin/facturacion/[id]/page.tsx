@@ -511,7 +511,12 @@ export default async function FichaComprobantePage({
 
             {!anulada && !comprobante.ventaAnulada && comprobante.saldo > 0 && (
               <div className="p-5">
+                {/* La clave cambia con cada cobro: el formulario vuelve a
+                    nacer vacío, con el saldo nuevo propuesto. Quedaba con el
+                    importe y el número de operación del cobro anterior y el
+                    medio en Efectivo, listo para cobrar dos veces (M2S1-006). */}
                 <FormularioCobro
+                  key={`${comprobante.saldo}-${comprobante.enCuenta}-${comprobante.cobros.length}`}
                   id={comprobante.id}
                   saldo={comprobante.saldo}
                   // La que ya se debe en la cuenta no ofrece pasarla otra vez.

@@ -65,23 +65,55 @@ type Listado struct {
 // (el pase a cuenta no es un cobro). Las notas de crédito, las anuladas y los
 // borradores no se cobran. La de un pedido partido (a_cuenta, H047) debe las
 // dos cosas: el resto sin cobrar y, de la parte a cuenta, lo que la cuenta
-// todavía debe.
+// todavía debe. De la cuenta, cada factura debe solo su parte
+// (deudaQueLeTocaALaFactura), y lo acreditado con notas de crédito o una
+// devolución ya no se debe: la factura devuelta a la cuenta seguía con su
+// total y ofrecía cobrarlo entero (mes simulado, M3S2-002).
 const SaldoDeFactura = `(CASE WHEN i.estado IN ('anulada', 'borrador') OR i.tipo::text LIKE 'nota_credito%' THEN 0
-	WHEN o.a_cuenta IS NOT NULL AND o.estado <> 'cancelado' AND i.tipo::text LIKE 'factura%' THEN least(greatest(i.total - coalesce(c.cobrado_contado, 0), 0),
-	  coalesce(` + fragmentos.SinCobrarDelPedido + `, 0) + least(o.a_cuenta,
-	  greatest(coalesce((SELECT sum(amc.monto) FROM account_movements amc WHERE amc.customer_id = i.customer_id), 0), 0)))
-	WHEN ` + EnCuentaDeFactura + ` THEN least(greatest(i.total - coalesce(c.cobrado_contado, 0), 0),
-	  greatest(coalesce((SELECT sum(amc.monto) FROM account_movements amc WHERE amc.customer_id = i.customer_id), 0), 0))
-	WHEN i.order_id IS NULL OR i.tipo::text NOT LIKE 'factura%' THEN greatest(i.total - coalesce(c.cobrado, 0), 0)
-	ELSE least(greatest(i.total - coalesce(c.cobrado, 0), 0), coalesce(` + fragmentos.SinCobrarDelPedido + `, 0)) END)`
+	WHEN o.a_cuenta IS NOT NULL AND o.estado <> 'cancelado' AND i.tipo::text LIKE 'factura%' THEN least(greatest(i.total - coalesce(c.cobrado_contado, 0) - i.acreditado, 0),
+	  coalesce(` + fragmentos.SinCobrarDelPedido + `, 0) + least(o.a_cuenta, ` + deudaQueLeTocaALaFactura + `))
+	WHEN ` + EnCuentaDeFactura + ` THEN least(greatest(i.total - coalesce(c.cobrado_contado, 0) - i.acreditado, 0), ` + deudaQueLeTocaALaFactura + `)
+	WHEN i.order_id IS NULL OR i.tipo::text NOT LIKE 'factura%' THEN greatest(i.total - coalesce(c.cobrado, 0) - i.acreditado, 0)
+	ELSE least(greatest(i.total - coalesce(c.cobrado, 0) - i.acreditado, 0), coalesce(` + fragmentos.SinCobrarDelPedido + `, 0)) END)`
+
+// deudaQueLeTocaALaFactura es, de lo que el cliente debe en la cuenta, la
+// parte que todavía corresponde a la factura `i`: los recibos cancelan
+// primero lo más viejo, así que lo que se debe es lo último que se cargó.
+// Es el saldo de la cuenta menos los cargos posteriores al de esta factura
+// (sus compras, las de otros pedidos y las notas de débito), nunca menos de
+// cero. Antes cada factura a cuenta tomaba el saldo entero de la cuenta: dos
+// facturas de un cliente que debía $ 321.400 decían $ 321.400 cada una y la
+// columna sumaba el doble (mes simulado, M2S1-013).
+const deudaQueLeTocaALaFactura = `greatest(coalesce((SELECT sum(amc.monto) FROM account_movements amc WHERE amc.customer_id = i.customer_id), 0)
+	  - coalesce((SELECT sum(amp.monto) FROM account_movements amp WHERE amp.customer_id = i.customer_id AND amp.monto > 0
+	      AND amp.created_at > ` + cargoDeLaFactura + `), 0), 0)`
+
+// cargoDeLaFactura es cuándo la factura `i` (con su pedido `o`) entró a la
+// cuenta: el cargo del pedido, el pase a cuenta corriente o, la manual, su
+// emisión (el cargo va en la misma transacción).
+const cargoDeLaFactura = `(CASE WHEN o.id IS NOT NULL THEN coalesce((SELECT min(amf.created_at) FROM account_movements amf
+	    WHERE amf.customer_id = i.customer_id AND amf.referencia = o.numero AND amf.monto > 0),
+	    (SELECT min(ipf.created_at) FROM invoice_payments ipf WHERE ipf.invoice_id = i.id AND ipf.medio = 'cuenta_corriente'), i.created_at)
+	  ELSE coalesce((SELECT min(ipf.created_at) FROM invoice_payments ipf WHERE ipf.invoice_id = i.id AND ipf.medio = 'cuenta_corriente'), i.created_at) END)`
+
+// etiquetaDeLaFactura es etiqueta() en SQL para una factura `i`: la
+// referencia con la que la manual carga su deuda en la cuenta.
+const etiquetaDeLaFactura = `('Factura ' || upper(split_part(i.tipo::text, '_', 2)) || ' ' || lpad(i.punto_venta::text, 4, '0') || '-' || lpad(i.numero::text, 8, '0'))`
 
 // EnCuentaDeFactura: la factura `i` (con su pedido `o`) se debe en la cuenta
 // corriente: tiene el cobro «cuenta_corriente», o su pedido fue a cuenta
 // (medio cuenta corriente, el resto del mostrador cargado a la cuenta, o la
-// compra asentada en la cuenta con el número del pedido).
+// compra asentada en la cuenta con el número del pedido), o es una manual
+// emitida a cuenta corriente: su compra entró a la cuenta al emitirse y no
+// se cobró de contado en el mismo acto. Esa última ofrecía «Pasar a cuenta
+// corriente» como si no estuviera cargada (mes simulado, M3S4-008).
 const EnCuentaDeFactura = `(EXISTS (SELECT 1 FROM invoice_payments ipc WHERE ipc.invoice_id = i.id AND ipc.medio = 'cuenta_corriente')
 	OR (o.id IS NOT NULL AND o.estado <> 'cancelado' AND (o.medio_pago IS NOT DISTINCT FROM 'cuenta_corriente' OR o.estado_pago = 'parcial'
-	  OR EXISTS (SELECT 1 FROM account_movements am WHERE am.customer_id = o.customer_id AND am.referencia = o.numero AND am.tipo = 'compra'))))`
+	  OR EXISTS (SELECT 1 FROM account_movements am WHERE am.customer_id = o.customer_id AND am.referencia = o.numero AND am.tipo = 'compra')))
+	OR (i.order_id IS NULL AND i.customer_id IS NOT NULL AND i.tipo::text LIKE 'factura%'
+	  AND EXISTS (SELECT 1 FROM account_movements amm WHERE amm.customer_id = i.customer_id AND amm.tipo = 'compra'
+	    AND amm.created_at = i.created_at AND amm.referencia = ` + etiquetaDeLaFactura + `)
+	  AND NOT EXISTS (SELECT 1 FROM invoice_payments ipm WHERE ipm.invoice_id = i.id AND ipm.medio <> 'cuenta_corriente' AND ipm.created_at = i.created_at)))`
 
 // EstadoAnuladaViva es el filtro de las facturas con CAE de ventas anuladas
 // a las que les falta acreditar algo (fragmentos.FacturaViva).

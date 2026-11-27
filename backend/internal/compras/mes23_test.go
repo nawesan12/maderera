@@ -634,3 +634,48 @@ func TestReferenciaQueRepiteLosMedios(t *testing.T) {
 		t.Error("una referencia propia se conserva")
 	}
 }
+
+// Mes 23 (prueba en el navegador, M2S2-040): con «endoso_espera_cae» en
+// «al_cae», el cheque de una venta con su factura esperando el CAE no se
+// endosa; con la de arranque («si») se endosa en un pago blanco.
+func TestEndosoDelChequeQueEsperaElCAE(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	ctx := context.Background()
+	cheque := func(numero string) string {
+		var pedido, pago, id string
+		_ = e.pool.QueryRow(ctx, `insert into orders (numero, contacto_nombre, origen, estado, total) values ('PED-'||$1, 'DEP2', 'mostrador', 'entregado', 500) returning id`, numero).Scan(&pedido)
+		_ = e.pool.QueryRow(ctx, `insert into order_payments (order_id, medio, importe) values ($1, 'cheque', 500) returning id`, pedido).Scan(&pago)
+		if _, err := e.pool.Exec(ctx, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, order_id)
+			values ('factura_a', 15, $2::int, 'DEP2', 413.22, 86.78, 0, 0, 0, 500, 'emitida', now(), $1)`, pedido, numero[len(numero)-3:]); err != nil {
+			t.Fatal(err)
+		}
+		if err := e.pool.QueryRow(ctx, `insert into cheques (sentido, tipo, numero, fecha_pago, importe, estado, circuito, order_payment_id)
+			values ('recibido', 'fisico', $1, now(), 500, 'cartera', 'blanco', $2) returning id`, numero, pago).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	pagar := func(chequeID string) (int, string) {
+		return pedir(t, adm, "POST", e.u+"compras/pagos", map[string]any{"supplierId": e.proveedor, "total": 500, "medio": "cheque",
+			"circuito": "blanco", "retenciones": []any{}, "imputaciones": []any{}, "partes": []any{map[string]any{"medio": "cheque", "importe": 500, "chequeId": chequeID, "cheque": nil}}})
+	}
+	if _, err := e.pool.Exec(ctx, `insert into site_settings (clave, valor) values ('endoso_espera_cae', 'al_cae') on conflict (clave) do update set valor = excluded.valor`); err != nil {
+		t.Fatal(err)
+	}
+	trabado := cheque("00077001")
+	if c, b := pagar(trabado); c != 422 || !strings.Contains(b, "espera el CAE") {
+		t.Errorf("con al_cae: %d %s", c, b)
+	}
+	var estado string
+	_ = e.pool.QueryRow(ctx, `select estado::text from cheques where id = $1`, trabado).Scan(&estado)
+	if estado != "cartera" {
+		t.Errorf("salió de la cartera: %s", estado)
+	}
+	if _, err := e.pool.Exec(ctx, `update site_settings set valor = 'si' where clave = 'endoso_espera_cae'`); err != nil {
+		t.Fatal(err)
+	}
+	if c, b := pagar(trabado); c != 200 {
+		t.Errorf("con la de arranque: %d %s", c, b)
+	}
+}

@@ -919,6 +919,8 @@ export interface components {
             devuelto?: boolean;
             /** @description de una venta con su factura esperando el CAE */
             esperaCae?: boolean;
+            /** @description la razón social del cliente */
+            clienteRazonSocial?: string | null;
         };
         Gestion: {
             id: string;
@@ -1520,6 +1522,10 @@ export interface operations {
                         cliente: string | null;
                         /** @enum {string} */
                         circuito: "blanco" | "negro";
+                        /** @description de una venta con su factura esperando el CAE */
+                        esperaCae?: boolean;
+                        /** @description espera el CAE y la regla endoso_espera_cae no deja endosarlo */
+                        trabado?: boolean;
                     }[];
                 };
             };

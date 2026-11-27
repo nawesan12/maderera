@@ -86,3 +86,78 @@ func TestChequeDeUnReciboEnteroEnElB(t *testing.T) {
 		t.Errorf("con el circuito del reparto guardado: %s", circuito)
 	}
 }
+
+// Mes 23 (prueba en el navegador, M3S3-043): el listado trae la razón social
+// del cliente, para reconocerlo como librador aunque la ficha tenga otro
+// nombre.
+func TestChequeConLaRazonSocialDelCliente(t *testing.T) {
+	b := armarBase(t)
+	ctx := context.Background()
+	if _, err := b.pool.Exec(ctx, `insert into cheques (sentido, tipo, numero, librador, fecha_pago, importe, estado, circuito, customer_id)
+		values ('recibido', 'fisico', '77700001', 'Pérez S.R.L.', now(), 500, 'cartera', 'blanco', $1)`, b.cliente); err != nil {
+		t.Fatal(err)
+	}
+	cs, err := Cheques(ctx, b.pool, "vivos", "")
+	if err != nil || len(cs) != 1 {
+		t.Fatalf("%v %d", err, len(cs))
+	}
+	if cs[0].ClienteRazonSocial == nil || *cs[0].ClienteRazonSocial != "Pérez SRL" {
+		t.Errorf("razón social: %v", cs[0].ClienteRazonSocial)
+	}
+}
+
+// Mes 23 (prueba en el navegador): el rechazo de un cheque cargado sin
+// cliente no dice que la cuenta del cliente no cambió ni que se le avisó.
+func TestRechazoDeUnChequeSinCliente(t *testing.T) {
+	b := armarBase(t)
+	ctx := context.Background()
+	_, _ = b.pool.Exec(ctx, `insert into "user" (id, name, email, email_verified, created_at, updated_at) values ('admin', 'Admin', 'admin@prueba.test', true, now(), now())`)
+	s := Nuevo(b.pool, silencio)
+	ses := &auth.Sesion{UserID: "admin"}
+	var id string
+	if err := b.pool.QueryRow(ctx, `insert into cheques (sentido, tipo, numero, librador, fecha_pago, importe, estado, circuito)
+		values ('recibido', 'fisico', '00045001', 'Un tercero', now(), 120000, 'depositado', 'blanco') returning id`).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	r, err := s.CambiarEstado(ctx, ses, id, "rechazado", "Sin fondos")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Ok != "Rechazado." {
+		t.Errorf("mensaje: %q", r.Ok)
+	}
+}
+
+// Mes 23 (M2S2-040): con «endoso_espera_cae» en «al_cae», la cartera marca
+// trabado el cheque de una venta con su factura esperando el CAE; con la de
+// arranque, no.
+func TestCarteraConElChequeQueEsperaElCAE(t *testing.T) {
+	b := armarBase(t)
+	ctx := context.Background()
+	var pedido, pago string
+	_ = b.pool.QueryRow(ctx, `insert into orders (numero, contacto_nombre, origen, estado, total) values ('PED-1165', 'DEP2', 'mostrador', 'entregado', 1000) returning id`).Scan(&pedido)
+	_ = b.pool.QueryRow(ctx, `insert into order_payments (order_id, medio, importe) values ($1, 'cheque', 1000) returning id`, pedido).Scan(&pago)
+	if _, err := b.pool.Exec(ctx, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, order_id)
+		values ('factura_a', 15, 9, 'DEP2', 826.45, 173.55, 0, 0, 0, 1000, 'emitida', now(), $1)`, pedido); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.pool.Exec(ctx, `insert into cheques (sentido, tipo, numero, fecha_pago, importe, estado, circuito, order_payment_id)
+		values ('recibido', 'fisico', '00077001', now(), 1000, 'cartera', 'blanco', $1)`, pago); err != nil {
+		t.Fatal(err)
+	}
+	for _, caso := range []struct {
+		regla   string
+		trabado bool
+	}{{"si", false}, {"al_cae", true}} {
+		if _, err := b.pool.Exec(ctx, `insert into site_settings (clave, valor) values ('endoso_espera_cae', $1) on conflict (clave) do update set valor = excluded.valor`, caso.regla); err != nil {
+			t.Fatal(err)
+		}
+		cs, err := EnCartera(ctx, b.pool)
+		if err != nil || len(cs) != 1 {
+			t.Fatalf("%v %d", err, len(cs))
+		}
+		if !cs[0].EsperaCae || cs[0].Trabado != caso.trabado {
+			t.Errorf("%s: espera %v trabado %v", caso.regla, cs[0].EsperaCae, cs[0].Trabado)
+		}
+	}
+}

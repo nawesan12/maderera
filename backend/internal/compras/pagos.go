@@ -1193,6 +1193,19 @@ func (s *Servicio) registrarParte(ctx context.Context, tx pgx.Tx, ses *auth.Sesi
 			}
 			return "", fallo("Ese cheque es del circuito blanco y el pago va por el " + reglas.Circuito(ctx, tx) + ": endosalo en un pago blanco.")
 		}
+		// Con la regla «endoso_espera_cae» en «al_cae», el cheque de una
+		// venta con su factura esperando el CAE queda en la cartera hasta
+		// el CAE (mes 23, M2S2-040). Con la de arranque se endosa: es blanco.
+		if reglas.Es(ctx, tx, reglas.EndosoEsperaCAE, "al_cae") {
+			var espera bool
+			if err := tx.QueryRow(ctx, `SELECT ch.order_payment_id IS NOT NULL AND `+fragmentos.ChequeEsperaCAE("ch")+` FROM cheques ch WHERE ch.id = $1`,
+				*parte.ChequeID).Scan(&espera); err != nil {
+				return "", err
+			}
+			if espera {
+				return "", fallo("El cheque " + numero + " es de una factura que espera el CAE: se endosa cuando llegue.")
+			}
+		}
 		if diferencia := float64(importe) - parte.Importe; diferencia > 0.01 || diferencia < -0.01 {
 			return "", fallo("El importe del renglón no coincide con el del cheque endosado.")
 		}

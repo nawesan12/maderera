@@ -395,6 +395,8 @@ paths:
                     tipo: { type: string }
                     cliente: { type: string, nullable: true }
                     circuito: { type: string, enum: [blanco, negro] }
+                    esperaCae: { type: boolean, description: de una venta con su factura esperando el CAE }
+                    trabado: { type: boolean, description: espera el CAE y la regla endoso_espera_cae no deja endosarlo }
   /api/v1/admin/cheques/{id}/estado:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string } }
@@ -1033,6 +1035,7 @@ components:
         noAceptado: { type: boolean, description: rechazado sin haberse aceptado (era informado) }
         devuelto: { type: boolean, description: rechazado desde la cartera, devuelto al cliente }
         esperaCae: { type: boolean, description: de una venta con su factura esperando el CAE }
+        clienteRazonSocial: { type: string, nullable: true, description: la razón social del cliente, para reconocer al librador }
     Gestion:
       type: object
       required: [id, customerId, cliente, etapa, asunto, notas, proximaAccionAt, vencida, createdAt]

@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"mjbj/internal/reglas"
 	"mjbj/internal/ventas/fragmentos"
 )
 
@@ -47,6 +48,10 @@ type ChequeListado struct {
 	// EsperaCae es el cheque de una venta con su factura esperando el CAE:
 	// la pantalla dice eso y no «Circuito B» (M2S1-061, M2S3-035).
 	EsperaCae bool `json:"esperaCae"`
+	// ClienteRazonSocial es la del cliente: el librador «RF Construcciones
+	// SRL» del cliente Roberto Fernández (razón social RF Construcciones)
+	// salía «De tercero» (mes 23, M3S3-043).
+	ClienteRazonSocial *string `json:"clienteRazonSocial"`
 }
 
 // EstadosVivos son los cheques que todavía mueven plata; el resto terminó.
@@ -62,7 +67,7 @@ var columnasDeCheque = `
 		    (SELECT coalesce(sum(m.monto), 0)::float8 FROM account_movements m WHERE m.customer_id = ch.customer_id) END,
 		  ch.estado = 'rechazado' AND EXISTS (SELECT 1 FROM cheque_estados ce WHERE ce.cheque_id = ch.id AND ce.desde = 'informado' AND ce.hacia = 'rechazado'),
 		  ch.estado = 'rechazado' AND EXISTS (SELECT 1 FROM cheque_estados ce WHERE ce.cheque_id = ch.id AND ce.desde = 'cartera' AND ce.hacia = 'rechazado'),
-		  ch.order_payment_id IS NOT NULL AND ` + fragmentos.ChequeEsperaCAE("ch") + `
+		  ch.order_payment_id IS NOT NULL AND ` + fragmentos.ChequeEsperaCAE("ch") + `, nullif(cu.razon_social, '')
 		FROM cheques ch
 		LEFT JOIN customers cu ON cu.id = ch.customer_id
 		LEFT JOIN LATERAL (
@@ -76,7 +81,7 @@ func leerCheques(filas pgx.Rows) ([]ChequeListado, error) {
 		var c ChequeListado
 		return c, r.Scan(&c.ID, &c.Sentido, &c.Tipo, &c.Numero, &c.Banco, &c.Librador, &c.FechaPago, &c.Importe, &c.Estado,
 			&c.Cliente, &c.CustomerID, &c.Circuito, &c.Proveedor, &c.ProveedorID, &c.Notas, &c.ReceiptID, &c.Recibo, &c.MotivoRechazo, &c.SaldoCliente,
-			&c.NoAceptado, &c.Devuelto, &c.EsperaCae)
+			&c.NoAceptado, &c.Devuelto, &c.EsperaCae, &c.ClienteRazonSocial)
 	})
 }
 
@@ -132,12 +137,20 @@ type ChequeEnCartera struct {
 	// Circuito es en el que está el valor (fragmentos.CircuitoDelCheque):
 	// la pantalla de pagos solo ofrece endosar los del circuito del pago.
 	Circuito string `json:"circuito"`
+	// EsperaCae es el de una venta con su factura esperando el CAE, y
+	// Trabado que la regla «endoso_espera_cae» no deja endosarlo hasta el
+	// CAE (mes 23, M2S2-040): la pantalla lo muestra apagado, como los del
+	// otro circuito.
+	EsperaCae bool `json:"esperaCae"`
+	Trabado   bool `json:"trabado"`
 }
 
 // EnCartera es chequesEnCartera.
 func EnCartera(ctx context.Context, pool *pgxpool.Pool) ([]ChequeEnCartera, error) {
+	alCae := reglas.Es(ctx, pool, reglas.EndosoEsperaCAE, "al_cae")
 	filas, err := pool.Query(ctx, `
-		SELECT ch.id, ch.numero, ch.banco, ch.fecha_pago, ch.importe::float8, ch.tipo::text, cu.nombre, `+fragmentos.CircuitoDelCheque("ch")+`
+		SELECT ch.id, ch.numero, ch.banco, ch.fecha_pago, ch.importe::float8, ch.tipo::text, cu.nombre, `+fragmentos.CircuitoDelCheque("ch")+`,
+		  ch.order_payment_id IS NOT NULL AND `+fragmentos.ChequeEsperaCAE("ch")+`
 		FROM cheques ch LEFT JOIN customers cu ON cu.id = ch.customer_id
 		WHERE ch.estado = 'cartera' AND ch.sentido = 'recibido'
 		ORDER BY ch.fecha_pago`)
@@ -146,7 +159,9 @@ func EnCartera(ctx context.Context, pool *pgxpool.Pool) ([]ChequeEnCartera, erro
 	}
 	return pgx.CollectRows(filas, func(r pgx.CollectableRow) (ChequeEnCartera, error) {
 		var c ChequeEnCartera
-		return c, r.Scan(&c.ID, &c.Numero, &c.Banco, &c.FechaPago, &c.Importe, &c.Tipo, &c.Cliente, &c.Circuito)
+		err := r.Scan(&c.ID, &c.Numero, &c.Banco, &c.FechaPago, &c.Importe, &c.Tipo, &c.Cliente, &c.Circuito, &c.EsperaCae)
+		c.Trabado = c.EsperaCae && alCae
+		return c, err
 	})
 }
 

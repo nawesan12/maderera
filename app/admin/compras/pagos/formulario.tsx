@@ -677,8 +677,8 @@ export function FormularioPago({
                           apagados bajo el nombre de su circuito: así se ve por
                           qué no se pueden elegir. */}
                         {(() => {
-                          const { endosables, delOtroCircuito } = chequesParaEndosar(cartera, parte.medio, circuito);
-                          if (endosables.length + delOtroCircuito.length === 0) return null;
+                          const { endosables, delOtroCircuito, esperanCae } = chequesParaEndosar(cartera, parte.medio, circuito);
+                          if (endosables.length + delOtroCircuito.length + esperanCae.length === 0) return null;
                           const elegido = cartera.find((c) => c.id === parte.chequeId);
                           return (
                           <>
@@ -704,6 +704,15 @@ export function FormularioPago({
                             {delOtroCircuito.length > 0 && (
                               <optgroup label={etiquetasCircuito[circuito === "negro" ? "blanco" : "negro"]}>
                                 {delOtroCircuito.map((c) => (
+                                  <option key={c.id} value={c.id} disabled>
+                                    {textoDelEndoso(c)}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                            {esperanCae.length > 0 && (
+                              <optgroup label="Espera CAE">
+                                {esperanCae.map((c) => (
                                   <option key={c.id} value={c.id} disabled>
                                     {textoDelEndoso(c)}
                                   </option>

@@ -21,3 +21,15 @@ export function normalizar(texto: string): string {
     .replace(/\s+/g, " ")
     .trim();
 }
+
+/**
+ * El mensaje de WhatsApp con lo que la persona escribió en el asistente, tal
+ * cual: «quería consultar por necesito tirantes» no se leía (mes 23). Arranca
+ * con mayúscula y cierra con punto si no traía signo.
+ */
+export function mensajeDesdeElAsistente(escrito: string): string {
+  const t = escrito.trim().replace(/\s+/g, " ").slice(0, 200);
+  if (!t) return "Hola! Vengo de la web.";
+  const frase = t.replace(/^([¿¡"«]*)(\p{L})/u, (_, signos: string, letra: string) => signos + letra.toLocaleUpperCase("es-AR"));
+  return `Hola! Vengo de la web. ${/[.!?…]$/.test(frase) ? frase : `${frase}.`}`;
+}

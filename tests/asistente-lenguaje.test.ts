@@ -18,3 +18,14 @@ describe("normalizar", () => {
     expect(normalizar("18 mm.")).toBe("18 mm.");
   });
 });
+
+describe("el mensaje de WhatsApp del asistente", () => {
+  it("lleva lo escrito tal cual, no «consultar por necesito…» (mes 23)", async () => {
+    const { mensajeDesdeElAsistente } = await import("@/lib/asistente/lenguaje");
+    expect(mensajeDesdeElAsistente("necesito tirantes de 3 metros")).toBe(
+      "Hola! Vengo de la web. Necesito tirantes de 3 metros.",
+    );
+    expect(mensajeDesdeElAsistente("  ¿tienen fenólico?  ")).toBe("Hola! Vengo de la web. ¿Tienen fenólico?");
+    expect(mensajeDesdeElAsistente("")).toBe("Hola! Vengo de la web.");
+  });
+});

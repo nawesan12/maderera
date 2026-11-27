@@ -30,6 +30,7 @@ import { formatearPrecio } from "@/lib/formato";
 import { useCarrito } from "@/lib/carrito-context";
 import { useTienda } from "@/lib/tienda-context";
 import { ETIQUETA_ASISTENTE, EVENTO_ABRIR_ASISTENTE } from "@/lib/asistente/abrir";
+import { mensajeDesdeElAsistente } from "@/lib/asistente/lenguaje";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
 import { MuestraDePlaca } from "@/components/catalogo/placa-de-producto";
 
@@ -448,7 +449,7 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
           <BotonWhatsapp
             enlace={
               ultimoEscrito
-                ? `${enlaceWhatsapp.split("?")[0]}?text=${encodeURIComponent(`Hola! Vengo de la web y quería consultar por ${ultimoEscrito.slice(0, 200)}`)}`
+                ? `${enlaceWhatsapp.split("?")[0]}?text=${encodeURIComponent(mensajeDesdeElAsistente(ultimoEscrito))}`
                 : enlaceWhatsapp
             }
             className="w-full"

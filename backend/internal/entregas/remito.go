@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 	"time"
 
@@ -481,6 +482,23 @@ func (r *RemitoCompleto) ParaElPdf() pdf.RemitoCompleto {
 	return out
 }
 
+var reMedidaDeLaPlaca = regexp.MustCompile(`^\d{3,5}\s*[xX×]\s*\d{3,5}\s*(mm)?$`)
+
+// materialSinPlaca es «Melamina Blanca 18mm» de «Melamina Blanca — 2600 ×
+// 1830 mm — 18mm»: la medida de la placa en el renglón de una pieza confunde.
+func materialSinPlaca(material string) string {
+	partes := []string{}
+	for _, p := range strings.Split(material, " — ") {
+		if p = strings.TrimSpace(p); p != "" && !reMedidaDeLaPlaca.MatchString(p) {
+			partes = append(partes, p)
+		}
+	}
+	if len(partes) == 0 {
+		return material
+	}
+	return strings.Join(partes, " ")
+}
+
 // completarReposicion llena el remito de una reposición sin cargo con las
 // piezas de su corte: no cobra nada, no tiene factura y no dice lo que queda
 // en acopio del pedido (no es una entrega de su mercadería).
@@ -512,9 +530,12 @@ func (s *Servicio) completarReposicion(ctx context.Context, r *RemitoCompleto, c
 		if err := filas.Scan(&largo, &ancho, &cantidad, &etiqueta); err != nil {
 			return nil, err
 		}
-		d := fmt.Sprintf("%s — %d × %d mm", material, largo, ancho)
+		// La pieza primero y el material sin la medida de la placa: «Melamina
+		// Blanca — 2600 × 1830 mm — 18mm — 700 × 396 mm» ponía dos medidas
+		// seguidas y no se sabía cuál era la de la pieza.
+		d := fmt.Sprintf("%d × %d mm — %s", largo, ancho, materialSinPlaca(material))
 		if etiqueta != "" {
-			d += " · " + etiqueta
+			d = etiqueta + " " + d
 		}
 		r.Lineas = append(r.Lineas, LineaDelRemito{Descripcion: d, Unidad: "pieza", Cantidad: float64(cantidad)})
 	}

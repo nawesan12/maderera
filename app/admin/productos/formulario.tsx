@@ -459,9 +459,8 @@ export function FormularioProducto({
                 defecto={inicial.featured}
               />
               {/* «Activo» y no «Visible en el sitio»: apagado, el producto
-                  sale también del buscador del mostrador. Por eso el alta lo
-                  trae prendido (mes simulado, M3S2-036; si se quiere publicar
-                  aparte, hace falta un interruptor propio del sitio). */}
+                  sale también del buscador del mostrador. Cómo arranca en el
+                  alta lo decide la regla «alta_de_producto» (M3S2-036). */}
               <Interruptor
                 nombre="active"
                 etiqueta="Activo"

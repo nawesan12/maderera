@@ -239,6 +239,19 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
     ],
   },
   {
+    titulo: "Productos",
+    reglas: [
+      {
+        clave: "alta_de_producto",
+        pregunta: "Un producto nuevo arranca",
+        opciones: [
+          { valor: "activo", texto: "Activo" },
+          { valor: "inactivo", texto: "Inactivo, hasta prenderlo" },
+        ],
+      },
+    ],
+  },
+  {
     titulo: "Mi cuenta",
     reglas: [
       {

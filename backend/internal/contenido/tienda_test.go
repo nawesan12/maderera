@@ -169,3 +169,38 @@ func TestLosAjustesDejanRenglon(t *testing.T) {
 		t.Errorf("número del sitio: %q %q", valor, desc)
 	}
 }
+
+// M3S2-036: cómo arranca «Activo» en el alta de un producto es una regla:
+// arranca en «activo» (lo de siempre), se cambia a «inactivo» y vuelve, y
+// cada cambio queda en la bitácora con las palabras de la pantalla.
+func TestReglaDelAltaDeProducto(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	adm := e.cliente(t, "admin@prueba.test", "admin")
+	u := e.srv.URL + "/api/v1/admin/contenido/ajustes/alta_de_producto"
+	if v, _ := reglasdel.Valor(ctx, e.pool, reglasdel.AltaDeProducto); v != "activo" {
+		t.Fatalf("arranca en %q", v)
+	}
+	for _, valor := range []string{"inactivo", "activo"} {
+		if c, b := pedir(t, adm, "PUT", u, map[string]string{"valor": valor}); c != 204 {
+			t.Fatalf("%s: %d %s", valor, c, b)
+		}
+		if !reglasdel.Es(ctx, e.pool, reglasdel.AltaDeProducto, valor) {
+			t.Errorf("no quedó en %s", valor)
+		}
+	}
+	if c, _ := pedir(t, adm, "PUT", u, map[string]string{"valor": "a_veces"}); c != 422 {
+		t.Errorf("valor inválido: %d", c)
+	}
+	var descs []string
+	rs, _ := e.pool.Query(ctx, `select descripcion from audit_log where entidad = 'regla' and entidad_id = 'alta_de_producto' order by created_at`)
+	for rs.Next() {
+		var d string
+		_ = rs.Scan(&d)
+		descs = append(descs, d)
+	}
+	rs.Close()
+	if strings.Join(descs, "|") != "Un producto nuevo arranca: Activo → Inactivo, hasta prenderlo|Un producto nuevo arranca: Inactivo, hasta prenderlo → Activo" {
+		t.Errorf("bitácora: %q", descs)
+	}
+}

@@ -31,6 +31,7 @@ export const OPCIONES_DE_REGLAS = {
   base_retencion_iva: ["neto", "total"],
   retencion_en_el_cobro: ["admin", "quien_cobra"],
   escala_con_lista: ["si", "no"],
+  alta_de_producto: ["activo", "inactivo"],
 } as const;
 
 

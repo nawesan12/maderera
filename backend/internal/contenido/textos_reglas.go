@@ -38,6 +38,7 @@ var textoDeRegla = map[string]struct {
 	"base_retencion_iva":    {"La retención de IVA se calcula sobre…", map[string]string{"neto": "El neto, como Ganancias", "total": "El total con IVA"}},
 	"exportar_sicore":       {"Las retenciones del mes también en TXT para SICORE", map[string]string{"no": "No, solo el CSV", "si": "Sí"}},
 	"cae_en_compras":        {"La factura A de compra sin CAE", map[string]string{"opcional": "Entra igual", "exigido": "No entra sin CAE"}},
+	"alta_de_producto":      {"Un producto nuevo arranca", map[string]string{"activo": "Activo", "inactivo": "Inactivo, hasta prenderlo"}},
 }
 
 // DescripcionDeRegla es el renglón de la bitácora del cambio de una regla.

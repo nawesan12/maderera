@@ -9,6 +9,8 @@ import {
 } from "@/lib/dal/admin/products";
 import { esUuid } from "@/lib/uuid";
 import { listarSucursales } from "@/lib/dal/admin/inventory";
+import { ajustesDelSitio } from "@/lib/dal/contenido";
+import { valorDeRegla } from "@/lib/reglas";
 import { FormularioProducto, type ProductoForm } from "../formulario";
 
 export default async function NuevoProductoPage({
@@ -17,13 +19,14 @@ export default async function NuevoProductoPage({
   searchParams: Promise<{ copiar?: string; guardado?: string }>;
 }) {
   const { copiar, guardado } = await searchParams;
-  const [categorias, rubros, imputaciones, atributos, original, todas] = await Promise.all([
+  const [categorias, rubros, imputaciones, atributos, original, todas, ajustes] = await Promise.all([
     listarCategoriasAdmin(),
     listarRubrosAdmin(),
     imputacionesUsadas(),
     atributosUsados(),
     copiar && esUuid(copiar) ? obtenerProductoAdmin(copiar) : null,
     listarSucursales(),
+    ajustesDelSitio(),
   ]);
   // Las columnas de stock: las sucursales activas de la base, en su orden.
   const sucursales = todas
@@ -118,7 +121,8 @@ export default async function NuevoProductoPage({
           cuidados: "",
           featured: false,
           aPedido: false,
-          active: true,
+          // Cómo arranca lo decide la regla «alta_de_producto» (M3S2-036).
+          active: valorDeRegla(ajustes, "alta_de_producto") === "activo",
           imagen: "",
           variantes: [],
         }}

@@ -90,6 +90,10 @@ const (
 	// M3S3-020: si en la tienda el precio de la lista propia suma el
 	// descuento por medio de pago.
 	EscalaConLista = "escala_con_lista"
+	// M3S2-036 (00453): cómo arranca el interruptor «Activo» en el alta de
+	// un producto. «activo» es lo de siempre (apagado, tampoco lo encuentra
+	// el mostrador); «inactivo», para no publicar uno a medio cargar.
+	AltaDeProducto = "alta_de_producto"
 )
 
 // Opciones son los valores posibles de cada regla, el de arranque primero.
@@ -119,6 +123,7 @@ var Opciones = map[string][]string{
 	BaseRetencionIva:            {"neto", "total"},
 	RetencionEnElCobro:          {"admin", "quien_cobra"},
 	EscalaConLista:              {"si", "no"},
+	AltaDeProducto:              {"activo", "inactivo"},
 }
 
 // Arranque es el valor de una regla cuando la fila no está o tiene algo que

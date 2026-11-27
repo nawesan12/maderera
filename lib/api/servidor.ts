@@ -3,6 +3,7 @@ import "server-only";
 import createClient from "openapi-fetch";
 import { traducirMensaje } from "@/lib/api/mensajes";
 import { cookies, headers } from "next/headers";
+import { connection } from "next/server";
 import { unstable_rethrow } from "next/navigation";
 import { cache } from "react";
 import type { paths } from "./tipos";
@@ -29,6 +30,15 @@ export const API_URL = process.env.API_URL ?? "http://127.0.0.1:8080";
  */
 export async function cabecerasDelPedido(): Promise<Record<string, string>> {
   const h = await headers();
+  /*
+   * Y se espera también a la petición: leer las cabeceras deja la página en la
+   * etapa «runtime», donde un Date.now() posterior —en la página o en
+   * openapi-fetch— cuenta como prerender. En `next dev` cada página del panel
+   * tiraba «Date.now() while prerendering» y el overlay recargaba en loop con
+   * cada compilación, hasta no dejar iniciar sesión (mes 23). En producción
+   * no cambia nada: estas páginas ya eran dinámicas.
+   */
+  await connection();
   const out: Record<string, string> = {};
   const cookie = await cookieDelPedido(h);
   if (cookie) out.cookie = cookie;
@@ -95,6 +105,7 @@ export const apiPublica = createClient<paths>({ baseUrl: API_URL, cache: "no-sto
  */
 export const apiPublicaDelVisitante = cache(async () => {
   const h = await headers();
+  await connection();
   const out: Record<string, string> = {};
   const ip = h.get("x-forwarded-for") ?? h.get("x-real-ip");
   if (ip) out["x-forwarded-for"] = ip;

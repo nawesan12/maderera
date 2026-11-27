@@ -2,6 +2,7 @@
 titulo: Clientes y cuenta corriente
 resumen: La ficha del cliente, el saldo, el límite de crédito y cómo se une con su cuenta del sitio.
 orden: 2
+para: admin, vendedor
 ---
 
 ## La ficha
@@ -103,8 +104,8 @@ un correo o mandarlo por WhatsApp cuando se reclama—. Los tipos de movimiento 
 | Nota de débito | Suma deuda |
 | Ajuste | Corrige una diferencia |
 
-**El signo lo pone el tipo, no usted.** Cargue siempre el importe en positivo y
-elija el tipo: un pago de $50.000 se carga como "Pago" y "50000", no como
+**El signo lo pone el tipo, no vos.** Cargá siempre el importe en positivo y
+elegí el tipo: un pago de $50.000 se carga como "Pago" y "50000", no como
 "-50000". Dejar que se escriba el signo a mano es la forma más rápida de que una
 cuenta termine al revés.
 
@@ -121,7 +122,7 @@ permitiría que alguien se registre con la dirección de un tercero y le quede a
 la vista la cuenta corriente ajena.
 
 Cuando aparece una cuenta web que parece ser de un cliente ya fichado, el panel
-lo avisa en su ficha. **La unión la hace usted**, con el botón *Vincular*, y
+lo avisa en su ficha. **La unión la hacés vos**, con el botón *Vincular*, y
 solo cuando está seguro de que es la misma persona: al unirlas se mudan pedidos,
 presupuestos, movimientos y direcciones de una ficha a la otra.
 

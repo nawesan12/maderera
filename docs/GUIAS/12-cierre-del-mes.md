@@ -2,6 +2,7 @@
 titulo: Cerrar el mes
 resumen: La posición de IVA, qué conviene resolver antes, y los asientos que se le mandan al estudio.
 orden: 12
+para: admin
 ---
 
 Está en **Cierre del mes**, y es la pantalla que se mira una vez por mes, cuando

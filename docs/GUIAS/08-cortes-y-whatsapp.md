@@ -2,6 +2,7 @@
 titulo: Cortes y WhatsApp
 resumen: La cola de corte y la bandeja de mensajes.
 orden: 8
+para: admin, vendedor, deposito, aserradero
 ---
 
 ## Cortes
@@ -106,6 +107,7 @@ La pieza que faltó en una entrega se repone desde el mismo pedido, con
 Un corte que todavía no se cortó se **corrige** (se carga de nuevo con lo suyo
 y el nuevo reemplaza al viejo en la cola) o se **anula** con un motivo.
 
+<!-- solo: admin, vendedor -->
 ### Cobrar el corte
 
 El corte se cobra **por pasada de sierra**, y el precio depende del material y
@@ -128,6 +130,7 @@ de madera, no.
 Si el material no tiene tarifa cargada, la ficha lo avisa con el nombre exacto
 que hay que dar de alta. Una lista de precios sin tarifa propia cae a la de
 público, igual que el precio del catálogo.
+<!-- /solo -->
 
 ### Pasarle el trabajo a la máquina
 
@@ -161,6 +164,7 @@ Lo instala quien administra el sistema una sola vez. Si un día deja de
 aparecer un archivo, lo primero a mirar es que la PC tenga internet y que el
 trabajo esté **en cola** y con piezas cargadas.
 
+<!-- solo: admin, vendedor -->
 ## WhatsApp
 
 *WhatsApp* es la bandeja de conversaciones con los clientes. Al costado de cada
@@ -210,3 +214,4 @@ mensaje lo cobra Meta.
 Si un cliente escribe **BAJA**, no le sale ningún aviso más (y se le confirma);
 con **ALTA** vuelve. También se puede marcar desde la conversación, a la
 derecha.
+<!-- /solo -->

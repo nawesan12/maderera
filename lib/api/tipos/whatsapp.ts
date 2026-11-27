@@ -737,7 +737,7 @@ export interface components {
         };
         Bandeja: {
             /** @enum {string} */
-            filtro: "todas" | "sin-leer" | "mias" | "sin-asignar" | "resueltas";
+            filtro: "todas" | "sin-leer" | "mias" | "sin-asignar" | "derivadas" | "resueltas";
             conversaciones: components["schemas"]["ConversacionListada"][];
             contadores: {
                 sinLeer: number;

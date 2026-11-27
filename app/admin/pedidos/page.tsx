@@ -29,6 +29,16 @@ const COLUMNAS = [
   { estado: "en-camino", titulo: "En camino" },
 ] as const;
 
+/**
+ * Las columnas que abre cada número de «Para hoy» (mes simulado, M3S2-020 y
+ * M2S1-192): «16 pedidos por preparar» abría el tablero entero, y «12 Sin
+ * preparar» arriba de todo parecía otro número.
+ */
+const COLUMNAS_DEL_FILTRO: Record<string, readonly string[]> = {
+  "por-preparar": ["pendiente", "preparando"],
+  listo: ["listo"],
+};
+
 export default async function PedidosPage({
   searchParams,
 }: {
@@ -36,6 +46,8 @@ export default async function PedidosPage({
 }) {
   const params = await searchParams;
   if (params.ver === "historial") return <Historial params={params} />;
+  const soloColumnas = params.estado ? COLUMNAS_DEL_FILTRO[params.estado] : undefined;
+  const columnas = soloColumnas ? COLUMNAS.filter((c) => soloColumnas.includes(c.estado)) : COLUMNAS;
   const [pedidos, sucursales] = await Promise.all([
     listarPedidos({ busqueda: params.buscar, sucursal: params.sucursal, vista: params.buscar ? undefined : "tablero" }),
     listarSucursalesPublicas(),
@@ -105,7 +117,7 @@ export default async function PedidosPage({
       ) : (
         <>
           <Tablero>
-            {COLUMNAS.map((columna) => {
+            {columnas.map((columna) => {
               const enColumna = pedidos.filter(
                 (p) => p.estado === columna.estado,
               );
@@ -129,7 +141,7 @@ export default async function PedidosPage({
             })}
           </Tablero>
 
-          {entregadosSinCobrar.length > 0 && (
+          {!soloColumnas && entregadosSinCobrar.length > 0 && (
             <section className="mt-8">
               <h2 className="mb-2.5 text-base font-semibold">
                 Entregados sin cobrar{" "}
@@ -145,7 +157,7 @@ export default async function PedidosPage({
             </section>
           )}
 
-          {entregados.length > 0 && (
+          {!soloColumnas && entregados.length > 0 && (
             <section className="mt-8">
               <h2 className="mb-2.5 text-base font-semibold text-muted-foreground">
                 Cerrados esta semana

@@ -23,7 +23,7 @@ export function requireBandeja(): Promise<SessionUser> {
   return requireStaffRole(...ROLES_BANDEJA);
 }
 
-export type FiltroBandeja = "todas" | "sin-leer" | "mias" | "sin-asignar" | "resueltas";
+export type FiltroBandeja = "todas" | "sin-leer" | "mias" | "sin-asignar" | "derivadas" | "resueltas";
 
 type Fechas<T, K extends keyof T> = Omit<T, K> & { [P in K]: null extends T[P] ? Date | null : Date };
 

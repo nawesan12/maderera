@@ -26,15 +26,24 @@ const ESTADOS: Record<string, { texto: string; clase: string }> = {
  * que no ve precios. Arriba, las órdenes que se esperan, con el remito a
  * mano; cargar una recepción suelta, con sus costos, queda para el admin.
  */
-export default async function RecepcionesPage() {
+export default async function RecepcionesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ estado?: string }>;
+}) {
   const usuario = await requireStaff();
+  // A donde lleva «recepciones sin factura de compra» del inicio (mes
+  // simulado, M2S4-011): Facturas de compra no las mostraba.
+  const sinFactura = (await searchParams).estado === "sin-factura";
   if (!puedeEntrar("/admin/recepciones", usuario.staffRole)) notFound();
   const veCostos = puedeEntrar("/admin/recepciones/nueva", usuario.staffRole);
 
-  const [recepciones, esperadas] = await Promise.all([listarRecepciones(), ordenesPorRecibir()]);
+  const [recepciones, esperadas] = await Promise.all([listarRecepciones(sinFactura ? 500 : 50), ordenesPorRecibir()]);
   const borradores = recepciones.filter((r) => r.estado === "borrador").length;
-  const vivas = recepciones.filter((r) => r.estado !== "anulada");
-  const anuladas = recepciones.filter((r) => r.estado === "anulada");
+  const vivas = recepciones.filter((r) =>
+    sinFactura ? r.estado === "confirmada" && !r.facturada : r.estado !== "anulada",
+  );
+  const anuladas = sinFactura ? [] : recepciones.filter((r) => r.estado === "anulada");
 
   return (
     <div className="space-y-6">
@@ -51,9 +60,20 @@ export default async function RecepcionesPage() {
         )}
       </header>
 
-      {esperadas.length > 0 && <PorRecibir ordenes={esperadas} />}
+      {sinFactura && (
+        <nav aria-label="Ver recepciones" className="flex gap-2">
+          <Link href="/admin/recepciones" className="inline-flex h-10 items-center rounded-lg bg-hundida px-4 text-base font-medium text-muted-foreground hover:text-foreground">
+            Todas
+          </Link>
+          <span aria-current="page" className="inline-flex h-10 items-center rounded-lg bg-foreground px-4 text-base font-medium text-background">
+            Sin factura
+          </span>
+        </nav>
+      )}
 
-      {borradores > 0 && (
+      {!sinFactura && esperadas.length > 0 && <PorRecibir ordenes={esperadas} />}
+
+      {!sinFactura && borradores > 0 && (
         <p className="estado-espera rounded-xl bg-[var(--estado-fondo)] px-4 py-3 text-base">
           {plural(borradores, "recepción en borrador", "recepciones en borrador")}: todavía no entró al stock.
         </p>
@@ -64,7 +84,9 @@ export default async function RecepcionesPage() {
           {vivas.length === 0 ? (
             <div className="px-5 py-14 text-center">
               <PackagePlus className="mx-auto h-8 w-8 text-muted-foreground" />
-              <p className="mt-3 text-base text-muted-foreground">Todavía no se cargó ninguna recepción.</p>
+              <p className="mt-3 text-base text-muted-foreground">
+                {sinFactura ? "Todas las recepciones tienen su factura." : "Todavía no se cargó ninguna recepción."}
+              </p>
             </div>
           ) : (
             <Lista recepciones={vivas} veCostos={veCostos} />

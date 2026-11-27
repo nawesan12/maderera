@@ -335,8 +335,12 @@ func (s *Servicio) CorregirReceptor(ctx context.Context, id string, c map[string
 		if err != nil {
 			return err
 		}
-		if estado != "rechazada" || cae != nil {
-			return errEmision("Solo se corrigen los datos de un comprobante que ARCA rechazó.")
+		// También el emitido sin CAE: todavía no salió a ARCA y el dato mal
+		// cargado se corrige con el mismo número, sin darlo de baja y correr
+		// la serie (mes simulado, FLUJO-F092). El cliente recibe el papel
+		// corregido.
+		if (estado != "rechazada" && estado != "emitida") || cae != nil {
+			return errEmision("Solo se corrigen los datos de un comprobante sin CAE.")
 		}
 		config, err := emisorEn(ctx, tx)
 		if err != nil {
@@ -358,10 +362,15 @@ func (s *Servicio) CorregirReceptor(ctx context.Context, id string, c map[string
 		if m := fiscal.FaltaIdentificarComprador(tipo, total, cuit, s.ahora()); m != "" {
 			return errEmision(m)
 		}
-		_, err = tx.Exec(ctx, `UPDATE invoices SET receptor_nombre = $2, receptor_cuit = $3, receptor_condicion_iva = $4::condicion_iva,
+		if _, err = tx.Exec(ctx, `UPDATE invoices SET receptor_nombre = $2, receptor_cuit = $3, receptor_condicion_iva = $4::condicion_iva,
 			receptor_domicilio = $5, estado = 'emitida', observaciones_arca = NULL, updated_at = now() WHERE id = $1`,
-			id, cab.nombre, cuit, cab.condicion, cab.domicilio)
-		return err
+			id, cab.nombre, cuit, cab.condicion, cab.domicilio); err != nil {
+			return err
+		}
+		if estado == "emitida" {
+			return s.encolarAviso(ctx, tx, id)
+		}
+		return nil
 	})
 }
 

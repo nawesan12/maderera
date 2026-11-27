@@ -379,10 +379,14 @@ func TestRechazadoSeCorrigeYDestraba(t *testing.T) {
 		"receptorCondicionIva": "responsable_inscripto"}); st != 422 || !strings.Contains(string(b), "la letra no se puede cambiar") {
 		t.Fatalf("cambiar la letra: %d %s", st, b)
 	}
-	// Solo un rechazado.
-	if st, b := corregir(segundo, map[string]string{"receptorNombre": "Juan Pérez", "receptorCondicionIva": "consumidor_final"}); st != 422 ||
-		!strings.Contains(string(b), "ARCA rechazó") {
-		t.Fatalf("corregir uno no rechazado: %d %s", st, b)
+	// El emitido sin CAE también se corrige, antes de ir a ARCA, sin
+	// pedirle el CAE (FLUJO-F092): el cliente recibe el papel corregido.
+	if st, b := corregir(segundo, map[string]string{"receptorNombre": "Juana Pérez", "receptorCondicionIva": "consumidor_final"}); st != 200 ||
+		leerJSON[map[string]string](t, b)["ok"] != "Datos corregidos." {
+		t.Fatalf("corregir uno sin CAE: %d %s", st, b)
+	}
+	if c, _ := e.s.Obtener(ctx, segundo); c.ReceptorNombre != "Juana Pérez" || c.Cae != nil {
+		t.Fatalf("el segundo corregido: %s %v", c.ReceptorNombre, c.Cae)
 	}
 	st, b := corregir(primero, map[string]string{"receptorNombre": "Juan Pérez", "receptorCuit": "20-12345678-6", "receptorCondicionIva": "consumidor_final"})
 	if st != 200 || !strings.HasPrefix(leerJSON[map[string]string](t, b)["ok"], "Autorizado por ARCA") {

@@ -284,9 +284,10 @@ export default async function FichaComprobantePage({
               />
             </div>
           )}
-          {autorizable && comprobante.estado === "rechazada" && (
+          {autorizable && (comprobante.estado === "rechazada" || comprobante.estado === "emitida") && (
             <div className="mt-3">
               <CorregirReceptor
+                rechazado={comprobante.estado === "rechazada"}
                 id={comprobante.id}
                 nombre={comprobante.receptorNombre}
                 cuit={comprobante.receptorCuit}

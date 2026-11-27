@@ -102,12 +102,15 @@ export function CorregirReceptor({
   cuit,
   condicion,
   domicilio,
+  rechazado = true,
 }: {
   id: string;
   nombre: string;
   cuit: string | null;
   condicion: string;
   domicilio: string | null;
+  /** Sin rechazo (emitido sin CAE) no se reenvía a ARCA: se corrige y listo. */
+  rechazado?: boolean;
 }) {
   const [estado, accion, pendiente] = useActionState(corregirReceptor, inicial);
   const [abierto, setAbierto] = useState(false);
@@ -119,7 +122,7 @@ export function CorregirReceptor({
         onClick={() => setAbierto(true)}
         className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-center text-base font-medium transition-colors hover:bg-muted sm:w-auto"
       >
-        Corregir los datos del cliente y reenviar
+        {rechazado ? "Corregir los datos del cliente y reenviar" : "Corregir los datos del cliente"}
       </button>
     );
   }
@@ -127,10 +130,7 @@ export function CorregirReceptor({
   return (
     <form action={accion} className="space-y-2.5 rounded-xl border bg-background p-4">
       <input type="hidden" name="id" value={id} />
-      <p className="text-sm text-muted-foreground">
-        Sale con el mismo número: para ARCA un comprobante rechazado no lo usó.
-        La ficha del cliente no cambia.
-      </p>
+      <p className="text-sm text-muted-foreground">Mismo número. La ficha del cliente no cambia.</p>
       <label className="block text-sm font-medium">
         Nombre o razón social
         <input
@@ -181,7 +181,7 @@ export function CorregirReceptor({
           className="inline-flex h-10 items-center gap-2 rounded-lg bg-accion px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
         >
           {pendiente ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
-          Corregir y reenviar a ARCA
+          {rechazado ? "Corregir y reenviar a ARCA" : "Corregir"}
         </button>
         <button
           type="button"

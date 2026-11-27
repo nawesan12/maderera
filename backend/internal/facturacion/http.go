@@ -530,8 +530,17 @@ func (a *API) CorregirReceptorYReintentar(ctx context.Context, r facturacionapi.
 		return nil, err
 	}
 	id := r.Id.String()
+	var estado string
+	_ = a.s.pool.QueryRow(ctx, `SELECT estado::text FROM invoices WHERE id = $1`, id).Scan(&estado)
 	if err := a.s.CorregirReceptor(ctx, id, *r.Body); err != nil {
 		return nil, comoProblema(err)
+	}
+	// El emitido sin CAE no fue a ARCA: se corrige y queda esperando su
+	// turno, sin pedir el CAE (FLUJO-F092).
+	if estado == "emitida" {
+		bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaEditar, "factura", id,
+			"Corrigió los datos del receptor de un comprobante sin CAE", nil)
+		return mensaje("Datos corregidos."), nil
 	}
 	bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaEditar, "factura", id,
 		"Corrigió los datos del receptor de un comprobante rechazado por ARCA", nil)

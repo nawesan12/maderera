@@ -72,6 +72,9 @@ type CorteListado struct {
 	// SalioAt es cuándo salió de la máquina: terminado_at, o para lo de antes
 	// de la 00240 la última modificación. Nulo mientras está en la cola.
 	SalioAt *time.Time `json:"salioAt"`
+	// OrderID: el corte de un pedido se entrega con el pedido, con quién
+	// retira y su remito (mes simulado, M3S2-026 y M3S4-040).
+	OrderID *string `json:"orderId"`
 	// UpdatedAt es lo que compara el agente del taller para volver a bajar
 	// un corte corregido. No sale en la cola.
 	UpdatedAt time.Time `json:"-"`
@@ -135,7 +138,7 @@ func (s *Servicio) Listar(ctx context.Context, busqueda, estado string, sucursal
 		       co.estado::text, co.urgente, co.notas, b.name, co.created_at, co.updated_at, r.piezas, r.superficie,
 		       co.mitad::text, co.sin_cargo, co.branch_id::text,
 		       CASE WHEN co.estado IN ('terminado', 'retirado') THEN coalesce(co.terminado_at, co.updated_at) END,
-		       pv.largo_mm, pv.ancho_mm
+		       pv.largo_mm, pv.ancho_mm, co.order_id::text
 		FROM cutting_orders co
 		LEFT JOIN branches b ON b.id = co.branch_id
 		LEFT JOIN product_variants pv ON pv.id = co.variant_id
@@ -162,7 +165,7 @@ func (s *Servicio) Listar(ctx context.Context, busqueda, estado string, sucursal
 		var sup *jsmath.Num
 		var vl, va *int32
 		if err := filas.Scan(&c.ID, &c.Numero, &c.Cliente, &c.Material, &c.Placas, &c.Pasadas, &c.Estado, &urgente,
-			&c.Notas, &c.Sucursal, &c.CreatedAt, &c.UpdatedAt, &piezas, &sup, &c.Mitad, &c.SinCargo, &c.BranchID, &c.SalioAt, &vl, &va); err != nil {
+			&c.Notas, &c.Sucursal, &c.CreatedAt, &c.UpdatedAt, &piezas, &sup, &c.Mitad, &c.SinCargo, &c.BranchID, &c.SalioAt, &vl, &va, &c.OrderID); err != nil {
 			return nil, err
 		}
 		c.Material = MaterialEnOrden(c.Material, vl, va)

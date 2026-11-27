@@ -489,6 +489,8 @@ export interface components {
              * @description Cuándo salió de la máquina
              */
             salioAt: string | null;
+            /** @description El pedido del corte: se entrega desde ahí */
+            orderId?: string | null;
             id: string;
             numero: string;
             cliente: string;

@@ -345,6 +345,8 @@ function TarjetaCorte({
             // La reposición sin cargo no cobra: termina con un toque, sin
             // confirmar pasadas (mes simulado, M3S1-038).
             pasadas={corte.sinCargo ? 0 : corte.pasadas}
+            pedidoId={corte.orderId ?? null}
+            sinCargo={corte.sinCargo}
             compacto
             soloMaquina={soloMaquina}
           />

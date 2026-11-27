@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowRight, Check, Flame, Loader2, Minus, Plus, Undo2, X } from "lucide-react";
-import { alternarUrgente, avanzarCorte, volverCorte } from "./actions";
+import { alternarUrgente, avanzarCorte, remitoDeLaReposicion, volverCorte } from "./actions";
 
 const SIGUIENTE: Record<string, string> = {
   "en-cola": "Empezar",
@@ -26,7 +26,21 @@ export function AccionesCorte({
   pasadas = 0,
   compacto = false,
   soloMaquina = false,
+  pedidoId = null,
+  sinCargo = false,
 }: {
+  /**
+   * El pedido del corte: terminado, se entrega desde el pedido, con quién
+   * retira y el remito, y el pedido queda entregado. «Marcar retirado» acá
+   * lo dejaba en Preparando y había que pedir los datos otra vez (mes
+   * simulado, M3S4-040).
+   */
+  pedidoId?: string | null;
+  /**
+   * La reposición sin cargo: al retirarla se firma su remito, con nombre y
+   * documento; salía con un toque y sin constancia (M3S2-026).
+   */
+  sinCargo?: boolean;
   id: string;
   estado: string;
   urgente: boolean;
@@ -195,6 +209,47 @@ export function AccionesCorte({
           Entregar sin cobrar
         </button>
       </div>
+    );
+  }
+
+  if (etiqueta && estado === "terminado" && pedidoId && !sinCargo) {
+    return (
+      <Link
+        href={`/admin/pedidos/${pedidoId}`}
+        className={`boton-accion inline-flex ${alto} w-full items-center justify-center gap-1.5 rounded-lg px-3 text-base font-medium`}
+      >
+        <ArrowRight className="h-5 w-5" />
+        Entregar
+      </Link>
+    );
+  }
+
+  if (etiqueta && estado === "terminado" && pedidoId && sinCargo) {
+    return (
+      <button
+        disabled={pendiente}
+        onClick={() =>
+          startTransition(async () => {
+            const r = await avanzarCorte(id, estado);
+            if (r.error) {
+              toast.error(r.error);
+              router.refresh();
+              return;
+            }
+            const remito = await remitoDeLaReposicion(id);
+            if (remito.firmaToken) {
+              router.push(`/firmar/${remito.firmaToken}?volver=${encodeURIComponent(`/admin/cortes/${id}`)}`);
+            } else {
+              toast.success(r.ok ?? "Listo.");
+              router.refresh();
+            }
+          })
+        }
+        className={`boton-accion inline-flex ${alto} w-full items-center justify-center gap-1.5 rounded-lg px-3 text-base font-medium disabled:opacity-50`}
+      >
+        {pendiente ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowRight className="h-5 w-5" />}
+        {etiqueta}
+      </button>
     );
   }
 

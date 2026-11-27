@@ -154,6 +154,8 @@ export default async function FichaCortePage({
                 estado={corte.estado}
                 urgente={corte.urgente}
                 pasadas={ficha.pasadasACobrar}
+                pedidoId={corte.orderId}
+                sinCargo={corte.sinCargo}
                 soloMaquina={!decide}
               />
             )}

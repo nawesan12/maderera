@@ -567,6 +567,7 @@ components:
         sinCargo: { type: boolean }
         branchId: { type: string, nullable: true }
         salioAt: { type: string, format: date-time, nullable: true, description: Cuándo salió de la máquina }
+        orderId: { type: string, nullable: true, description: "El pedido del corte: se entrega desde ahí" }
         id: { type: string }
         numero: { type: string }
         cliente: { type: string }

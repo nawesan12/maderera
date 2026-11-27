@@ -400,3 +400,35 @@ func TestArchivoDeLaMediaPlaca(t *testing.T) {
 		t.Errorf("cantos o etiqueta: %q", b)
 	}
 }
+
+// M2S1-106: el armador arranca con una placa que hay. Fibrofácil va antes que
+// Melamina por nombre, pero sin stock baja al final; con stock vuelve arriba.
+func TestLasPlacasSinStockAlFinal(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	fibro := otraPlaca(t, e)
+	if _, err := e.pool.Exec(ctx, `insert into inventory (variant_id, branch_id, qty, min_qty) values ($1, $2, 10, 0)`, e.melamina, e.central); err != nil {
+		t.Fatal(err)
+	}
+	orden := func() []PlacaCortable {
+		_, b := pedir(t, http.DefaultClient, "GET", e.srv.URL+"/api/v1/cortes/placas?publico=true", nil)
+		var placas []PlacaCortable
+		if err := json.Unmarshal([]byte(b), &placas); err != nil || len(placas) < 2 {
+			t.Fatalf("placas: %v %s", err, b)
+		}
+		return placas
+	}
+	if p := orden(); p[0].VariantID != e.melamina || !p[0].HayStock || p[len(p)-1].VariantID != fibro || p[len(p)-1].HayStock {
+		t.Errorf("sin stock, al final: %+v", p)
+	}
+	// Lo reservado no es stock: con todo reservado la melamina también baja.
+	if _, err := e.pool.Exec(ctx, `update inventory set reservado = qty where variant_id = $1`, e.melamina); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.pool.Exec(ctx, `insert into inventory (variant_id, branch_id, qty, min_qty) values ($1, $2, 3, 0)`, fibro, e.central); err != nil {
+		t.Fatal(err)
+	}
+	if p := orden(); p[0].VariantID != fibro || p[len(p)-1].VariantID != e.melamina {
+		t.Errorf("con la melamina reservada: %+v", p)
+	}
+}

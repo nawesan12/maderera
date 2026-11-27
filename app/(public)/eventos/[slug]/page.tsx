@@ -3,7 +3,7 @@ import { numeroWhatsapp } from "@/lib/whatsapp/enlace";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, CalendarDays, Clock, MapPin, Users } from "lucide-react";
+import { ArrowLeft, CalendarDays, MapPin, Users } from "lucide-react";
 import { getSession } from "@/lib/dal/session";
 import { clienteDeLaSesion } from "@/lib/dal/cuenta";
 import {
@@ -144,18 +144,19 @@ async function FichaDelEvento({ slug }: { slug: string }) {
             )}
 
             <dl className="mt-6 grid gap-4 sm:grid-cols-2">
+              {/* Un solo renglón con el comienzo y el fin: «Hasta» en otro
+                  bloque bajaba el formulario del pliegue (M3S3-048). */}
               <Dato
                 icono={CalendarDays}
                 etiqueta="Cuándo"
-                valor={`${fechaLarga.format(evento.inicia)}, ${hora.format(evento.inicia)}`}
+                valor={
+                  evento.termina
+                    ? fechaLarga.format(evento.termina) === fechaLarga.format(evento.inicia)
+                      ? `${fechaLarga.format(evento.inicia)} · ${hora.format(evento.inicia)} a ${hora.format(evento.termina)}`
+                      : `${fechaLarga.format(evento.inicia)}, ${hora.format(evento.inicia)} al ${fechaLarga.format(evento.termina)}, ${hora.format(evento.termina)}`
+                    : `${fechaLarga.format(evento.inicia)} · ${hora.format(evento.inicia)}`
+                }
               />
-              {evento.termina && (
-                <Dato
-                  icono={Clock}
-                  etiqueta="Hasta"
-                  valor={hora.format(evento.termina)}
-                />
-              )}
               {evento.lugar && (
                 <Dato icono={MapPin} etiqueta="Dónde" valor={evento.lugar} />
               )}

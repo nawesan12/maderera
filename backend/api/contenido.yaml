@@ -366,7 +366,7 @@ paths:
         - { name: limite, in: query, required: true, schema: { type: integer, minimum: 1, maximum: 500 } }
       responses:
         "200":
-          description: Los slugs de los que no son borrador, los más nuevos primero
+          description: Los slugs de los publicados o cerrados que no pasaron, el más cercano primero
           content:
             application/json:
               schema: { type: array, items: { type: string } }

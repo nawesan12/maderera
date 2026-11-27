@@ -554,9 +554,12 @@ func (q *Queries) SitemapEventos(ctx context.Context) ([]SitemapEventosRow, erro
 }
 
 const slugsDeEventosVisibles = `-- name: SlugsDeEventosVisibles :many
-SELECT slug FROM events WHERE estado <> 'borrador' ORDER BY inicia DESC LIMIT $1
+SELECT slug FROM events WHERE estado IN ('publicado', 'cerrado') AND inicia >= now() ORDER BY inicia LIMIT $1
 `
 
+// Los que se pueden ver y no pasaron, como /eventos: devolvía los que ya
+// pasaron mientras /eventos decía que no había ninguno (mes simulado,
+// M2S1-207). El de un evento pasado se sigue abriendo por su dirección.
 func (q *Queries) SlugsDeEventosVisibles(ctx context.Context, limit int32) ([]string, error) {
 	rows, err := q.db.Query(ctx, slugsDeEventosVisibles, limit)
 	if err != nil {

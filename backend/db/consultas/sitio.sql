@@ -45,7 +45,10 @@ SELECT id, estado::text AS estado FROM event_registrations WHERE event_id = $1 A
 SELECT EXISTS (SELECT 1 FROM events WHERE slug = $1 AND estado <> 'borrador');
 
 -- name: SlugsDeEventosVisibles :many
-SELECT slug FROM events WHERE estado <> 'borrador' ORDER BY inicia DESC LIMIT $1;
+-- Los que se pueden ver y no pasaron, como /eventos: devolvía los que ya
+-- pasaron mientras /eventos decía que no había ninguno (mes simulado,
+-- M2S1-207). El de un evento pasado se sigue abriendo por su dirección.
+SELECT slug FROM events WHERE estado IN ('publicado', 'cerrado') AND inicia >= now() ORDER BY inicia LIMIT $1;
 
 -- name: SitemapCatalogo :many
 SELECT p.slug,

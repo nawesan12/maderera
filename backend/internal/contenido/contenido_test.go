@@ -482,7 +482,7 @@ func TestSitio(t *testing.T) {
 	if _, b := pedir(t, juan, "GET", u+"eventos/taller-de-melamina", nil); !strings.Contains(string(b), `"estado":"reservada"`) {
 		t.Errorf("la inscripción de quien mira: %s", b)
 	}
-	if _, b := pedir(t, anon, "GET", u+"eventos-visibles?limite=5", nil); string(b) != `["taller-de-melamina","el-de-ayer"]`+"\n" {
+	if _, b := pedir(t, anon, "GET", u+"eventos-visibles?limite=5", nil); string(b) != `["taller-de-melamina"]`+"\n" {
 		t.Errorf("slugs: %s", b)
 	}
 	if _, b := pedir(t, anon, "GET", u+"sitemap/eventos", nil); !strings.Contains(string(b), `"ruta":"/eventos/taller-de-melamina"`) || strings.Contains(string(b), "el-de-ayer") {

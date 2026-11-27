@@ -1574,7 +1574,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Los slugs de los que no son borrador, los más nuevos primero */
+            /** @description Los slugs de los publicados o cerrados que no pasaron, el más cercano primero */
             200: {
                 headers: {
                     [name: string]: unknown;

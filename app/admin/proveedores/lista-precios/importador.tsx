@@ -15,7 +15,13 @@ const inicial: EstadoLista = {};
 
 /** Una fila apareada que no cambia ni el costo ni el precio. */
 function sinCambios(f: FilaPrevia) {
-  return (f.cambio === "igual" || f.cambio === "sin_sugerido") && f.costoAnterior === f.costoNeto;
+  // Al centavo: el costo guardado (el promedio) trae más decimales que la lista.
+  const centavos = (v: number) => Math.round(v * 100);
+  return (
+    (f.cambio === "igual" || f.cambio === "sin_sugerido") &&
+    f.costoAnterior !== null &&
+    centavos(f.costoAnterior) === centavos(f.costoNeto)
+  );
 }
 
 /**

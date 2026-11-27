@@ -81,10 +81,13 @@ func (s *Servicio) resolverCodigos(ctx context.Context, proveedor string, codigo
 	if len(unicos) == 0 {
 		return nil, nil
 	}
+	// label es el producto con su variante: con la medida sola, el MDF y la
+	// melamina de 18 se veían iguales en la vista previa (mes 23).
 	type par struct{ variante, sku, label string }
 	guardados, porSku := map[string]par{}, map[string]par{}
 	filas, err := s.pool.Query(ctx, `
-		SELECT c.codigo, c.variant_id, v.sku, v.label FROM supplier_variant_codes c JOIN product_variants v ON v.id = c.variant_id
+		SELECT c.codigo, c.variant_id, v.sku, p.name || CASE WHEN v.label <> '' AND v.label <> p.name THEN ' · ' || v.label ELSE '' END FROM supplier_variant_codes c JOIN product_variants v ON v.id = c.variant_id
+		JOIN products p ON p.id = v.product_id
 		WHERE c.supplier_id = $1 AND c.codigo = ANY($2)`, proveedor, unicos)
 	if err != nil {
 		return nil, err
@@ -102,7 +105,7 @@ func (s *Servicio) resolverCodigos(ctx context.Context, proveedor string, codigo
 	if filas.Err() != nil {
 		return nil, filas.Err()
 	}
-	filas, err = s.pool.Query(ctx, `SELECT sku, id, label FROM product_variants WHERE active AND sku = ANY($1)`, unicos)
+	filas, err = s.pool.Query(ctx, `SELECT v.sku, v.id, p.name || CASE WHEN v.label <> '' AND v.label <> p.name THEN ' · ' || v.label ELSE '' END FROM product_variants v JOIN products p ON p.id = v.product_id WHERE v.active AND v.sku = ANY($1)`, unicos)
 	if err != nil {
 		return nil, err
 	}
@@ -172,8 +175,17 @@ func precioConMargenActual(actual, costoAnterior, costoNuevo float64) float64 {
 	if !(actual > 0) || !(costoAnterior > 0) || !(costoNuevo > 0) {
 		return 0
 	}
+	// El costo guardado lleva más decimales que la lista (el promedio):
+	// 16.303,6183 contra 16.303,62 subía el precio un centavo y contaba
+	// «para actualizar» algo que no cambia (mes 23, M2S3-056).
+	if mismoCosto(costoAnterior, costoNuevo) {
+		return actual
+	}
 	return jsmath.Redondear2(float64(actual*costoNuevo) / costoAnterior)
 }
+
+// mismoCosto compara al centavo, que es lo que trae la lista.
+func mismoCosto(a, b float64) bool { return jsmath.Redondear2(a) == jsmath.Redondear2(b) }
 
 // cambioDelPrecio clasifica una fila apareada.
 func cambioDelPrecio(actual *float64, sugerido float64) string {
@@ -309,7 +321,7 @@ func (s *Servicio) PrevisualizarLista(ctx context.Context, archivo []byte, form 
 				}
 			}
 			x.Cambio = cambioDelPrecio(x.PrecioActual, x.PrecioSugerido)
-			if (x.Cambio == CambioIgual || x.Cambio == CambioSinSugerido) && x.CostoAnterior != nil && *x.CostoAnterior == x.CostoNeto {
+			if (x.Cambio == CambioIgual || x.Cambio == CambioSinSugerido) && x.CostoAnterior != nil && mismoCosto(*x.CostoAnterior, x.CostoNeto) {
 				vista.SinCambios++
 			}
 			vista.Apareadas++

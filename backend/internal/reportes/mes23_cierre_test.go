@@ -211,6 +211,10 @@ func TestElCierreAvisaLaCajaEnNegativo(t *testing.T) {
 	if !ok || len(p.Casos) != 1 || !strings.HasPrefix(p.Casos[0].Nombre, "1.1.01") || *p.Casos[0].Importe != -1000 {
 		t.Errorf("el aviso: %s", cuerpo)
 	}
+	// «Resolver» lleva a la caja, no al mismo cierre (mes 23).
+	if p.Donde != "/admin/caja" || p.Casos[0].Donde != "/admin/caja" {
+		t.Errorf("adónde lleva: %q %q", p.Donde, p.Casos[0].Donde)
+	}
 }
 
 // M2S1-058: lo cobrado con tarjeta va a Tarjetas a acreditar y pasa al Banco,

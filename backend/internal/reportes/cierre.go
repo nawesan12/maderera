@@ -1234,16 +1234,20 @@ func (s *Servicio) pendientesDeLosCircuitos(ctx context.Context, desde, hasta ti
 	if err != nil {
 		return nil, err
 	}
+	// Cada cuenta lleva a la pantalla donde se mira lo que la mueve: la caja,
+	// las cobranzas del banco y la cartera de cheques. «Resolver» llevaba al
+	// mismo cierre (mes 23).
+	dondeSeMira := map[string]string{Cuentas.Caja: "/admin/caja", Cuentas.Banco: "/admin/pagos", Cuentas.ValoresADepositar: "/admin/cheques"}
 	var enRojo []CasoDelCierre
 	for _, c := range []string{Cuentas.Caja, Cuentas.Banco, Cuentas.ValoresADepositar} {
 		if saldo := SaldoDeCuenta(DelCircuito(fondos, "blanco"), c); saldo < -0.009 {
 			x := saldo
-			enRojo = append(enRojo, CasoDelCierre{Nombre: c + " " + nombresDeCuenta[c], Importe: &x, Donde: "/admin/cierre/exportar?periodo=" + desde.UTC().Format("2006-01")})
+			enRojo = append(enRojo, CasoDelCierre{Nombre: c + " " + nombresDeCuenta[c], Importe: &x, Donde: dondeSeMira[c]})
 		}
 	}
 	if len(enRojo) > 0 {
 		p := pendiente("fondos-negativos", "Caja o Banco en negativo en el archivo del estudio",
-			"Salió más de lo que entró: revisar qué cobro o depósito quedó en el otro archivo.", len(enRojo), "/admin/cierre")
+			"Salió más de lo que entró: revisar qué cobro o depósito quedó en el otro archivo.", len(enRojo), enRojo[0].Donde)
 		p.Casos = enRojo
 		out = append(out, p)
 	}

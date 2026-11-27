@@ -369,12 +369,16 @@ export default async function CierrePage({
                     </ul>
                   )}
                 </details>
-                <Link
-                  href={p.donde}
-                  className="inline-flex h-10 shrink-0 items-center rounded-lg border border-linea px-3.5 text-sm font-medium hover:bg-hundida"
-                >
-                  Resolver
-                </Link>
+                {/* Un «Resolver» que vuelve a esta misma pantalla no
+                    resuelve nada: sin otro lugar, el aviso queda solo. */}
+                {p.donde.split("?")[0] !== "/admin/cierre" && (
+                  <Link
+                    href={p.donde}
+                    className="inline-flex h-10 shrink-0 items-center rounded-lg border border-linea px-3.5 text-sm font-medium hover:bg-hundida"
+                  >
+                    Resolver
+                  </Link>
+                )}
               </li>
             ))}
           </ul>

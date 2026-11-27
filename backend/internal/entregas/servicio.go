@@ -25,6 +25,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -888,6 +889,21 @@ func (s *Servicio) RegistrarFirma(ctx context.Context, f FormFirma, ip *string) 
 	var r FirmaRegistrada
 	firmo := false
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		// Un retiro sin documento guardado lo pide en la firma: el remito de
+		// la reposición nace sin quien retira y el DNI salía «opcional»,
+		// cuando en un retiro es obligatorio (mes simulado).
+		if strings.TrimSpace(deTexto(f.ReceptorDocumento)) == "" {
+			var falta bool
+			err := tx.QueryRow(ctx, `
+				SELECT tipo = 'retiro' AND nullif(trim(coalesce(receptor_documento, '')), '') IS NULL
+				FROM deliveries WHERE firma_token = $1 AND estado = 'preparada' FOR UPDATE`, f.Token).Scan(&falta)
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+			if falta {
+				return invalido("receptorDocumento", MsjFaltaDocumento)
+			}
+		}
 		var pedido, tipo string
 		err := tx.QueryRow(ctx, `
 			UPDATE deliveries SET estado = 'entregada', firma_url = $2, firmado_at = now(), firmado_ip = $3,

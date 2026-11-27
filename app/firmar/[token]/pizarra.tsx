@@ -191,13 +191,15 @@ export function Pizarra({
       {cambiarDni || otraPersona ? (
         <div>
           <label htmlFor="receptorDocumento" className="block font-medium">
-            DNI {!documentoSugerido && !otraPersona && <span className="font-normal text-muted-foreground">(opcional)</span>}
+            {/* En un retiro el DNI es obligatorio, también en el remito de
+                la reposición, que nace sin quien retira (mes simulado). */}
+            DNI {envio && !documentoSugerido && !otraPersona && <span className="font-normal text-muted-foreground">(opcional)</span>}
           </label>
           <input
             id="receptorDocumento"
             name="receptorDocumento"
             inputMode="numeric"
-            required={otraPersona}
+            required={otraPersona || !envio}
             autoFocus={cambiarDni && Boolean(documentoSugerido)}
             className="tabular mt-1 h-12 w-full rounded-lg border bg-background px-3 text-base"
           />

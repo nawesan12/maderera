@@ -28,6 +28,16 @@ var textoDeRegla = map[string]struct {
 	"aceptar_presupuesto_pendiente":  {"El cliente acepta un presupuesto que no se le envió", map[string]string{"no": "No", "si": "Sí"}},
 	"datos_fiscales_del_cliente":     {"CUIT, razón social y condición frente al IVA", map[string]string{"hasta_facturar": "Los cambia hasta su primera factura", "ninguno": "Los cambia solo la casa"}},
 	"anular_compra_con_pagos":        {"Al anular una factura de compra que ya se pagó…", map[string]string{"a_cuenta": "Los pagos quedan a cuenta del proveedor", "bloquear": "No se puede: primero se anulan los pagos"}},
+	// Las que faltaban y salían con su clave (mes 23, M2S4-052).
+	"descuento_con_escala":  {"Un descuento tipeado y el de la forma de pago", map[string]string{"reemplaza": "Vale el tipeado", "suma": "Se suman"}},
+	"redondeo_efectivo":     {"El total en efectivo, ¿con centavos?", map[string]string{"no": "Con centavos", "al_peso": "Al peso, a favor del cliente"}},
+	"entregar_sin_cobrar":   {"Entregar sin cobrar, ¿quién pide el PIN?", map[string]string{"deposito": "Solo el depósito", "fuera_de_la_cuenta": "También quien vende, fuera de la cuenta corriente"}},
+	"retencion_en_el_cobro": {"La retención que trae el cliente con el pago, ¿quién la carga en el cobro?", map[string]string{"admin": "Solo un admin", "quien_cobra": "Quien cobra"}},
+	"escala_con_lista":      {"En la tienda, ¿el descuento por medio de pago se suma al precio de profesional?", map[string]string{"si": "Sí", "no": "No, ese precio ya es de contado"}},
+	"corte_chico_stock":     {"La placa de la casa de un corte de menos de media placa, en el stock", map[string]string{"no_mueve": "Sigue contada", "descuenta": "Sale al terminar el corte"}},
+	"base_retencion_iva":    {"La retención de IVA se calcula sobre…", map[string]string{"neto": "El neto, como Ganancias", "total": "El total con IVA"}},
+	"exportar_sicore":       {"Las retenciones del mes también en TXT para SICORE", map[string]string{"no": "No, solo el CSV", "si": "Sí"}},
+	"cae_en_compras":        {"La factura A de compra sin CAE", map[string]string{"opcional": "Entra igual", "exigido": "No entra sin CAE"}},
 }
 
 // DescripcionDeRegla es el renglón de la bitácora del cambio de una regla.

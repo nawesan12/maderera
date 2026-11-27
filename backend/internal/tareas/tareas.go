@@ -113,7 +113,19 @@ func Correr(ctx context.Context, q *sqlc.Queries, log *slog.Logger, t Tarea, aho
 	if err != nil {
 		return Error, err
 	}
+	// Las horas que se perdieron con el worker caído (mes simulado,
+	// M2S1-174): la tarea horaria hace lo de todas, así que esta corrida
+	// las recupera de una vez; queda anotado cuántas eran y desde cuándo.
+	perdidas, desde := periodosPerdidos(ctx, q, t, periodo)
 	resultado, errTarea := t.Ejecutar(ctx)
+	if errTarea == nil && perdidas > 0 {
+		if resultado == nil {
+			resultado = map[string]any{}
+		}
+		resultado["recupera"] = perdidas
+		resultado["desde"] = desde
+		log.Warn("tarea atrasada", "tarea", t.Nombre, "periodo", periodo, "perdidas", perdidas, "desde", desde)
+	}
 	if errTarea != nil {
 		mensaje := errTarea.Error()
 		_ = q.TerminarCorrida(ctx, sqlc.TerminarCorridaParams{ID: id, Estado: sqlc.EstadoTareaError, Error: &mensaje})
@@ -126,4 +138,33 @@ func Correr(ctx context.Context, q *sqlc.Queries, log *slog.Logger, t Tarea, aho
 	}
 	log.Info("tarea", "tarea", t.Nombre, "periodo", periodo, "resultado", resultado)
 	return Ok, nil
+}
+
+// periodosPerdidos son las horas entre la última corrida buena de una tarea
+// horaria y esta, sin contar ninguna de las dos. Sin corrida anterior, o con
+// más de una semana de hueco (una tarea nueva, una base restaurada), cero.
+func periodosPerdidos(ctx context.Context, q *sqlc.Queries, t Tarea, periodo string) (int, string) {
+	if t.Frecuencia != Hora {
+		return 0, ""
+	}
+	anterior, err := q.PeriodoAnterior(ctx, sqlc.PeriodoAnteriorParams{Tarea: t.Nombre, Periodo: periodo})
+	if err != nil {
+		return 0, ""
+	}
+	return HorasEntre(anterior, periodo), anterior
+}
+
+// HorasEntre cuenta los períodos horarios que faltan entre dos
+// («2026-11-26T00» y «2026-11-26T05» son cuatro: T01 a T04).
+func HorasEntre(anterior, actual string) int {
+	a, err1 := time.ParseInLocation("2006-01-02T15", anterior, zona)
+	b, err2 := time.ParseInLocation("2006-01-02T15", actual, zona)
+	if err1 != nil || err2 != nil {
+		return 0
+	}
+	n := int(b.Sub(a)/time.Hour) - 1
+	if n < 0 || n > 24*7 {
+		return 0
+	}
+	return n
 }

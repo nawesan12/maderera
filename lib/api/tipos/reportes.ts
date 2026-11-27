@@ -262,6 +262,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/sistema": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Los trabajos de la cola que fallaron y la última corrida de cada tarea del worker. Solo el admin. */
+        get: operations["EstadoDelSistema"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/sistema/trabajos/{id}/reintentar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ReintentarTrabajo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/inicio/ventas-por-sucursal": {
         parameters: {
             query?: never;
@@ -797,6 +830,31 @@ export interface components {
              */
             total: number;
         };
+        EstadoDelSistema: {
+            pendientes: number;
+            trabajos: {
+                id: string;
+                tipo: string;
+                estado: string;
+                intentos: number;
+                maxIntentos: number;
+                ultimoError: string | null;
+                /** Format: date-time */
+                createdAt: string;
+                /** Format: date-time */
+                terminadoAt: string | null;
+            }[];
+            tareas: {
+                tarea: string;
+                periodo: string;
+                estado: string;
+                error: string | null;
+                /** Format: date-time */
+                iniciadaAt: string;
+                /** Format: date-time */
+                terminadaAt: string | null;
+            }[];
+        };
         Cobranzas: {
             /** @description Cuántos renglones hay en el período */
             total: number;
@@ -1264,6 +1322,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlataHoy"];
+                };
+            };
+        };
+    };
+    EstadoDelSistema: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Lo que falló y lo que corrió */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EstadoDelSistema"];
+                };
+            };
+        };
+    };
+    ReintentarTrabajo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Vuelve a la cola */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok: string;
+                    };
                 };
             };
         };

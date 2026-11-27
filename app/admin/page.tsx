@@ -17,6 +17,7 @@ import {
 import { NumerosDelNegocio } from "@/components/admin/numeros-del-negocio";
 import { FiltroPeriodo } from "@/components/admin/filtro-periodo";
 import { CeldaPin } from "@/components/admin/aviso-sin-pin";
+import { AvisosPush } from "@/components/admin/avisos-push";
 import { leerPeriodo, resolverPeriodo } from "@/lib/periodos";
 import { trabajoPendiente } from "@/lib/dal/admin/pendientes";
 import { requireStaff } from "@/lib/dal/session";
@@ -235,6 +236,8 @@ export default async function ResumenPage({
   return (
     <div className="space-y-8">
       <h1 className="sr-only">Panel</h1>
+
+      {staffRole === "admin" && <AvisosPush soloSiFaltan />}
 
       {seccionParaHoy}
 

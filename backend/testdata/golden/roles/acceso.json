@@ -155,6 +155,9 @@
   "/admin/bitacora": [
    "admin"
   ],
+  "/admin/sistema": [
+   "admin"
+  ],
   "/admin/personal": [
    "admin"
   ],
@@ -390,6 +393,11 @@
   ],
   "/admin/reportes/algo": null,
   "/admin/reportes/nuevo/123": null,
+  "/admin/sistema": [
+   "admin"
+  ],
+  "/admin/sistema/algo": null,
+  "/admin/sistema/nuevo/123": null,
   "/admin/stock": [
    "admin",
    "vendedor",
@@ -3393,6 +3401,81 @@
   },
   {
    "ruta": "/admin/reportes/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/sistema",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/sistema",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/sistema",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/sistema",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/sistema",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/sistema/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/sistema/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/sistema/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/sistema/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/sistema/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/sistema/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/sistema/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/sistema/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/sistema/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/sistema/nuevo/123",
    "rol": null,
    "puede": false
   },

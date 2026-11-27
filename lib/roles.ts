@@ -158,6 +158,9 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
   "/admin/precios/formas-de-pago": ["admin"],
   "/admin/migracion": ["admin"],
   "/admin/bitacora": ["admin"],
+  // Los trabajos automáticos que fallaron y las tareas del worker: a donde
+  // lleva el aviso de un trabajo fallido (mes simulado, M2S2-061).
+  "/admin/sistema": ["admin"],
   // Dar usuario al personal y cambiarle el puesto es repartir permisos.
   "/admin/personal": ["admin"],
   /*

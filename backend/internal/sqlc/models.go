@@ -6248,6 +6248,14 @@ type RetencionesSufrida struct {
 	AnuladaAt       pgtype.Timestamptz `json:"anuladaAt"`
 }
 
+type SaldosDeBanco struct {
+	ID              string             `json:"id"`
+	Monto           jsmath.Num         `json:"monto"`
+	Al              pgtype.Timestamptz `json:"al"`
+	CreatedByUserID *string            `json:"createdByUserId"`
+	CreatedAt       pgtype.Timestamptz `json:"createdAt"`
+}
+
 type Seller struct {
 	ID        string       `json:"id"`
 	Nombre    string       `json:"nombre"`

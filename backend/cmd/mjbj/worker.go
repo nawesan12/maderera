@@ -70,7 +70,7 @@ func correrWorker() error {
 		}
 		avisos.Avisar(ctx, push.Aviso{
 			Titulo: "Un trabajo automático no se pudo hacer", Cuerpo: tipo + ": " + mensaje,
-			URL: "/admin/sistema", Etiqueta: "trabajo-fallido",
+			URL: "/admin/sistema", Etiqueta: "trabajo-fallido", // la pantalla existe desde M2S2-061
 		})
 	}
 	c.Registrar(revalidar.Tipo, revalidar.Manejador(cfg.Revalidar))

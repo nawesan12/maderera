@@ -230,6 +230,27 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PlataHoy" }
+  /api/v1/admin/sistema:
+    get:
+      operationId: EstadoDelSistema
+      description: Los trabajos de la cola que fallaron y la última corrida de cada tarea del worker. Solo el admin.
+      responses:
+        "200":
+          description: Lo que falló y lo que corrió
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EstadoDelSistema" }
+  /api/v1/admin/sistema/trabajos/{id}/reintentar:
+    post:
+      operationId: ReintentarTrabajo
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Vuelve a la cola
+          content:
+            application/json:
+              schema: { type: object, required: [ok], properties: { ok: { type: string } } }
   /api/v1/admin/inicio/ventas-por-sucursal:
     get:
       operationId: InicioVentasPorSucursal
@@ -680,6 +701,37 @@ components:
         bancoSaldo: { type: number, format: double, nullable: true, description: "El último saldo cargado más lo que entró y menos lo que salió desde entonces; sin saldo cargado, null y el banco no suma al total" }
         bancoSaldoAl: { type: string, format: date-time, nullable: true }
         total: { type: number, format: double, description: "Lo que hay: efectivo, caja fuerte, Mercado Pago, cheques y el saldo del banco si se cargó. Lo movido hoy en el banco no suma" }
+    EstadoDelSistema:
+      type: object
+      required: [trabajos, tareas, pendientes]
+      properties:
+        pendientes: { type: integer }
+        trabajos:
+          type: array
+          items:
+            type: object
+            required: [id, tipo, estado, intentos, maxIntentos, ultimoError, createdAt, terminadoAt]
+            properties:
+              id: { type: string }
+              tipo: { type: string }
+              estado: { type: string }
+              intentos: { type: integer }
+              maxIntentos: { type: integer }
+              ultimoError: { type: string, nullable: true }
+              createdAt: { type: string, format: date-time }
+              terminadoAt: { type: string, format: date-time, nullable: true }
+        tareas:
+          type: array
+          items:
+            type: object
+            required: [tarea, periodo, estado, error, iniciadaAt, terminadaAt]
+            properties:
+              tarea: { type: string }
+              periodo: { type: string }
+              estado: { type: string }
+              error: { type: string, nullable: true }
+              iniciadaAt: { type: string, format: date-time }
+              terminadaAt: { type: string, format: date-time, nullable: true }
     Cobranzas:
       type: object
       required: [filas, total, cobrado, porMedio, ventas]

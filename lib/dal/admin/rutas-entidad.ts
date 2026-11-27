@@ -96,6 +96,7 @@ export function rutaDeEntidad(
  * las dos se noten en el mismo archivo.
  */
 const ETIQUETAS: Record<string, string> = {
+  banco: "Banco",
   banner: "Cartel del sitio",
   caja: "Caja",
   cheque: "Cheque",
@@ -131,6 +132,7 @@ const ETIQUETAS: Record<string, string> = {
   // (mes simulado, M2S2-088).
   campana: "Campaña",
   cierre: "Cierre del mes",
+  devolucion: "Devolución",
   documento: "Documento",
   evento: "Evento",
   libro_iva: "Libro IVA",
@@ -140,6 +142,7 @@ const ETIQUETAS: Record<string, string> = {
   resena_producto: "Reseña de producto",
   retencion: "Retención",
   sitio: "Textos del sitio",
+  trabajo: "Trabajo automático",
   traslado: "Traslado",
   usuario: "Usuario",
   whatsapp: "WhatsApp",

@@ -242,7 +242,7 @@ func (s *Servicio) GuardarConID(ctx context.Context, ses *auth.Sesion, f FormCli
 				cambios = append(cambios, "vendedor: "+vacioComo(vendedor, "ninguno")+" → "+vacioComo(nuevoVendedor, "ninguno"))
 			}
 			if l := c.LimiteCredito; jsmath.Numero(l) != jsmath.Numero(limite) && !(l == "" && limite == "") {
-				cambios = append(cambios, "límite de crédito: "+vacioComo(limite, "sin límite")+" → "+vacioComo(l, "sin límite"))
+				cambios = append(cambios, "límite de crédito: "+limiteEnPesos(limite)+" → "+limiteEnPesos(l))
 			}
 		}
 	}
@@ -338,8 +338,10 @@ func (s *Servicio) Movimiento(ctx context.Context, ses *auth.Sesion, cliente, ti
 	if d != "" {
 		det["detalleCarga"] = d
 	}
+	// Con las palabras y la plata de la pantalla: decía «nota_debito por
+	// 180000.00» (mes 23).
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "cliente", cliente,
-		"Cargó un movimiento de cuenta corriente: "+tipo+" por "+texto, det)
+		"Cargó "+movimientoEnPalabras[tipo]+" de "+formato.Importe(math.Abs(m))+" en la cuenta corriente", det)
 	return nil
 }
 
@@ -628,6 +630,24 @@ func deref(p *string) string {
 		return ""
 	}
 	return *p
+}
+
+// movimientoEnPalabras nombra el tipo de un movimiento cargado a mano.
+var movimientoEnPalabras = map[string]string{
+	"compra": "una compra", "nota_credito": "una nota de crédito", "nota_debito": "una nota de débito", "ajuste": "un ajuste",
+}
+
+// limiteEnPesos es el límite de crédito como se lee en la ficha: «$ 5.000.000»
+// o «sin límite». Decía «5000000.00» (mes 23).
+func limiteEnPesos(l string) string {
+	if strings.TrimSpace(l) == "" {
+		return "sin límite"
+	}
+	v := jsmath.Numero(l)
+	if math.IsNaN(v) {
+		return l
+	}
+	return formato.Importe(v)
 }
 
 func vacioComo(s, siVacio string) string {

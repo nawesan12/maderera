@@ -393,7 +393,7 @@ func (a *API) CargarSaldoDelBanco(ctx context.Context, r reportesapi.CargarSaldo
 		detalle["antes"] = *antes.BancoSaldo
 	}
 	bitacora.Anotar(ctx, sqlc.New(a.s.pool), a.s.log, ses, sqlc.AccionAuditoriaEditar, "banco", "",
-		"Cargó el saldo del banco: "+jsmath.Fijo2(r.Body.Monto), detalle)
+		"Cargó el saldo del banco: "+formato.Importe(r.Body.Monto), detalle)
 	return ok(v), nil
 }
 

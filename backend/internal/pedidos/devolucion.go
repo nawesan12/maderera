@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/auth"
+	"mjbj/internal/caja"
 	"mjbj/internal/entregas"
 	"mjbj/internal/facturacion"
 	"mjbj/internal/formato"
@@ -92,7 +93,7 @@ func (s *Servicio) DevolverSinFacturaDesde(ctx context.Context, ses *auth.Sesion
 		return nil, plataforma.Invalido(map[string]string{"clave": "Falta la clave de la devolución."})
 	}
 	var out DevolucionDelPedido
-	var numero string
+	var numero, comoVolvio string
 	err := s.enTransaccion(ctx, func(tx pgx.Tx) error {
 		if err := numeracion.BloquearRemitos(ctx, tx); err != nil {
 			return err
@@ -349,10 +350,20 @@ func (s *Servicio) DevolverSinFacturaDesde(ctx context.Context, ses *auth.Sesion
 		switch destino {
 		case facturacion.DevolverPorCaja:
 			renglon += " · Sale de la caja"
+			comoVolvio = "en efectivo de la caja"
 		case facturacion.DevolverPorAfuera:
 			renglon += " · Vuelve por el banco"
+			// El medio por el que volvió, el mismo que dice el cierre Z.
+			var medio string
+			if err := tx.QueryRow(ctx, `SELECT `+caja.MedioDeLaDevolucion+` FROM devoluciones d WHERE d.id = $1`, out.ID).Scan(&medio); err != nil {
+				return err
+			}
+			comoVolvio = "por " + medioDeLaVuelta(medio)
 		case "cuenta":
 			renglon += " · A la cuenta corriente"
+			comoVolvio = "a la cuenta corriente"
+		default:
+			comoVolvio = "descontada de lo que falta cobrar"
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, $2, $3, $4)`,
 			pedido, p.estado, renglon, ses.UserID); err != nil {
@@ -366,9 +377,24 @@ func (s *Servicio) DevolverSinFacturaDesde(ctx context.Context, ses *auth.Sesion
 		return nil, err
 	}
 	if !out.Repetida {
-		s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "devolucion", out.ID, "Devolución sin factura del pedido "+numero+" por "+formato.Importe(out.Importe), nil)
+		// Con el medio: «por $ 22.221» no decía si salió del cajón, del banco o
+		// de la cuenta (mes 23).
+		s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "devolucion", out.ID, "Devolución sin factura del pedido "+numero+" por "+formato.Importe(out.Importe)+", "+comoVolvio, nil)
 	}
 	return &out, nil
+}
+
+// medioDeLaVuelta es el medio de una devolución por afuera, para la
+// bitácora.
+func medioDeLaVuelta(medio string) string {
+	if n, ok := map[string]string{
+		"efectivo": "efectivo", "transferencia": "transferencia", "deposito": "depósito", "cheque": "cheque", "echeq": "e-Cheq",
+		"debito": "tarjeta de débito", "credito": "tarjeta de crédito", "tarjeta_debito": "tarjeta de débito",
+		"tarjeta_credito": "tarjeta de crédito", "mercado_pago": "Mercado Pago", "cuenta_corriente": "cuenta corriente",
+	}[medio]; ok {
+		return n
+	}
+	return "el banco"
 }
 
 // ParaDevolverSinFactura es lo que necesita el diálogo de la devolución sin

@@ -52,6 +52,10 @@ func TestDevolucionDeUnPedidoSinFactura(t *testing.T) {
 	if n := e.numero(t, `select count(*) from order_status_history where order_id = $1 and nota like 'Devolución · 1 Fenólico%'`, pedido); n != 1 {
 		t.Errorf("historial: %v", n)
 	}
+	// La bitácora dice por dónde volvió (mes 23: «por $ 22.221» a secas).
+	if n := e.numero(t, `select count(*) from audit_log where descripcion like 'Devolución sin factura del pedido PED-1000 por %, descontada de lo que falta cobrar'`); n != 1 {
+		t.Errorf("bitácora con el medio: %v", n)
+	}
 	// No se trae más de lo que se llevó.
 	cuerpo = map[string]any{"renglones": []any{map[string]any{"orderItemId": placa, "cantidad": 5}}, "motivo": "x", "clave": "dev-2"}
 	if c, b := pedir(t, ven, "POST", u+"/devolucion", cuerpo); c != 422 || !strings.Contains(b, "se puede devolver hasta 1") {

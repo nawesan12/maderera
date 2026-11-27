@@ -82,6 +82,14 @@ export function TableroDeCortes({
           </Link>
         )}
       </div>
+    ) : taller ? (
+      // En el taller el vacío es el de su cola, grande y al centro, también
+      // sin ningún terminado: era un renglón chico arriba a la izquierda
+      // sobre la pantalla en blanco (mes simulado, M2S4-040).
+      <div className="tarjeta-hundida mt-[18px] flex min-h-[50vh] flex-col items-center justify-center rounded-xl px-5 py-16 text-center">
+        <Scissors className="mb-3 h-10 w-10 text-muted-foreground" aria-hidden />
+        <p className="text-xl font-semibold">La cola está vacía</p>
+      </div>
     ) : (
       <div className="tarjeta-hundida mt-6 rounded-xl px-5 py-12 text-center">
         <Scissors className="mx-auto mb-3 h-8 w-8 text-muted-foreground" aria-hidden />

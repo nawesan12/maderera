@@ -727,6 +727,13 @@ func (a *API) Registrar(m *http.ServeMux) {
 // lectura: el agente lleva su registro. «actualizado» es updated_at: el
 // agente vuelve a bajar el archivo cuando cambia, y con created_at un corte
 // corregido después de bajado nunca se volvía a escribir.
+//
+// ?sucursal= (el id o el nombre, MJBJ_SUCURSAL del agente) deja solo los de
+// ese taller: el agente de la PC del aserradero bajaba también los de Casa
+// Central a la carpeta de su seccionadora (mes simulado, M3S1-015).
+// «enLaMaquina» son los que el operario ya empezó: su archivo se queda en la
+// carpeta; el de cualquier otro que salió de la cola (terminado, anulado o
+// reemplazado) el agente lo saca (M2S1-014).
 func (a *API) pendientes(w http.ResponseWriter, r *http.Request) {
 	if TokenDelAgente() == "" {
 		textoPlano(w, http.StatusNotFound, "No encontrado")
@@ -736,30 +743,82 @@ func (a *API) pendientes(w http.ResponseWriter, r *http.Request) {
 		textoPlano(w, http.StatusUnauthorized, "No autorizado")
 		return
 	}
-	cortes, err := a.s.Listar(r.Context(), "", "en-cola")
+	sucursal, err := a.s.sucursalDelAgente(r.Context(), r.URL.Query().Get("sucursal"))
+	if err != nil {
+		if errors.Is(err, errSucursalDesconocida) {
+			textoPlano(w, http.StatusBadRequest, "No hay una sucursal con ese nombre: revisar MJBJ_SUCURSAL.")
+			return
+		}
+		a.s.log.Error("cortes pendientes", "error", err)
+		textoPlano(w, http.StatusInternalServerError, "Error")
+		return
+	}
+	cortes, err := a.s.Listar(r.Context(), "", "en-cola", sucursal)
+	var enMaquina []CorteListado
+	if err == nil {
+		enMaquina, err = a.s.Listar(r.Context(), "", "en-proceso", sucursal)
+	}
 	if err != nil {
 		a.s.log.Error("cortes pendientes", "error", err)
 		textoPlano(w, http.StatusInternalServerError, "Error")
 		return
 	}
 	type pendiente struct {
-		ID          string `json:"id"`
-		Numero      string `json:"numero"`
-		Cliente     string `json:"cliente"`
-		Material    string `json:"material"`
-		Piezas      int32  `json:"piezas"`
-		Urgente     bool   `json:"urgente"`
-		Actualizado string `json:"actualizado"`
+		ID          string  `json:"id"`
+		Numero      string  `json:"numero"`
+		Cliente     string  `json:"cliente"`
+		Material    string  `json:"material"`
+		Piezas      int32   `json:"piezas"`
+		Urgente     bool    `json:"urgente"`
+		Sucursal    *string `json:"sucursal"`
+		Actualizado string  `json:"actualizado"`
+	}
+	type enLaMaquina struct {
+		ID     string `json:"id"`
+		Numero string `json:"numero"`
 	}
 	out := []pendiente{}
 	for _, c := range cortes {
 		if c.Piezas > 0 {
-			out = append(out, pendiente{c.ID, c.Numero, c.Cliente, c.Material, c.Piezas, c.Urgente,
+			out = append(out, pendiente{c.ID, c.Numero, c.Cliente, c.Material, c.Piezas, c.Urgente, c.Sucursal,
 				c.UpdatedAt.UTC().Format("2006-01-02T15:04:05.000Z")})
 		}
 	}
+	maquina := []enLaMaquina{}
+	for _, c := range enMaquina {
+		maquina = append(maquina, enLaMaquina{c.ID, c.Numero})
+	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"cortes": out})
+	_ = json.NewEncoder(w).Encode(map[string]any{"cortes": out, "enLaMaquina": maquina})
+}
+
+var errSucursalDesconocida = errors.New("sucursal desconocida")
+
+// sucursalDelAgente es el id de la sucursal que pidió el agente: un uuid o
+// el nombre («Aserradero», sin importar mayúsculas ni acentos). Vacío: todas.
+func (s *Servicio) sucursalDelAgente(ctx context.Context, pedida string) (string, error) {
+	pedida = strings.TrimSpace(pedida)
+	if pedida == "" {
+		return "", nil
+	}
+	filas, err := s.pool.Query(ctx, `SELECT id::text, name FROM branches WHERE active`)
+	if err != nil {
+		return "", err
+	}
+	defer filas.Close()
+	for filas.Next() {
+		var id, nombre string
+		if err := filas.Scan(&id, &nombre); err != nil {
+			return "", err
+		}
+		if id == pedida || comparable(nombre) == comparable(pedida) {
+			return id, nil
+		}
+	}
+	if err := filas.Err(); err != nil {
+		return "", err
+	}
+	return "", errSucursalDesconocida
 }
 
 // lista_ es la lista de piezas en el formato del optimizador: el agente con

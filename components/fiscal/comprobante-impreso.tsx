@@ -13,7 +13,7 @@ import {
   fechaCorta,
   fechaSolaCorta,
   formatearCuit,
-  formatearMonto,
+  formatearMontoContable,
   unitarioQueCierra,
 } from "@/lib/formato";
 import type { EmisorFiscal } from "@/lib/dal/admin/facturacion";
@@ -301,7 +301,7 @@ export async function ComprobanteImpreso({
                   )}
                   {/* En la A, la fila neta: cantidad × unitario neto. */}
                   <td className="der mono" data-label="Subtotal">
-                    {formatearMonto(discrimina ? item.neto : item.subtotal)}
+                    {formatearMontoContable(discrimina ? item.neto : item.subtotal)}
                   </td>
                 </tr>
               );
@@ -345,7 +345,7 @@ export async function ComprobanteImpreso({
             <div className="total-final">
               <span>Total</span>
               <span className="mono">
-                {formatearMonto(comprobante.total)}
+                {formatearMontoContable(comprobante.total)}
               </span>
             </div>
             {letra === "B" && comprobante.receptorCondicionIva === "consumidor_final" && ivaContenido > 0 && (
@@ -416,7 +416,7 @@ function Linea({ etiqueta, valor }: { etiqueta: string; valor: string }) {
   return (
     <div className="linea">
       <span>{etiqueta}</span>
-      <span className="mono">{formatearMonto(valor)}</span>
+      <span className="mono">{formatearMontoContable(valor)}</span>
     </div>
   );
 }

@@ -15,7 +15,7 @@ import {
   Truck,
 } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
-import { cantidadConUnidad, fechaCorta, fechaLarga, formatearCuit, formatearMonto, hoyEnArgentina, plural, unitarioQueCierra, ZONA } from "@/lib/formato";
+import { cantidadConUnidad, fechaCorta, fechaLarga, formatearCuit, formatearMonto, formatearMontoContable, hoyEnArgentina, plural, unitarioQueCierra, ZONA } from "@/lib/formato";
 import { datosDeDevolucion, obtenerComprobante, serieDelComprobante } from "@/lib/dal/admin/facturacion";
 import {
   discriminaIva,
@@ -373,7 +373,7 @@ export default async function FichaComprobantePage({
                           = subtotal neto, y el IVA abajo. Con el subtotal
                           con IVA la fila no se podía verificar (H080). */}
                       <td className="tabular px-5 py-3 text-right text-base font-medium">
-                        {formatearMonto(discrimina ? item.neto : item.subtotal)}
+                        {formatearMontoContable(discrimina ? item.neto : item.subtotal)}
                       </td>
                     </tr>
                   ))}
@@ -381,28 +381,30 @@ export default async function FichaComprobantePage({
               </table>
             </div>
 
-            {/* Totales: en la A el IVA se discrimina; en la B va incluido */}
+            {/* Totales: en la A el IVA se discrimina; en la B va incluido.
+                Todos con sus centavos, como el papel: el total sin ellos al
+                lado del neto y el IVA con ellos no se podía sumar (mes 23). */}
             <dl className="space-y-1.5 border-t bg-muted/40 px-5 py-4 text-base">
               {discrimina ? (
                 <>
-                  <Fila etiqueta="Neto gravado" valor={formatearMonto(comprobante.neto)} />
+                  <Fila etiqueta="Neto gravado" valor={formatearMontoContable(comprobante.neto)} />
                   {Number(comprobante.iva21) > 0 && (
-                    <Fila etiqueta="IVA 21%" valor={formatearMonto(comprobante.iva21)} />
+                    <Fila etiqueta="IVA 21%" valor={formatearMontoContable(comprobante.iva21)} />
                   )}
                   {Number(comprobante.iva105) > 0 && (
-                    <Fila etiqueta="IVA 10,5%" valor={formatearMonto(comprobante.iva105)} />
+                    <Fila etiqueta="IVA 10,5%" valor={formatearMontoContable(comprobante.iva105)} />
                   )}
                   {Number(comprobante.iva27) > 0 && (
-                    <Fila etiqueta="IVA 27%" valor={formatearMonto(comprobante.iva27)} />
+                    <Fila etiqueta="IVA 27%" valor={formatearMontoContable(comprobante.iva27)} />
                   )}
                   {Number(comprobante.exento) > 0 && (
-                    <Fila etiqueta="Exento" valor={formatearMonto(comprobante.exento)} />
+                    <Fila etiqueta="Exento" valor={formatearMontoContable(comprobante.exento)} />
                   )}
                 </>
               ) : (
                 <Fila
                   etiqueta="Subtotal"
-                  valor={formatearMonto(Number(comprobante.total) - Number(comprobante.tributosTotal))}
+                  valor={formatearMontoContable(Number(comprobante.total) - Number(comprobante.tributosTotal))}
                 />
               )}
 
@@ -410,21 +412,21 @@ export default async function FichaComprobantePage({
                 <Fila
                   key={tributo.id}
                   etiqueta={`${tributo.descripcion} (${Number(tributo.alicuota)}%)`}
-                  valor={formatearMonto(tributo.importe)}
+                  valor={formatearMontoContable(tributo.importe)}
                 />
               ))}
 
               <div className="flex items-baseline justify-between border-t pt-2.5">
                 <dt className="font-semibold">Total</dt>
                 <dd className="tabular text-2xl font-bold">
-                  {formatearMonto(comprobante.total)}
+                  {formatearMontoContable(comprobante.total)}
                 </dd>
               </div>
 
               {!discrimina && totalIva > 0 && (
                 <p className="pt-1 text-sm text-muted-foreground">
                   {/* En esta factura no se discrimina, pero se informa a ARCA igual. */}
-                  IVA contenido: {formatearMonto(totalIva)}
+                  IVA contenido: {formatearMontoContable(totalIva)}
                 </p>
               )}
             </dl>

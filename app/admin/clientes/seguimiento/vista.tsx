@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CalendarClock, Loader2, MessageSquareText, Plus } from "lucide-react";
@@ -65,7 +65,15 @@ export function TableroDeSeguimiento({
   const sinSeguir = deudores.filter((d) => !d.seguido);
   return (
     <>
-      <NuevaGestion cliente={nueva?.cliente} asunto={nueva?.asunto} abierto={Boolean(nueva)} />
+      {/* Con la llave del cliente: «+ Seguir» navega a ?cliente= y, sin
+          ella, el formulario guardaba su estado inicial y no se abría
+          (M3S2-021). */}
+      <NuevaGestion
+        key={nueva ? `${nueva.cliente.id}-${nueva.asunto}` : "nueva"}
+        cliente={nueva?.cliente}
+        asunto={nueva?.asunto}
+        abierto={Boolean(nueva)}
+      />
 
       {sinSeguir.length > 0 && (
         <section>
@@ -300,6 +308,12 @@ export function NuevaGestion({
   const [trabajando, empezar] = useTransition();
   const router = useRouter();
   const campoAsunto = useRef<HTMLInputElement>(null);
+  const formulario = useRef<HTMLFormElement>(null);
+  // Llegando desde «+ Seguir» de la lista, el formulario queda arriba: a
+  // 375 px no se veía.
+  useEffect(() => {
+    if (abiertoInicial && clienteInicial && !fijo) formulario.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [abiertoInicial, clienteInicial, fijo]);
 
   if (!abierto) {
     return (
@@ -316,6 +330,7 @@ export function NuevaGestion({
 
   return (
     <form
+      ref={formulario}
       // Sin el globo del navegador (en inglés): el campo vacío se marca acá.
       noValidate
       action={(formData) => {
@@ -336,7 +351,7 @@ export function NuevaGestion({
           }
         });
       }}
-      className="tarjeta space-y-3 p-4"
+      className="tarjeta scroll-mt-20 space-y-3 p-4"
     >
       <div className="grid gap-3 sm:grid-cols-2">
         {fijo && cliente ? (

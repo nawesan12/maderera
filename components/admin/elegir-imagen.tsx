@@ -52,6 +52,12 @@ export function ElegirImagen({
             src={vista}
             alt=""
             onError={() => setRota(true)}
+            // Si falló antes de hidratar, el onError ya pasó y nadie lo
+            // escuchó: se veía el ícono roto del navegador (mes 23). Al
+            // montarla se mira si terminó de cargar sin nada.
+            ref={(img) => {
+              if (img && !elegida && img.complete && img.naturalWidth === 0) setRota(true);
+            }}
             className={`${caja} rounded-lg bg-muted ${forma === "logo" ? "object-contain" : "object-cover"}`}
           />
         ) : actual ? (

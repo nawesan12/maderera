@@ -161,15 +161,25 @@ export function Devolucion({
       ? elegido
       : (["caja", "cuenta", "afuera", "deuda"] as const).find((d) => posibles[d]) ?? null;
 
-  const listo =
-    pedidos.length > 0 &&
-    !pasado &&
-    !acopioMal &&
-    importe !== null &&
-    destino !== null &&
-    motivo.trim().length >= 4 &&
-    (!hayFueraDeStock || sinStock !== null) &&
-    (alStockCuantos === 0 || sucursal !== null);
+  // Qué falta, dicho en el botón: «Devolver» quedaba gris con el resumen
+  // completo y sin decir que el motivo era corto (M2S3-089).
+  const falta =
+    pedidos.length === 0
+      ? "Elegí qué devuelve"
+      : pasado || acopioMal
+        ? "Revisá las cantidades"
+        : importe === null
+          ? "Calculando…"
+          : destino === null
+            ? "No hay por dónde devolver"
+            : hayFueraDeStock && sinStock === null
+              ? "Falta por qué no vuelve"
+              : alStockCuantos > 0 && sucursal === null
+                ? "Elegí a qué sucursal entra"
+                : motivo.trim().length < 4
+                  ? "Falta el motivo"
+                  : null;
+  const listo = falta === null;
 
   const resumen =
     importe === null
@@ -324,12 +334,19 @@ export function Devolucion({
             etiqueta="Por dónde vuelve la plata"
             valor={destino}
             alCambiar={setElegido}
-            opciones={[
-              { valor: "caja", texto: "Caja", deshabilitada: !cajaPosible },
-              { valor: "cuenta", texto: "Cuenta", deshabilitada: !cuentaPosible },
-              { valor: "afuera", texto: "Otro medio", deshabilitada: !afueraPosible },
-              { valor: "deuda", texto: "Baja la deuda", deshabilitada: !deudaPosible },
-            ]}
+            // Solo los que valen para esta venta: «Caja» y «Cuenta» quedaban
+            // grises sin decir por qué (sin turno abierto, una venta de
+            // contado) (M2S3-089).
+            opciones={(
+              [
+                { valor: "caja", texto: "Caja", posible: cajaPosible },
+                { valor: "cuenta", texto: "Cuenta", posible: cuentaPosible },
+                { valor: "afuera", texto: "Otro medio", posible: afueraPosible },
+                { valor: "deuda", texto: "Baja la deuda", posible: deudaPosible },
+              ] as const
+            )
+              .filter((o) => o.posible)
+              .map(({ valor, texto }) => ({ valor, texto }))}
           />
         </div>
       </div>
@@ -376,7 +393,7 @@ export function Devolucion({
             className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-semibold disabled:opacity-50"
           >
             {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}
-            Devolver
+            {falta ?? "Devolver"}
           </button>
         )}
         {/* Con el PIN pedido, su X vuelve atrás: «Cancelar» quedaba solo en

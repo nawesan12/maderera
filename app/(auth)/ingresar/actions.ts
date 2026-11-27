@@ -15,6 +15,8 @@ import { api, copiarCookies, mensajeDe, type Problema } from "@/lib/api/servidor
 
 export interface EstadoIngreso {
   error?: string;
+  /** El correo que se escribió: vuelve al campo después de un error. */
+  correo?: string;
 }
 
 export async function ingresar(
@@ -38,14 +40,14 @@ export async function ingresar(
         detalle: error instanceof Error ? error.message : "desconocido",
       }),
     );
-    return { error: "No pudimos validar tus datos. Si el problema sigue, escribinos y lo revisamos." };
+    return { error: "No pudimos validar tus datos. Si el problema sigue, escribinos y lo revisamos.", correo };
   }
 
   if (!respuesta.data) {
     // 422 (datos o clave), 429 (demasiados intentos) o un 500: el mensaje lo
     // arma Go. Para correo o clave equivocados es deliberadamente vago:
     // distinguirlos le confirmaría a un atacante qué cuentas existen.
-    return { error: mensajeDe(respuesta.error as Problema | undefined, "No pudimos validar tus datos. Si el problema sigue, escribinos y lo revisamos.") };
+    return { error: mensajeDe(respuesta.error as Problema | undefined, "No pudimos validar tus datos. Si el problema sigue, escribinos y lo revisamos."), correo };
   }
 
   await copiarCookies(respuesta.response);

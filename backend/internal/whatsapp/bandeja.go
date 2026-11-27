@@ -395,7 +395,7 @@ func (s *Servicio) DocumentosDelCliente(ctx context.Context, customerID string) 
 				return d, err
 			}},
 		{`select d.id, d.numero, o.numero, d.created_at from deliveries d join orders o on o.id = d.order_id
-			where o.customer_id = $1 order by d.created_at desc limit 5`,
+			where o.customer_id = $1 and d.estado <> 'anulada' order by d.created_at desc limit 5`,
 			func(r pgx.Rows) (DocumentoListado, error) {
 				var d DocumentoListado
 				var numero, pedido string
@@ -414,7 +414,7 @@ func (s *Servicio) DocumentosDelCliente(ctx context.Context, customerID string) 
 				d.Tipo, d.Titulo, d.Descripcion, d.Detalle, d.Fecha = "recibo", "Recibo "+numero, "el recibo "+numero, formato.Importe(total), &f
 				return d, err
 			}},
-		{`select id, numero, created_at from cutting_orders where customer_id = $1 order by created_at desc limit 5`,
+		{`select id, numero, created_at from cutting_orders where customer_id = $1 and estado <> 'cancelado' order by created_at desc limit 5`,
 			func(r pgx.Rows) (DocumentoListado, error) {
 				var d DocumentoListado
 				var numero string

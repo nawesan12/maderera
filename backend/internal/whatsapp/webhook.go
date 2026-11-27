@@ -379,7 +379,7 @@ const (
 // pedido de no recibir más mensajes. Se registra y se confirma en el momento
 // (como acaba de escribir, la ventana está abierta).
 func (s *Servicio) atenderBajaOAlta(ctx context.Context, convID, waJid, texto string) error {
-	baja := EsPedidoDeBaja(texto)
+	baja := PideLaBaja(texto)
 	alta := !baja && EsPedidoDeAlta(texto)
 	if !baja && !alta {
 		return nil

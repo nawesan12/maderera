@@ -91,6 +91,10 @@ type ProductoListado struct {
 	StockCentral    NivelStock        `json:"stockCentral"`
 	StockAserradero NivelStock        `json:"stockAserradero"`
 	HayStock        bool              `json:"hayStock"`
+	// StockPorMedida son, por etiqueta de la medida, las sucursales con
+	// stock de esa medida. No viaja: lo usa el bot de WhatsApp, que dice
+	// dónde hay de la medida que le pidieron y no del producto entero.
+	StockPorMedida map[string][]string `json:"-"`
 }
 
 // StockDeSucursal es el nivel de stock de una sucursal activa.
@@ -403,8 +407,14 @@ func (s *Servicio) claves(ctx context.Context, f Filtros, l listaParaConsulta) (
 			hayAnterior      bool
 		}
 		p.Labels = []string{}
+		p.StockPorMedida = map[string][]string{}
 		for _, v := range propias {
 			p.Labels = append(p.Labels, v.label)
+			for _, b := range sucursales {
+				if n, ok := v.stock[b.slug]; ok && n != SinStock {
+					p.StockPorMedida[v.label] = append(p.StockPorMedida[v.label], b.nombre)
+				}
+			}
 			precio := 0.0
 			if v.precio != nil {
 				precio = numero(*v.precio)

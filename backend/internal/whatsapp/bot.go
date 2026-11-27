@@ -44,6 +44,10 @@ type ProductoBot struct {
 	// orden de branches; Sucursales, cuántas activas hay.
 	ConStock   []string
 	Sucursales int
+	// StockPorMedida son las sucursales con stock de cada medida (por su
+	// etiqueta). ConStock es del producto entero: el Fenólico de 15 mm con
+	// stock hacía decir «hay en las dos sucursales» del de 18, que no tenía.
+	StockPorMedida map[string][]string
 }
 
 // Buscador busca en el catálogo. Lo pone cmd/mjbj: el paquete no conoce el
@@ -123,6 +127,9 @@ type DatosBot struct {
 	// Ahorro: se pasó el 80 % de los mensajes del mes (uso.go). No saluda y
 	// deriva a la primera que no entiende: cada mensaje cuenta.
 	Ahorro bool
+	// EnlaceHumano es el enlace corto que lleva al número humano con lo que
+	// escribió (/api/whatsapp/hablar/<token>). Vacío: el wa.me de siempre.
+	EnlaceHumano string
 }
 
 // RespuestaBot es lo que decidió.
@@ -147,6 +154,9 @@ type RespuestaBot struct {
 	// NoEntendio: el «no lo encontré» de la primera vez. En una ráfaga con
 	// algo que sí se entendió, se descarta.
 	NoEntendio bool
+	// CorteArmado: mandó el enlace de un corte armado en el sitio
+	// (/corte/c/<token>). Lo lee atenderTurno y lo pasa a una persona.
+	CorteArmado string
 }
 
 // TopeBotPorHora es cuántas respuestas da el bot en una conversación en una
@@ -168,6 +178,24 @@ func Responder(texto string, est EstadoBot, d DatosBot, conBusqueda bool) Respue
 	// entre dos bots que Meta cobra de un solo lado.
 	if esAutorespuesta(texto) {
 		return RespuestaBot{Entendio: asistente.Gracias, Estado: est}
+	}
+	// «Gracias. Y hacen envíos a Batán?»: se contesta la pregunta. El
+	// «gracias» del principio callaba el turno entero.
+	texto = sinAgradecimiento(texto)
+	// Pidió una persona, o es un reclamo o algo de su cuenta: no hay
+	// respuesta automática que sirva, y gana sobre todo lo demás.
+	if pideUnaPersona(texto) {
+		return derivar(RespuestaBot{Entendio: asistente.Persona, Estado: EstadoBot{Consulta: est.Consulta}}, d, texto)
+	}
+	if m := motivoDePersona(texto); m != "" {
+		r := derivar(RespuestaBot{Entendio: asistente.Persona, Estado: EstadoBot{Consulta: est.Consulta}}, d, texto)
+		r.Motivo = m
+		return r
+	}
+	// Mandó el corte que armó en el sitio: no se le pide el despiece de nuevo.
+	if tok := tokenDeCorteEnTexto(texto); tok != "" {
+		return RespuestaBot{Entendio: asistente.ArmarCorte, CorteArmado: tok, Estado: EstadoBot{Consulta: est.Consulta},
+			Texto: "Recibimos tu corte. Lo revisa una persona y te confirma precio y entrega por acá."}
 	}
 	// Si estaba esperando la medida de un presupuesto y la medida llegó, se
 	// completa; si escribieron otra cosa, el pendiente se olvida.
@@ -199,12 +227,37 @@ func Responder(texto string, est EstadoBot, d DatosBot, conBusqueda bool) Respue
 		return r
 	case asistente.Horarios:
 		var b strings.Builder
-		b.WriteString("Estamos en:\n")
-		for _, s := range Sucursales {
-			fmt.Fprintf(&b, "\n*%s*\n%s\n%s\n", s.Nombre, s.Direccion, s.Horario)
+		if s := sucursalNombrada(texto); s != nil {
+			// Preguntó por una: va esa sola («¿dónde queda el aserradero?»).
+			// Dicho distinto que en la lista: si la lista ya salió, esto no
+			// cuenta como repetido y no se calla (M3S1-026).
+			fmt.Fprintf(&b, "%s está en %s.\n%s", articuloMayuscula(s.Nombre), s.Direccion, s.Horario)
+		} else {
+			b.WriteString("Estamos en:\n")
+			for _, s := range Sucursales {
+				fmt.Fprintf(&b, "\n*%s*\n%s\n%s\n", s.Nombre, s.Direccion, s.Horario)
+			}
 		}
 		r.Texto = strings.TrimSpace(b.String())
+		// «¿Abren el domingo?»: primero el sí o el no.
+		if dia := respuestaDelDia(texto); dia != "" {
+			r.Texto = dia + "\n\n" + r.Texto
+		}
 	case asistente.Envios:
+		if lugar := lugarDeEnvio(texto); lugar != "" {
+			if z := zonaDeEnvio(lugar, d.Envios); z != "" {
+				r.Texto = "Sí, entregamos en " + strings.Replace(strings.TrimPrefix(z, "• "), " — ", ". ", 1) + "."
+				r.Texto = strings.Replace(r.Texto, "..", ".", 1)
+				return r
+			}
+			if len(d.Envios) > 0 {
+				// Un lugar que no está entre las zonas: lo dice una persona,
+				// no la lista entera de las otras.
+				r = derivar(r, d, texto)
+				r.Motivo = "Pregunta si llegan a " + lugar + "."
+				return r
+			}
+		}
 		r.Texto = "Entregamos en Mar del Plata y la zona."
 		if len(d.Envios) > 0 {
 			r.Texto += "\n\n" + strings.Join(d.Envios, "\n")
@@ -262,7 +315,17 @@ func Responder(texto string, est EstadoBot, d DatosBot, conBusqueda bool) Respue
 			return noEntendio(r, est, d, texto)
 		}
 		r.Estado = EstadoBot{Consulta: e.Consulta}
+		// Lo que más se parece a lo que escribió, primero y solo.
+		ps = rankearProductos(ps, e.Consulta)
 		if preguntaPrecio(texto) {
+			// Pidió precio de varias cosas («melamina blanca 18 y 6
+			// bisagras»): lo arma una persona con el pedido completo, en vez
+			// de preguntarle «¿de cuál?» y perder la mitad.
+			if rs := renglonesDelPedido(texto); rs != nil {
+				r = derivar(r, d, texto)
+				r.Motivo = "Pidió presupuesto de: " + strings.Join(rs, " · ") + "."
+				return r
+			}
 			if len(ps) == 1 {
 				// Un producto: se arma el presupuesto y lo revisa una persona.
 				cant, unidad := cantidadPedida(texto, e)
@@ -273,6 +336,9 @@ func Responder(texto string, est EstadoBot, d DatosBot, conBusqueda bool) Respue
 			return r
 		}
 		r.Texto = listarProductos(ps, sitio, d.StockVisible)
+		if pideCortado(texto) {
+			r.Texto += "\n\nPara cortarla, armá el corte acá y lo revisamos:\n" + sitio + "/corte"
+		}
 		return r
 	}
 	return r
@@ -484,7 +550,11 @@ func derivar(r RespuestaBot, d DatosBot, texto string) RespuestaBot {
 		r.Texto = "Te va a contestar una persona del mostrador por acá, en el horario de atención." + cuando
 		return r
 	}
-	r.Texto = "Te paso con una persona." + cuando + " " + pieDerivar + "\n" + enlaceHumano(d.NumeroHumano, texto)
+	enlace := d.EnlaceHumano
+	if enlace == "" {
+		enlace = enlaceHumano(d.NumeroHumano, texto)
+	}
+	r.Texto = "Te paso con una persona." + cuando + " " + pieDerivar + "\n" + enlace
 	return r
 }
 
@@ -542,6 +612,11 @@ func enlaceHumano(numero, texto string) string {
 	// Recortado: el texto va entero en la URL, y un mensaje largo pasaría el
 	// límite de 4096 de Meta y la respuesta no saldría.
 	msg := "Hola, vengo del WhatsApp automático. " + cortarJS(strings.TrimSpace(texto), 400)
+	return enlaceConTexto(numero, msg)
+}
+
+// enlaceConTexto es el wa.me con el mensaje escrito.
+func enlaceConTexto(numero, msg string) string {
 	return "https://wa.me/" + numero + "?text=" + url.QueryEscape(msg)
 }
 
@@ -582,13 +657,38 @@ func listarProductos(ps []ProductoBot, sitio string, stock bool) string {
 			b.WriteString("\n" + strings.Join(ms, " · "))
 		}
 		if stock {
-			if d := dondeHay(p); d != "" {
+			if d := dondeHay(conStockDeLasMedidas(p)); d != "" {
 				b.WriteString("\nHay en " + d)
+			} else {
+				b.WriteString("\nSin stock ahora")
 			}
 		}
 		b.WriteString("\n" + sitio + "/catalogo/" + p.Slug + "\n")
 	}
 	return strings.TrimSpace(b.String())
+}
+
+// conStockDeLasMedidas deja en ConStock solo las sucursales que tienen
+// alguna de las medidas que se muestran (las del espesor pedido), en el
+// orden de branches. Sin el detalle por medida, queda como vino.
+func conStockDeLasMedidas(p ProductoBot) ProductoBot {
+	if p.StockPorMedida == nil {
+		return p
+	}
+	hay := map[string]bool{}
+	for _, m := range p.Medidas {
+		for _, x := range p.StockPorMedida[m] {
+			hay[x] = true
+		}
+	}
+	var quedan []string
+	for _, x := range p.ConStock {
+		if hay[x] {
+			quedan = append(quedan, x)
+		}
+	}
+	p.ConStock = quedan
+	return p
 }
 
 // dondeHay es «las dos sucursales», «todas las sucursales» o las que tienen,
@@ -611,6 +711,12 @@ func dondeHay(p ProductoBot) string {
 		return nombres[0]
 	}
 	return strings.Join(nombres[:n-1], ", ") + " y " + nombres[n-1]
+}
+
+// articuloMayuscula es conArticulo al principio de la frase.
+func articuloMayuscula(nombre string) string {
+	a := conArticulo(nombre)
+	return strings.ToUpper(a[:1]) + a[1:]
 }
 
 // conArticulo: «el Aserradero» se dice con artículo; Casa Central, no.
@@ -675,6 +781,10 @@ func JuntarRespuestas(rs []RespuestaBot, textos, extra []string, est EstadoBot, 
 			vistas[u] = true
 			t.Partes = append(t.Partes, u)
 		}
+	}
+	// El «no lo encontré» ya se le dijo: la segunda vez pasa a una persona.
+	if len(t.Partes) == 0 && !t.Derivar && noEntendio != "" && yaDicho(noEntendio, dichos) {
+		t.Derivar = true
 	}
 	if t.Derivar {
 		t.Partes = append(t.Partes, derivar(RespuestaBot{}, d, strings.Join(textos, "\n")).Texto)
@@ -785,7 +895,8 @@ func (s *Servicio) botPuedeHablar(ctx context.Context, convID string) (*estadoPa
 	err = s.pool.QueryRow(ctx, `
 		select c.bot_estado, c.bot_fallos, c.bot_consulta, c.bot_pendiente::text, c.asignado_a_user_id,
 			exists (select 1 from whatsapp_mensajes m where m.conversacion_id = c.id and m.direccion = 'saliente'
-				and coalesce(m.origen, '') in ('panel', 'telefono', 'aviso') and m.ocurrido_at > now() - interval '12 hours'),
+				and coalesce(m.origen, '') in ('panel', 'telefono', 'aviso') and m.ocurrido_at > now() - interval '12 hours'
+				and m.ocurrido_at > coalesce(c.bot_devuelto_at, '-infinity'::timestamptz)),
 			(select count(*) from whatsapp_mensajes m where m.conversacion_id = c.id and m.origen = 'bot'
 				and m.ocurrido_at > now() - interval '1 hour'),
 			(select count(*) from whatsapp_mensajes m where m.conversacion_id = c.id and m.origen = 'bot'
@@ -801,6 +912,14 @@ func (s *Servicio) botPuedeHablar(ctx context.Context, convID string) (*estadoPa
 		return nil, callaPersona, nil
 	}
 	if s.TopeAlcanzado(ctx) {
+		// Con el tope del mes el bot no contesta: la conversación pasa a una
+		// persona, a la vista en la bandeja, y se avisa. Antes el cliente
+		// quedaba sin respuesta y nadie se enteraba.
+		if _, err := s.pool.Exec(ctx, `update whatsapp_conversaciones set bot_estado = 'derivada', bot_derivada_at = now(), bot_pendiente = null where id = $1`, convID); err != nil {
+			return nil, "", err
+		}
+		s.avisar(ctx, push.Aviso{Titulo: "WhatsApp: el bot no contesta (tope del mes)", Cuerpo: "Se llegó al tope de WhatsApp del mes. Contestale vos.",
+			URL: "/admin/whatsapp?chat=" + convID, Etiqueta: "whatsapp-" + convID, Pantalla: "/admin/whatsapp"})
 		return nil, callaTope, nil
 	}
 	if deLaHora >= TopeBotPorHora || deDiezMinutos >= TopeBotDiezMinutos {
@@ -884,6 +1003,16 @@ func (s *Servicio) resolverTexto(ctx context.Context, convID, waJid, entranteID,
 			p.pasaAPersona = hecho.Aviso != nil
 		}
 	}
+	if r.CorteArmado != "" {
+		texto, aviso, err := s.corteQueMando(ctx, convID, r.CorteArmado)
+		if err != nil {
+			return p, err
+		}
+		if texto != "" {
+			r.Texto = texto
+		}
+		p.aviso, p.pasaAPersona = aviso, true
+	}
 	if r.Presupuestar != nil {
 		texto, consulta, aviso, motivo, err := s.presupuestar(ctx, convID, waJid, entranteID, *r.Presupuestar)
 		if err != nil {
@@ -908,7 +1037,9 @@ func (s *Servicio) resolverTexto(ctx context.Context, convID, waJid, entranteID,
 
 // ReactivarBot le devuelve la conversación al bot.
 func (s *Servicio) ReactivarBot(ctx context.Context, convID string) error {
-	_, err := s.pool.Exec(ctx, `update whatsapp_conversaciones set bot_estado = 'activo', bot_fallos = 0, bot_derivada_at = null, bot_pendiente = null where id = $1`, convID)
+	// bot_devuelto_at: lo que escribió una persona antes ya no lo calla.
+	_, err := s.pool.Exec(ctx, `update whatsapp_conversaciones set bot_estado = 'activo', bot_fallos = 0, bot_derivada_at = null, bot_pendiente = null,
+		bot_devuelto_at = now() where id = $1`, convID)
 	return err
 }
 
@@ -1210,12 +1341,48 @@ func (s *Servicio) consultaDeCorte(ctx context.Context, convID string, d asisten
 		n += p.Cantidad
 	}
 	enlace := sitio + "/corte/c/" + token
-	texto := fmt.Sprintf("Te armé el corte: %d %s en *%s*. Ya lo tiene el aserradero: te confirmamos precio y entrega por acá.\n\nEl plano:\n%s",
+	// Es una consulta, no un corte en la cola: lo revisa una persona y lo
+	// pasa a corte. «Ya lo tiene el aserradero» prometía algo que no pasó.
+	texto := fmt.Sprintf("Te armé el corte: %d %s en *%s*. Lo revisa una persona y te confirma precio y entrega por acá.\n\nEl plano:\n%s",
 		n, plural(n, "pieza", "piezas"), placa, enlace)
+	// La consulta queda atada a la conversación: «Pasar a corte» trae el
+	// cliente y el teléfono.
+	if _, err := s.pool.Exec(ctx, `update consultas_corte set whatsapp_conversacion_id = $2 where token = $1`, token, convID); err != nil {
+		return "", nil, err
+	}
 	var nombre string
 	_ = s.pool.QueryRow(ctx, `select coalesce(cu.nombre, c.display_name, 'Cliente de WhatsApp') from whatsapp_conversaciones c
 		left join customers cu on cu.id = c.customer_id where c.id = $1`, convID).Scan(&nombre)
 	aviso := &push.Aviso{Titulo: "Corte por WhatsApp", Cuerpo: fmt.Sprintf("%s: %d %s en %s. Confirmale precio y entrega.", nombre, n, plural(n, "pieza", "piezas"), placa),
+		URL: "/corte/c/" + token, Etiqueta: "corte-" + token, Pantalla: "/admin/cortes"}
+	return texto, aviso, nil
+}
+
+// corteQueMando lee el corte que el cliente armó en el sitio y mandó por
+// acá: lo ata a la conversación y avisa, para que una persona lo pase a
+// corte con su cliente. Un enlace que no existe vuelve sin texto.
+func (s *Servicio) corteQueMando(ctx context.Context, convID, token string) (string, *push.Aviso, error) {
+	var material string
+	var piezas int
+	err := s.pool.QueryRow(ctx, `
+		update consultas_corte c set whatsapp_conversacion_id = coalesce(c.whatsapp_conversacion_id, $2)
+		 where c.token = $1
+		returning c.material,
+			(coalesce((select sum((x->>'cantidad')::numeric) from jsonb_array_elements(c.piezas) x), 0)
+			 + coalesce((select sum((x->>'cantidad')::numeric) from consultas_corte_grupos g, jsonb_array_elements(g.piezas) x
+			             where g.consulta_id = c.id), 0))::int`, token, convID).Scan(&material, &piezas)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil, nil
+	}
+	if err != nil {
+		return "", nil, err
+	}
+	var nombre string
+	_ = s.pool.QueryRow(ctx, `select coalesce(cu.nombre, c.display_name, 'Cliente de WhatsApp') from whatsapp_conversaciones c
+		left join customers cu on cu.id = c.customer_id where c.id = $1`, convID).Scan(&nombre)
+	texto := fmt.Sprintf("Recibimos tu corte: %d %s en *%s*. Lo revisa una persona y te confirma precio y entrega por acá.",
+		piezas, plural(piezas, "pieza", "piezas"), material)
+	aviso := &push.Aviso{Titulo: "Corte por WhatsApp", Cuerpo: fmt.Sprintf("%s mandó su corte: %d %s en %s. Pasalo a corte.", nombre, piezas, plural(piezas, "pieza", "piezas"), material),
 		URL: "/corte/c/" + token, Etiqueta: "corte-" + token, Pantalla: "/admin/cortes"}
 	return texto, aviso, nil
 }

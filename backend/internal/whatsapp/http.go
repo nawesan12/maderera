@@ -573,6 +573,7 @@ func (s *Servicio) Rutas(m *http.ServeMux) {
 	m.HandleFunc("POST /api/whatsapp/webhook", s.RecibirWebhook)
 	m.HandleFunc("GET /api/whatsapp/medios/{id}", s.ServirMedio)
 	m.HandleFunc("POST /api/whatsapp/enviar-archivo", s.EnviarArchivo)
+	m.HandleFunc("GET /api/whatsapp/hablar/{token}", s.Hablar)
 }
 
 func puedeBandeja(r *http.Request) *auth.Sesion {

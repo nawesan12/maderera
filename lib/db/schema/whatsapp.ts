@@ -126,6 +126,9 @@ export const conversaciones = pgTable(
     botEstado: text().notNull().default("activo"),
     botFallos: integer().notNull().default(0),
     botPendiente: jsonb(),
+    botDevueltoAt: timestamp({ withTimezone: true }),
+    botDerivacionToken: text(),
+    botDerivacionTexto: text(),
   },
   (t) => [
     uniqueIndex("whatsapp_conversaciones_jid_idx").on(t.waJid),

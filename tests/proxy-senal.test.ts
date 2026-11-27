@@ -15,26 +15,26 @@ function pedido(ruta: string, cookies: Record<string, string> = {}) {
 }
 
 describe("la señal en el sitio público", () => {
-  it("con sesión y sin señal, la prende en la respuesta y en el pedido", () => {
-    const salida = proxy(pedido("/catalogo/mdf", { "better-auth.session_token": "x" }));
+  it("con sesión y sin señal, la prende en la respuesta y en el pedido", async () => {
+    const salida = await proxy(pedido("/catalogo/mdf", { "better-auth.session_token": "x" }));
     expect(salida.cookies.get(SENAL_ESTADO)?.value).toBe("1");
     expect(salida.headers.get("x-middleware-request-cookie") ?? salida.headers.get("x-middleware-override-headers")).toBeTruthy();
     expect(salida.headers.get("location")).toBeNull();
   });
 
-  it("sin sesión no hace nada ni manda al ingreso", () => {
-    const salida = proxy(pedido("/eventos/taller"));
+  it("sin sesión no hace nada ni manda al ingreso", async () => {
+    const salida = await proxy(pedido("/eventos/taller"));
     expect(salida.cookies.get(SENAL_ESTADO)).toBeUndefined();
     expect(salida.headers.get("location")).toBeNull();
   });
 
-  it("con la señal puesta no la vuelve a mandar", () => {
-    const salida = proxy(pedido("/", { "better-auth.session_token": "x", [SENAL_ESTADO]: "abc" }));
+  it("con la señal puesta no la vuelve a mandar", async () => {
+    const salida = await proxy(pedido("/", { "better-auth.session_token": "x", [SENAL_ESTADO]: "abc" }));
     expect(salida.cookies.get(SENAL_ESTADO)).toBeUndefined();
   });
 
-  it("Mi cuenta sin sesión sigue mandando al ingreso", () => {
-    const salida = proxy(pedido("/mi-cuenta/pedidos"));
+  it("Mi cuenta sin sesión sigue mandando al ingreso", async () => {
+    const salida = await proxy(pedido("/mi-cuenta/pedidos"));
     expect(salida.headers.get("location")).toContain("/ingresar?volver=%2Fmi-cuenta%2Fpedidos");
   });
 });

@@ -328,8 +328,10 @@ export default async function FichaClientePage({
                 valor={cliente.userId ? "Sí, con acceso al portal" : "No tiene"}
               />
             </dl>
-            {/* Con el correo cargado, se lo invita desde acá (M2S1-097). */}
-            {!cliente.userId && cliente.email && (
+            {/* Con el correo cargado, se lo invita desde acá (M2S1-097). La
+                ficha apagada al vincularla a otra no se invita: Go la
+                rechazaba con «No encontramos ese cliente». */}
+            {cliente.active && !cliente.userId && cliente.email && (
               <div className="mt-2 flex justify-end">
                 <InvitarAlPortal customerId={cliente.id} />
               </div>

@@ -33,7 +33,8 @@ func (s *Servicio) InvitarAlPortal(ctx context.Context, ses *auth.Sesion, client
 	}
 	var correo *string
 	var usuario *string
-	err := s.pool.QueryRow(ctx, `SELECT nombre, email, user_id FROM customers WHERE id = $1 AND active`, cliente).Scan(&inv.Nombre, &correo, &usuario)
+	var activo bool
+	err := s.pool.QueryRow(ctx, `SELECT nombre, email, user_id, active FROM customers WHERE id = $1`, cliente).Scan(&inv.Nombre, &correo, &usuario, &activo)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return inv, mal("customerId", "No encontramos ese cliente.")
 	}
@@ -41,6 +42,9 @@ func (s *Servicio) InvitarAlPortal(ctx context.Context, ses *auth.Sesion, client
 		return inv, err
 	}
 	switch {
+	case !activo:
+		// La ficha que quedó apagada al vincularla a otra (mes 23).
+		return inv, mal("customerId", "La ficha está inactiva.")
 	case usuario != nil:
 		return inv, mal("customerId", "Ya tiene cuenta web.")
 	case correo == nil || !plataforma.CorreoValido(strings.TrimSpace(*correo)):

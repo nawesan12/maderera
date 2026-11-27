@@ -235,3 +235,17 @@ const (
 	// hechoDeLaCancelacion es el id del hecho que resta la cancelación.
 	HechoDeLaCancelacion = `md5('cancelacion:' || o.id::text)::uuid`
 )
+
+// MotivoDelDescuento es, sobre la fila `o`, el motivo del descuento como se
+// lee: si el descuento salió de la escala de un medio («10% por
+// transferencia», el que se eligió al pasar el presupuesto a pedido) y el
+// pedido se terminó cobrando entero con recibos de otro medio que tiene su
+// escala («10% en efectivo»), el de ese medio. PED-1123, cobrado en
+// efectivo, decía «10% por transferencia» (mes 23). Si no, el guardado.
+const MotivoDelDescuento = `coalesce((SELECT pd2.etiqueta FROM payment_discounts pd2
+	  WHERE pd2.activo AND pd2.etiqueta <> '' AND o.estado_pago = 'pagado'
+	    AND o.descuento_motivo IN (SELECT pd3.etiqueta FROM payment_discounts pd3 WHERE pd3.medio::text <> pd2.medio::text)
+	    AND pd2.medio::text = (SELECT min(rpm.medio::text) FROM receipt_parts rpm JOIN receipts rcm ON rcm.id = rpm.receipt_id
+	                           WHERE rcm.estado = 'emitido' AND rcm.id IN ` + recibosDelPedido + `
+	                           HAVING count(DISTINCT rpm.medio) = 1)
+	  ORDER BY pd2.desde_monto DESC LIMIT 1), o.descuento_motivo)`

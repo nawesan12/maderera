@@ -948,7 +948,7 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 	err := s.pool.QueryRow(ctx, `
 		SELECT o.id, o.numero, o.numero_provisorio, o.contacto_nombre, o.contacto_email, o.contacto_telefono, c.razon_social,
 		       o.branch_id, o.customer_id, b.name, o.estado::text, o.origen::text, o.tipo_entrega::text, o.direccion_entrega,
-		       o.zona_envio, o.costo_envio::text, o.subtotal::text, o.descuento::text, o.descuento_motivo, o.total::text,
+		       o.zona_envio, o.costo_envio::text, o.subtotal::text, o.descuento::text, `+fragmentos.MotivoDelDescuento+`, o.total::text,
 		       o.medio_pago::text, o.estado_pago::text, o.notas, o.created_at, o.quote_id, q.numero,
 		       CASE WHEN o.customer_id IS NULL THEN NULL
 		            ELSE (SELECT coalesce(sum(monto), 0)::float8 FROM account_movements WHERE customer_id = o.customer_id) END,

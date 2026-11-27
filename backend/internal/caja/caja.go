@@ -145,8 +145,11 @@ type Movimiento struct {
 	// Anulado: el gasto (o el pago) del renglón se anuló después; su
 	// efectivo volvió con otro renglón. Se ve tachado (M2S1-182).
 	Anulado bool `json:"anulado"`
-	// OtroPuesto: lo cargó alguien que no es quien abrió el turno (un recibo
-	// cobrado desde el panel, M2S2-063).
+	// OtroPuesto: lo cargó alguien que no es quien mira (en el mostrador,
+	// quien está en la terminal) o, en el panel, quien abrió el turno: un
+	// recibo cobrado desde el panel (M2S2-063). Contra quien abrió, el
+	// vendedor de un turno que abrió el admin veía sus propias ventas como
+	// cargadas por otro (mes 23, Casa Central).
 	OtroPuesto bool `json:"otroPuesto"`
 }
 
@@ -155,7 +158,7 @@ type Movimiento struct {
 const consultaDeMovimientos = `
 		SELECT m.session_id::text, m.id, m.tipo::text, m.monto, m.motivo, m.order_id, m.created_at, u.name, m.destino,
 		       coalesce(e.anulado_at IS NOT NULL, false) OR coalesce(sp.anulado_at IS NOT NULL, false),
-		       coalesce(m.creado_por <> s.abierta_por, false)
+		       coalesce(m.tipo <> 'apertura' AND m.creado_por <> coalesce($2::text, s.abierta_por), false)
 		FROM cash_movements m
 		JOIN cash_sessions s ON s.id = m.session_id
 		LEFT JOIN "user" u ON u.id = m.creado_por
@@ -164,12 +167,12 @@ const consultaDeMovimientos = `
 		WHERE m.session_id = ANY($1::uuid[]) %s
 		ORDER BY m.created_at DESC`
 
-func movimientos(ctx context.Context, c Consultador, sesiones []string, filtro string) (map[string][]Movimiento, error) {
+func movimientos(ctx context.Context, c Consultador, sesiones []string, filtro string, quien *string) (map[string][]Movimiento, error) {
 	por := map[string][]Movimiento{}
 	if len(sesiones) == 0 {
 		return por, nil
 	}
-	filas, err := c.Query(ctx, fmt.Sprintf(consultaDeMovimientos, filtro), sesiones)
+	filas, err := c.Query(ctx, fmt.Sprintf(consultaDeMovimientos, filtro), sesiones, quien)
 	if err != nil {
 		return nil, err
 	}
@@ -187,9 +190,21 @@ func movimientos(ctx context.Context, c Consultador, sesiones []string, filtro s
 	return por, filas.Err()
 }
 
-// MovimientosDelTurno, del más nuevo al más viejo.
+// MovimientosDelTurno, del más nuevo al más viejo; OtroPuesto, contra quien
+// abrió el turno.
 func MovimientosDelTurno(ctx context.Context, c Consultador, sesion string) ([]Movimiento, error) {
-	por, err := movimientos(ctx, c, []string{sesion}, "")
+	return MovimientosDelTurnoPara(ctx, c, sesion, "")
+}
+
+// MovimientosDelTurnoPara es MovimientosDelTurno visto por `quien` (el
+// usuario de la terminal): OtroPuesto es lo que cargó otra persona. Vacío,
+// contra quien abrió el turno.
+func MovimientosDelTurnoPara(ctx context.Context, c Consultador, sesion, quien string) ([]Movimiento, error) {
+	var q *string
+	if quien != "" {
+		q = &quien
+	}
+	por, err := movimientos(ctx, c, []string{sesion}, "", q)
 	if err != nil {
 		return nil, err
 	}

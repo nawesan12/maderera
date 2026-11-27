@@ -241,7 +241,7 @@ func turnosCerrados(ctx context.Context, c Consultador, donde, limite string, ar
 	if err != nil {
 		return nil, err
 	}
-	movs, err := movimientos(ctx, c, ids, "AND m.tipo NOT IN ('apertura', 'venta')")
+	movs, err := movimientos(ctx, c, ids, "AND m.tipo NOT IN ('apertura', 'venta')", nil)
 	if err != nil {
 		return nil, err
 	}

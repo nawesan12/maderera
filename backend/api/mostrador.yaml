@@ -752,7 +752,7 @@ components:
         quien: { type: string, nullable: true }
         destino: { type: string, nullable: true, enum: [banco, caja_fuerte, otro], description: "a dónde fue un retiro, o de dónde vino un ingreso" }
         anulado: { type: boolean, description: "el gasto o el pago del renglón se anuló después" }
-        otroPuesto: { type: boolean, description: "lo cargó alguien que no es quien abrió el turno" }
+        otroPuesto: { type: boolean, description: "lo cargó alguien que no es quien está en la terminal (sin terminal, quien abrió el turno)" }
     MostradorVentaDeHoy:
       type: object
       required: [id, numero, cliente, total, devuelto, medioPago, medios, conFactura, estado, createdAt]

@@ -115,10 +115,11 @@ func puesto(ctx context.Context) (*auth.Sesion, error) {
 }
 
 func (a *API) PantallaDelMostrador(ctx context.Context, r mostradorapi.PantallaDelMostradorRequestObject) (mostradorapi.PantallaDelMostradorResponseObject, error) {
-	if _, err := puesto(ctx); err != nil {
+	ses, err := puesto(ctx)
+	if err != nil {
 		return nil, err
 	}
-	p, err := a.s.Pantalla(ctx, r.Params.Sucursal)
+	p, err := a.s.Pantalla(ctx, r.Params.Sucursal, ses.UserID)
 	return ok(p), err
 }
 
@@ -687,7 +688,9 @@ type Pantalla struct {
 
 // Pantalla junta el turno, sus movimientos, el cierre Z, las ventas de hoy,
 // la lista general y el fondo de cambio de la sucursal.
-func (s *Servicio) Pantalla(ctx context.Context, sucursal string) (Pantalla, error) {
+// `quien` es el usuario de la terminal: el chip de la caja avisa lo que
+// cargó otra persona (M2S2-063).
+func (s *Servicio) Pantalla(ctx context.Context, sucursal, quien string) (Pantalla, error) {
 	p := Pantalla{Movimientos: []caja.Movimiento{}, Cierre: []caja.RenglonDelCierre{}, Ventas: []caja.VentaDeHoy{}}
 	if !plataforma.UUIDValido(sucursal) {
 		return p, nil
@@ -719,7 +722,7 @@ func (s *Servicio) Pantalla(ctx context.Context, sucursal string) (Pantalla, err
 		return p, err
 	}
 	if p.Turno != nil {
-		if p.Movimientos, err = caja.MovimientosDelTurno(ctx, s.pool, p.Turno.ID); err != nil {
+		if p.Movimientos, err = caja.MovimientosDelTurnoPara(ctx, s.pool, p.Turno.ID, quien); err != nil {
 			return p, err
 		}
 		if p.Cierre, err = caja.CierreDelTurno(ctx, s.pool, p.Turno.ID); err != nil {

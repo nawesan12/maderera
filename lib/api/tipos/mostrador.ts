@@ -578,7 +578,7 @@ export interface components {
             destino?: "banco" | "caja_fuerte" | "otro" | null;
             /** @description el gasto o el pago del renglón se anuló después */
             anulado?: boolean;
-            /** @description lo cargó alguien que no es quien abrió el turno */
+            /** @description lo cargó alguien que no es quien está en la terminal (sin terminal, quien abrió el turno) */
             otroPuesto?: boolean;
         };
         MostradorVentaDeHoy: {

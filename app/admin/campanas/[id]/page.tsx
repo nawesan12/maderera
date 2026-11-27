@@ -36,8 +36,9 @@ export default async function CampanaPage({ params }: { params: Promise<{ id: st
           titulo={campana.asunto}
           resumen={
             campana.estado === "programada" && campana.programadaPara
-              ? `Programada para el ${hora(campana.programadaPara)}`
-              : "Borrador"
+              ? `Para el ${hora(campana.programadaPara)}`
+              : // El estado ya va en la etiqueta: «Borrador» salía dos veces (M2S1-135).
+                undefined
           }
         >
           <EtiquetaEstado estado={campana.estado} />

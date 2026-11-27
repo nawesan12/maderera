@@ -148,7 +148,20 @@ func TestBajoElMinimoEnLasTresPantallas(t *testing.T) {
 			dePlaca = &r.Filas[i]
 		}
 	}
-	if sugeridos[placa] != 12 || sugeridos[tirante] != 5 || dePlaca == nil ||
+	// La placa queda por encima del mínimo (21, no 20: justo en el mínimo
+	// se volvía a pedir; M2S1-032): faltan 13, se traen los 5 del Aserradero
+	// y se compran 8. El tirante no se compra: Central tiene de sobra y se
+	// traen 6 al Aserradero (M2S1-029).
+	var deTirante *FilaDeReposicion
+	for i := range r.Filas {
+		if r.Filas[i].VariantID == tirante {
+			deTirante = &r.Filas[i]
+		}
+	}
+	if deTirante == nil || deTirante.TrasladoAAserradero != 6 || deTirante.ComprarAserradero != 0 {
+		t.Fatalf("el traslado: %+v", deTirante)
+	}
+	if sugeridos[placa] != 8 || sugeridos[tirante] != 0 || dePlaca == nil || dePlaca.TrasladoACentral != 5 ||
 		dePlaca.ProveedorID == nil || *dePlaca.ProveedorID != prov || *dePlaca.Proveedor != "Placas del Sur" {
 		t.Fatalf("reposición: %v %s", sugeridos, b)
 	}
@@ -161,7 +174,7 @@ func TestBajoElMinimoEnLasTresPantallas(t *testing.T) {
 	r = ReporteDeReposicion{}
 	_ = json.Unmarshal([]byte(b), &r)
 	for _, f := range r.Filas {
-		if f.VariantID == placa && f.Sugerido != 12+30 {
+		if f.VariantID == placa && (f.Sugerido != 13+30 || !f.Negativo || r.Filas[0].VariantID != placa) {
 			t.Fatalf("lo vendido de más: %v %s", f.Sugerido, b)
 		}
 	}

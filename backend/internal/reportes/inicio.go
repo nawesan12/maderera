@@ -484,7 +484,7 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 	agregar(o.ordenesPorLlegar, Pendiente{Clave: "ordenes-por-llegar", Texto: uno(o.ordenesPorLlegar, "orden de compra llega hoy o mañana", "órdenes de compra llegan hoy o mañana"),
 		Href: "/admin/compras/ordenes", Urgente: true})
 	agregar(o.recepcionesSinFactura, Pendiente{Clave: "recepciones-sin-factura", Texto: uno(o.recepcionesSinFactura,
-		"recepción sin factura de compra", "recepciones sin factura de compra"), Href: "/admin/compras/facturas"})
+		"recepción sin factura de compra", "recepciones sin factura de compra"), Href: "/admin/recepciones"})
 	agregar(o.presupuestosEnviados, Pendiente{Clave: "presupuestos-enviados", Texto: uno(o.presupuestosEnviados,
 		"presupuesto enviado sin respuesta", "presupuestos enviados sin respuesta"), Href: "/admin/presupuestos?estado=enviado", Urgente: vende})
 	agregar(o.aceptadosSinPedido, Pendiente{Clave: "presupuestos-aceptados", Texto: uno(o.aceptadosSinPedido,
@@ -498,6 +498,19 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 	// el atajo abría Stock sin filtrar (mes simulado, H004, H102, H358).
 	agregar(c.reponer, Pendiente{Clave: "reponer", Texto: uno(c.reponer, "medida para reponer", "medidas para reponer"),
 		Detalle: detalle("Llegó al mínimo o se vendió de más"), Href: "/admin/stock?estado=reponer"})
+	// El stock en negativo (se vendió lo que no había): aparte y urgente,
+	// porque el número de Stock está mal hasta que se cuente o se reciba
+	// (mes simulado, M2S4-001). Lleva a la reposición, donde va arriba.
+	if ve("/admin/stock") {
+		var negativos int
+		if err := s.pool.QueryRow(ctx, `SELECT count(DISTINCT i.variant_id)::int FROM inventory i
+			JOIN product_variants v ON v.id = i.variant_id JOIN products p ON p.id = v.product_id
+			WHERE p.active AND v.active AND i.qty - coalesce(i.reservado, 0) < 0`).Scan(&negativos); err != nil {
+			return nil, err
+		}
+		agregar(negativos, Pendiente{Clave: "stock-negativo", Texto: uno(negativos, "medida con stock en negativo", "medidas con stock en negativo"),
+			Href: "/admin/reportes/reposicion", Urgente: true, Vencido: true})
+	}
 	// El precio de lista bajo el costo: cada venta pierde plata (H139).
 	agregar(c.bajoCosto, Pendiente{Clave: "bajo-costo", Texto: uno(c.bajoCosto, "medida con el precio bajo el costo", "medidas con el precio bajo el costo"),
 		Href: "/admin/precios?estado=bajo-costo", Urgente: true})

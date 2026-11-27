@@ -399,7 +399,7 @@ export interface components {
             disponibleCentral: number;
             /** Format: double */
             disponibleAserradero: number;
-            /** @description El proveedor habitual (el último con el que se cargó un código) */
+            /** @description El proveedor al que se le compró por última vez la medida (o el último con el que se cargó un código) */
             proveedorId?: string | null;
             proveedor?: string | null;
             /** Format: double */
@@ -408,8 +408,27 @@ export interface components {
             vendido: number;
             /** Format: double */
             cobertura: number | null;
-            /** Format: double */
+            /**
+             * Format: double
+             * @description Lo que se compra en la vista elegida
+             */
             sugerido: number;
+            /** Format: double */
+            comprarCentral: number;
+            /** Format: double */
+            comprarAserradero: number;
+            /**
+             * Format: double
+             * @description Lo que conviene traer del Aserradero en vez de comprar
+             */
+            trasladoACentral: number;
+            /**
+             * Format: double
+             * @description Lo que conviene traer de Casa Central en vez de comprar
+             */
+            trasladoAAserradero: number;
+            /** @description Alguna sucursal tiene la medida en negativo */
+            negativo: boolean;
         };
         Reposicion: {
             filas: components["schemas"]["ReposicionFila"][];

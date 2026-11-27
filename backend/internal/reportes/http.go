@@ -226,7 +226,7 @@ func (a *API) ReporteDeReposicionArchivo(ctx context.Context, r reportesapi.Repo
 	}
 	nombre := "reposicion-" + jsmath.Texto(o.DiasDelPeriodo) + "dias"
 	if texto(q.Formato) != "pdf" {
-		return csv(nombre+".csv", CsvReposicion(rep)), nil
+		return csv(nombre+".csv", CsvReposicionPorSucursal(rep)), nil
 	}
 	d := pdf.ReporteDeReposicion{DiasDelPeriodo: rep.DiasDelPeriodo, CoberturaObjetivo: rep.CoberturaObjetivo,
 		Filas: make([]pdf.FilaDeReposicion, len(rep.Filas))}

@@ -313,7 +313,7 @@ components:
         total: { type: number, format: double }
     ReposicionFila:
       type: object
-      required: [variantId, productId, producto, medida, sku, unidad, categoria, categoriaSlug, rubro, disponibleCentral, disponibleAserradero, disponible, vendido, cobertura, sugerido]
+      required: [variantId, productId, producto, medida, sku, unidad, categoria, categoriaSlug, rubro, disponibleCentral, disponibleAserradero, disponible, vendido, cobertura, sugerido, comprarCentral, comprarAserradero, trasladoACentral, trasladoAAserradero, negativo]
       properties:
         variantId: { type: string }
         productId: { type: string }
@@ -326,12 +326,17 @@ components:
         rubro: { type: string, nullable: true }
         disponibleCentral: { type: number, format: double }
         disponibleAserradero: { type: number, format: double }
-        proveedorId: { type: string, nullable: true, description: El proveedor habitual (el último con el que se cargó un código) }
+        proveedorId: { type: string, nullable: true, description: El proveedor al que se le compró por última vez la medida (o el último con el que se cargó un código) }
         proveedor: { type: string, nullable: true }
         disponible: { type: number, format: double }
         vendido: { type: number, format: double }
         cobertura: { type: number, format: double, nullable: true }
-        sugerido: { type: number, format: double }
+        sugerido: { type: number, format: double, description: Lo que se compra en la vista elegida }
+        comprarCentral: { type: number, format: double }
+        comprarAserradero: { type: number, format: double }
+        trasladoACentral: { type: number, format: double, description: Lo que conviene traer del Aserradero en vez de comprar }
+        trasladoAAserradero: { type: number, format: double, description: Lo que conviene traer de Casa Central en vez de comprar }
+        negativo: { type: boolean, description: Alguna sucursal tiene la medida en negativo }
     Reposicion:
       type: object
       required: [filas, porCategoria, diasDelPeriodo, coberturaObjetivo]

@@ -114,11 +114,13 @@ export function DialogoTraslado({ sucursales }: { sucursales: { id: string; name
           <DialogTitle>Traslado entre sucursales</DialogTitle>
         </DialogHeader>
 
+        {/* El ⇆ a la altura de los selectores: los tres miden 44 px y se
+            alinean abajo (caía 8 px más abajo, M2S1-166). */}
         <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
           <div className="min-w-0 space-y-2">
             <Label htmlFor="traslado-origen">Desde</Label>
             <Select value={origen} onValueChange={(v) => v && setOrigen(v)} items={nombres}>
-              <SelectTrigger id="traslado-origen" className="w-full">
+              <SelectTrigger id="traslado-origen" className="h-11 w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -134,14 +136,14 @@ export function DialogoTraslado({ sucursales }: { sucursales: { id: string; name
             type="button"
             onClick={invertir}
             aria-label="Invertir origen y destino"
-            className="mb-0.5 flex h-10 w-10 items-center justify-center rounded-md border text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="flex h-11 w-11 items-center justify-center rounded-lg border text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             <ArrowLeftRight className="h-4 w-4" aria-hidden="true" />
           </button>
           <div className="min-w-0 space-y-2">
             <Label htmlFor="traslado-destino">Hacia</Label>
             <Select value={destino} onValueChange={(v) => v && setDestino(v)} items={nombres}>
-              <SelectTrigger id="traslado-destino" className="w-full">
+              <SelectTrigger id="traslado-destino" className="h-11 w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -157,68 +159,87 @@ export function DialogoTraslado({ sucursales }: { sucursales: { id: string; name
 
         {revisados.length > 0 && (
           <ul className="tarjeta-hundida divide-y divide-border/60 overflow-hidden">
-            {revisados.map((r) => (
-              <li key={r.medida.id} className="flex items-center gap-3 px-3 py-2.5">
-                <div className="min-w-0 flex-1">
+            {revisados.map((r) => {
+              const nombre = `${r.medida.producto} ${r.medida.medida}`;
+              const hay = Math.max(r.hay, 0);
+              return (
+                // El nombre y la medida a todo el ancho; la cantidad, con su
+                // unidad, y la ✕ en el renglón de abajo: al lado del campo la
+                // columna quedaba de una palabra por línea (M2S4-048).
+                <li key={r.medida.id} className="px-3 py-2.5">
                   <p className="text-base font-medium leading-snug break-words">{r.medida.producto}</p>
                   <p className="text-sm text-muted-foreground">
                     {r.medida.medida} · <span className="tabular">{r.medida.sku}</span>
                   </p>
-                  {/* Lo que frena «Mandar» se dice en el renglón: el botón
-                      se apagaba sin decir por qué (mes simulado). */}
-                  <p
-                    id={`traslado-hay-${r.medida.id}`}
-                    className={`tabular text-sm ${r.sinStock || r.mal || r.hay <= 0 ? "font-medium text-destructive" : "text-muted-foreground"}`}
-                  >
-                    {r.mal
-                      ? Number.isFinite(r.n) && r.n > 0
-                        ? "Va sin decimales"
-                        : "Cantidad mal escrita"
-                      : `${r.sinStock ? "Solo hay " : `${origenNombre}: `}${formatearCantidad(Math.max(r.hay, 0))} ${unidadConcordada(
-                          Math.max(r.hay, 0),
-                          r.medida.unidad,
-                          `${r.medida.producto} ${r.medida.medida}`,
-                        )}${r.sinStock ? ` en ${origenNombre}` : ""}`}
-                  </p>
-                </div>
-                <label className="sr-only" htmlFor={`traslado-cant-${r.medida.id}`}>
-                  Cantidad de {r.medida.producto} {r.medida.medida}
-                </label>
-                <Input
-                  id={`traslado-cant-${r.medida.id}`}
-                  ref={(el) => {
-                    if (el) cantidades.current.set(r.medida.id, el);
-                    else cantidades.current.delete(r.medida.id);
-                  }}
-                  inputMode="decimal"
-                  autoComplete="off"
-                  value={r.cantidad}
-                  onChange={(e) => cambiar(r.medida.id, e.target.value)}
-                  onKeyDown={(e) => {
-                    // Enter pasa a la próxima medida, como al cargar el camión.
-                    if (e.key === "Enter" && !e.ctrlKey && !e.metaKey) {
-                      e.preventDefault();
-                      buscador.current?.focus();
-                    } else if (e.key === "Enter") {
-                      e.preventDefault();
-                      mandar();
-                    }
-                  }}
-                  aria-invalid={r.mal || r.sinStock || undefined}
-                  aria-describedby={`traslado-hay-${r.medida.id}`}
-                  placeholder={admiteDecimales(r.medida.unidad) ? "2,5" : "4"}
-                  className="tabular h-11 w-20 shrink-0 text-right text-lg"
-                />
-                <button
-                  type="button"
-                  onClick={() => sacar(r.medida.id)}
-                  aria-label={`Sacar ${r.medida.producto} ${r.medida.medida}`}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-                >
-                  <X className="h-4 w-4" aria-hidden="true" />
-                </button>
-              </li>
-            ))}
+                  <div className="mt-2 flex items-center gap-2">
+                    {/* Lo que frena «Mandar» se dice en el renglón: el botón
+                        se apagaba sin decir por qué (mes simulado). */}
+                    <p
+                      id={`traslado-hay-${r.medida.id}`}
+                      className={`tabular min-w-0 flex-1 text-sm ${r.sinStock || r.mal || r.hay <= 0 ? "font-medium text-saldo-debe" : "text-muted-foreground"}`}
+                    >
+                      {r.mal ? (
+                        Number.isFinite(r.n) && r.n > 0 ? (
+                          "Va sin decimales"
+                        ) : (
+                          "Cantidad mal escrita"
+                        )
+                      ) : (
+                        <>
+                          {r.sinStock ? "Solo hay " : `${origenNombre}: `}
+                          <span className="whitespace-nowrap">
+                            {formatearCantidad(hay)} {unidadConcordada(hay, r.medida.unidad, nombre)}
+                          </span>
+                          {r.sinStock ? ` en ${origenNombre}` : ""}
+                        </>
+                      )}
+                    </p>
+                    <label
+                      htmlFor={`traslado-cant-${r.medida.id}`}
+                      className="flex h-11 shrink-0 items-center gap-1.5 rounded-md bg-hundida pr-3 focus-within:ring-2 focus-within:ring-ring"
+                    >
+                      <span className="sr-only">Cantidad de {nombre}</span>
+                      <input
+                        id={`traslado-cant-${r.medida.id}`}
+                        ref={(el) => {
+                          if (el) cantidades.current.set(r.medida.id, el);
+                          else cantidades.current.delete(r.medida.id);
+                        }}
+                        inputMode="decimal"
+                        autoComplete="off"
+                        value={r.cantidad}
+                        onChange={(e) => cambiar(r.medida.id, e.target.value)}
+                        onKeyDown={(e) => {
+                          // Enter pasa a la próxima medida, como al cargar el camión.
+                          if (e.key === "Enter" && !e.ctrlKey && !e.metaKey) {
+                            e.preventDefault();
+                            buscador.current?.focus();
+                          } else if (e.key === "Enter") {
+                            e.preventDefault();
+                            mandar();
+                          }
+                        }}
+                        aria-invalid={r.mal || r.sinStock || undefined}
+                        aria-describedby={`traslado-hay-${r.medida.id}`}
+                        placeholder={admiteDecimales(r.medida.unidad) ? "2,5" : "4"}
+                        className="tabular h-11 w-16 bg-transparent text-right text-lg text-foreground outline-none"
+                      />
+                      <span className="text-sm text-muted-foreground">
+                        {unidadConcordada(Number.isFinite(r.n) ? r.n : 2, r.medida.unidad, nombre)}
+                      </span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => sacar(r.medida.id)}
+                      aria-label={`Sacar ${nombre}`}
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                    >
+                      <X className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
 
@@ -242,7 +263,7 @@ export function DialogoTraslado({ sucursales }: { sucursales: { id: string; name
         </div>
 
         {error && (
-          <p role="alert" className="text-base text-destructive">
+          <p role="alert" className="text-base text-saldo-debe">
             {error}
           </p>
         )}
@@ -266,16 +287,20 @@ export function DialogoTraslado({ sucursales }: { sucursales: { id: string; name
  * («2x4» encuentra el tirante de 2" x 4"); al elegir, el campo se vacía para
  * la siguiente. Cada resultado dice lo que hay en el origen.
  */
-function BuscadorDeMedida({
+export function BuscadorDeMedida({
   ref,
   etiqueta,
   alElegir,
   origen,
+  id = "traslado-buscar",
+  autoFocus = true,
 }: {
-  ref: React.Ref<HTMLInputElement>;
+  ref?: React.Ref<HTMLInputElement>;
   etiqueta: string;
   alElegir: (m: MedidaEncontrada) => void;
   origen: string;
+  id?: string;
+  autoFocus?: boolean;
 }) {
   const [texto, setTexto] = useState("");
   const [encontradas, setEncontradas] = useState<MedidaEncontrada[]>([]);
@@ -312,9 +337,9 @@ function BuscadorDeMedida({
 
   return (
     <div className="space-y-2">
-      <Label htmlFor="traslado-buscar">{etiqueta}</Label>
+      <Label htmlFor={id}>{etiqueta}</Label>
       <Input
-        id="traslado-buscar"
+        id={id}
         ref={ref}
         value={texto}
         onChange={(e) => setTexto(e.target.value)}
@@ -333,13 +358,13 @@ function BuscadorDeMedida({
         }}
         placeholder="Nombre, medida o código"
         autoComplete="off"
-        autoFocus
+        autoFocus={autoFocus}
         role="combobox"
         aria-expanded={visibles.length > 0}
-        aria-controls="traslado-resultados"
+        aria-controls={`${id}-resultados`}
       />
       {visibles.length > 0 && (
-        <ul id="traslado-resultados" role="listbox" className="max-h-64 overflow-y-auto rounded-lg bg-card shadow-sm">
+        <ul id={`${id}-resultados`} role="listbox" className="max-h-64 overflow-y-auto rounded-lg bg-card shadow-sm">
           {visibles.map((v, i) => (
             <li key={v.id} role="option" aria-selected={i === resaltada}>
               <button

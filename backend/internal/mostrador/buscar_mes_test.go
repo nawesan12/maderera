@@ -81,9 +81,15 @@ func TestBuscarMedidaDeCorrido(t *testing.T) {
 	if _, err := e.pool.Exec(ctx, `insert into price_list_items (price_list_id, variant_id, price) values ($1, $2, 1000)`, e.general, v); err != nil {
 		t.Fatal(err)
 	}
+	// Mes 23: el machimbre de 1/2" x 4" salía primero con «2x4».
+	mach := e.txt(t, `insert into products (slug, name, category_id, description, unit) values ('machimbre', 'Machimbre Pino', $1, '', 'unidad') returning id::text`, cat)
+	mv := e.txt(t, `insert into product_variants (product_id, sku, label, sort_order) values ($1, 'MAC-12X4', '1/2" x 4"', 1) returning id::text`, mach)
+	if _, err := e.pool.Exec(ctx, `insert into price_list_items (price_list_id, variant_id, price) values ($1, $2, 500)`, e.general, mv); err != nil {
+		t.Fatal(err)
+	}
 	for _, q := range []string{"2x4", "tirante 2x4", "pino 2x4"} {
 		r, err := e.svc.Buscar(ctx, q, e.central, nil)
-		if err != nil || len(r) == 0 || r[0].VariantID != v {
+		if err != nil || len(r) != 1 || r[0].VariantID != v {
 			t.Errorf("%q: %+v %v", q, r, err)
 		}
 	}

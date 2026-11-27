@@ -43,9 +43,6 @@ type ResultadoDeMostrador struct {
 	Piso *float64 `json:"piso"`
 }
 
-// reMedidaPorPor es una medida escrita de corrido: «2x4», «1x6».
-var reMedidaPorPor = regexp.MustCompile(`^(\d{1,4})x(\d{1,4})$`)
-
 // args junta los parámetros de una consulta armada a mano.
 type args []any
 
@@ -68,8 +65,8 @@ func (a *args) coincide(texto string, columnas ...string) string {
 	for _, t := range terminos {
 		// «2x4» encuentra el tirante de 2" x 4" (M2S3-028): la medida se
 		// escribe sin comillas ni espacios.
-		if g := reMedidaPorPor.FindStringSubmatch(strings.ToLower(t)); g != nil {
-			p := a.poner(`(^|[^0-9])` + g[1] + `\W{0,3}x\W{0,3}` + g[2] + `([^0-9]|$)`)
+		if re, ok := busqueda.MedidaPorPor(t); ok {
+			p := a.poner(re)
 			var col []string
 			for _, c := range columnas {
 				col = append(col, "coalesce("+c+", '') ~* "+p)

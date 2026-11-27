@@ -16,6 +16,7 @@ import (
 	"golang.org/x/text/language"
 	"golang.org/x/text/unicode/norm"
 
+	"mjbj/internal/busqueda"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/sqlc"
 )
@@ -340,6 +341,14 @@ func (s *Servicio) claves(ctx context.Context, f Filtros, l listaParaConsulta) (
 	if terminos := terminosDeBusqueda(f.Busqueda); len(terminos) > 0 {
 		var porTermino []string
 		for _, t := range terminos {
+			// «2x4» es una medida: está en el nombre o en una medida como
+			// «2" x 4"» (el bot buscaba «pino 2x4», no encontraba nada y
+			// caía a todo el pino, con el machimbre primero).
+			if re, ok := busqueda.MedidaPorPor(t); ok {
+				r := arg(re)
+				porTermino = append(porTermino, "(p.name ~* "+r+" OR EXISTS (SELECT 1 FROM product_variants mv WHERE mv.product_id = p.id AND mv.active AND mv.label ~* "+r+"))")
+				continue
+			}
 			patron := arg("%" + t + "%")
 			var col []string
 			for _, c := range []string{"p.name", "p.description", "p.subcategory", "p.brand", "c.name"} {

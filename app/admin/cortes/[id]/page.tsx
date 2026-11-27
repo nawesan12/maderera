@@ -119,7 +119,10 @@ export default async function FichaCortePage({
                 nulo —`branchId` lo admite— y concatenarla sin preguntar
                 imprimía "null" en el encabezado de la ficha. */}
             <span className="tabular">{corte.numero}</span>
-            {corte.empresa && ` · ${corte.empresa}`}
+            {/* La empresa solo si dice otra cosa que el título: «Sim
+                Mueblería Atlántica · Sim Mueblería Atlántica SRL» repetía el
+                nombre y partía el renglón a 375 px (mes simulado, M3S3-028). */}
+            {corte.empresa && !mismoNombre(corte.empresa, corte.cliente) && ` · ${corte.empresa}`}
             {corte.sucursal && ` · ${corte.sucursal}`}
             {` · ${fechaHora.format(corte.createdAt)}`}
           </p>
@@ -127,7 +130,6 @@ export default async function FichaCortePage({
 
         {!anulado && (
           <div className="flex flex-wrap items-center gap-2">
-            <VolverUnPaso id={corte.id} estado={corte.estado} />
             {/* El suelto con algo para cobrar no se entrega con un clic: se
                 cobra (H348). */}
             {corte.estado === "terminado" && modo === "suelto" && cuenta.total > 0 && cobra ? (
@@ -167,6 +169,12 @@ export default async function FichaCortePage({
       ) : (
         <section className="tarjeta p-5">
           <Pasos etapas={ETAPAS_CORTE} actual={corte.estado} />
+          {/* Deshacer va con la barra que deshace, como botón (M3S2-047). */}
+          {(corte.estado === "en-proceso" || corte.estado === "terminado") && (
+            <div className="mt-4 flex justify-end">
+              <VolverUnPaso id={corte.id} estado={corte.estado} />
+            </div>
+          )}
         </section>
       )}
 
@@ -290,6 +298,14 @@ export default async function FichaCortePage({
                 <div className="flex items-baseline justify-between gap-4">
                   <dt className="text-base text-muted-foreground">Las placas</dt>
                   <dd className="text-base">
+                    {/* En un acopio usar una de tres es lo normal: un dato,
+                        no un aviso en rojo (mes simulado, M3S3-051). */}
+                    {pedido.placasDelPedido > 0 && (
+                      <span className="tabular">
+                        {formatearDecimal((media ? nPlacas / 2 : nPlacas) + (pedido.placasDeOtrosCortes ?? 0))} de{" "}
+                        {formatearDecimal(pedido.placasDelPedido)}{" "}
+                      </span>
+                    )}
                     en{" "}
                     {vePedidos ? (
                       <Link href={`/admin/pedidos/${corte.orderId}`} className="codigo hover:text-brand-orange">
@@ -356,9 +372,15 @@ export default async function FichaCortePage({
                   {pedido && corte.orderId && (
                     <span className="text-muted-foreground">
                       reposición de{" "}
-                      <Link href={`/admin/pedidos/${corte.orderId}`} className="codigo hover:text-brand-orange">
-                        {pedido.numero}
-                      </Link>
+                      {/* Sin enlace para quien no entra a Pedidos, como «Del
+                          pedido» (mes simulado, M3S2-015). */}
+                      {vePedidos ? (
+                        <Link href={`/admin/pedidos/${corte.orderId}`} className="codigo hover:text-brand-orange">
+                          {pedido.numero}
+                        </Link>
+                      ) : (
+                        <span className="codigo">{pedido.numero}</span>
+                      )}
                     </span>
                   )}
                 </p>
@@ -443,8 +465,12 @@ export default async function FichaCortePage({
         </section>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
-        <section className="tarjeta overflow-hidden">
+      {/* El despiece a todo el ancho y los datos del trabajo en una fila de
+          tarjetas arriba: al costado, la tabla quedaba en media pantalla y
+          «720 × 560 mm» se partía en tres renglones a 1024 px (mes simulado,
+          M2S1-151 y M3S1-039). */}
+      <div className="flex flex-col gap-4">
+        <section className="tarjeta order-2 overflow-hidden">
           <div className="flex flex-wrap items-baseline justify-between gap-3 px-5 py-4">
             <h2 className="text-base font-medium">Despiece</h2>
             <p className="text-base text-muted-foreground">
@@ -472,7 +498,7 @@ export default async function FichaCortePage({
             <tbody>
               {corte.piezas.map((pieza) => (
                 <tr key={pieza.id} className="border-b last:border-0">
-                  <td className="tabular px-5 py-3.5 text-base">
+                  <td className="tabular whitespace-nowrap px-5 py-3.5 text-base">
                     {pieza.largoMm} × {pieza.anchoMm} mm
                   </td>
                   <td className="tabular px-4 py-3.5 text-right text-base">
@@ -522,7 +548,7 @@ export default async function FichaCortePage({
           </table>
         </section>
 
-        <aside className="space-y-4">
+        <aside className="order-1 grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <section className="tarjeta p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Material
@@ -561,7 +587,7 @@ export default async function FichaCortePage({
                 si la máquina dio otras. Al terminar las confirma el taller en
                 su tarjeta; esta corrección es del mostrador (H115). Solo donde
                 cambian lo que se cobra. */}
-            {decide && !sinPlata && (modo === "suelto" || modo === "pedido") && !anulado && (
+            {cobra && !sinPlata && (modo === "suelto" || modo === "pedido") && !anulado && (
               <div className="mt-3 border-t pt-3">
                 <CargarPasadas
                   id={corte.id}
@@ -704,4 +730,13 @@ function Total({ texto, monto, children }: { texto: React.ReactNode; monto: numb
       </dd>
     </div>
   );
+}
+
+/** Dos nombres que dicen lo mismo («Mueblería Atlántica» y «Mueblería Atlántica SRL»). */
+function mismoNombre(a: string, b: string) {
+  const limpio = (t: string) =>
+    t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+  const x = limpio(a);
+  const y = limpio(b);
+  return x === y || x.startsWith(y) || y.startsWith(x);
 }

@@ -90,6 +90,17 @@ export function TableroDeCortes({
     );
   }
 
+  if (taller) {
+    return (
+      <TableroDelTaller
+        cortes={cortes}
+        avisos={avisos}
+        soloMaquina={soloMaquina}
+        verSucursal={verSucursal}
+      />
+    );
+  }
+
   return (
     <Tablero>
       {columnas.map((columna) => {
@@ -131,6 +142,75 @@ export function TableroDeCortes({
   );
 }
 
+/**
+ * El tablero del taller, ordenado por lo que el operario tiene entre manos
+ * (mes simulado, M2S1-066, M2S2-108, M2S4-040 y M3S1-040): lo que está en la
+ * máquina arriba de todo en el teléfono, y en una pantalla ancha la cola a la
+ * izquierda y la máquina con los terminados debajo a la derecha, para que
+ * esa columna no quede vacía. La cola se ve entera (un «Ver 1 más» escondía
+ * un trabajo pendiente) y nada scrollea por dentro.
+ */
+function TableroDelTaller({
+  cortes,
+  avisos,
+  soloMaquina,
+  verSucursal,
+}: {
+  cortes: CorteListado[];
+  avisos: Record<string, AvisoManualListo>;
+  soloMaquina: boolean;
+  verSucursal: boolean;
+}) {
+  const de = (estado: string) => cortes.filter((c) => c.estado === estado);
+  const cola = de("en-cola");
+  const maquina = de("en-proceso");
+  const terminados = de("terminado").sort(recientePrimero);
+  const m2 = (lista: CorteListado[]) =>
+    lista.length > 0 ? `${formatearDecimal(lista.reduce((s, c) => s + c.metrosCuadrados, 0))} m²` : undefined;
+  const tarjetas = (lista: CorteListado[], enCola = false) =>
+    lista.map((corte, i) => (
+      <TarjetaCorte
+        key={corte.id}
+        corte={corte}
+        posicion={enCola ? i + 1 : undefined}
+        aviso={avisos[corte.id] ?? null}
+        soloMaquina={soloMaquina}
+        verSucursal={verSucursal}
+      />
+    ));
+
+  return (
+    <div className="mt-[18px] grid items-start gap-3 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      {maquina.length > 0 && (
+        <div className="lg:col-start-2 lg:row-start-1">
+          <ColumnaTablero titulo="En la máquina" cantidad={maquina.length} detalle={m2(maquina)} estado="en-proceso" tope={Infinity} largo>
+            {tarjetas(maquina)}
+          </ColumnaTablero>
+        </div>
+      )}
+      <div className="lg:col-start-1 lg:row-span-3 lg:row-start-1">
+        {cola.length > 0 ? (
+          <ColumnaTablero titulo="En cola" cantidad={cola.length} detalle={m2(cola)} estado="en-cola" tope={Infinity} largo>
+            {tarjetas(cola, true)}
+          </ColumnaTablero>
+        ) : (
+          <div className="tarjeta-hundida flex flex-col items-center justify-center rounded-xl px-5 py-16 text-center lg:min-h-[50vh]">
+            <Scissors className="mb-3 h-10 w-10 text-muted-foreground" aria-hidden />
+            <p className="text-xl font-semibold">La cola está vacía</p>
+          </div>
+        )}
+      </div>
+      {terminados.length > 0 && (
+        <div className="lg:col-start-2">
+          <ColumnaTablero titulo="Terminados" cantidad={terminados.length} estado="terminado" tope={3} secundaria largo>
+            {tarjetas(terminados)}
+          </ColumnaTablero>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TarjetaCorte({
   corte,
   posicion,
@@ -158,7 +238,8 @@ function TarjetaCorte({
     : corte.placas === 1 ? "placa" : "placas";
 
   return (
-    <TarjetaTablero destacada={corte.urgente || demorado}>
+    // Terminado, la urgencia ya no le dice nada al taller (M2S1-149).
+    <TarjetaTablero destacada={(corte.urgente && pendiente) || demorado}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           {posicion !== undefined && (
@@ -184,9 +265,9 @@ function TarjetaCorte({
         </span>
       </div>
 
-      {(corte.urgente || (verSucursal && corte.sucursal)) && (
+      {((corte.urgente && pendiente) || (verSucursal && corte.sucursal)) && (
         <div className="mt-1.5 flex flex-wrap gap-1.5">
-          {corte.urgente && (
+          {corte.urgente && pendiente && (
             <span className="inline-flex items-center gap-1 rounded-full bg-brand-orange/15 px-2 py-0.5 text-sm font-medium text-brand-orange-dark">
               <Flame className="h-3.5 w-3.5" />
               Urgente
@@ -261,7 +342,9 @@ function TarjetaCorte({
             id={corte.id}
             estado={corte.estado}
             urgente={corte.urgente}
-            pasadas={corte.pasadas}
+            // La reposición sin cargo no cobra: termina con un toque, sin
+            // confirmar pasadas (mes simulado, M3S1-038).
+            pasadas={corte.sinCargo ? 0 : corte.pasadas}
             compacto
             soloMaquina={soloMaquina}
           />

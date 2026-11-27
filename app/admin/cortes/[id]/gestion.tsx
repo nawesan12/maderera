@@ -62,6 +62,7 @@ export function CobrarCorte({ id, conPlaca }: { id: string; conPlaca: boolean })
 
 /** Corregir o anular un corte cargado mal (H185, H228). */
 export function CorregirOAnular({ id, numero, cliente }: { id: string; numero: string; cliente: string }) {
+  const router = useRouter();
   return (
     <div className="flex flex-wrap gap-2">
       <Link
@@ -77,7 +78,12 @@ export function CorregirOAnular({ id, numero, cliente }: { id: string; numero: s
         confirmar="Anular el corte"
         anular={(motivo) => anularCorte(id, motivo)}
         // Sin aviso, anular parecía no haber hecho nada (mes simulado).
-        alTerminar={(ok) => toast.success(ok || `${numero} quedó anulado.`)}
+        // Y la ficha pasa a anulada en el momento: seguía «En cola» con
+        // «Empezar» hasta recargar (mes simulado, M2S1-141).
+        alTerminar={(ok) => {
+          toast.success(ok || `${numero} quedó anulado.`);
+          router.refresh();
+        }}
       />
     </div>
   );

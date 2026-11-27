@@ -74,6 +74,16 @@ function conFormatoDeLinea(texto: string): string {
  * esa prop es una advertencia razonable, y lo que la vuelve aceptable acá es
  * que el escapado pasa antes que cualquier otra cosa.
  */
+/** «La pantalla del taller» → «la-pantalla-del-taller». */
+export function anclaDe(titulo: string): string {
+  return titulo
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 export function markdownAHtml(markdown: string): string {
   const bloques: string[] = [];
   let lista: string[] = [];
@@ -197,7 +207,9 @@ export function markdownAHtml(markdown: string): string {
     if (limpia.startsWith("### ")) {
       cerrarParrafo();
       cerrarLista();
-      bloques.push(`<h3>${conFormatoDeLinea(limpia.slice(4))}</h3>`);
+      // Con un id, para entrar directo a una parte de una guía larga: la
+      // ayuda del taller abría 18.000 px de mostrador y WhatsApp (M2S1-150).
+      bloques.push(`<h3 id="${anclaDe(limpia.slice(4))}">${conFormatoDeLinea(limpia.slice(4))}</h3>`);
       continue;
     }
 

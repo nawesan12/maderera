@@ -6,6 +6,7 @@ import { requireStaff } from "@/lib/dal/session";
 import { listarCortes } from "@/lib/dal/admin/cortes";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { plural } from "@/components/admin/formato";
+import { formatearDecimal } from "@/lib/unidades";
 import { esUuid } from "@/lib/uuid";
 import { DECIDEN_EN_LA_COLA } from "@/lib/roles";
 import { BuscadorCortes } from "@/app/admin/cortes/buscador";
@@ -88,7 +89,9 @@ export default async function TallerPage({
         <span aria-hidden className="ml-auto" />
 
         <span className="tabular hidden whitespace-nowrap text-base text-texto-2 md:block">
-          {Math.round(superficie)} m² por cortar
+          {/* Con la misma cifra que la columna: «9» arriba y «8,63» abajo
+              parecían dos cuentas (mes simulado, M2S3-066). */}
+          {formatearDecimal(superficie)} m² por cortar
         </span>
 
         <span className="hidden min-w-0 max-w-48 truncate text-base text-texto-2 xl:block">{usuario.name}</span>
@@ -96,7 +99,7 @@ export default async function TallerPage({
         {/* La guía, acá: el aserradero no tiene panel detrás, así que este
             encabezado es todo lo que tiene. */}
         <Link
-          href="/admin/ayuda/cortes-y-whatsapp"
+          href="/admin/ayuda/cortes-y-whatsapp#la-pantalla-del-taller"
           aria-label="Cómo se usa"
           className="inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-[9px] border border-linea bg-card px-3 text-base font-medium transition-colors hover:bg-hundida"
         >
@@ -122,14 +125,8 @@ export default async function TallerPage({
       <main className="flex-1 px-4 pb-8 pt-4 lg:px-7">
         <h1 className="sr-only">Cola de corte</h1>
 
-        {!busqueda && (
-          <p className="mb-3 text-base text-texto-2">
-            {pendientes.length > 0
-              ? `${plural(pendientes.length, "trabajo")} por hacer`
-              : "No hay trabajos pendientes."}
-          </p>
-        )}
-
+        {/* Cuántos hay lo dice la insignia del encabezado; el vacío, la
+            columna de la cola (mes simulado, M2S4-040). */}
         <BuscadorCortes
           busquedaActual={busqueda}
           ruta="/taller"

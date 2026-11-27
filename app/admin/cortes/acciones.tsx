@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowRight, Check, Flame, Loader2, Minus, Plus, X } from "lucide-react";
+import { ArrowRight, Check, Flame, Loader2, Minus, Plus, Undo2, X } from "lucide-react";
 import { alternarUrgente, avanzarCorte, volverCorte } from "./actions";
 
 const SIGUIENTE: Record<string, string> = {
@@ -58,8 +58,9 @@ export function AccionesCorte({
     startTransition(async () => {
       const resultado = await fn();
       if (resultado.error?.includes("no está cobrado")) {
+        // Los dos botones que aparecen ya lo dicen: sin aviso encima
+        // (mes simulado, M3S3-015).
         setSinCobrar(true);
-        toast.error(resultado.error);
         return;
       }
       setSinCobrar(false);
@@ -114,8 +115,10 @@ export function AccionesCorte({
         }}
       >
         <div className="flex items-center gap-3">
-          <label htmlFor={`pasadas-${id}`} className="text-base font-medium">
-            Pasadas
+          {/* La cifra que se cobra, como en la ficha: no las pasadas que hizo
+              la sierra en todas las placas (mes simulado, M2S4-014). */}
+          <label htmlFor={`pasadas-${id}`} className="text-base font-medium leading-tight">
+            Pasadas a cobrar
           </label>
           <div className="flex flex-1 items-center justify-between rounded-lg bg-hundida">
             <button
@@ -171,9 +174,37 @@ export function AccionesCorte({
     );
   }
 
+  // Terminado y sin cobrar: dos botones a lo ancho, uno abajo del otro, el
+  // de cobrar primero y el peligroso aparte. En un renglón con «Urgente» los
+  // textos se pisaban a 375 px (mes simulado, M3S3-015).
+  if (etiqueta && sinCobrar && estado === "terminado") {
+    return (
+      <div className="grid w-full gap-3">
+        <Link
+          href={`/mostrador?corte=${id}`}
+          className={`boton-accion inline-flex ${alto} w-full items-center justify-center gap-1.5 rounded-lg px-3 text-base font-medium`}
+        >
+          Cobrar en el mostrador
+        </Link>
+        <button
+          onClick={() => avanzar(undefined, true)}
+          disabled={pendiente}
+          className={`inline-flex ${alto} w-full items-center justify-center gap-1.5 rounded-lg border border-destructive/40 px-3 text-base font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50`}
+        >
+          {pendiente && <Loader2 className="h-5 w-5 animate-spin" />}
+          Entregar sin cobrar
+        </button>
+      </div>
+    );
+  }
+
+  // Urgente es para lo que espera: en un terminado ya no le dice nada al
+  // taller (M2S1-149, M3S3-015).
+  const puedeUrgente = (estado === "en-cola" || estado === "en-proceso") && !soloMaquina;
+
   return (
     <div className={`flex items-center gap-2 ${compacto ? "w-full" : ""}`}>
-      {estado !== "retirado" && estado !== "cancelado" && !soloMaquina && (
+      {puedeUrgente && (
         <button
           onClick={() => accion(() => alternarUrgente(id))}
           disabled={pendiente}
@@ -192,34 +223,23 @@ export function AccionesCorte({
         </button>
       )}
 
-      {etiqueta && sinCobrar && estado === "terminado" && (
-        <Link
-          href={`/mostrador?corte=${id}`}
-          className={`inline-flex ${alto} items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
-        >
-          Cobrar en el mostrador
-        </Link>
-      )}
-
       {etiqueta && (
         <button
           onClick={() => {
             if (estado === "en-proceso" && pasadas > 0) {
               setCuantas(pasadas);
               setConfirmando(true);
-            } else avanzar(undefined, sinCobrar && estado === "terminado");
+            } else avanzar();
           }}
           disabled={pendiente}
-          className={`inline-flex ${alto} items-center justify-center gap-1.5 rounded-lg px-3 text-base font-medium transition-colors disabled:opacity-50 ${
-            sinCobrar && estado === "terminado" ? "border border-destructive/40 text-destructive hover:bg-destructive/10" : "boton-accion"
-          } ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
+          className={`boton-accion inline-flex ${alto} items-center justify-center gap-1.5 rounded-lg px-3 text-base font-medium transition-colors disabled:opacity-50 ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
         >
           {pendiente ? (
             <Loader2 className="h-5 w-5 animate-spin" />
           ) : (
             <ArrowRight className="h-5 w-5" />
           )}
-          {sinCobrar && estado === "terminado" ? "Entregar sin cobrar" : etiqueta}
+          {etiqueta}
         </button>
       )}
     </div>
@@ -244,9 +264,11 @@ export function VolverUnPaso({ id, estado }: { id: string; estado: string }) {
           router.refresh();
         })
       }
-      className="inline-flex h-12 items-center gap-1.5 rounded-lg px-3 text-base font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+      // Un botón secundario de verdad, con borde y el alto de «Hoja de
+      // corte»: sin borde se leía como un título (mes simulado, M3S2-047).
+      className="inline-flex h-12 items-center justify-center gap-1.5 rounded-lg border px-4 text-base font-medium transition-colors hover:bg-muted disabled:opacity-50"
     >
-      {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}
+      {pendiente ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}
       {texto}
     </button>
   );

@@ -3,10 +3,14 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { OPCIONES_DE_REGLAS, valorDeRegla } from "@/lib/reglas";
 
-const migracion = readFileSync(
-  join(__dirname, "../backend/db/migraciones/00290_reglas_que_esperan_al_contador.sql"),
-  "utf8",
-);
+// Las reglas nacen en la 00290; las que se sumaron después, en su propia
+// migración (00430: escala_con_lista).
+const migracion = [
+  "00290_reglas_que_esperan_al_contador.sql",
+  "00430_escala_con_lista.sql",
+]
+  .map((m) => readFileSync(join(__dirname, "../backend/db/migraciones", m), "utf8"))
+  .join("\n");
 const go = readFileSync(join(__dirname, "../backend/internal/reglas/reglas.go"), "utf8");
 
 describe("reglas que esperan al contador", () => {

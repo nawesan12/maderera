@@ -1,4 +1,4 @@
-import { cantidadConUnidad } from "@/lib/formato";
+import { cantidadConUnidad, telefonoLegible } from "@/lib/formato";
 import { ajustesDelSitio } from "@/lib/dal/contenido";
 import { escalasDePago } from "@/lib/dal/descuentos-pago";
 import { valorDeRegla } from "@/lib/reglas";
@@ -827,7 +827,7 @@ export default async function FichaPedidoPage({
                   className="tabular inline-flex h-10 items-center gap-1.5 rounded-lg bg-hundida px-3 text-base hover:bg-muted"
                 >
                   <Phone className="h-4 w-4" aria-hidden="true" />
-                  {pedido.telefono}
+                  {telefonoLegible(pedido.telefono)}
                 </a>
                 <a
                   href={`https://wa.me/${paraWhatsapp(pedido.telefono)}`}

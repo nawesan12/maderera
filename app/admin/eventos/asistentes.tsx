@@ -3,7 +3,7 @@
 import { useActionState, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { marcarAsistencia, type EstadoEvento } from "./actions";
-import { fechaCorta } from "@/lib/formato";
+import { fechaCorta, telefonoLegible } from "@/lib/formato";
 import type { Asistente } from "@/lib/dal/admin/eventos";
 
 const inicial: EstadoEvento = {};
@@ -80,7 +80,7 @@ export function Asistentes({ asistentes, empezo }: { asistentes: Asistente[]; em
                   {a.nombre}
                   <span className="block text-muted-foreground">
                     {a.email}
-                    {a.telefono ? ` · ${a.telefono}` : ""}
+                    {a.telefono ? ` · ${telefonoLegible(a.telefono)}` : ""}
                   </span>
                 </span>
 

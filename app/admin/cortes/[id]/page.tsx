@@ -13,7 +13,7 @@ import { fichaDeCorte } from "@/lib/dal/admin/cortes";
 import { AcomodoDelCorte } from "../acomodo";
 import { PlanoSimple } from "@/components/cortes/plano-simple";
 import { nombreDeLaMitad } from "@/lib/cortes/placa";
-import { formatearMonto } from "@/lib/formato";
+import { formatearMonto, telefonoLegible } from "@/lib/formato";
 import { formatearDecimal } from "@/lib/unidades";
 import { AccionesCorte, VolverUnPaso } from "../acciones";
 import { CargarPasadas } from "../pasadas";
@@ -599,7 +599,7 @@ export default async function FichaCortePage({
                 href={`tel:${corte.telefono.replace(/[^\d+]/g, "")}`}
                 className="tabular mt-1 block text-base text-muted-foreground hover:text-foreground"
               >
-                {corte.telefono}
+                {telefonoLegible(corte.telefono)}
               </a>
             )}
             {corte.retiraEl && (

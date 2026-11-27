@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BellOff, BellRing, ClipboardList, Link2, Loader2, Lock, Scissors, Search, UserPlus, Wallet } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
-import { fechaCorta, formatearMonto, moneda } from "@/lib/formato";
+import { fechaCorta, formatearMonto, moneda, telefonoLegible } from "@/lib/formato";
 import {
   buscarClientesParaVincular,
   cambiarBaja,
@@ -270,7 +270,7 @@ function SinFicha({ detalle }: { detalle: DetalleConversacion }) {
                 <input type="hidden" name="customerId" value={c.id} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-base">{c.nombre}</span>
-                  <span className="tabular block truncate text-sm text-muted-foreground">{c.telefono ?? c.cuit ?? ""}</span>
+                  <span className="tabular block truncate text-sm text-muted-foreground">{c.telefono ? telefonoLegible(c.telefono) : (c.cuit ?? "")}</span>
                 </span>
                 <button
                   type="submit"

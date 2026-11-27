@@ -11,7 +11,7 @@ import { AlertTriangle, FileDown } from "lucide-react";
 import { EncabezadoFicha } from "@/components/admin/encabezado-ficha";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { fechaCorta, formatearMonto } from "@/components/admin/formato";
-import { cantidadConUnidad } from "@/lib/formato";
+import { cantidadConUnidad, telefonoLegible } from "@/lib/formato";
 import { obtenerPresupuesto } from "@/lib/dal/admin/ventas";
 import { obtenerCliente } from "@/lib/dal/admin/clientes";
 import { AccionesPresupuesto, EnviarAlCliente } from "../acciones";
@@ -230,7 +230,7 @@ export default async function FichaPresupuestoPage({
             <dl className="space-y-1.5 text-base">
               <div className="flex justify-between gap-3">
                 <dt className="text-muted-foreground">Teléfono</dt>
-                <dd className="tabular">{p.telefono ?? "—"}</dd>
+                <dd className="tabular">{p.telefono ? telefonoLegible(p.telefono) : "—"}</dd>
               </div>
               <div className="flex justify-between gap-3">
                 <dt className="text-muted-foreground">Correo</dt>

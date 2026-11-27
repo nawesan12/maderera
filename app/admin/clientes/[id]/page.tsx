@@ -10,7 +10,7 @@ import { valorDeRegla } from "@/lib/reglas";
 import { ArrowLeft, CalendarClock, ClipboardList, Download, MessageCircle, MessageSquareText, Printer, Scissors } from "lucide-react";
 import { MANEJAN_PLATA, puedeEntrar } from "@/lib/roles";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
-import { enlaceDeWhatsapp, fechaSolaCorta } from "@/lib/formato";
+import { enlaceDeWhatsapp, fechaSolaCorta, telefonoLegible } from "@/lib/formato";
 import {
   fechaCorta,
   formatearCuit,
@@ -130,7 +130,9 @@ export default async function FichaClientePage({
             <h1 className="text-2xl font-semibold tracking-tight">
               {cliente.nombre}
             </h1>
-            <EtiquetaEstado estado={cliente.estado} />
+            {/* La ficha que quedó apagada al unir su cuenta web a otra
+                dice «Inactivo»: decía «Activo» (mes 23). */}
+            <EtiquetaEstado estado={cliente.active ? cliente.estado : "inactivo"} />
           </div>
           <p className="mt-0.5 text-base text-muted-foreground">
             {subtitulo.join(" · ") || "Particular"}
@@ -309,7 +311,7 @@ export default async function FichaClientePage({
                 valor={CONDICIONES[cliente.condicionIva] ?? cliente.condicionIva}
               />
               <Dato etiqueta="Correo" valor={cliente.email ?? "—"} />
-              <Dato etiqueta="Teléfono" valor={cliente.telefono ?? "—"} tabular />
+              <Dato etiqueta="Teléfono" valor={cliente.telefono ? telefonoLegible(cliente.telefono) : "—"} tabular />
               <Dato etiqueta="Domicilio" valor={cliente.direccion ?? "—"} />
               <Dato etiqueta="Lista de precios" valor={lista?.name ?? "General"} />
               {/* El vendedor asignado; `asesor` es el texto que dejó la
@@ -423,7 +425,7 @@ export default async function FichaClientePage({
                     (r, m) =>
                       // Con un cheque rechazado tampoco: ya volvió a la cuenta
                       // con su nota de débito (M2S3-070).
-                      r.porMercadoPago || r.chequeRechazado || m.clase === "cheque" || m.clase === "nota_debito" ? null : (
+                      r.porMercadoPago || r.chequeRechazado || r.chequeDevuelto || m.clase === "cheque" || m.clase === "nota_debito" ? null : (
                         <AnularRecibo
                           id={r.id}
                           numero={r.numero}

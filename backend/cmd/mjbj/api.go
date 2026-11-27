@@ -374,9 +374,10 @@ func correrAPI() error {
 		campanasapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 	// Profesionales y eventos (tanda 10).
+	profSrv := profesionales.Nuevo(pool, avisos.Nuevo(pool, correoT10, cfg.Email.Remitente, log), cfg.Campanas.URLDelSitio(), log)
+	profSrv.PagoOnline = func() bool { return cfg.Pagos.Elegir() != nil }
 	profesionalesapi.HandlerWithOptions(
-		profesionalesapi.NewStrictHandlerWithOptions(profesionales.NuevaAPI(profesionales.Nuevo(pool,
-			avisos.Nuevo(pool, correoT10, cfg.Email.Remitente, log), cfg.Campanas.URLDelSitio(), log), lim, cfg.Interna),
+		profesionalesapi.NewStrictHandlerWithOptions(profesionales.NuevaAPI(profSrv, lim, cfg.Interna),
 			[]profesionalesapi.StrictMiddlewareFunc{plataforma.ConPedido[profesionalesapi.StrictHandlerFunc]},
 			profesionalesapi.StrictHTTPServerOptions{
 				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,

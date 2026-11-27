@@ -33,7 +33,15 @@ type Servicio struct {
 	// enSegundoPlano corre los avisos después de responder (el after() de
 	// Next). Las pruebas lo cambian para esperarlos.
 	enSegundoPlano func(func(context.Context))
+	// PagoOnline dice si hay con qué cobrar en línea (pagos.Config.Elegir);
+	// nil es que sí. Sin eso, un evento pago no reserva lugar.
+	PagoOnline func() bool
 }
+
+// MsjEventoSinPago es lo que se contesta al anotarse a un evento pago con el
+// cobro en línea apagado: reservaba el lugar y no había forma de pagarlo
+// (mes simulado, M2S2-016).
+const MsjEventoSinPago = "El pago online no está disponible. Escribinos por WhatsApp y te anotamos."
 
 // Nuevo arma el servicio. sitio es APP_URL (para los enlaces de los correos).
 func Nuevo(pool *pgxpool.Pool, av *avisos.Servicio, sitio string, log *slog.Logger) *Servicio {

@@ -15,7 +15,7 @@ import {
 import { Suspense } from "react";
 import { CargandoSitio } from "@/components/sitio/cargando";
 import { degradar } from "@/lib/degradar";
-import { cobrosEnVivo } from "@/lib/dal/pagos";
+import { cobrosEnVivo, pagoOnlineDisponible } from "@/lib/dal/pagos";
 import { fechaLarga, hora } from "@/lib/formato";
 import { Anotarse } from "./anotarse";
 import { DatosEstructurados } from "@/components/datos-estructurados";
@@ -205,6 +205,7 @@ async function FichaDelEvento({ slug }: { slug: string }) {
                 email={cliente?.email ?? sesion?.email}
                 telefono={cliente?.telefono}
                 enVivo={await cobrosEnVivo()}
+                pagoOnline={evento.precio > 0 ? await pagoOnlineDisponible() : true}
               />
             )}
           </aside>

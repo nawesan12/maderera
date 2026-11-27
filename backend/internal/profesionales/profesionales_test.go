@@ -441,6 +441,26 @@ func TestEventos(t *testing.T) {
 	}
 }
 
+// M2S2-016: con el cobro en línea apagado, un evento pago no reserva lugar;
+// uno gratis se anota igual.
+func TestEventoPagoSinCobroEnLinea(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	pago := e.uno(t, `insert into events (slug, titulo, inicia, cupo, precio, estado) values ('pago', 'Pago', now() + interval '2 days', 3, 15000, 'publicado') returning id`)
+	gratis := e.uno(t, `insert into events (slug, titulo, inicia, cupo, estado) values ('gratis', 'Gratis', now() + interval '2 days', 3, 'publicado') returning id`)
+	e.s.PagoOnline = func() bool { return false }
+	if _, err := e.s.Anotar(ctx, Anotarse{EventID: pago, Nombre: "Persona", Email: "p@x.test"}, nil, nil, false); err == nil ||
+		!strings.Contains(err.Error()+primerErrorDe(err), "pago online no está disponible") {
+		t.Fatalf("se anotó a un evento pago sin cobro: %v", err)
+	}
+	if n := e.uno(t, `select count(*)::text from event_registrations where event_id = $1`, pago); n != "0" {
+		t.Fatalf("retuvo el lugar: %s", n)
+	}
+	if _, err := e.s.Anotar(ctx, Anotarse{EventID: gratis, Nombre: "Persona", Email: "p@x.test"}, nil, nil, false); err != nil {
+		t.Fatalf("el gratis: %v", err)
+	}
+}
+
 // Diez personas al último lugar a la vez: con el candado por evento entra
 // una sola. Sin pg_advisory_xact_lock las diez cuentan los mismos ocupados y
 // entran todas (probado sacándolo).

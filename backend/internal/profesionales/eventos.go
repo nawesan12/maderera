@@ -259,6 +259,9 @@ func (s *Servicio) Anotar(ctx context.Context, a Anotarse, customerID, userID *s
 		}
 		r.Monto = precio.F()
 		r.RequierePago = r.Monto > 0
+		if r.RequierePago && s.PagoOnline != nil && !s.PagoOnline() {
+			return &ErrInscripcion{MsjEventoSinPago}
+		}
 		nuevo := "confirmada"
 		if r.RequierePago {
 			nuevo = "reservada"

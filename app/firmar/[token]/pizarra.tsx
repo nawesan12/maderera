@@ -48,7 +48,10 @@ export function Pizarra({
   // es de otra persona y se pide de nuevo (mes simulado 2: la constancia
   // quedaba a nombre de Hugo con el DNI de Martín).
   const [nombre, setNombre] = useState(nombreSugerido ?? "");
-  const otraPersona = Boolean(documentoSugerido) && nombre.trim().toLowerCase() !== (nombreSugerido ?? "").trim().toLowerCase();
+  // «Juan» del mostrador y «Juan Pérez» al firmar son la misma persona.
+  const antes = (nombreSugerido ?? "").trim().toLowerCase();
+  const ahora = nombre.trim().toLowerCase();
+  const otraPersona = Boolean(documentoSugerido) && antes !== "" && !ahora.startsWith(antes) && !antes.startsWith(ahora);
   // Ya estaba firmado: la página vuelve a leerse y muestra la constancia.
   useEffect(() => {
     if (estado.yaFirmado) router.refresh();

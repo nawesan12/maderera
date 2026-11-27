@@ -563,10 +563,21 @@ export default async function FichaPedidoPage({
           <section className="tarjeta p-5">
             <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
               <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">Corte</h2>
-              {!["cancelado", "entregado"].includes(pedido.estado) && (
+              {!["cancelado", "entregado"].includes(pedido.estado) ? (
                 <Link href={`/admin/cortes/nuevo?pedido=${pedido.id}`} className="text-base text-brand-orange hover:underline">
                   Mandar a cortar
                 </Link>
+              ) : (
+                /* Entregado es cuando falta una pieza: la reposición sin
+                   cargo sale de acá (mes simulado 2: había que escribir la
+                   dirección a mano). */
+                pedido.estado === "entregado" &&
+                cortes.length > 0 &&
+                puedeEntrar("/admin/cortes/nuevo", usuario.staffRole) && (
+                  <Link href={`/admin/cortes/nuevo?pedido=${pedido.id}&reponer=1`} className="text-base text-brand-orange hover:underline">
+                    Reponer una pieza
+                  </Link>
+                )
               )}
             </div>
 

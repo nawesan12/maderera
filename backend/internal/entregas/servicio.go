@@ -845,7 +845,8 @@ func (s *Servicio) RegistrarFirma(ctx context.Context, f FormFirma, ip *string) 
 		err := tx.QueryRow(ctx, `
 			UPDATE deliveries SET estado = 'entregada', firma_url = $2, firmado_at = now(), firmado_ip = $3,
 			  receptor_nombre = $4, receptor_documento = CASE WHEN nullif($5, '') IS NOT NULL THEN $5
-			    WHEN lower(trim(coalesce(receptor_nombre, ''))) = lower(trim($4)) THEN receptor_documento END,
+			    WHEN coalesce(trim(receptor_nombre), '') = '' OR starts_with(lower(trim($4)), lower(trim(receptor_nombre)))
+			      OR starts_with(lower(trim(receptor_nombre)), lower(trim($4))) THEN receptor_documento END,
 			  entregado_at = now(), updated_at = now()
 			WHERE firma_token = $1 AND estado = 'preparada'
 			RETURNING id, numero, order_id, tipo::text`, f.Token, f.Firma, ip, f.ReceptorNombre, textoONulo(f.ReceptorDocumento)).
@@ -869,7 +870,8 @@ func (s *Servicio) RegistrarFirma(ctx context.Context, f FormFirma, ip *string) 
 		if _, err := tx.Exec(ctx, `
 			UPDATE deliveries SET estado = 'entregada', firma_url = $2, firmado_at = now(), firmado_ip = $3,
 			  receptor_nombre = $4, receptor_documento = CASE WHEN nullif($5, '') IS NOT NULL THEN $5
-			    WHEN lower(trim(coalesce(receptor_nombre, ''))) = lower(trim($4)) THEN receptor_documento END,
+			    WHEN coalesce(trim(receptor_nombre), '') = '' OR starts_with(lower(trim($4)), lower(trim(receptor_nombre)))
+			      OR starts_with(lower(trim(receptor_nombre)), lower(trim($4))) THEN receptor_documento END,
 			  entregado_at = now(), updated_at = now()
 			WHERE visita_de = $1 AND estado = 'preparada'`, r.DeliveryID, f.Firma, ip, f.ReceptorNombre, textoONulo(f.ReceptorDocumento)); err != nil {
 			return err
@@ -1113,7 +1115,7 @@ func (s *Servicio) RemitosDelPedido(ctx context.Context, pedido string) ([]Remit
 		  s.transportista, s.numero_seguimiento,
 		  CASE WHEN d.cutting_order_id IS NULL THEN (SELECT count(*) FROM delivery_items di WHERE di.delivery_id = d.id)
 		       ELSE (SELECT count(*) FROM cutting_items ci WHERE ci.cutting_order_id = d.cutting_order_id) END::int,
-		  co.numero
+		  CASE WHEN co.sin_cargo THEN co.numero END
 		FROM deliveries d LEFT JOIN shipments s ON s.delivery_id = d.id
 		LEFT JOIN cutting_orders co ON co.id = d.cutting_order_id
 		WHERE d.order_id = $1 ORDER BY d.created_at DESC`, pedido)

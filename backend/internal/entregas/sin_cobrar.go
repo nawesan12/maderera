@@ -58,7 +58,7 @@ func AutorizarSinCobrar(ctx context.Context, tx pgx.Tx, aut *autorizacion.Servic
 	if sinCobrar == nil || *sinCobrar <= 0.005 {
 		return "", nil
 	}
-	pide := !ses.Tiene(roles.ManejanPlata...)
+	pide := ses.EsStaff() && !ses.Tiene(roles.ManejanPlata...)
 	if !pide && reglas.Es(ctx, tx, reglas.EntregarSinCobrar, "fuera_de_la_cuenta") {
 		if cliente == nil {
 			pide = true

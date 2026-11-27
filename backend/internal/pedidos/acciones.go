@@ -241,6 +241,23 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 			if remito, err = entregas.RemitoPorLoQueQueda(ctx, tx, id, sucursal, p.tipoEntrega, &usuario, quien); err != nil {
 				return err
 			}
+			// Sin mercadería, el pedido que solo lleva el corte sale con el
+			// remito de sus piezas, con quien retira, para firmar (mes
+			// simulado 2: se entregaba sin firma ni constancia).
+			if remito == nil && siguiente == "entregado" && p.tipoEntrega != "envio" {
+				solo, err := entregas.SoloElCorte(ctx, tx, id)
+				if err != nil {
+					return err
+				}
+				if solo {
+					if campo, msj := quien.Revisar(); msj != "" {
+						return plataforma.Invalido(map[string]string{campo: msj})
+					}
+					if remito, err = entregas.RemitoDelCorte(ctx, tx, id, sucursal, &usuario, quien); err != nil {
+						return err
+					}
+				}
+			}
 		}
 		// Entregar sin cobrar se puede (existe el pago contra entrega), pero
 		// deja firma: la pantalla pregunta y el historial guarda cuánto

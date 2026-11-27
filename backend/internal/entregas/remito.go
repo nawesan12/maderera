@@ -480,11 +480,16 @@ func (r *RemitoCompleto) ParaElPdf() pdf.RemitoCompleto {
 // en acopio del pedido (no es una entrega de su mercadería).
 func (s *Servicio) completarReposicion(ctx context.Context, r *RemitoCompleto, corte string) (*RemitoCompleto, error) {
 	var numero, material string
-	if err := s.pool.QueryRow(ctx, `SELECT numero, material_descripcion FROM cutting_orders WHERE id = $1`, corte).Scan(&numero, &material); err != nil {
+	var sinCargo bool
+	if err := s.pool.QueryRow(ctx, `SELECT numero, material_descripcion, sin_cargo FROM cutting_orders WHERE id = $1`, corte).Scan(&numero, &material, &sinCargo); err != nil {
 		return nil, err
 	}
-	r.Reposicion = &numero
-	r.SinCobrar = nil
+	// El remito de un pedido que solo lleva el corte (RemitoDelCorte) lista
+	// las mismas piezas, pero es una entrega cobrada: no dice «sin cargo».
+	if sinCargo {
+		r.Reposicion = &numero
+		r.SinCobrar = nil
+	}
 	r.Pendientes = []PendienteDelRemito{}
 	r.Visita = []RemitoDeLaVisita{}
 	filas, err := s.pool.Query(ctx, `

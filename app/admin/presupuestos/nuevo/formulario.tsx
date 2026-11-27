@@ -792,7 +792,7 @@ function BuscadorDeCliente({
   );
 }
 
-function BuscadorDeProductos({
+export function BuscadorDeProductos({
   branchId,
   customerId,
   onAgregar,

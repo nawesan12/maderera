@@ -23,6 +23,7 @@ import { devolucionDesdeElPedido, pedidoParaFacturar } from "@/lib/dal/admin/fac
 import { BotonFacturar } from "./facturar";
 import { CorregirPedido, DevolverPedido } from "./corregir-devolver";
 import { DevolverFacturado } from "./devolver-facturado";
+import { zonasParaPedido } from "../../presupuestos/zonas";
 import { Entregas } from "./entregas";
 import { saldoDeAcopio } from "@/lib/entregas";
 import { seOfreceLaFirma } from "@/lib/entregas/firma";
@@ -148,7 +149,9 @@ export default async function FichaPedidoPage({
     devolucionFacturada &&
     devolucionFacturada.tope + devolucionFacturada.caja + devolucionFacturada.afuera > 0.005 &&
     devolucionFacturada.renglones.some((r) => r.queda > 0);
-  const corregible = devolvible && pedido.origen !== "mostrador" && pedido.cobrado < 0.005;
+  // Entregado no se corrige: lo que falta va en otro pedido y lo que vuelve,
+  // con una devolución (mes simulado 2).
+  const corregible = devolvible && pedido.origen !== "mostrador" && pedido.cobrado < 0.005 && pedido.estado !== "entregado";
   const renglones = pedido.items.map((i) => ({
     id: i.id,
     descripcion: i.descripcion,
@@ -311,6 +314,18 @@ export default async function FichaPedidoPage({
                 costoEnvio={Number(pedido.costoEnvio)}
                 conEnvio={pedido.tipoEntrega === "envio"}
                 descuento={Number(pedido.descuento)}
+                entrega={
+                  remitos.some((r) => r.estado !== "anulada") || pedido.estado === "en-camino"
+                    ? null
+                    : {
+                        tipo: pedido.tipoEntrega === "envio" ? "envio" : "retiro",
+                        direccion: pedido.direccionEntrega ?? "",
+                        zona: pedido.zonaEnvio ?? "",
+                      }
+                }
+                zonas={corregible ? await zonasParaPedido() : []}
+                branchId={pedido.branchId}
+                customerId={pedido.customerId}
               />
             )}
             {devolvible && <DevolverPedido id={pedido.id} numero={pedido.numero} renglones={renglones} datos={paraDevolver} />}

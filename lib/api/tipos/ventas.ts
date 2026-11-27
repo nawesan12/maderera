@@ -1001,6 +1001,24 @@ export interface operations {
                     }[];
                     /** Format: double */
                     costoEnvio?: number;
+                    /** @description Los renglones que se suman */
+                    nuevos?: {
+                        variantId: string;
+                        descripcion: string;
+                        unidad?: string;
+                        /** Format: double */
+                        cantidad: number;
+                        /** Format: double */
+                        precioUnitario: number;
+                    }[];
+                    /**
+                     * @description para cambiar cómo se entrega (antes de que salga algo)
+                     * @enum {string}
+                     */
+                    entrega?: "retiro" | "envio";
+                    direccion?: string;
+                    zona?: string;
+                    sinCargo?: boolean;
                     motivo: string;
                     pin?: string;
                     ficha?: string;

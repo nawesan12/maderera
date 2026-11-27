@@ -308,7 +308,11 @@ export async function corregirPedido(
   id: string,
   correccion: {
     renglones: { orderItemId: string; cantidad: number; precioUnitario: number }[];
+    nuevos?: { variantId: string; descripcion: string; unidad?: string; cantidad: number; precioUnitario: number }[];
     costoEnvio?: number;
+    entrega?: "retiro" | "envio";
+    direccion?: string;
+    zona?: string;
     motivo: string;
     pin?: string;
   },

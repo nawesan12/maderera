@@ -272,9 +272,22 @@ func (a *API) CorregirPedido(ctx context.Context, r ventasapi.CorregirPedidoRequ
 	if err != nil {
 		return nil, err
 	}
-	c := Correccion{Motivo: r.Body.Motivo, CostoEnvio: r.Body.CostoEnvio, PIN: texto(r.Body.Pin), Ficha: texto(r.Body.Ficha)}
+	c := Correccion{Motivo: r.Body.Motivo, CostoEnvio: r.Body.CostoEnvio, PIN: texto(r.Body.Pin), Ficha: texto(r.Body.Ficha),
+		Direccion: texto(r.Body.Direccion), Zona: texto(r.Body.Zona)}
+	if r.Body.Entrega != nil {
+		c.Entrega = string(*r.Body.Entrega)
+	}
+	if r.Body.SinCargo != nil {
+		c.SinCargo = *r.Body.SinCargo
+	}
 	for _, x := range r.Body.Renglones {
 		c.Renglones = append(c.Renglones, RenglonCorregido{OrderItemID: x.OrderItemId, Cantidad: x.Cantidad, PrecioUnitario: x.PrecioUnitario})
+	}
+	if r.Body.Nuevos != nil {
+		for _, x := range *r.Body.Nuevos {
+			c.Nuevos = append(c.Nuevos, RenglonNuevo{VariantID: x.VariantId, Descripcion: x.Descripcion, Unidad: texto(x.Unidad),
+				Cantidad: x.Cantidad, PrecioUnitario: x.PrecioUnitario})
+		}
 	}
 	v, err := a.s.Corregir(ctx, ses, r.Id.String(), c)
 	if err != nil {
@@ -389,7 +402,7 @@ func (a *API) ConvertirPresupuestoEnPedido(ctx context.Context, r ventasapi.Conv
 	}
 	var ent Entrega
 	if b := r.Body; b != nil {
-		ent.Envio = b.TipoEntrega != nil && *b.TipoEntrega == ventasapi.Envio
+		ent.Envio = b.TipoEntrega != nil && *b.TipoEntrega == ventasapi.ConvertirPresupuestoEnPedidoJSONBodyTipoEntregaEnvio
 		ent.Direccion = texto(b.Direccion)
 		ent.Zona = texto(b.Zona)
 		if b.CostoEnvio != nil {

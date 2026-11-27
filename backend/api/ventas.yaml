@@ -268,6 +268,24 @@ paths:
                       cantidad: { type: number, format: double }
                       precioUnitario: { type: number, format: double }
                 costoEnvio: { type: number, format: double }
+                nuevos:
+                  type: array
+                  maxItems: 50
+                  description: Los renglones que se suman
+                  items:
+                    type: object
+                    required: [variantId, descripcion, cantidad, precioUnitario]
+                    additionalProperties: false
+                    properties:
+                      variantId: { type: string, maxLength: 64 }
+                      descripcion: { type: string, maxLength: 300 }
+                      unidad: { type: string, maxLength: 40 }
+                      cantidad: { type: number, format: double }
+                      precioUnitario: { type: number, format: double }
+                entrega: { type: string, enum: [retiro, envio], description: "para cambiar cómo se entrega (antes de que salga algo)" }
+                direccion: { type: string, maxLength: 300 }
+                zona: { type: string, maxLength: 120 }
+                sinCargo: { type: boolean }
                 motivo: { type: string, maxLength: 300 }
                 pin: { type: string, maxLength: 12 }
                 ficha: { type: string, maxLength: 400 }

@@ -21,7 +21,7 @@ import {
 } from "@/components/admin/etiqueta-estado";
 import { ETAPAS_PEDIDO, ETAPAS_RETIRO, Pasos } from "@/components/admin/pasos";
 import { clienteDeLaSesion, miPedido } from "@/lib/dal/cuenta";
-import { datosParaTransferir } from "@/lib/dal/pagos";
+import { datosParaTransferir, pagoOnlineDisponible } from "@/lib/dal/pagos";
 import { sucursalPublicada } from "@/lib/sucursales";
 import {
   fechaCorta,
@@ -98,7 +98,7 @@ export default async function DetallePedidoPage({
 
   // Un solo `?text=`: enlaceWhatsapp ya lo arma (antes la página le sumaba
   // otro y el mensaje llegaba con basura, H081).
-  const [consulta, pedirDatos, banco] = await Promise.all([
+  const [consulta, pedirDatos, banco, enLinea] = await Promise.all([
     enlaceWhatsapp(
       mensajeDeConsulta(
         `Hola! Consulto por mi pedido ${pedido.numero}.`,
@@ -114,6 +114,9 @@ export default async function DetallePedidoPage({
     pedido.medioPago === "transferencia"
       ? datosParaTransferir()
       : Promise.resolve(null),
+    pedido.medioPago === "mercado_pago" && pedido.estadoPago !== "pagado"
+      ? pagoOnlineDisponible().catch(() => false)
+      : Promise.resolve(false),
   ]);
 
   const pago = estadoDelPago({
@@ -129,6 +132,10 @@ export default async function DetallePedidoPage({
     !cancelado &&
     pedido.medioPago === "transferencia" &&
     pago?.clave === "pendiente";
+  // Con Mercado Pago pendiente solo decía «Falta abonarlo», sin cómo (mes
+  // 23, PED-1161): se paga en la página del pedido, que tiene el cobro.
+  const pagarEnLinea =
+    !cancelado && enLinea && pedido.medioPago === "mercado_pago" && pago?.clave === "pendiente";
 
   // Lo entregado por renglón, para decir «110 de 120» cuando se entregó menos
   // de lo pedido y ya no queda nada por retirar (H302). Se compara contra la
@@ -518,6 +525,14 @@ export default async function DetallePedidoPage({
                   Pagar tu cuenta
                 </Link>
               ) : null}
+              {pagarEnLinea && (
+                <Link
+                  href={`/pedido/${pedido.numero}?t=${pedido.publicToken}`}
+                  className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-accion px-5 font-medium text-white transition-colors hover:bg-brand-orange-dark"
+                >
+                  Pagar {formatearMonto(pago.falta ?? Number(pedido.total))}
+                </Link>
+              )}
               {informar && (
                 <InformarTransferencia
                   numero={pedido.numero}

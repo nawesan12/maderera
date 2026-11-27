@@ -117,6 +117,12 @@ interface ParteUI {
   numero: string;
   banco: string;
   fechaPago: string;
+  /**
+   * El renglón único que abre «Partir»: su importe sigue al neto hasta que
+   * alguien lo toca. Si se partía antes de que llegara la simulación de la
+   * retención, arrancaba en el bruto y quedaba ahí (mes 23).
+   */
+  auto?: boolean;
 }
 
 const MEDIOS = [
@@ -213,7 +219,7 @@ export function FormularioPago({
   const [retener, setRetener] = useState<Record<string, boolean>>({});
   const [basesAMano, setBasesAMano] = useState<Record<string, string>>({});
 
-  const [partes, setPartes] = useState<ParteUI[] | null>(null);
+  const [partesGuardadas, setPartes] = useState<ParteUI[] | null>(null);
   const [cartera, setCartera] = useState<ChequeDeCartera[]>([]);
 
   /** La cuenta de cada retención prendida, como la va a hacer el certificado. */
@@ -293,9 +299,6 @@ export function FormularioPago({
   );
   const total = totalTocado === null ? sumaAplicada : importeDelCampo(totalTocado);
   const aCuenta = redondear(total - sumaAplicada);
-  const sumaPartes = redondear(
-    (partes ?? []).reduce((s, p) => s + importeDelCampo(p.importe), 0),
-  );
 
   /*
    * La base de las retenciones: el neto de IVA de lo que se paga de cada
@@ -335,6 +338,12 @@ export function FormularioPago({
     retenciones.reduce((s, r) => s + (simuladas[r.regimenId]?.retencion ?? 0), 0),
   );
   const neto = redondear(total - retenido);
+  const partes =
+    partesGuardadas &&
+    partesGuardadas.map((p) => (p.auto ? { ...p, importe: neto ? importeParaElCampo(neto) : "" } : p));
+  const sumaPartes = redondear(
+    (partes ?? []).reduce((s, p) => s + importeDelCampo(p.importe), 0),
+  );
   const faltanPartes = redondear(neto - sumaPartes);
   const claveSimulacion = JSON.stringify([supplierId, fechaPago, retenciones]);
 
@@ -395,7 +404,7 @@ export function FormularioPago({
 
   function actualizarParte(i: number, cambios: Partial<ParteUI>) {
     setPartes((prev) =>
-      prev ? prev.map((p, j) => (j === i ? { ...p, ...cambios } : p)) : prev,
+      prev ? prev.map((p, j) => (j === i ? { ...p, ...cambios, ...("importe" in cambios ? { auto: false } : {}) } : p)) : prev,
     );
   }
 
@@ -563,7 +572,7 @@ export function FormularioPago({
                   setMedio(elegido);
                   // Un cheque necesita sus datos, así que abre el detalle.
                   if ((elegido === "cheque" || elegido === "echeq") && !partes) {
-                    setPartes([{ ...parteVacia(elegido as ParteUI["medio"]), importe: neto ? importeParaElCampo(neto) : "" }]);
+                    setPartes([{ ...parteVacia(elegido as ParteUI["medio"]), auto: true }]);
                   }
                 }}
               />
@@ -763,7 +772,7 @@ export function FormularioPago({
                   {partes.length < 6 && (
                     <button
                       type="button"
-                      onClick={() => setPartes([...partes, parteVacia()])}
+                      onClick={() => setPartes([...partes.map((p) => ({ ...p, auto: false })), parteVacia()])}
                       className="tarjeta-hundida h-11 rounded-xl px-4 text-base font-medium"
                     >
                       + Otro renglón
@@ -792,7 +801,7 @@ export function FormularioPago({
                 onClick={() =>
                   setPartes(
                     partes === null
-                      ? [{ ...parteVacia(medio as ParteUI["medio"]), importe: neto ? importeParaElCampo(neto) : "" }]
+                      ? [{ ...parteVacia(medio as ParteUI["medio"]), auto: true }]
                       : null,
                   )
                 }

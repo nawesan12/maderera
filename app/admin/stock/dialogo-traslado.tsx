@@ -115,12 +115,14 @@ export function DialogoTraslado({ sucursales }: { sucursales: { id: string; name
         </DialogHeader>
 
         {/* El ⇆ a la altura de los selectores: los tres miden 44 px y se
-            alinean abajo (caía 8 px más abajo, M2S1-166). */}
-        <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
+            alinean abajo (caía 8 px más abajo, M2S1-166). A 375 px, Desde y
+            Hacia uno arriba del otro con el ⇆ al costado: en tres columnas
+            «Casa Central» se cortaba. */}
+        <div className="grid grid-cols-[1fr_auto] items-end gap-x-2 gap-y-3 sm:grid-cols-[1fr_auto_1fr]">
           <div className="min-w-0 space-y-2">
             <Label htmlFor="traslado-origen">Desde</Label>
             <Select value={origen} onValueChange={(v) => v && setOrigen(v)} items={nombres}>
-              <SelectTrigger id="traslado-origen" className="h-11 w-full">
+              <SelectTrigger id="traslado-origen" className="h-11 w-full text-base data-[size=default]:h-11">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -136,14 +138,14 @@ export function DialogoTraslado({ sucursales }: { sucursales: { id: string; name
             type="button"
             onClick={invertir}
             aria-label="Invertir origen y destino"
-            className="flex h-11 w-11 items-center justify-center rounded-lg border text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="flex h-11 w-11 items-center justify-center rounded-lg border text-muted-foreground hover:bg-muted hover:text-foreground max-sm:row-span-2 max-sm:self-center"
           >
             <ArrowLeftRight className="h-4 w-4" aria-hidden="true" />
           </button>
           <div className="min-w-0 space-y-2">
             <Label htmlFor="traslado-destino">Hacia</Label>
             <Select value={destino} onValueChange={(v) => v && setDestino(v)} items={nombres}>
-              <SelectTrigger id="traslado-destino" className="h-11 w-full">
+              <SelectTrigger id="traslado-destino" className="h-11 w-full text-base data-[size=default]:h-11">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -171,12 +173,14 @@ export function DialogoTraslado({ sucursales }: { sucursales: { id: string; name
                   <p className="text-sm text-muted-foreground">
                     {r.medida.medida} · <span className="tabular">{r.medida.sku}</span>
                   </p>
-                  <div className="mt-2 flex items-center gap-2">
+                  {/* Lo que hay en el origen, en su propia línea a 375 px:
+                      al lado del campo se partía en tres (M2S4-048). */}
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
                     {/* Lo que frena «Mandar» se dice en el renglón: el botón
                         se apagaba sin decir por qué (mes simulado). */}
                     <p
                       id={`traslado-hay-${r.medida.id}`}
-                      className={`tabular min-w-0 flex-1 text-sm ${r.sinStock || r.mal || r.hay <= 0 ? "font-medium text-saldo-debe" : "text-muted-foreground"}`}
+                      className={`tabular min-w-0 basis-full text-sm sm:basis-0 sm:flex-1 ${r.sinStock || r.mal || r.hay <= 0 ? "font-medium text-saldo-debe" : "text-muted-foreground"}`}
                     >
                       {r.mal ? (
                         Number.isFinite(r.n) && r.n > 0 ? (
@@ -196,7 +200,7 @@ export function DialogoTraslado({ sucursales }: { sucursales: { id: string; name
                     </p>
                     <label
                       htmlFor={`traslado-cant-${r.medida.id}`}
-                      className="flex h-11 shrink-0 items-center gap-1.5 rounded-md bg-hundida pr-3 focus-within:ring-2 focus-within:ring-ring"
+                      className="ml-auto flex h-11 shrink-0 items-center gap-1.5 rounded-md bg-hundida pr-3 focus-within:ring-2 focus-within:ring-ring sm:ml-0"
                     >
                       <span className="sr-only">Cantidad de {nombre}</span>
                       <input

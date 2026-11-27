@@ -883,7 +883,8 @@ components:
           required: [id, numero, anulado, porMercadoPago]
           properties: { id: { type: string }, numero: { type: string }, anulado: { type: boolean },
             porMercadoPago: { type: boolean, description: Una parte es un cobro de Mercado Pago aprobado; no se anula desde el panel },
-            chequeRechazado: { type: boolean } }
+            chequeRechazado: { type: boolean },
+            chequeDevuelto: { type: boolean, description: el cheque que volvió estaba en la cartera y se le devolvió al cliente } }
         cheques:
           type: array
           description: Los cheques del renglón que el banco todavía puede rechazar (H272)

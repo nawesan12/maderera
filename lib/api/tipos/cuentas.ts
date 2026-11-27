@@ -768,6 +768,8 @@ export interface components {
                 /** @description Una parte es un cobro de Mercado Pago aprobado; no se anula desde el panel */
                 porMercadoPago: boolean;
                 chequeRechazado?: boolean;
+                /** @description el cheque que volvió estaba en la cartera y se le devolvió al cliente */
+                chequeDevuelto?: boolean;
             } | null;
             /** @description Los cheques del renglón que el banco todavía puede rechazar (H272) */
             cheques?: {

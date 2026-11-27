@@ -527,10 +527,16 @@ func (s *Servicio) RechazarConPIN(ctx context.Context, ses *auth.Sesion, id, mot
 		return ResultadoDeCobro{}, comoProblema(errCobro("Un cheque " + strings.ToLower(ParaElCliente[Estado(estado)]) + " no se puede rechazar."))
 	}
 	if !ses.Tiene(sqlc.StaffRoleAdmin) {
-		if _, err := s.aut.Exigir(ctx, ses, autorizacion.Pedido{Motivo: autorizacion.Cheque, Monto: importe, Clave: id, PIN: pin}); err != nil {
+		// Desde la cartera es una devolución (CambiarEstado la anota así):
+		// el PIN firma eso y no un rechazo del banco.
+		motivoPIN := autorizacion.Cheque
+		if Estado(estado) == "cartera" {
+			motivoPIN = autorizacion.ChequeDevuelto
+		}
+		if _, err := s.aut.Exigir(ctx, ses, autorizacion.Pedido{Motivo: motivoPIN, Monto: importe, Clave: id, PIN: pin}); err != nil {
 			var falta *autorizacion.Falta
 			if errors.As(err, &falta) {
-				e := map[string]string{"pin": falta.Mensaje(), "pinMonto": jsmath.Fijo2(falta.Monto)}
+				e := map[string]string{"pin": falta.Mensaje(), "pinMonto": jsmath.Fijo2(falta.Monto), "pinMotivo": string(motivoPIN)}
 				if falta.PinIncorrecto {
 					e["pinIncorrecto"] = "si"
 				}

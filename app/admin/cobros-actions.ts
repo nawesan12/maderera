@@ -178,7 +178,7 @@ export async function rechazarChequeDesdeLaFicha(chequeId: string, motivo: strin
       return {
         error: e.pin,
         autorizacion: {
-          motivo: "cheque",
+          motivo: e.pinMotivo === "cheque_devuelto" ? "cheque_devuelto" : "cheque",
           monto: Number(e.pinMonto ?? 0),
           pinIncorrecto: e.pinIncorrecto === "si",
           bloqueadoHasta: e.pinHasta,

@@ -357,8 +357,14 @@ function UltimoMovimiento({
 }: {
   movimiento: MovimientoConSaldo;
 }) {
-  const chequeRechazado =
-    m.tipo === "nota_debito" && /rechazado/i.test(m.detalle ?? "");
+  const cheque =
+    m.tipo !== "nota_debito"
+      ? null
+      : /devuelto al cliente/i.test(m.detalle ?? "")
+        ? "Cheque devuelto"
+        : /rechazado/i.test(m.detalle ?? "")
+          ? "Cheque rechazado"
+          : null;
   return (
     <p className="mt-2 flex flex-wrap items-baseline gap-x-2 text-sm">
       <span className="text-muted-foreground">
@@ -367,8 +373,8 @@ function UltimoMovimiento({
       {/* El ajuste dice qué fue («Anulación del recibo REC-0006»): solo
           «Ajuste +$ 1.000» no decía nada (M2S1-153). */}
       <span className="font-medium">
-        {chequeRechazado
-          ? "Cheque rechazado"
+        {cheque
+          ? cheque
           : m.tipo === "ajuste" && m.detalle
             ? m.detalle
             : estiloDeEstado(m.tipo).etiqueta}

@@ -40,19 +40,16 @@ type RefCheque struct {
 	ID      string  `json:"id"`
 	Nombre  string  `json:"nombre"`
 	Importe float64 `json:"importe"`
-	// Devolver: está en la cartera y todavía no vence; el banco no lo vio.
-	// La ficha ofrece «Devolver al cliente», no «Marcar rechazado»
-	// (M3S3-010, M2S3-069).
+	// Devolver: está en la cartera, venza o no; el banco no lo vio. La
+	// ficha ofrece «Devolver al cliente», no «Marcar rechazado» (M3S3-010,
+	// M2S3-069, M2S3-088): con uno vencido decía «rechazado» y CambiarEstado
+	// lo anotaba devuelto.
 	Devolver bool `json:"devolver"`
 }
 
 // refCheque arma el cheque rechazable de un renglón.
 func refCheque(id, nombre string, importe float64, estado string, fechaPago *time.Time) RefCheque {
-	r := RefCheque{ID: id, Nombre: nombre, Importe: importe}
-	if estado == "cartera" && fechaPago != nil {
-		r.Devolver = SinVencer(*fechaPago, time.Now())
-	}
-	return r
+	return RefCheque{ID: id, Nombre: nombre, Importe: importe, Devolver: estado == "cartera"}
 }
 
 // RefPedido es el pedido de un renglón.
@@ -74,6 +71,9 @@ type RefRecibo struct {
 	// la cuenta con una nota de débito. El recibo emitido no cambia (lo
 	// emitido no se edita), pero el pago no puede verse entero (H303).
 	ChequeRechazado bool `json:"chequeRechazado,omitempty"`
+	// ChequeDevuelto: el que volvió estaba en la cartera y se le devolvió al
+	// cliente; el banco no lo rechazó (mes 23).
+	ChequeDevuelto bool `json:"chequeDevuelto,omitempty"`
 }
 
 // DetalleParaElCliente saca de un asiento lo que se escribió para la casa.
@@ -257,10 +257,16 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 
 	// Los recibos con un cheque que rebotó: la nota de débito lleva el
 	// recibo con el que había entrado.
-	rebotados := map[string]bool{}
+	rebotados, devueltos := map[string]bool{}, map[string]bool{}
 	for _, m := range libro {
 		if m.Tipo == "nota_debito" && m.ReciboID != nil {
-			rebotados[*m.ReciboID] = true
+			// CambiarEstado escribe «… devuelto al cliente» o «… rechazado
+			// por el banco» en la nota de débito.
+			if m.Detalle != nil && strings.Contains(*m.Detalle, " devuelto al cliente") {
+				devueltos[*m.ReciboID] = true
+			} else {
+				rebotados[*m.ReciboID] = true
+			}
 		}
 	}
 
@@ -288,7 +294,7 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 		}
 		if m.ReciboID != nil {
 			x.Recibo = &RefRecibo{*m.ReciboID, deref(m.ReciboNumero), m.ReciboEstado != nil && *m.ReciboEstado == sqlc.EstadoReciboAnulado, porMP[*m.ReciboID],
-				rebotados[*m.ReciboID]}
+				rebotados[*m.ReciboID], devueltos[*m.ReciboID] && !rebotados[*m.ReciboID]}
 			if m.Tipo == "pago" && !x.Recibo.Anulado {
 				x.Cheques = chequesDe[*m.ReciboID]
 			}

@@ -37,8 +37,8 @@ export function RechazarCheque({
   /** En un pago con varios cheques el botón dice cuál. */
   conNombre?: boolean;
   /**
-   * En la cartera y sin vencer: el banco nunca lo vio, se le devuelve al
-   * cliente (M3S3-010, M2S3-069).
+   * En la cartera, venza o no: el banco nunca lo vio, se le devuelve al
+   * cliente (M3S3-010, M2S3-069). Go lo anota igual.
    */
   devolver?: boolean;
 }) {
@@ -57,7 +57,7 @@ export function RechazarCheque({
 
   function enviar(pin?: string) {
     if (!motivo.trim()) {
-      setError("Poné el motivo del rechazo: lo lee el cliente.");
+      setError(devolver ? "Poné el motivo: lo lee el cliente." : "Poné el motivo del rechazo: lo lee el cliente.");
       return;
     }
     empezar(async () => {
@@ -69,7 +69,7 @@ export function RechazarCheque({
         setPidePin(r.autorizacion);
         setError(null);
       } else {
-        setError(r.error ?? "No se pudo registrar el rechazo.");
+        setError(r.error ?? (devolver ? "No se pudo registrar la devolución." : "No se pudo registrar el rechazo."));
       }
     });
   }

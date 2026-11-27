@@ -118,3 +118,16 @@ func TestLaDevolucionSinNotaNoRompeLaFicha(t *testing.T) {
 	}
 	t.Fatalf("falta la devolución: %+v", movs)
 }
+
+// Mes 23: en la cartera se devuelve venza o no (CambiarEstado lo anota
+// devuelto); depositado, lo rechaza el banco.
+func TestRefChequeDevolverEnLaCartera(t *testing.T) {
+	ayer := time.Now().AddDate(0, 0, -7)
+	manana := time.Now().AddDate(0, 0, 20)
+	if !refCheque("a", "x", 1, "cartera", &ayer).Devolver || !refCheque("b", "x", 1, "cartera", &manana).Devolver {
+		t.Error("en la cartera se devuelve")
+	}
+	if refCheque("c", "x", 1, "depositado", &ayer).Devolver {
+		t.Error("depositado lo rechaza el banco")
+	}
+}

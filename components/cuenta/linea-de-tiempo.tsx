@@ -222,9 +222,9 @@ function Fila({
           )}
           {/* El recibo emitido no cambia, pero el pago no puede verse entero
               si un cheque suyo rebotó (H303). */}
-          {m.recibo?.chequeRechazado && m.clase === "pago" && (
+          {(m.recibo?.chequeRechazado || m.recibo?.chequeDevuelto) && m.clase === "pago" && (
             <span className="estado-problema rounded-full bg-[var(--estado-fondo)] px-2 py-0.5 text-xs font-semibold">
-              Con un cheque rechazado
+              {m.recibo.chequeRechazado ? "Con un cheque rechazado" : "Con un cheque devuelto"}
             </span>
           )}
           {m.recibo && !m.recibo.anulado && accionDelRecibo?.(m.recibo, m)}

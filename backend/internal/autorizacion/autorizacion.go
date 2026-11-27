@@ -80,6 +80,10 @@ const (
 	// Cheque: registrar el rechazo de un cheque de un cliente sin ser admin
 	// (mes simulado, H272): vuelve la deuda con una nota de débito.
 	Cheque Motivo = "cheque"
+	// ChequeDevuelto: lo mismo con un cheque que está en la cartera, que se
+	// le devuelve al cliente y no lo rechazó el banco: el PIN decía
+	// «rechazar» sobre una devolución (mes 23).
+	ChequeDevuelto Motivo = "cheque_devuelto"
 	// SinCobrar: soltar mercadería de un pedido que no se cobró (mes
 	// simulado 2: el depósito entregaba $ 836.680 con un toque).
 	SinCobrar Motivo = "sin_cobrar"
@@ -382,6 +386,8 @@ func QueSeAutoriza(motivo Motivo, monto, credito float64) string {
 		t = "anular un remito firmado"
 	case Cheque:
 		t = "rechazar un cheque de " + m
+	case ChequeDevuelto:
+		t = "devolver al cliente un cheque de " + m
 	case SinCobrar:
 		t = "entregar " + m + " sin cobrar"
 	default:

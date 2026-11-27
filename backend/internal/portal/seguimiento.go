@@ -144,7 +144,19 @@ type PedidoPropio struct {
 	// diciendo 120 m² y el cliente no veía la corrección (H302).
 	Ajustes    []AjusteDelPedido `json:"ajustes"`
 	EnRevision *float64          `json:"enRevision"`
-	origen     string
+	// Devuelto es lo devuelto de cada renglón y Devoluciones el importe de
+	// todas: el pedido seguía diciendo «10 u.» y el total de antes de la
+	// devolución (mes simulado, M3S1-046 y M2S3-030).
+	Devuelto     []DevueltoDelRenglon `json:"devuelto"`
+	Devoluciones float64              `json:"devoluciones"`
+	origen       string
+}
+
+// DevueltoDelRenglon es lo devuelto de un renglón del pedido.
+type DevueltoDelRenglon struct {
+	OrderItemID string  `json:"orderItemId"`
+	Cantidad    float64 `json:"cantidad"`
+	Importe     float64 `json:"importe"`
 }
 
 // CorteDelPedido es un trabajo del taller atado al pedido (H210).
@@ -282,6 +294,19 @@ func (s *Servicio) MiPedido(ctx context.Context, c *Cliente, numero string) (*Pe
 	}
 	for i := range p.Ajustes {
 		p.Ajustes[i].Detalle = cobros.DetalleParaElCliente(p.Ajustes[i].Detalle)
+	}
+	filas, err = s.pool.Query(ctx, `SELECT di.order_item_id::text, sum(di.cantidad)::float8, sum(di.importe)::float8
+		FROM devolucion_items di JOIN devoluciones d ON d.id = di.devolucion_id
+		WHERE d.order_id = $1 AND di.order_item_id IS NOT NULL GROUP BY di.order_item_id`, p.ID)
+	if err != nil {
+		return nil, err
+	}
+	if p.Devuelto, err = pgx.CollectRows(filas, pgx.RowToStructByPos[DevueltoDelRenglon]); err != nil {
+		return nil, err
+	}
+	if err := s.pool.QueryRow(ctx, `SELECT coalesce(sum(importe), 0)::float8 FROM devoluciones WHERE order_id = $1`, p.ID).
+		Scan(&p.Devoluciones); err != nil {
+		return nil, err
 	}
 	var revision float64
 	if err := s.pool.QueryRow(ctx, `SELECT coalesce(sum(monto), 0)::float8 FROM payments

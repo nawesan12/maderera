@@ -2,6 +2,7 @@ package cobros
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"sort"
 	"strings"
@@ -181,6 +182,10 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 	if err != nil {
 		return nil, false, err
 	}
+	devueltas, err := q.DevolucionesFueraDeLaCuenta(ctx, sqlc.DevolucionesFueraDeLaCuentaParams{CustomerID: &cliente, Desde: d})
+	if err != nil {
+		return nil, false, err
+	}
 
 	var recibos []string
 	vistos := map[string]bool{}
@@ -316,6 +321,18 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 				Recibo:  &RefRecibo{ID: c.ReciboID, Numero: c.ReciboNumero},
 				Cheques: []RefCheque{{c.ID, titulo, c.Importe}}})
 		}
+	}
+	// Las devoluciones de lo pagado de contado: no mueven la cuenta (el
+	// reintegro fue aparte), pero el cliente las tiene que ver (M2S3-030).
+	for _, v := range devueltas {
+		var detalle *string
+		if v.NotaTipo != "" && v.NotaPv != nil && v.NotaNumero != nil {
+			letra := strings.ToUpper(v.NotaTipo[len(v.NotaTipo)-1:])
+			t := fmt.Sprintf("Nota de crédito %s %04d-%08d", letra, *v.NotaPv, *v.NotaNumero)
+			detalle = &t
+		}
+		movs = append(movs, MovimientoDelCliente{ID: v.ID, Fecha: v.CreatedAt.Time, Clase: "nota_credito", Titulo: "Devolución",
+			Detalle: detalle, ImporteInformativo: f64(-v.Importe), Pedido: &RefPedido{v.PedidoID, v.PedidoNumero}})
 	}
 	for _, c := range sueltos {
 		// El que no se tomó (no mueve la cuenta) no es el que rebotó en el

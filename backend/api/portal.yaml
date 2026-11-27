@@ -322,7 +322,8 @@ components:
     PedidoPropio:
       type: object
       required: [id, numero, estado, estadoPago, medioPago, tipoEntrega, direccionEntrega, zonaEnvio, costoEnvio, subtotal, total, notas,
-        sucursal, sucursalSlug, createdAt, items, historial, descuento, debeEnCuenta, cortes, facturas, recibos, ajustes, enRevision]
+        sucursal, sucursalSlug, createdAt, items, historial, descuento, debeEnCuenta, cortes, facturas, recibos, ajustes, enRevision,
+        devuelto, devoluciones]
       properties:
         descuento: { type: number, format: double }
         descuentoMotivo: { type: string, nullable: true }
@@ -363,6 +364,16 @@ components:
               numero: { type: integer }
               estado: { type: string }
               total: { type: number, format: double }
+        devoluciones: { type: number, format: double, description: el importe de todas las devoluciones del pedido }
+        devuelto:
+          type: array
+          items:
+            type: object
+            required: [orderItemId, cantidad, importe]
+            properties:
+              orderItemId: { type: string }
+              cantidad: { type: number, format: double }
+              importe: { type: number, format: double }
         ajustes:
           type: array
           items:

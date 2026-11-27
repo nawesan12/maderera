@@ -352,6 +352,33 @@ func TestLaNotaDeCreditoNoEsUnPago(t *testing.T) {
 	}
 }
 
+// M3S1-046: el pedido dice lo devuelto de cada renglón y cuánto suman las
+// devoluciones, para el total neto.
+func TestPedidoConLoDevuelto(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	juan, idJuan := e.web(t, "juan@prueba.test")
+	var pedido, item, dev string
+	if err := e.pool.QueryRow(ctx, `insert into orders (numero, contacto_nombre, customer_id, total, subtotal)
+		values ('PED-1198', 'Juan', $1, 428000, 428000) returning id`, idJuan).Scan(&pedido); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.pool.QueryRow(ctx, `insert into order_items (order_id, descripcion, unidad, cantidad, precio_unitario, subtotal, orden)
+		values ($1, 'Bisagra', 'u', 10, 4200, 42000, 0) returning id`, pedido).Scan(&item); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.pool.QueryRow(ctx, `insert into devoluciones (clave, order_id, importe, destino, motivo) values ('m3s1-046', $1, 8400, 'cuenta', 'cambio') returning id`, pedido).Scan(&dev); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.pool.Exec(ctx, `insert into devolucion_items (devolucion_id, order_item_id, cantidad, al_stock, importe) values ($1, $2, 2, true, 8400)`, dev, item); err != nil {
+		t.Fatal(err)
+	}
+	_, b := pedir(t, juan, "GET", e.srv.URL+"/api/v1/cuenta/pedidos/PED-1198", nil)
+	if !strings.Contains(b, `"devoluciones":8400`) || !strings.Contains(b, `"orderItemId":"`+item+`","cantidad":2,"importe":8400`) {
+		t.Errorf("lo devuelto del pedido: %s", b)
+	}
+}
+
 // M2S1-017 y M3S3-012: el pago de un pedido va primero a ese pedido (el
 // recibo del pedido, el que cobra su factura o el que lo nombra), y lo que
 // sobra a la deuda más vieja. Antes cada pedido mostraba lo que se debía

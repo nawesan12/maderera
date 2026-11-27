@@ -329,6 +329,18 @@ export interface components {
                 /** Format: double */
                 total: number;
             }[];
+            /**
+             * Format: double
+             * @description el importe de todas las devoluciones del pedido
+             */
+            devoluciones: number;
+            devuelto: {
+                orderItemId: string;
+                /** Format: double */
+                cantidad: number;
+                /** Format: double */
+                importe: number;
+            }[];
             ajustes: {
                 id: string;
                 tipo: string;

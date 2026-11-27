@@ -131,6 +131,8 @@ export default async function DetallePedidoPage({
   // cantidad del renglón y no contra la del acopio: la devolución de un
   // faltante baja la del acopio, y ahí las dos daban 110.
   const entregadoPor = new Map(pedido.acopio.map((a) => [a.orderItemId, a]));
+  // Lo devuelto de cada renglón y el total neto (M3S1-046, M2S3-030).
+  const devueltoPor = new Map(pedido.devuelto.map((d) => [d.orderItemId, d]));
   const huboRetiro = pedido.entregas.some((e) => e.estado !== "anulada");
   const sumaRenglones = pedido.items.reduce(
     (s, i) => s + Number(i.subtotal),
@@ -399,6 +401,11 @@ export default async function DetallePedidoPage({
                         {cantidadConUnidad(Number(item.cantidad), item.unidad, item.descripcion)} ×{" "}
                         {formatearMonto(item.precioUnitario)}
                       </p>
+                      {devueltoPor.has(item.id) && (
+                        <p className="tabular mt-0.5 text-sm text-saldo-favor">
+                          Devolución: {cantidadConUnidad(devueltoPor.get(item.id)!.cantidad, item.unidad, item.descripcion)}
+                        </p>
+                      )}
                       {corto && (
                         <p className="tabular mt-0.5 text-sm text-brand-orange-dark">
                           Entregado {cantidadConUnidad(r.entregado, null)} de{" "}
@@ -448,6 +455,20 @@ export default async function DetallePedidoPage({
                   {formatearMonto(pedido.total)}
                 </dd>
               </div>
+              {pedido.devoluciones > 0.005 && (
+                <>
+                  <div className="flex justify-between text-saldo-favor">
+                    <dt>Devuelto</dt>
+                    <dd className="tabular">− {formatearMonto(pedido.devoluciones)}</dd>
+                  </div>
+                  <div className="flex items-baseline justify-between">
+                    <dt className="font-semibold">Total neto</dt>
+                    <dd className="tabular text-lg font-bold">
+                      {formatearMonto(Math.max(Number(pedido.total) - pedido.devoluciones, 0))}
+                    </dd>
+                  </div>
+                </>
+              )}
               {cuentas.ahorro > 0 && !cuentas.restaElAhorro && (
                 <div className="flex justify-between gap-3 text-saldo-favor">
                   <dt>Incluye {nombreDelDescuento(pedido.descuentoMotivo).toLowerCase()}</dt>

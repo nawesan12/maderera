@@ -605,6 +605,65 @@ func (q *Queries) CrearRecibo(ctx context.Context, arg CrearReciboParams) (strin
 	return id, err
 }
 
+const devolucionesFueraDeLaCuenta = `-- name: DevolucionesFueraDeLaCuenta :many
+SELECT d.id, d.created_at, d.importe::float8 AS importe, o.id AS pedido_id, o.numero AS pedido_numero,
+       i.tipo::text AS nota_tipo, i.punto_venta AS nota_pv, i.numero AS nota_numero
+FROM devoluciones d
+JOIN orders o ON o.id = d.order_id
+LEFT JOIN invoices i ON i.id = d.nota_id
+WHERE o.customer_id = $1 AND d.account_movement_id IS NULL
+  AND ($2::timestamptz IS NULL OR d.created_at >= $2)
+ORDER BY d.created_at DESC
+`
+
+type DevolucionesFueraDeLaCuentaParams struct {
+	CustomerID *string            `json:"customerId"`
+	Desde      pgtype.Timestamptz `json:"desde"`
+}
+
+type DevolucionesFueraDeLaCuentaRow struct {
+	ID           string             `json:"id"`
+	CreatedAt    pgtype.Timestamptz `json:"createdAt"`
+	Importe      float64            `json:"importe"`
+	PedidoID     string             `json:"pedidoId"`
+	PedidoNumero string             `json:"pedidoNumero"`
+	NotaTipo     string             `json:"notaTipo"`
+	NotaPv       *int32             `json:"notaPv"`
+	NotaNumero   *int32             `json:"notaNumero"`
+}
+
+// Las devoluciones de lo que se pagó de contado: el reintegro no pasa por
+// la cuenta y Movimientos no las mostraba, ni con «Notas y ajustes» (mes
+// simulado, M2S3-030). Las que van a la cuenta ya están en el libro.
+func (q *Queries) DevolucionesFueraDeLaCuenta(ctx context.Context, arg DevolucionesFueraDeLaCuentaParams) ([]DevolucionesFueraDeLaCuentaRow, error) {
+	rows, err := q.db.Query(ctx, devolucionesFueraDeLaCuenta, arg.CustomerID, arg.Desde)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DevolucionesFueraDeLaCuentaRow{}
+	for rows.Next() {
+		var i DevolucionesFueraDeLaCuentaRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.Importe,
+			&i.PedidoID,
+			&i.PedidoNumero,
+			&i.NotaTipo,
+			&i.NotaPv,
+			&i.NotaNumero,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const efectivoACaja = `-- name: EfectivoACaja :exec
 INSERT INTO cash_movements (session_id, tipo, monto, motivo, creado_por)
 VALUES ($1, 'ingreso', $4::text::numeric, $2, $3)

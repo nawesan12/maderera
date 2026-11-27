@@ -90,3 +90,31 @@ func TestFechaCortaConCeros(t *testing.T) {
 		t.Errorf("fecha: %s", f)
 	}
 }
+
+// Mes 23: la ficha de un cliente con una devolución de contado sin nota de
+// crédito daba 500 («cannot scan NULL into *string (nota_tipo)»).
+func TestLaDevolucionSinNotaNoRompeLaFicha(t *testing.T) {
+	b := armarBase(t)
+	ctx := context.Background()
+	var pedido string
+	if err := b.pool.QueryRow(ctx, `insert into orders (numero, contacto_nombre, branch_id, origen, estado, estado_pago, total, customer_id)
+		values ('PED-1070', 'Mueblería', $1, 'mostrador', 'entregado', 'pagado', 5000, $2) returning id`, b.sucursal, b.cliente).Scan(&pedido); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.pool.Exec(ctx, `insert into devoluciones (clave, order_id, importe, destino, motivo) values ('mes23-sin-nota', $1, 1000, 'caja', 'cambio')`, pedido); err != nil {
+		t.Fatal(err)
+	}
+	movs, _, err := Historial(ctx, sqlc.New(b.pool), b.cliente, nil, "todo", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range movs {
+		if m.Titulo == "Devolución" {
+			if m.Detalle != nil {
+				t.Errorf("sin nota no hay detalle de nota: %+v", m)
+			}
+			return
+		}
+	}
+	t.Fatalf("falta la devolución: %+v", movs)
+}

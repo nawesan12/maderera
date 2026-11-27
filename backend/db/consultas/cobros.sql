@@ -144,7 +144,7 @@ ORDER BY created_at DESC;
 -- la cuenta y Movimientos no las mostraba, ni con «Notas y ajustes» (mes
 -- simulado, M2S3-030). Las que van a la cuenta ya están en el libro.
 SELECT d.id, d.created_at, d.importe::float8 AS importe, o.id AS pedido_id, o.numero AS pedido_numero,
-       i.tipo::text AS nota_tipo, i.punto_venta AS nota_pv, i.numero AS nota_numero
+       coalesce(i.tipo::text, '')::text AS nota_tipo, i.punto_venta AS nota_pv, i.numero AS nota_numero
 FROM devoluciones d
 JOIN orders o ON o.id = d.order_id
 LEFT JOIN invoices i ON i.id = d.nota_id

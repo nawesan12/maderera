@@ -612,7 +612,7 @@ func (q *Queries) CrearRecibo(ctx context.Context, arg CrearReciboParams) (strin
 
 const devolucionesFueraDeLaCuenta = `-- name: DevolucionesFueraDeLaCuenta :many
 SELECT d.id, d.created_at, d.importe::float8 AS importe, o.id AS pedido_id, o.numero AS pedido_numero,
-       i.tipo::text AS nota_tipo, i.punto_venta AS nota_pv, i.numero AS nota_numero
+       coalesce(i.tipo::text, '')::text AS nota_tipo, i.punto_venta AS nota_pv, i.numero AS nota_numero
 FROM devoluciones d
 JOIN orders o ON o.id = d.order_id
 LEFT JOIN invoices i ON i.id = d.nota_id

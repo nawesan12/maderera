@@ -26,7 +26,20 @@ import {
 } from "@/components/admin/formulario";
 import { CampoFecha } from "@/components/ui/campo-fecha";
 
-const inicial: EstadoResena = {};
+/** `vuelta` cuenta las guardadas: el formulario se arma de nuevo, vacío. */
+type EstadoDelEditor = EstadoResena & { vuelta: number };
+
+const inicial: EstadoDelEditor = { vuelta: 0 };
+
+/**
+ * Guardar y, si salió, vaciar el formulario: conservaba autor, fecha,
+ * estrellas y el interruptor, y la siguiente se cargaba encima de la anterior
+ * (mes 23). Si falla, queda todo como estaba.
+ */
+async function guardarYVaciar(previo: EstadoDelEditor, datos: FormData): Promise<EstadoDelEditor> {
+  const r = await guardarResenaDelNegocio(previo, datos);
+  return { ...r, vuelta: r.ok ? previo.vuelta + 1 : previo.vuelta };
+}
 
 export interface ResenaEditable {
   id: string;
@@ -46,10 +59,7 @@ export function EditorDeResenas({
   resenas: ResenaEditable[];
   hayGoogle: boolean;
 }) {
-  const [estado, guardar, guardando] = useActionState(
-    guardarResenaDelNegocio,
-    inicial,
-  );
+  const [estado, guardar, guardando] = useActionState(guardarYVaciar, inicial);
   const [trayendo, empezarTraida] = useTransition();
   const [aviso, setAviso] = useState<string | null>(null);
 
@@ -87,7 +97,7 @@ export function EditorDeResenas({
         ))}
       </ul>
 
-      <form {...sinReiniciar(guardar)} className="space-y-4">
+      <form key={estado.vuelta} {...sinReiniciar(guardar)} className="space-y-4">
         <Hoja>
           <Seccion titulo="Cargar una reseña" icono={MessageSquareQuote}>
             <label className="block">

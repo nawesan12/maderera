@@ -369,10 +369,12 @@ function Tarjeta({
    */
   return (
     <article className={`tarjeta space-y-2 px-4 py-3.5 sm:px-5 ${apagado ? "opacity-75" : ""}`}>
-      <div className="flex items-baseline justify-between gap-3">
+      {/* Si el importe con centavos y «en 13 días» no entran juntos, la fecha
+          baja entera a su renglón: se salía de la tarjeta a 375 px (mes 23). */}
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
         <p className="tabular text-xl font-semibold">{formatearMonto(c.importe)}</p>
         <p
-          className={`tabular text-right text-base ${
+          className={`tabular ml-auto text-right text-base ${
             vencido
               ? "font-semibold text-brand-orange-dark"
               : dias !== null && dias <= 7
@@ -410,8 +412,11 @@ function Tarjeta({
         {/* Solo el circuito B se marca, y como «Circuito B»: una «B» suelta
             se leía como Factura B (mes simulado, H167/H262). El de una venta
             con su factura esperando el CAE no es del B: dice eso (M2S1-061,
-            M2S3-035). */}
-        {c.circuito === "negro" && c.esperaCae && (
+            M2S3-035). Con las dos opciones de «asiento_sin_cae» su cobro ya
+            está en el archivo del estudio (Anticipos o la transitoria) y el
+            cheque es blanco: la chapa sale igual, porque la factura sigue sin
+            CAE (mes 23, M2S2-040). */}
+        {c.esperaCae && (
           <span className="whitespace-nowrap rounded-full bg-chip px-2.5 py-0.5 text-sm font-medium text-texto-2">
             Espera CAE
           </span>

@@ -425,6 +425,18 @@ func TestTarifasParametrosYSierra(t *testing.T) {
 	if code, b := pedir(t, adm, "POST", u+"admin/cortes/tarifas", map[string]any{"material": "Tableros de madera", "precioPorPasada": "1.400", "activo": true}); code != 204 {
 		t.Fatalf("tarifa: %d %s", code, b)
 	}
+	// Guardarla igual no deja otro renglón en la bitácora (mes 23).
+	var tarifa string
+	var antes, despues int
+	_ = e.pool.QueryRow(context.Background(), `select id::text from cutting_rates where material = 'Tableros de madera'`).Scan(&tarifa)
+	_ = e.pool.QueryRow(context.Background(), `select count(*) from audit_log where entidad = 'tarifa_corte'`).Scan(&antes)
+	if code, b := pedir(t, adm, "POST", u+"admin/cortes/tarifas", map[string]any{"id": tarifa, "material": "Tableros de madera", "precioPorPasada": "1.400", "activo": true}); code != 204 {
+		t.Fatalf("tarifa sin cambios: %d %s", code, b)
+	}
+	_ = e.pool.QueryRow(context.Background(), `select count(*) from audit_log where entidad = 'tarifa_corte'`).Scan(&despues)
+	if despues != antes {
+		t.Errorf("guardar sin cambios dejó renglón: %d → %d", antes, despues)
+	}
 	if code, b := pedir(t, adm, "POST", u+"admin/cortes/tarifas", map[string]any{"material": "Placas", "precioPorPasada": "1000", "activo": true}); code != 422 || !strings.Contains(b, `Ya hay una tarifa de \"Placas\"`) {
 		t.Errorf("repetida: %d %s", code, b)
 	}

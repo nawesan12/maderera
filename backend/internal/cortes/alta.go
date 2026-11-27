@@ -819,10 +819,18 @@ func (s *Servicio) GuardarTarifa(ctx context.Context, ses *auth.Sesion, f FormTa
 	lista := opcional(f.PriceListID)
 	var err error
 	if f.ID != "" {
-		_, err = s.pool.Exec(ctx, `
+		// Guardar sin cambiar nada no toca la fila ni deja renglón en la
+		// bitácora (mes 23): quedaba «Corte de …» repetido por cada clic.
+		var tag pgconn.CommandTag
+		tag, err = s.pool.Exec(ctx, `
 			UPDATE cutting_rates SET material = $1, price_list_id = $2, precio_por_pasada = $3::numeric,
-				precio_por_metro_canto = $4::numeric, activo = $5, updated_at = $6 WHERE id = $7`,
+				precio_por_metro_canto = $4::numeric, activo = $5, updated_at = $6 WHERE id = $7
+			  AND (material, price_list_id, precio_por_pasada, precio_por_metro_canto, activo)
+			      IS DISTINCT FROM ($1, $2::uuid, $3::numeric, $4::numeric, $5)`,
 			material, lista, pp, pc, f.Activo, ahora, f.ID)
+		if err == nil && tag.RowsAffected() == 0 {
+			return nil
+		}
 	} else {
 		_, err = s.pool.Exec(ctx, `
 			INSERT INTO cutting_rates (material, price_list_id, precio_por_pasada, precio_por_metro_canto, activo, updated_at)

@@ -453,3 +453,27 @@ func TestLaFacturaSinCaeNoSaleSola(t *testing.T) {
 		t.Fatalf("con CAE: %v, %d correos", err, e.correos()-antes)
 	}
 }
+
+// Mes 23: «El comprobante … quedó sin efecto» le llegaba a un cliente que
+// nunca recibió ese comprobante (sin CAE no se le manda). Solo sale si lo
+// recibió por algún canal.
+func TestLaBajaSoloAQuienLoRecibio(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	cliente := e.uno(t, `insert into customers (nombre, email) values ('Sim Baja', 'sim.baja@prueba.test') returning id::text`)
+	factura := e.uno(t, `select gen_random_uuid()::text`)
+	baja := func() string {
+		return e.uno(t, `insert into invoices_dadas_de_baja (invoice_id, tipo, punto_venta, numero, receptor_nombre, customer_id, total,
+			fecha_emision, motivo, usuario_nombre, comprobante)
+			values ($1::uuid, 'factura_b', 15, 7, 'Sim Baja', $2, 1000, now(), 'Sim', 'Sim', '{}'::jsonb) returning id::text`, factura, cliente)
+	}
+	antes := e.correos()
+	if err := e.s.FacturaDadaDeBaja(ctx, baja()); err != nil || e.correos() != antes {
+		t.Fatalf("sin haberla recibido: %v, %d correos", err, e.correos()-antes)
+	}
+	e.uno(t, `insert into notifications_log (canal, evento, destinatario, entidad_tipo, entidad_id, estado)
+		values ('whatsapp_manual', 'factura_emitida', '5492235550000', 'invoice', $1::uuid, 'enviada') returning 'ok'`, factura)
+	if err := e.s.FacturaDadaDeBaja(ctx, baja()); err != nil || e.correos() != antes+1 {
+		t.Fatalf("después de recibirla: %v, %d correos", err, e.correos()-antes)
+	}
+}

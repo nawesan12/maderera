@@ -381,18 +381,23 @@ func (s *Servicio) loRecibio(ctx context.Context, id string) (bool, error) {
 }
 
 // FacturaDadaDeBaja le avisa al cliente que el comprobante que recibió se
-// dio de baja y no vale (M3S4-009). El motivo es interno: no va.
+// dio de baja y no vale (M3S4-009). El motivo es interno: no va. Solo a
+// quien lo recibió: sin CAE no se le manda, y «quedó sin efecto» le llegaba
+// por un comprobante que nunca vio (mes 23).
 func (s *Servicio) FacturaDadaDeBaja(ctx context.Context, bajaID string) error {
-	var tipo, receptor string
+	var tipo, receptor, invoiceID string
 	var pv, numero int64
 	var cliente *string
 	var total float64
-	err := s.pool.QueryRow(ctx, `SELECT tipo::text, punto_venta, numero, customer_id, receptor_nombre, total::float8
-		FROM invoices_dadas_de_baja WHERE id = $1`, bajaID).Scan(&tipo, &pv, &numero, &cliente, &receptor, &total)
+	err := s.pool.QueryRow(ctx, `SELECT invoice_id::text, tipo::text, punto_venta, numero, customer_id, receptor_nombre, total::float8
+		FROM invoices_dadas_de_baja WHERE id = $1`, bajaID).Scan(&invoiceID, &tipo, &pv, &numero, &cliente, &receptor, &total)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && cliente == nil) {
 		return nil
 	}
 	if err != nil {
+		return err
+	}
+	if recibio, err := s.loRecibio(ctx, invoiceID); err != nil || !recibio {
 		return err
 	}
 	cl, err := s.cliente(ctx, *cliente)

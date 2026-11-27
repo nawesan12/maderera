@@ -35,7 +35,12 @@ const origenTexto: Record<string, string> = {
  * «Importación» (M2S2-005).
  */
 function origenDelCambio(origen: string, motivo: string | null): string {
-  if (motivo?.startsWith("Lista del proveedor")) return motivo;
+  // Go anota «Lista de <proveedor>» y las ofertas como edición manual con
+  // su motivo: se buscaba «Lista del proveedor» y salían «Importación» y
+  // «Edición» (M2S2-005).
+  if (motivo && /^(Lista de|Oferta hasta|Terminó la oferta|Venció la oferta)/.test(motivo)) {
+    return motivo.replace(/^Oferta hasta el /, "Oferta hasta ");
+  }
   const deshecho = /^Se deshizo el ajuste(?: «(.+)»)?/.exec(motivo ?? "");
   if (deshecho) return deshecho[1] ? `Deshecho: ${deshecho[1]}` : "Deshecho";
   return origenTexto[origen] ?? origen;

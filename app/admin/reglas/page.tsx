@@ -160,6 +160,14 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
         ],
       },
       {
+        clave: "corte_chico_stock",
+        pregunta: "La placa de la casa de ese corte, en el stock",
+        opciones: [
+          { valor: "no_mueve", texto: "Sigue contada" },
+          { valor: "descuenta", texto: "Sale al terminar el corte" },
+        ],
+      },
+      {
         clave: "sucursal_del_corte_suelto",
         pregunta: "Dónde se corta un corte suelto",
         opciones: [

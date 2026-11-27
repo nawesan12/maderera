@@ -617,6 +617,9 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 		if err := s.listoConElCorte(ctx, ses, id, numero); err != nil {
 			return "", err
 		}
+		if err := s.StockDeLaPlacaChica(ctx, ses, id); err != nil {
+			return "", err
+		}
 	}
 	// La reposición entregada queda escrita en el pedido que la originó: el
 	// reclamo se cierra con constancia (H321).
@@ -708,6 +711,12 @@ func (s *Servicio) Volver(ctx context.Context, ses *auth.Sesion, id, desde strin
 		return "", yaCambio(numero, ahora)
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCambiarEstado, "corte", id, numero+": "+estado+" → "+anterior+" (deshecho)", nil)
+	// Lo que salió del stock al terminarlo vuelve con él a la máquina.
+	if estado == "terminado" {
+		if err := s.StockDeLaPlacaChica(ctx, ses, id); err != nil {
+			return "", err
+		}
+	}
 	texto := map[string]string{"en-cola": "volvió a la cola", "en-proceso": "volvió a la máquina"}[anterior]
 	return numero + " " + texto + ".", nil
 }

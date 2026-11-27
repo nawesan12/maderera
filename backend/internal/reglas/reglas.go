@@ -38,6 +38,8 @@ const (
 	AsientoSinCAE = "asiento_sin_cae"
 	// H019: el material de un corte por debajo de la media placa.
 	CorteChicoMaterial = "corte_chico_material"
+	// M3S4-016 (00391): el stock de la placa de la casa de ese corte.
+	CorteChicoStock = "corte_chico_stock"
 	// H037: cuándo la lista del cliente obliga a pagar de contado.
 	ContadoPorLista = "contado_por_lista"
 	// H168: si el descuento por medio de pago alcanza al flete.
@@ -67,6 +69,7 @@ var Opciones = map[string][]string{
 	ExcedenteCuentaCorriente:    {"circuito_b", "anticipos"},
 	AsientoSinCAE:               {"al_cae", "transitoria"},
 	CorteChicoMaterial:          {"sin_cargo", "cobrar"},
+	CorteChicoStock:             {"no_mueve", "descuenta"},
 	ContadoPorLista:             {"con_ventaja", "siempre"},
 	DescuentoAlFlete:            {"no", "si"},
 	FacturaAlMonotributista:     {"a", "b"},

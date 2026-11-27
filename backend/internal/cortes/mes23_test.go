@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"mjbj/internal/reglas"
 )
 
 // Las pruebas del mes simulado 2–3 (rama mes23-cortes-taller).
@@ -181,6 +183,59 @@ func TestLaPlacaDelClienteCobraSusPasadas(t *testing.T) {
 	}
 	if c := leerFicha(t, e, ven, id)["cuenta"].(map[string]any); c["precioPorPasada"].(float64) != 1500 {
 		t.Errorf("con su tarifa: %v", c["precioPorPasada"])
+	}
+}
+
+// M3S4-016: la regla corte_chico_stock. Con «no_mueve» (la de arranque) el
+// corte chico no toca el stock; con «descuenta» la placa sale al terminarlo
+// y vuelve si se devuelve a la máquina.
+func TestElStockDeLaPlacaChica(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	ven := e.staff(t, "vendedor@prueba.test", "vendedor")
+	if _, err := e.pool.Exec(ctx, `insert into inventory (variant_id, branch_id, qty, min_qty) values ($1, $2, 10, 0)`, e.melamina, e.central); err != nil {
+		t.Fatal(err)
+	}
+	stock := func() float64 {
+		var n float64
+		if err := e.pool.QueryRow(ctx, `select qty::float8 from inventory where variant_id = $1 and branch_id = $2`, e.melamina, e.central).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	u := e.srv.URL + "/api/v1/admin/cortes/"
+	paso := func(id, que, desde string) {
+		if code, b := pedir(t, ven, "POST", u+id+"/"+que+"?desde="+desde, nil); code != 200 {
+			t.Fatalf("%s desde %s: %d %s", que, desde, code, b)
+		}
+	}
+	chico := func() string {
+		return alta(t, e, ven, melamina(e, "branchId", e.central, "piezas", []any{pieza(600, 300, 3)}))
+	}
+
+	uno := chico()
+	paso(uno, "avanzar", "en-cola")
+	paso(uno, "avanzar", "en-proceso")
+	if n := stock(); n != 10 {
+		t.Errorf("no_mueve: el stock quedó en %v", n)
+	}
+
+	if err := reglas.Fijar(ctx, e.pool, reglas.CorteChicoStock, "descuenta"); err != nil {
+		t.Fatal(err)
+	}
+	dos := chico()
+	paso(dos, "avanzar", "en-cola")
+	paso(dos, "avanzar", "en-proceso")
+	if n := stock(); n != 9 {
+		t.Errorf("descuenta: el stock quedó en %v", n)
+	}
+	paso(dos, "volver", "terminado")
+	if n := stock(); n != 10 {
+		t.Errorf("vuelto a la máquina: %v", n)
+	}
+	paso(dos, "avanzar", "en-proceso")
+	if n := stock(); n != 9 {
+		t.Errorf("terminado otra vez: %v", n)
 	}
 }
 

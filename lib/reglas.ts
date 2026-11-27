@@ -11,6 +11,7 @@ export const OPCIONES_DE_REGLAS = {
   excedente_cuenta_corriente: ["circuito_b", "anticipos"],
   asiento_sin_cae: ["al_cae", "transitoria"],
   corte_chico_material: ["sin_cargo", "cobrar"],
+  corte_chico_stock: ["no_mueve", "descuenta"],
   contado_por_lista: ["con_ventaja", "siempre"],
   descuento_al_flete: ["no", "si"],
   factura_al_monotributista: ["a", "b"],

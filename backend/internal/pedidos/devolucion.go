@@ -9,7 +9,9 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/auth"
+	"mjbj/internal/caja"
 	"mjbj/internal/entregas"
+	"mjbj/internal/facturacion"
 	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/numeracion"
@@ -56,11 +58,49 @@ type DevolucionDelPedido struct {
 	Repetida bool    `json:"repetida,omitempty"`
 }
 
+// topeDeLoCobrado: por caja no sale más que lo cobrado en efectivo, y por
+// afuera no más que lo cobrado con los otros medios (sin la cuenta), menos
+// lo que ya se devolvió por ahí. El que pagó con tarjeta no se lleva
+// efectivo.
+func topeDeLoCobrado(ctx context.Context, tx pgx.Tx, pedido, porDonde string, total float64) error {
+	var cobrado, devuelto float64
+	medio := `op.medio = 'efectivo'`
+	if porDonde == "afuera" {
+		medio = `op.medio NOT IN ('efectivo', 'cuenta_corriente')`
+	}
+	if err := tx.QueryRow(ctx, `SELECT coalesce((SELECT sum(op.importe) FROM order_payments op WHERE op.order_id = $1 AND `+medio+`), 0)::float8,
+		coalesce((SELECT sum(d.importe) FROM devoluciones d WHERE d.order_id = $1 AND d.destino = $2), 0)::float8`, pedido, porDonde).Scan(&cobrado, &devuelto); err != nil {
+		return err
+	}
+	queda := jsmath.Redondear2(cobrado - devuelto)
+	if total > queda+0.005 {
+		if porDonde == "caja" {
+			return fallo("En efectivo se cobraron " + formato.Importe(queda) + ": lo demás vuelve por el medio de pago.")
+		}
+		return fallo("Por el medio de pago quedan " + formato.Importe(queda) + ".")
+	}
+	return nil
+}
+
 // MsjDevolverDesdeLaFactura es el 422 de un pedido facturado.
+
 const MsjDevolverDesdeLaFactura = "Está facturado: la devolución sale desde la factura, con su nota de crédito."
 
 // DevolverSinFactura hace la devolución de un pedido sin factura.
 func (s *Servicio) DevolverSinFactura(ctx context.Context, ses *auth.Sesion, pedido string, renglones []RenglonDevuelto, motivo, clave string) (*DevolucionDelPedido, error) {
+	return s.DevolverSinFacturaPor(ctx, ses, pedido, renglones, motivo, clave, "")
+}
+
+// DevolverSinFacturaPor es DevolverSinFactura con la plata por donde se
+// elige: "" (la cuenta o lo que falta cobrar, como siempre), "caja" (sale
+// efectivo del turno abierto de la sucursal del pedido, hasta lo cobrado en
+// efectivo) o "afuera" (vuelve por el medio con que se cobró: el posnet o el
+// banco). La venta del mostrador sin factura ya cobrada no tenía cómo
+// devolverse una parte: había que anularla entera (mes simulado, M3S2-060).
+func (s *Servicio) DevolverSinFacturaPor(ctx context.Context, ses *auth.Sesion, pedido string, renglones []RenglonDevuelto, motivo, clave, porDonde string) (*DevolucionDelPedido, error) {
+	if porDonde != "" && porDonde != "caja" && porDonde != "afuera" {
+		return nil, plataforma.Invalido(map[string]string{"destino": "Elegí por dónde vuelve la plata."})
+	}
 	motivo = zodjs.TrimJS(motivo)
 	if motivo == "" {
 		return nil, plataforma.Invalido(map[string]string{"motivo": "Escribí por qué devuelve."})
@@ -201,7 +241,12 @@ func (s *Servicio) DevolverSinFactura(ctx context.Context, ses *auth.Sesion, ped
 		}
 
 		destino := "deuda"
-		if aCuenta {
+		if porDonde != "" {
+			destino = porDonde
+			if err := topeDeLoCobrado(ctx, tx, pedido, porDonde, total); err != nil {
+				return err
+			}
+		} else if aCuenta {
 			destino = "cuenta"
 		} else {
 			var falta float64
@@ -217,9 +262,16 @@ func (s *Servicio) DevolverSinFactura(ctx context.Context, ses *auth.Sesion, ped
 			}
 		}
 
-		if err := tx.QueryRow(ctx, `INSERT INTO devoluciones (clave, order_id, importe, destino, motivo, created_by_user_id)
-			VALUES ($1, $2, $3::numeric, $4, $5, $6) RETURNING id::text`,
-			clave, pedido, jsmath.Fijo2(total), destino, motivo, ses.UserID).Scan(&out.ID); err != nil {
+		// Con la plata por caja o por afuera la pide el mostrador: es del
+		// puesto (el cierre Z la cuenta).
+		origen := "panel"
+		if porDonde != "" {
+			origen = "mostrador"
+		}
+		if err := tx.QueryRow(ctx, `INSERT INTO devoluciones (clave, order_id, importe, destino, motivo, created_by_user_id, origen)
+			VALUES ($1, $2, $3::numeric, $4, $5, $6, $7) RETURNING id::text`,
+			clave, pedido, jsmath.Fijo2(total), destino, motivo, ses.UserID, origen).Scan(&out.ID); err != nil {
+
 			return err
 		}
 		for _, v := range vueltas {
@@ -263,7 +315,43 @@ func (s *Servicio) DevolverSinFactura(ctx context.Context, ses *auth.Sesion, ped
 		}
 
 		// La plata.
-		if destino == "cuenta" {
+		if destino == "caja" || destino == "afuera" {
+			nombre := "Devolución " + p.numero
+			if destino == "caja" {
+				if sucursal == nil {
+					return fallo("El pedido no tiene sucursal: no se sabe de qué caja sale.")
+				}
+				turno, hay, err := caja.TurnoAbiertoDe(ctx, tx, *sucursal)
+				if err != nil {
+					return err
+				}
+				if !hay {
+					return fallo("No hay caja abierta en la sucursal: abrila para devolver en efectivo.")
+				}
+				var mov string
+				if err := tx.QueryRow(ctx, `INSERT INTO cash_movements (session_id, tipo, monto, motivo, order_id, creado_por)
+					VALUES ($1, 'devolucion', $2::numeric, $3, $4, $5) RETURNING id::text`,
+					turno, jsmath.Fijo2(-total), nombre+": "+motivo, pedido, ses.UserID).Scan(&mov); err != nil {
+					return err
+				}
+				if _, err := tx.Exec(ctx, `UPDATE devoluciones SET cash_movement_id = $2, branch_id = $3 WHERE id = $1`, out.ID, mov, *sucursal); err != nil {
+					return err
+				}
+			} else if sucursal != nil {
+				if _, err := tx.Exec(ctx, `UPDATE devoluciones SET branch_id = $2 WHERE id = $1`, out.ID, *sucursal); err != nil {
+					return err
+				}
+			}
+			// El tramo en el cobro: el cierre asienta el reintegro y la
+			// anulación posterior no devuelve dos veces.
+			falta, err := facturacion.TramosDeLosPagos(ctx, tx, pedido, out.ID, total, nombre, destino == "caja")
+			if err != nil {
+				return err
+			}
+			if falta > 0.005 {
+				return fallo("Los cobros de esta venta no alcanzan para devolver " + formato.Importe(total) + ".")
+			}
+		} else if destino == "cuenta" {
 			var mov string
 			if err := tx.QueryRow(ctx, `INSERT INTO account_movements (customer_id, tipo, monto, detalle, referencia, created_by_user_id)
 				VALUES ($1, 'nota_credito', $2::numeric, $3, $4, $5) RETURNING id::text`, *p.customerID, jsmath.Fijo2(-total),

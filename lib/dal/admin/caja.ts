@@ -27,6 +27,7 @@ export async function turnosCerrados(periodo: string, pagina = 1, porPagina = 30
   );
   return {
     total: r.total,
+    primerMes: r.primerMes ?? null,
     filas: r.filas.map((t) => ({
       ...t,
       abiertaAt: new Date(t.abiertaAt),

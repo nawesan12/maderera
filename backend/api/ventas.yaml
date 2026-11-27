@@ -746,6 +746,8 @@ components:
         cobrado, aCobrar, recibos, comprobante, acopio, facturado]
       properties:
         facturado: { type: boolean, description: Tiene una factura viva }
+        efectivoRecibido: { type: number, format: double, nullable: true, description: "con cuánto pagó en efectivo en el mostrador (el vuelto del ticket)" }
+        facturaId: { type: string, nullable: true, description: "la factura viva de la venta: el papel que vale" }
         acopio: { type: boolean, description: Se retira de a partes (ya salió algo, o es la venta del mostrador en acopio) }
         cobrado: { type: number, format: double, description: Lo cobrado con recibos y en línea }
         aCobrar: { type: number, format: double, description: El total menos lo devuelto contra la deuda }

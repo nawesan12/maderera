@@ -6,7 +6,9 @@ import { useRouter } from "next/navigation";
 import { VincularCaja } from "@/components/mostrador/vincular-caja";
 import { tarifaDeCorte, type TarifaDeCorte } from "@/lib/cortes/tarifa";
 import type { PromoVigente } from "@/lib/dal/contenido";
-import { formatearMonto, importeDelCampo } from "@/lib/formato";
+import { formatearMonto, importeDelCampo, importeIlegible, importeParaElCampo } from "@/lib/formato";
+import { medioPermitido } from "@/lib/precios/medio-pago";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { leerDocumento } from "@/lib/clientes/documento";
 import { borradorVale, duenoDelBorrador, type DuenoDelBorrador } from "@/lib/mostrador/borrador-del-corte";
 import type { Autorizacion } from "@/components/autorizacion/campo-pin";
@@ -18,6 +20,7 @@ import {
   totalDeLaVenta,
   vuelto,
   type LineaDeVenta,
+  type PagoDeVenta,
   type TipoDescuento,
   type MedioDeMostrador,
 } from "@/lib/mostrador/importes";
@@ -35,6 +38,7 @@ import {
 import {
   clientePorId,
   cobrarVenta,
+  corteParaCobrar,
   emitirPresupuestoDeMostrador,
   emitirRemitoDeVenta,
   letraDelComprobante,
@@ -75,6 +79,7 @@ import {
   type VentaDeHoy,
   type Cliente,
   type UltimaVenta,
+  type TurnoCerradoDelMostrador,
   papelDeLaVenta,
 } from "./tipos";
 
@@ -88,7 +93,24 @@ interface VentaGuardada {
   acopio: boolean;
   presupuesto: PresupuestoDeLaVenta | null;
   clave: string;
+  /*
+   * El papel, el CUIT, el descuento, la tarjeta, el cheque y el pago
+   * partido: con una recarga volvían el cliente y los renglones y la venta
+   * a un RI salía con comprobante, sin factura y sin aviso (mes simulado,
+   * M2S2-017). Opcionales: lo guardado antes no los trae.
+   */
+  comprobante?: "interno" | "fiscal";
+  cuit?: string;
+  tipoDesc?: TipoDescuento;
+  valorDesc?: string;
+  motivoDesc?: string;
+  tarjeta?: { nroLote: string; nroCupon: string; marca: string; cuotas: number };
+  cheque?: ChequeEnPantalla;
+  partes?: ParteDePago[] | null;
 }
+
+/** El corte de la cola sin venta que se cobra (desde su ficha o al rehacer). */
+type CorteTraido = NonNullable<Awaited<ReturnType<typeof corteParaCobrar>>>;
 
 /**
  * El presupuesto que armó la venta. Sin ficha, su nombre y teléfono pasan
@@ -127,7 +149,10 @@ export function VistaMostrador({
   escalasDePago,
   corteACobrar = null,
   reglas = REGLAS_DE_ARRANQUE,
+  ultimoCierre = null,
 }: {
+  /** El último turno cerrado hoy: su papel se reimprime desde la caja (M2S2-064). */
+  ultimoCierre?: TurnoCerradoDelMostrador | null;
   /** Las reglas del negocio que cambian la cuenta de la pantalla (/admin/reglas), las mismas que lee Go. */
   reglas?: ReglasDelMostrador;
   /**
@@ -162,29 +187,16 @@ export function VistaMostrador({
    * Un corte de la cola sin venta («paga al retirar»), traído desde su ficha
    * para cobrarlo: abre el corte cargado y la venta lo ata (H173).
    */
-  corteACobrar?: {
-    id: string;
-    numero: string;
-    customerId: string | null;
-    variantId: string;
-    material: string;
-    unidad: string;
-    precio: number;
-    largoMm: number | null;
-    anchoMm: number | null;
-    color: string | null;
-    categoria: string | null;
-    formaDeVenta: "entera" | "entera_o_media" | "metro_cuadrado";
-    precioMediaPct: number;
-    mitad: "largo" | "ancho" | null;
-    canto: string;
-    piezas: EstadoDelCorte["piezas"];
-    /** Las confirmadas en el taller: las que dice la ficha. */
-    pasadas: number;
-  } | null;
+  corteACobrar?: CorteTraido | null;
 }) {
   const router = useRouter();
   const [enviando, empezar] = useTransition();
+  /*
+   * El corte de la cola que se está cobrando. Arranca con el que trae la
+   * página (?corte=) y también lo pone «Rehacer»: el corte que no se cortó
+   * vuelve con su despiece (mes simulado, M2S3-047).
+   */
+  const [corteTraido, setCorteTraido] = useState<CorteTraido | null>(corteACobrar);
 
   /*
    * La copia local del catálogo.
@@ -209,19 +221,61 @@ export function VistaMostrador({
     useColaDelMostrador(sucursal.id);
 
   // Cuando la cola baja, lo que subió ya está en el servidor: la copia se
-  // pone al día y deja de descontarlo a mano.
+  // pone al día y deja de descontarlo a mano, y la caja se vuelve a leer: el
+  // chip y «Debería haber» quedaban sin esas ventas hasta recargar (mes
+  // simulado, M3S4-042).
   const { subioLaCola } = copia;
   const sinSubirAntes = useRef(cola.sinSubir);
   useEffect(() => {
-    if (cola.sinSubir < sinSubirAntes.current) subioLaCola();
+    if (cola.sinSubir < sinSubirAntes.current) {
+      subioLaCola();
+      router.refresh();
+    }
     sinSubirAntes.current = cola.sinSubir;
-  }, [cola.sinSubir, subioLaCola]);
+  }, [cola.sinSubir, subioLaCola, router]);
+
+  /*
+   * El turno con lo que espera en la cola: esa plata ya está en el cajón. El
+   * chip y el panel seguían en lo de antes de cortarse internet (M2S1-086).
+   */
+  const turnoConCola = useMemo(() => {
+    if (!turno) return null;
+    const { ventas: v, ingresos, retiros } = cola.efectivo;
+    if (v === 0 && ingresos === 0 && retiros === 0) return turno;
+    return {
+      ...turno,
+      esperado: Math.round((turno.esperado + v + ingresos + retiros) * 100) / 100,
+      ventasEnEfectivo: Math.round((turno.ventasEnEfectivo + v) * 100) / 100,
+      otrosIngresos: Math.round((turno.otrosIngresos + ingresos) * 100) / 100,
+      retiros: Math.round((turno.retiros + retiros) * 100) / 100,
+    };
+  }, [turno, cola.efectivo]);
 
   const [lineas, setLineas] = useState<LineaDeVenta[]>([]);
   const [clave, setClave] = useState(claveNueva);
   const [cliente, setCliente] = useState<Cliente | null>(null);
   /** El presupuesto que armó la venta (se tipeó su número en el buscador). */
   const [presupuesto, setPresupuesto] = useState<PresupuestoDeLaVenta | null>(null);
+  /*
+   * Se intentó cobrar este carrito (lo frenó el PIN, «Faltan», un dato que
+   * falta): el carrito ya es de alguien, y elegir otro cliente pregunta.
+   */
+  const [intentado, setIntentado] = useState(false);
+  /** El saldo del cliente elegido (negativo: a favor), para saber si se le puede anotar. */
+  const [saldoDelCliente, setSaldoDelCliente] = useState<{ de: string; monto: number } | null>(null);
+
+  /** El otro cliente elegido con el carrito de otra venta: se pregunta. */
+  const [porCambiar, setPorCambiar] = useState<Cliente | null>(null);
+  /** Go dijo que es igual a una venta de recién al mismo cliente (M3S4-015). */
+  const [repetida, setRepetida] = useState<string | null>(null);
+  /** La clave del presupuesto de este carrito: el doble toque no emite dos (M3S2-050). */
+  const [clavePresupuesto, setClavePresupuesto] = useState(claveNueva);
+  /*
+   * A nombre de quién sale la venta sin ficha: el del presupuesto traído o el
+   * que se anotó con el corte de la cola (mes simulado, M3S4-041).
+   */
+  const contactoSinFicha = presupuesto?.contacto ?? corteTraido?.contacto ?? null;
+  const telefonoSinFicha = presupuesto?.telefono ?? corteTraido?.telefono ?? null;
   const [medio, setMedio] = useState<MedioDeMostrador>("efectivo");
   const [recibido, setRecibido] = useState("");
   const [aviso, setAviso] = useState<Aviso | null>(null);
@@ -298,23 +352,7 @@ export function VistaMostrador({
   const [cortes, setCortes] = useState<CorteEnLaVenta<EstadoDelCorte, ResultadoDeMostrador>[]>([]);
   /** La placa elegida para cortar, mientras el diálogo está abierto. */
   const [cortando, setCortando] = useState<ResultadoDeMostrador | null>(() =>
-    corteACobrar
-      ? {
-          variantId: corteACobrar.variantId,
-          sku: corteACobrar.numero,
-          producto: corteACobrar.material,
-          medida: "",
-          unidad: corteACobrar.unidad,
-          precio: corteACobrar.precio,
-          stock: 0,
-          largoMm: corteACobrar.largoMm,
-          anchoMm: corteACobrar.anchoMm,
-          color: corteACobrar.color,
-          categoria: corteACobrar.categoria,
-          formaDeVenta: corteACobrar.formaDeVenta,
-          precioMediaPct: corteACobrar.precioMediaPct,
-        }
-      : null,
+    corteACobrar ? placaDelCorte(corteACobrar) : null,
   );
   /** El corte de la cola que se está cobrando (H173): se ata al cobrar. */
   const [corteExistente, setCorteExistente] = useState<string | null>(corteACobrar?.id ?? null);
@@ -359,6 +397,26 @@ export function VistaMostrador({
   const [acopio, setAcopio] = useState(false);
 
   /*
+   * Los datos de la terminal para un pago con tarjeta: lote, cupón y qué
+   * tarjeta. Son el "código de que se pagó con qué" que pide el contador.
+   */
+  const [tarjeta, setTarjeta] = useState({
+    nroLote: "",
+    nroCupon: "",
+    marca: "",
+    cuotas: 1,
+  });
+  /** El cheque de un pago de un solo medio. En el pago partido va por renglón. */
+  const [cheque, setCheque] = useState<ChequeEnPantalla>(CHEQUE_VACIO);
+
+  /*
+   * El pago partido: null es "todo por el medio elegido", que es la venta de
+   * siempre. Activado, cada renglón dice medio e importe y la suma tiene que
+   * dar el total al centavo.
+   */
+  const [partes, setPartes] = useState<ParteDePago[] | null>(null);
+
+  /*
    * La venta a medio cargar sobrevive a una recarga (ver
    * `lib/mostrador/venta-en-curso.ts`). Se lee después de montar —el servidor
    * no tiene el navegador— y una venta que llega de un corte de la cola no se
@@ -379,6 +437,17 @@ export function VistaMostrador({
       setAcopio(v.acopio);
       setPresupuesto(v.presupuesto);
       setClave(v.clave);
+      // El papel guardado, o el que corresponde al cliente: quien no es
+      // consumidor final se lleva factura (como al elegirlo).
+      if (v.comprobante) setComprobante(v.comprobante);
+      else if (v.cliente && v.cliente.condicionIva !== "consumidor_final") setComprobante("fiscal");
+      if (v.cuit) setCuit(v.cuit);
+      if (v.tipoDesc) setTipoDesc(v.tipoDesc);
+      if (v.valorDesc) setValorDesc(v.valorDesc);
+      if (v.motivoDesc) setMotivoDesc(v.motivoDesc);
+      if (v.tarjeta) setTarjeta(v.tarjeta);
+      if (v.cheque) setCheque(v.cheque);
+      if (v.partes) setPartes(v.partes);
     });
   }, [corteACobrar, sucursal.id]);
   useEffect(() => {
@@ -387,29 +456,14 @@ export function VistaMostrador({
       sucursal.id,
       lineas.length === 0 && cortes.length === 0
         ? null
-        : { lineas, cortes, cliente, medio, acopio, presupuesto, clave },
+        : {
+            lineas, cortes, cliente, medio, acopio, presupuesto, clave,
+            comprobante, cuit, tipoDesc, valorDesc, motivoDesc, tarjeta, cheque, partes,
+          },
     );
-  }, [sucursal.id, lineas, cortes, cliente, medio, acopio, presupuesto, clave]);
+  }, [sucursal.id, lineas, cortes, cliente, medio, acopio, presupuesto, clave, comprobante, cuit, tipoDesc, valorDesc, motivoDesc, tarjeta, cheque, partes]);
 
-  /*
-   * Los datos de la terminal para un pago con tarjeta: lote, cupón y qué
-   * tarjeta. Son el "código de que se pagó con qué" que pide el contador.
-   */
-  const [tarjeta, setTarjeta] = useState({
-    nroLote: "",
-    nroCupon: "",
-    marca: "",
-    cuotas: 1,
-  });
-  /** El cheque de un pago de un solo medio. En el pago partido va por renglón. */
-  const [cheque, setCheque] = useState<ChequeEnPantalla>(CHEQUE_VACIO);
 
-  /*
-   * El pago partido: null es "todo por el medio elegido", que es la venta de
-   * siempre. Activado, cada renglón dice medio e importe y la suma tiene que
-   * dar el total al centavo.
-   */
-  const [partes, setPartes] = useState<ParteDePago[] | null>(null);
 
   /*
    * El PIN pedido y la ficha valen para la venta como estaba cuando Go los
@@ -488,15 +542,29 @@ export function VistaMostrador({
   // La escala que el pago partido dejó sin correr, para decirlo al lado del total.
   const escalaSinCorrer =
     partidoEnMedios && descuentoManual <= 0 ? descuentoPorMedioDePago(escalasDePago, medio, baseEscala) : null;
-  const descuento =
-    descuentoManual > 0
-      ? descuentoManual
-      : escalaDePago
-        ? montoDelDescuentoDePago(baseEscala, escalaDePago.porcentaje)
-        : 0;
-  const motivoDelDescuento =
-    descuentoManual > 0 ? motivoDesc : (escalaDePago?.etiqueta ?? "");
-  const total = useMemo(() => subtotal - descuento, [subtotal, descuento]);
+  // Con la regla descuento_con_escala en «suma», el tipeado va además del de
+  // la forma de pago; en «reemplaza», el de la forma de pago se ve tachado
+  // (mes simulado, M2S2-018). Las dos cuentas son las de Go.
+  const montoEscala = escalaDePago ? montoDelDescuentoDePago(baseEscala, escalaDePago.porcentaje) : 0;
+  const sumaEscala = reglas.descuentoSuma && descuentoManual > 0 && montoEscala > 0;
+  const escalaReemplazada = !reglas.descuentoSuma && descuentoManual > 0 && escalaDePago ? escalaDePago.etiqueta : null;
+  const descuentoSinRedondeo = descuentoManual > 0 ? (sumaEscala ? descuentoManual + montoEscala : descuentoManual) : montoEscala;
+  // Con la regla redondeo_efectivo en «al_peso», lo que se paga todo en
+  // efectivo va sin centavos, a favor del cliente (M2S1-180).
+  const totalSinRedondeo = Math.round((subtotal - descuentoSinRedondeo) * 100) / 100;
+  const redondeo =
+    reglas.redondeoAlPeso && medio === "efectivo" && !partes && totalSinRedondeo > 1
+      ? Math.round((totalSinRedondeo - Math.floor(totalSinRedondeo)) * 100) / 100
+      : 0;
+  const descuento = Math.round((descuentoSinRedondeo + redondeo) * 100) / 100;
+  const motivoDelDescuento = [
+    descuentoManual > 0 ? motivoDesc : "",
+    descuentoManual <= 0 || sumaEscala ? (escalaDePago?.etiqueta ?? "") : "",
+    redondeo > 0 ? "redondeo" : "",
+  ]
+    .filter(Boolean)
+    .join(" + ");
+  const total = useMemo(() => Math.round((subtotal - descuento) * 100) / 100, [subtotal, descuento]);
   /*
    * Lo que va a pedir el PIN, avisado mientras se carga y no al cobrar: con la
    * misma regla que Go (ventas.DesvioDeLaVenta), el total se pone naranja y
@@ -663,11 +731,14 @@ export function VistaMostrador({
         lineas,
         cortes,
         cliente,
-        contacto: presupuesto?.contacto,
+        contacto: contactoSinFicha,
         medio,
         pagosDeLaVenta,
         acopio,
         cuit,
+        comprobante,
+        recibido: recibido.trim() !== "" && !importeIlegible(recibido) ? importeDelCampo(recibido) : null,
+
         descuento,
         motivoDelDescuento,
         descuentoManual,
@@ -685,6 +756,11 @@ export function VistaMostrador({
     setBorradorDelCorte(null);
     setALista(false);
     setCorteExistente(null);
+    setCorteTraido(null);
+    setIntentado(false);
+    setRepetida(null);
+    setPorCambiar(null);
+    setClavePresupuesto(claveNueva());
     setPresupuesto(null);
     setLineas([]);
     setCliente(null);
@@ -728,7 +804,18 @@ export function VistaMostrador({
     if (campo) requestAnimationFrame(() => enfocar(campo));
   }
 
+  /*
+   * Un medio que la lista del cliente no admite (crédito, cheque) pasa la
+   * venta a precio de lista y lo elige: quedaba marcado, gris, y Cobrar no
+   * hacía nada (mes simulado, M3S4-017).
+   */
+  function elegirMedioOLista(m: MedioDeMostrador) {
+    if (listaDeContado && conListaPropia && !medioPermitido(m, true)) void alternarALista();
+    elegirMedio(m);
+  }
+
   /** Contado, cuenta corriente o acopio: el medio de pago se acomoda solo. */
+
   function elegirTipo(t: TipoDeOperacion) {
     if (t === "acopio") {
       setAcopio(true);
@@ -787,7 +874,25 @@ export function VistaMostrador({
    * No se pisan solos. Quien atiende puede haber tocado un precio a mano, y
    * cambiárselo por atrás es peor que no hacer nada: se avisa y se ofrece.
    */
-  async function alElegirCliente(nuevo: Cliente | null) {
+  async function alElegirCliente(nuevo: Cliente | null, sinPreguntar = false) {
+    /*
+     * Otro cliente con lo de otra venta en el carrito: se pregunta. Pasaba
+     * después de un cobro frenado (el PIN, «Faltan») o con otro cliente ya
+     * elegido, y la venta salía con los productos del anterior (mes
+     * simulado, M2S3-049, M3S1-024 y M3S2-032). Identificar al cliente
+     * después de cargar —lo normal— no pregunta.
+     */
+    if (
+      !sinPreguntar &&
+      nuevo &&
+      lineas.length > 0 &&
+      nuevo.id !== cliente?.id &&
+      (cliente !== null || intentado || pidePin !== null)
+    ) {
+      setPorCambiar(nuevo);
+      return;
+    }
+    setPorCambiar(null);
     setCliente(nuevo);
     setALista(false);
     // El corte a medio cargar era para el otro: con otro cliente no vuelve.
@@ -934,6 +1039,101 @@ export function VistaMostrador({
     !aLista &&
     (reglas.contadoSiempre || !(ventajaDeLista?.clave === claveDeVentaja && !ventajaDeLista.hay && idsDeLaVenta.length > 0));
 
+  // Un medio que la lista no admite quedaba marcado, gris, y Cobrar no
+  // hacía nada (M3S4-017): no se cobra, y Ctrl+Enter lleva a «A precio de
+  // lista».
+  const medioBloqueado =
+    listaDeContado &&
+    (partes === null
+      ? !medioPermitido(medio, true)
+      : partes.some((p) => importeDelCampo(p.importe) > 0 && !medioPermitido(p.medio, true)));
+
+  /*
+   * La cuenta corriente que no se puede usar: bloqueada, o un cliente sin
+   * límite y sin saldo a favor. Se elegía y al cobrar hablaba del saldo a
+   * favor (mes simulado, M2S4-061, M3S2-031 y M3S3-050).
+   */
+  const saldoAFavor = saldoDelCliente && saldoDelCliente.de === cliente?.id && saldoDelCliente.monto < 0;
+  const cuentaNoDisponible = !cliente
+    ? null
+    : cliente.cuentaBloqueada
+      ? `La cuenta corriente de ${cliente.nombre} está bloqueada.`
+      : cliente.limiteCredito === 0 && !saldoAFavor
+        ? `${cliente.nombre} no tiene cuenta corriente.`
+        : null;
+  const usaLaCuenta =
+    medio === "cuenta_corriente" || (partes?.some((p) => p.medio === "cuenta_corriente" && importeDelCampo(p.importe) > 0) ?? false);
+  const sePuedeCobrar = puedeCobrar && !medioBloqueado && !(usaLaCuenta && cuentaNoDisponible !== null);
+
+  // Lo que cobró otra persona y entró a este cajón (un recibo desde el
+  // panel): se ve en el chip de la caja (M2S2-063).
+  const deOtros = useMemo(() => {
+    const suyos = movimientos.filter((m) => m.otroPuesto && m.monto > 0);
+    if (suyos.length === 0) return null;
+    return { monto: suyos.reduce((s, m) => s + m.monto, 0), quien: [...new Set(suyos.map((m) => m.quien).filter(Boolean))].join(", ") };
+  }, [movimientos]);
+
+  /*
+   * «Rehacer»: los renglones, el cliente, el papel y cómo pagó, con la
+   * tarjeta y el cheque; y el corte que quedó en la cola, abierto con su
+   * despiece. Volvían los renglones solos (mes simulado, M2S1-178, M2S2-133,
+   * M2S3-047 y M3S2-060).
+   */
+  async function rehacer(
+    renglones: LineaDeVenta[],
+    conCorte: boolean,
+    venta: VentaDeHoy,
+    datos?: { customerId: string | null; comprobante: "interno" | "fiscal" | null; pagos: PagoDeVenta[]; cortes: string[] },
+  ) {
+    setLineas((prev) => [...prev, ...renglones]);
+    setCaja(false);
+    setCajaParaCobrar(false);
+    setAcopio(venta.estado === "listo");
+    if (datos?.customerId) {
+      const c = await clientePorId(datos.customerId);
+      if (c) await alElegirCliente({ ...c, estado: c.estado ?? "activo" } as Cliente, true);
+    }
+    if (datos?.comprobante) setComprobante(datos.comprobante);
+    const pagos = datos?.pagos ?? [];
+    if (pagos.length > 1) {
+      setPartes(
+        pagos.map((p) => ({
+          medio: p.medio,
+          importe: importeParaElCampo(p.importe),
+          nroLote: p.nroLote ?? "",
+          nroCupon: p.nroCupon ?? "",
+          tarjeta: p.tarjeta ?? "",
+          cuotas: p.cuotas ?? 1,
+          ...(p.cheque ? { cheque: aChequeEnPantalla(p.cheque) } : {}),
+        })),
+      );
+    } else {
+      /* La venta rehecha sale como la anulada: a cuenta sigue a cuenta, y no
+         vuelve a contado con el descuento de efectivo (mes simulado, H269). */
+      const p = pagos[0];
+      const medioAnterior = p?.medio ?? (MEDIOS.find((m) => m.valor === venta.medioPago)?.valor ?? null);
+      if (medioAnterior) {
+        setPartes(null);
+        setMedio(medioAnterior);
+      }
+      if (p && (p.medio === "debito" || p.medio === "credito")) {
+        setTarjeta({ nroLote: p.nroLote ?? "", nroCupon: p.nroCupon ?? "", marca: p.tarjeta ?? "", cuotas: p.cuotas ?? 1 });
+      }
+      if (p?.cheque) setCheque(aChequeEnPantalla(p.cheque));
+    }
+    const corte = datos?.cortes[0];
+    if (corte) {
+      const c = await corteParaCobrar(corte);
+      if (c) {
+        traerCorte(c);
+        return;
+      }
+    }
+    if (conCorte) setAviso({ tipo: "error", texto: "El corte de esa venta se vuelve a armar." });
+    // Rehacer es casi siempre cambiarle el cliente: el cursor va ahí.
+    requestAnimationFrame(() => enfocar("cliente"));
+  }
+
   /** Pasa la venta a la lista general (y vuelve), con los precios de esa lista. */
   async function alternarALista() {
     const nuevo = !aLista;
@@ -951,18 +1151,28 @@ export function VistaMostrador({
     );
   }
 
-  // El cliente del corte traído, si tiene: se busca una vez al abrir.
-  const clienteDelCorte = corteACobrar?.customerId ?? null;
+  // El cliente del corte traído, si tiene: se busca al traerlo, y entra como
+  // si se lo eligiera (su lista y su factura). Ponerlo a mano lo perdía en el
+  // camino y la venta salía a Consumidor final (mes simulado, M2S2-062).
+  const clienteDelCorte = corteTraido?.customerId ?? null;
+  const elegirClienteDelCorte = useEffectEvent((c: Cliente) => void alElegirCliente(c, true));
   useEffect(() => {
     if (!clienteDelCorte) return;
     let vigente = true;
     void clientePorId(clienteDelCorte).then((c) => {
-      if (vigente && c) setCliente({ ...c, estado: c.estado ?? "activo" } as Cliente);
+      if (vigente && c) elegirClienteDelCorte({ ...c, estado: c.estado ?? "activo" } as Cliente);
     });
     return () => {
       vigente = false;
     };
   }, [clienteDelCorte]);
+
+  /** Abre el corte de la cola con su despiece, para atarlo a esta venta. */
+  function traerCorte(c: CorteTraido) {
+    setCorteTraido(c);
+    setCorteExistente(c.id);
+    setCortando(placaDelCorte(c));
+  }
 
   function aplicarPrecios() {
     if (!otrosPrecios) return;
@@ -978,8 +1188,10 @@ export function VistaMostrador({
     setOtrosPrecios(null);
   }
 
-  function cobrar(pin?: string) {
+  function cobrar(pin?: string, repetidaOk = false) {
     setAviso(null);
+    setIntentado(true);
+    setRepetida(null);
 
     // Con el pago partido, la suma tiene que dar el total antes de cobrar.
     if (partes && Math.abs(restanteDePartes) > 0.01) {
@@ -1028,8 +1240,12 @@ export function VistaMostrador({
           branchId: sucursal.id,
           lineas: conLosCortes.lineas,
           customerId: cliente?.id ?? null,
-          contactoNombre: cliente?.nombre ?? (presupuesto?.contacto || "Consumidor final"),
-          ...(!cliente && presupuesto?.telefono ? { contactoTelefono: presupuesto.telefono } : {}),
+          contactoNombre: cliente?.nombre ?? (contactoSinFicha || "Consumidor final"),
+          ...(!cliente && telefonoSinFicha ? { contactoTelefono: telefonoSinFicha } : {}),
+          ...(medio === "efectivo" && !partes && recibido.trim() !== "" && !importeIlegible(recibido)
+            ? { efectivoRecibido: importeDelCampo(recibido) }
+            : {}),
+          ...(repetidaOk ? { repetidaOk: true } : {}),
           medioPago: medio,
           pagos: pagosDeLaVenta(),
           acopio,
@@ -1053,6 +1269,11 @@ export function VistaMostrador({
       }
 
       if (r.ficha) setFicha(r.ficha);
+      if (r.repetida) {
+        // Igual a una de recién al mismo cliente: se pregunta en el lugar del botón.
+        setRepetida(r.repetida);
+        return;
+      }
       if (r.autorizacion) {
         // Falta el PIN, o el que se tecleó no era: el campo aparece (o
         // tiembla) en el lugar del botón.
@@ -1086,11 +1307,15 @@ export function VistaMostrador({
       // Lo vendido de más tampoco: la venta está, y lo que falta hay que
       // pedirlo (H218).
       const avisos = [r.avisoFiscal, r.avisoStock].filter(Boolean).join(" ");
+      // El vuelto queda a la vista hasta la próxima venta: es lo que se
+      // cuenta con el cliente delante (mes simulado, M2S1-176).
+      const elVuelto = cambio !== null && cambio > 0 ? cambio : undefined;
       setAviso(
         avisos
-          ? { tipo: "error", texto: `${r.ok} ${avisos}` }
-          : { tipo: "ok", texto: r.ok ?? "Venta registrada." },
+          ? { tipo: "error", texto: `${r.ok} ${avisos}`, vuelto: elVuelto }
+          : { tipo: "ok", texto: r.ok ?? "Venta registrada.", vuelto: elVuelto },
       );
+
       if (r.numero && r.orderId) {
         setUltima({
           numero: r.numero,
@@ -1144,19 +1369,32 @@ export function VistaMostrador({
        * descuento depende de cómo pague.
        */
       const notas = notaDelPresupuesto({ descuento, descuentoManual, medio, motivo: motivoDelDescuento, total });
+      // La pestaña del PDF se abre con el toque: abierta después de esperar
+      // la respuesta, el navegador la dejaba en blanco (mes simulado,
+      // M3S2-050). Si falla, se cierra.
+      const pestana = window.open("about:blank", "_blank");
       const r = await emitirPresupuestoDeMostrador({
         branchId: sucursal.id,
         lineas,
         customerId: cliente?.id ?? null,
-        contactoNombre: cliente?.nombre ?? "Consumidor final",
+        contactoNombre: cliente?.nombre ?? (contactoSinFicha || "Consumidor final"),
+        ...(!cliente && telefonoSinFicha ? { contactoTelefono: telefonoSinFicha } : {}),
         notas,
+        clave: clavePresupuesto,
       });
       if (r.error) {
+        pestana?.close();
         setAviso({ tipo: "error", texto: r.error });
         return;
       }
       setAviso({ tipo: "ok", texto: r.ok ?? "Presupuesto emitido." });
-      if (r.quoteId) window.open(`/api/presupuestos/${r.quoteId}/pdf`, "_blank");
+      if (r.quoteId) {
+        const url = `/api/presupuestos/${r.quoteId}/pdf`;
+        if (pestana) pestana.location.href = url;
+        else window.open(url, "_blank");
+      } else {
+        pestana?.close();
+      }
     });
   }
 
@@ -1190,8 +1428,48 @@ export function VistaMostrador({
     volverDe("caja-para-cobrar");
   }
 
+  /*
+   * Ctrl+Enter sin poder cobrar lleva el cursor a lo que falta: no pasaba
+   * nada y los bordes rojos solos no decían dónde (mes simulado, M2S1-185 y
+   * M3S1-024). Es la misma lista de condiciones de `puedeCobrar`.
+   */
+  function irALoQueFalta() {
+    if (lineas.length === 0) return enfocar("buscador");
+    setIntentado(true);
+    const campo = (foco: string) => document.querySelector<HTMLElement>(`[data-foco="${foco}"]`);
+    const ir = (foco: string) => {
+      const el = campo(foco);
+      if (!el) return false;
+      el.focus();
+      if (el instanceof HTMLInputElement) el.select();
+      el.scrollIntoView({ block: "center" });
+      return true;
+    };
+    if (medioBloqueado && ir("a-lista")) return;
+    if (medio === "cuenta_corriente" && !cliente) return enfocar("cliente");
+    if (faltaRecibido > 0) return enfocar("recibido");
+    if (partes === null && (medio === "debito" || medio === "credito")) {
+      if (!tarjeta.nroLote.trim() && ir("lote")) return;
+      if (!tarjeta.nroCupon.trim() && ir("cupon")) return;
+    }
+    if (partes === null && medio === "cheque") {
+      const c = aChequeDePago(cheque);
+      if (c && !c.banco && ir("cheque-banco")) return;
+      if (c && !c.numero && ir("cheque-numero")) return;
+      if (c && !c.fechaPago && ir("cheque-fecha")) return;
+    }
+    if (partes !== null && Math.abs(restanteDePartes) > 0.01 && ir("parte")) return;
+    if ((faltaDocumento || cuitDeLaFichaMal) && ir("cuit")) return;
+  }
+
   /** Lo que hace Ctrl+Enter, y lo mismo el botón grande. */
-  const alCobrar = faltaCaja ? abrirCajaParaCobrar : puedeCobrar ? () => void cobrar() : undefined;
+  const alCobrar = faltaCaja
+    ? abrirCajaParaCobrar
+    : sePuedeCobrar
+      ? () => void cobrar()
+      : lineas.length > 0 && !enviando && !enPausa
+        ? irALoQueFalta
+        : undefined;
 
   /*
    * Ctrl+Enter en el buscador agrega la línea y cobra, **con la línea ya en la
@@ -1224,10 +1502,10 @@ export function VistaMostrador({
     cantidad: lineas.length > 0 ? () => enfocar("cantidad") : undefined,
     descuento: () => enfocar("descuento"),
     tipo: ciclarTipo,
-    medio1: () => elegirMedio(MEDIOS_DE_CONTADO[0].valor),
-    medio2: () => elegirMedio(MEDIOS_DE_CONTADO[1].valor),
-    medio3: () => elegirMedio(MEDIOS_DE_CONTADO[2].valor),
-    medio4: () => elegirMedio(MEDIOS_DE_CONTADO[3].valor),
+    medio1: () => elegirMedioOLista(MEDIOS_DE_CONTADO[0].valor),
+    medio2: () => elegirMedioOLista(MEDIOS_DE_CONTADO[1].valor),
+    medio3: () => elegirMedioOLista(MEDIOS_DE_CONTADO[2].valor),
+    medio4: () => elegirMedioOLista(MEDIOS_DE_CONTADO[3].valor),
     papel: () =>
       setComprobante((c) => (c === "interno" ? "fiscal" : "interno")),
     partir: partes === null ? partirElPago : () => setPartes(null),
@@ -1272,8 +1550,9 @@ export function VistaMostrador({
           usuario={usuario}
           sucursales={sucursales}
           sucursal={sucursal}
-          turno={hayTurno ? turno : null}
+          turno={hayTurno ? turnoConCola : null}
           cajaAbierta={hayTurno}
+          deOtros={hayTurno ? deOtros : null}
           onCaja={() => {
             setCajaParaCobrar(false);
             setCaja(true);
@@ -1343,7 +1622,17 @@ export function VistaMostrador({
             <Cobro
               branchId={sucursal.id}
               buscarClienteLocal={buscarClienteLocal}
-              sinFicha={cliente ? null : presupuesto?.contacto}
+              sinFicha={cliente ? null : contactoSinFicha}
+              onSaldo={(de, monto) => setSaldoDelCliente({ de, monto })}
+              cuentaNoDisponible={cuentaNoDisponible}
+              escalaReemplazada={escalaReemplazada}
+              repetida={repetida}
+              onCobrarRepetida={() => cobrar(undefined, true)}
+              onCancelarRepetida={() => {
+                setRepetida(null);
+                enfocar("buscador");
+              }}
+              onIrALoQueFalta={irALoQueFalta}
               listaDeContado={listaDeContado}
               loteObligatorio={reglas.loteObligatorio}
               aLista={aLista}
@@ -1370,7 +1659,7 @@ export function VistaMostrador({
               cuitMal={cuitDeLaFichaMal}
               letra={letraVisible}
               medio={medio}
-              onMedio={elegirMedio}
+              onMedio={elegirMedioOLista}
               recibido={recibido}
               onRecibido={setRecibido}
               cambio={cambio}
@@ -1380,7 +1669,7 @@ export function VistaMostrador({
               onAbrirCaja={abrirCajaParaCobrar}
               enviando={enviando}
               puede={lineas.length > 0}
-              puedeCobrar={puedeCobrar}
+              puedeCobrar={sePuedeCobrar}
               onCobrar={() => cobrar()}
               porAutorizar={porAutorizar}
               pidePin={pidePin}
@@ -1429,8 +1718,8 @@ export function VistaMostrador({
             inicial={
               corrigiendo
                 ? corrigiendo.estado
-                : corteExistente && corteACobrar && cortando.variantId === corteACobrar.variantId
-                  ? { piezas: corteACobrar.piezas, mitad: corteACobrar.mitad, canto: corteACobrar.canto, fijadas: [] }
+                : corteExistente && corteTraido && cortando.variantId === corteTraido.variantId
+                  ? { piezas: corteTraido.piezas, mitad: corteTraido.mitad, canto: corteTraido.canto, fijadas: [] }
                   : borradorDelCorte &&
                     borradorVale(borradorDelCorte, {
                       clave,
@@ -1444,10 +1733,10 @@ export function VistaMostrador({
             focoAlCerrar={focoAlCerrar("corte")}
             cliente={cliente?.nombre ?? null}
             confirmado={
-              corteExistente && corteACobrar && cortando.variantId === corteACobrar.variantId
+              corteExistente && corteTraido && cortando.variantId === corteTraido.variantId
                 ? {
-                    pasadas: corteACobrar.pasadas,
-                    piezas: corteACobrar.piezas.map((p) => ({
+                    pasadas: corteTraido.pasadas,
+                    piezas: corteTraido.piezas.map((p) => ({
                       largoMm: Number(p.largo) || 0,
                       anchoMm: Number(p.ancho) || 0,
                       cantidad: Number(p.cantidad) || 0,
@@ -1492,7 +1781,7 @@ export function VistaMostrador({
               // El corte traído de la cola se ata a la venta en vez de crear otro.
               const existente =
                 corrigiendo?.corte.existente ??
-                (corteExistente && corteACobrar && cortando.variantId === corteACobrar.variantId && !cortes.some((c) => c.corte.existente === corteExistente)
+                (corteExistente && corteTraido && cortando.variantId === corteTraido.variantId && !cortes.some((c) => c.corte.existente === corteExistente)
                   ? corteExistente
                   : null);
               const r = conElCorte(lineas, cortes, {
@@ -1527,30 +1816,49 @@ export function VistaMostrador({
           />
         )}
 
+        {/* Otro cliente con el carrito de otra venta: venta nueva o sumarlo
+            a esta (M2S3-049, M3S1-024, M3S2-032). */}
+        {porCambiar && (
+          <Dialog open onOpenChange={(abierto) => !abierto && setPorCambiar(null)}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="text-xl font-bold tracking-tight">{porCambiar.nombre}</DialogTitle>
+              </DialogHeader>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  autoFocus
+                  onClick={() => {
+                    const nuevo = porCambiar;
+                    limpiar();
+                    void alElegirCliente(nuevo, true);
+                  }}
+                  className="inline-flex h-14 min-w-0 flex-1 items-center justify-center rounded-xl bg-accion text-lg font-bold text-white transition-colors hover:bg-accion-hover"
+                >
+                  Venta nueva
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void alElegirCliente(porCambiar, true)}
+                  className="inline-flex h-14 min-w-0 flex-1 items-center justify-center rounded-xl border border-linea text-base font-semibold transition-colors hover:bg-hundida"
+                >
+                  Con lo cargado ({lineas.length})
+                </button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
+
         {caja && (
           <PanelDeCaja
             sucursal={sucursal}
-            turno={turno}
+            turno={turnoConCola}
+            ultimoCierre={ultimoCierre}
             fondoBase={fondoBase}
             ultimoContado={ultimoContado}
             cajaId={cajaFisica?.id ?? null}
-            onRehacer={(renglones, conCorte, venta) => {
-              setLineas((prev) => [...prev, ...renglones]);
-              /* La venta rehecha sale como la anulada: a cuenta sigue a
-                 cuenta, y no vuelve a contado con el descuento de efectivo
-                 (mes simulado, H269). Un pago partido se vuelve a partir. */
-              const medioAnterior = venta.medios && venta.medios.length > 1 ? null : MEDIOS.find((m) => m.valor === venta.medioPago);
-              if (medioAnterior) {
-                setPartes(null);
-                setMedio(medioAnterior.valor);
-              }
-              setAcopio(venta.estado === "listo");
-              setCaja(false);
-              setCajaParaCobrar(false);
-              if (conCorte) setAviso({ tipo: "error", texto: "El corte de esa venta se vuelve a armar." });
-              // Rehacer es casi siempre cambiarle el cliente: el cursor va ahí.
-              requestAnimationFrame(() => enfocar("cliente"));
-            }}
+            onRehacer={(renglones, conCorte, venta, datos) => void rehacer(renglones, conCorte, venta, datos)}
+
             cierre={cierre}
             movimientos={movimientos}
             ventas={ventas}
@@ -1578,6 +1886,34 @@ export interface ReglasDelMostrador {
   descuentoAlFlete: boolean;
   /** lote_y_cupon = «obligatorio». */
   loteObligatorio: boolean;
+  /** descuento_con_escala = «suma». */
+  descuentoSuma?: boolean;
+  /** redondeo_efectivo = «al_peso». */
+  redondeoAlPeso?: boolean;
 }
 
 const REGLAS_DE_ARRANQUE: ReglasDelMostrador = { contadoSiempre: false, descuentoAlFlete: false, loteObligatorio: true };
+
+/** La placa del corte de la cola, como un resultado del buscador para abrir el corte. */
+function placaDelCorte(c: CorteTraido): ResultadoDeMostrador {
+  return {
+    variantId: c.variantId,
+    sku: c.numero,
+    producto: c.material,
+    medida: "",
+    unidad: c.unidad,
+    precio: c.precio,
+    stock: 0,
+    largoMm: c.largoMm,
+    anchoMm: c.anchoMm,
+    color: c.color,
+    categoria: c.categoria,
+    formaDeVenta: c.formaDeVenta,
+    precioMediaPct: c.precioMediaPct,
+  };
+}
+
+/** El cheque de un pago, como lo edita la pantalla. */
+function aChequeEnPantalla(c: NonNullable<PagoDeVenta["cheque"]>): ChequeEnPantalla {
+  return { tipo: c.tipo === "echeq" ? "echeq" : "fisico", banco: c.banco, numero: c.numero, fechaPago: c.fechaPago, librador: c.librador ?? "" };
+}

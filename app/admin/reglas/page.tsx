@@ -131,6 +131,23 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
         ],
       },
       {
+        clave: "descuento_con_escala",
+        pregunta: "Un descuento tipeado y el de la forma de pago",
+        opciones: [
+          { valor: "reemplaza", texto: "Vale el tipeado" },
+          { valor: "suma", texto: "Se suman" },
+        ],
+      },
+      {
+        clave: "redondeo_efectivo",
+        pregunta: "El total en efectivo, ¿con centavos?",
+        opciones: [
+          { valor: "no", texto: "Con centavos" },
+          { valor: "al_peso", texto: "Al peso, a favor del cliente" },
+        ],
+      },
+
+      {
         clave: "lote_y_cupon",
         pregunta: "Lote y cupón de la tarjeta",
         opciones: [

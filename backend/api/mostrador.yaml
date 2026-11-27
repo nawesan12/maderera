@@ -82,6 +82,7 @@ paths:
                 volvioLaMercaderia: { type: boolean, default: true, description: "false: el cliente se la llevó y el stock no vuelve (pide el PIN)" }
                 pin: { type: string, maxLength: 128, description: "el PIN de un admin, o su contraseña si ninguno cargó PIN" }
                 ficha: { type: string, maxLength: 400 }
+                rehacer: { type: boolean, description: "se anula para volver a cobrarla: el corte que no se terminó queda en la cola, sin venta, para atarlo a la nueva" }
       responses:
         "200":
           description: Anulada (y si tenía factura, cuál espera su nota de crédito), o el PIN que falta
@@ -109,7 +110,34 @@ paths:
                         precioUnitario: { type: number, format: double }
                         presentacion: { type: string, nullable: true }
                   conCorte: { type: boolean, description: "la venta tenía un corte, que no se rehace solo" }
+                  customerId: { type: string, nullable: true, description: "el cliente de la venta, para rehacerla" }
+                  comprobante: { type: string, nullable: true, description: "interno o fiscal" }
+                  pagos:
+                    type: array
+                    description: "cómo se pagó, con los datos de la tarjeta y del cheque, para rehacerla"
+                    items:
+                      type: object
+                      required: [medio, importe, nroLote, nroCupon, tarjeta, cuotas, cheque]
+                      properties:
+                        medio: { type: string }
+                        importe: { type: number, format: double }
+                        nroLote: { type: string, nullable: true }
+                        nroCupon: { type: string, nullable: true }
+                        tarjeta: { type: string, nullable: true }
+                        cuotas: { type: integer }
+                        cheque:
+                          type: object
+                          nullable: true
+                          required: [tipo, numero, banco, librador, fechaPago]
+                          properties:
+                            tipo: { type: string }
+                            numero: { type: string }
+                            banco: { type: string }
+                            librador: { type: string, nullable: true }
+                            fechaPago: { type: string, description: AAAA-MM-DD }
+                  cortes: { type: array, items: { type: string }, description: "los cortes que quedaron en la cola sin venta, para atarlos a la venta rehecha" }
                   error: { type: string }
+
                   autorizacion: { $ref: "#/components/schemas/MostradorAutorizacion" }
         "422": { $ref: "#/components/responses/Problema" }
   /api/v1/mostrador/ventas/{id}/devolucion:
@@ -160,7 +188,76 @@ paths:
                   error: { type: string }
                   autorizacion: { $ref: "#/components/schemas/MostradorAutorizacion" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/mostrador/ventas/{id}/devolucion-sin-factura:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: DevolucionSinFacturaDatos
+      description: Lo que se puede devolver de una venta del mostrador sin factura, y cuánto queda por cada camino de la plata
+      responses:
+        "200":
+          description: Los renglones y los topes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [numero, renglones, efectivo, afuera]
+                properties:
+                  numero: { type: string }
+                  efectivo: { type: number, format: double, description: "lo cobrado en efectivo que todavía no se devolvió" }
+                  afuera: { type: number, format: double, description: "lo cobrado con los otros medios que todavía no se devolvió" }
+                  renglones:
+                    type: array
+                    items:
+                      type: object
+                      required: [orderItemId, descripcion, unidad, cantidad, devuelto, precioUnitario]
+                      properties:
+                        orderItemId: { type: string }
+                        descripcion: { type: string }
+                        unidad: { type: string }
+                        cantidad: { type: number, format: double }
+                        devuelto: { type: number, format: double }
+                        precioUnitario: { type: number, format: double }
+        "404": { $ref: "#/components/responses/Problema" }
+    post:
+      operationId: DevolucionSinFacturaDeMostrador
+      description: La devolución de una parte de una venta sin factura (pedidos.DevolverSinFacturaPor). A quien no es admin le pide el PIN.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clave, destino, motivo, renglones]
+              additionalProperties: false
+              properties:
+                clave: { type: string, maxLength: 80 }
+                destino: { type: string, enum: [caja, afuera, cuenta], description: "cuenta: la venta fue a cuenta corriente y vuelve a la cuenta (o baja lo que falta cobrar)" }
+                motivo: { type: string }
+                renglones:
+                  type: array
+                  items:
+                    type: object
+                    required: [orderItemId, cantidad]
+                    properties:
+                      orderItemId: { type: string }
+                      cantidad: { type: number, format: double }
+                pin: { type: string, maxLength: 128 }
+                ficha: { type: string, maxLength: 400 }
+      responses:
+        "200":
+          description: Hecha, o el PIN que falta
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: string }
+                  error: { type: string }
+                  autorizacion: { $ref: "#/components/schemas/MostradorAutorizacion" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/mostrador/ventas/{id}/devolucion/calculo:
+
     parameters:
       - { name: id, in: path, required: true, schema: { type: string } }
     post:
@@ -371,6 +468,7 @@ paths:
                 fondoInicial: { type: number, format: double, nullable: true }
                 motivo: { type: string, description: "adónde fue (o de dónde vino) la diferencia con lo contado al cerrar el turno anterior" }
                 cajaId: { type: string, description: "la caja física de la PC que abre, si tiene una" }
+                corregir: { type: boolean, description: "la diferencia es un conteo mal hecho: se corrige el arqueo del turno anterior en vez de cargar un movimiento entre turnos" }
       responses:
         "200": { $ref: "#/components/responses/Ok" }
         "422": { $ref: "#/components/responses/Problema" }
@@ -390,7 +488,8 @@ paths:
                 tipo: { type: string, enum: [ingreso, retiro] }
                 monto: { type: number, format: double, nullable: true }
                 motivo: { type: string }
-                destino: { type: string, enum: [banco, caja_fuerte, otro], description: "a dónde va un retiro; sin él se clasifica por el motivo" }
+                destino: { type: string, enum: [banco, caja_fuerte, otro], description: "a dónde va un retiro, o de dónde viene un ingreso; sin él se clasifica por el motivo" }
+                categoria: { type: string, description: "con destino otro, la categoría de gasto: el retiro es un gasto en efectivo" }
       responses:
         "200": { $ref: "#/components/responses/Ok" }
         "422": { $ref: "#/components/responses/Problema" }
@@ -488,6 +587,7 @@ components:
         avisoStock: { type: string, description: "la venta dejó medidas con lo disponible en negativo (se vendió más de lo que hay)" }
         autorizacion: { $ref: "#/components/schemas/MostradorAutorizacion" }
         ficha: { type: string, description: "un PIN ya tecleado para esta venta: si falló por otra cosa, se reenvía con la ficha" }
+        repetida: { type: string, description: "el número de una venta igual al mismo cliente de recién: se reenvía con repetidaOk para cobrarla igual" }
     MostradorRenglonADevolver:
       type: object
       required: [itemId, cantidad, alStock]
@@ -595,6 +695,7 @@ components:
         direccion: { type: string, nullable: true }
         estado: { type: string }
         limiteCredito: { type: number, format: double }
+        cuentaBloqueada: { type: boolean, description: "la cuenta corriente está bloqueada: no se le anota" }
         priceListId: { type: string, nullable: true }
     MostradorAltaRapida:
       type: object
@@ -649,7 +750,9 @@ components:
         orderId: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
         quien: { type: string, nullable: true }
-        destino: { type: string, nullable: true, enum: [banco, caja_fuerte, otro], description: "a dónde fue un retiro" }
+        destino: { type: string, nullable: true, enum: [banco, caja_fuerte, otro], description: "a dónde fue un retiro, o de dónde vino un ingreso" }
+        anulado: { type: boolean, description: "el gasto o el pago del renglón se anuló después" }
+        otroPuesto: { type: boolean, description: "lo cargó alguien que no es quien abrió el turno" }
     MostradorVentaDeHoy:
       type: object
       required: [id, numero, cliente, total, devuelto, medioPago, medios, conFactura, estado, createdAt]
@@ -672,8 +775,10 @@ components:
         cantidad: { type: integer }
         total: { type: number, format: double, description: En negativo si es una devolución }
         devolucion: { type: boolean, description: Ventas anuladas o devoluciones parciales durante el turno (la venta queda en el Z de su turno) }
-        quien: { type: string, nullable: true, description: Quién hizo las devoluciones parciales del renglón }
-        cobranza: { type: boolean, description: "lo cobrado por recibos de cuenta en el mostrador durante el turno" }
+        quien: { type: string, nullable: true, description: Quién cobró el recibo si no es quien abrió el turno }
+        cobranza: { type: boolean, description: "lo cobrado por recibos durante el turno (los del mostrador, y el efectivo de los del panel que entró a este cajón)" }
+        dePedido: { type: boolean, description: "el cobro es de un pedido, no de la cuenta" }
+        pedidos: { type: string, nullable: true, description: "los pedidos de las devoluciones parciales, o los recibos que cobró otra persona" }
     MostradorPantalla:
       type: object
       required: [turno, movimientos, cierre, ventas, listaGeneral, fondoBase, descuentoLibrePct, ultimoContado]
@@ -688,3 +793,27 @@ components:
         fondoBase: { type: number, format: double }
         descuentoLibrePct: { type: number, format: double, description: "lo que se puede dejar de cobrar sin el PIN de un admin (regla del negocio)" }
         ultimoContado: { type: number, format: double, nullable: true, description: "lo contado al cerrar el último turno de la sucursal: con eso abre el siguiente" }
+        ultimoCierre:
+          nullable: true
+          description: "el último turno cerrado hoy, para reimprimir su papel"
+          allOf: [{ $ref: "#/components/schemas/MostradorTurnoCerrado" }]
+    MostradorTurnoCerrado:
+      type: object
+      required: [id, sucursal, abiertaAt, cerradaAt, contado, notas, abiertaPor, esperado, fondo, ventas, otrosIngresos, retiros, devoluciones, gastos, cierre, movimientos]
+      properties:
+        id: { type: string }
+        sucursal: { type: string }
+        abiertaAt: { type: string, format: date-time }
+        cerradaAt: { type: string, format: date-time, nullable: true }
+        contado: { type: number, format: double, nullable: true }
+        notas: { type: string, nullable: true }
+        abiertaPor: { type: string }
+        esperado: { type: number, format: double }
+        fondo: { type: number, format: double }
+        ventas: { type: number, format: double }
+        otrosIngresos: { type: number, format: double }
+        retiros: { type: number, format: double }
+        devoluciones: { type: number, format: double }
+        gastos: { type: number, format: double }
+        cierre: { type: array, items: { $ref: "#/components/schemas/MostradorRenglonDelCierre" } }
+        movimientos: { type: array, items: { $ref: "#/components/schemas/MostradorMovimiento" } }

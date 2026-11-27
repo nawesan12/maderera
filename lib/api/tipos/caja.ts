@@ -120,6 +120,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/caja/fuera-de-caja/recibos/{id}/asignar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AsignarReciboAlTurno"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/caja/cajas-fuertes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CajasFuertes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/caja/cajas-fuertes/{id}/deposito": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description La sucursal */
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DepositarDeLaCajaFuerte"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/caja/ventas-sueltas/{id}/asignar": {
         parameters: {
             query?: never;
@@ -233,10 +286,14 @@ export interface components {
             total: number;
             /** @description Ventas anuladas o devoluciones parciales durante el turno (la venta queda en el Z de su turno) */
             devolucion: boolean;
-            /** @description Quién hizo las devoluciones parciales del renglón */
+            /** @description Quién cobró el recibo si no es quien abrió el turno */
             quien: string | null;
-            /** @description lo cobrado por recibos de cuenta en el mostrador durante el turno */
+            /** @description lo cobrado por recibos durante el turno (los del mostrador, y el efectivo de los del panel que entró a este cajón) */
             cobranza: boolean;
+            /** @description el cobro es de un pedido, no de la cuenta */
+            dePedido?: boolean;
+            /** @description los pedidos de las devoluciones parciales, o los recibos que cobró otra persona */
+            pedidos?: string | null;
         };
         TurnoCerrado: {
             id: string;
@@ -302,6 +359,39 @@ export interface components {
             gastos: number;
             /** @description La caja física desde la que se abrió */
             puesto: string | null;
+            /** @description Los ingresos, retiros, gastos y devoluciones del turno */
+            movimientos: components["schemas"]["CajaMovimiento"][];
+            /**
+             * Format: double
+             * @description Lo que había, corregido al abrir el turno siguiente
+             */
+            contadoCorregido?: number | null;
+            correccionMotivo?: string | null;
+            corregidoPor?: string | null;
+            /** Format: date-time */
+            corregidoAt?: string | null;
+        };
+        CajaMovimiento: {
+            id: string;
+            tipo: string;
+            /** Format: double */
+            monto: number;
+            motivo: string | null;
+            orderId: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            quien: string | null;
+            destino: string | null;
+            anulado: boolean;
+            otroPuesto: boolean;
+        };
+        CajaFuerte: {
+            branchId: string;
+            sucursal: string;
+            /** Format: double */
+            saldo: number;
+            /** Format: date-time */
+            ultimoDeposito: string | null;
         };
         CajaFueraDeCaja: {
             /** @enum {string} */
@@ -309,6 +399,7 @@ export interface components {
             id: string;
             detalle: string;
             sucursal: string | null;
+            branchId: string | null;
             /**
              * Format: double
              * @description con signo: el recibo entra, el gasto sale
@@ -484,6 +575,8 @@ export interface operations {
                     "application/json": {
                         filas: components["schemas"]["TurnoCerrado"][];
                         total: number;
+                        /** @description aaaa-mm del primer mes con algo en la caja */
+                        primerMes?: string | null;
                     };
                 };
             };
@@ -586,6 +679,73 @@ export interface operations {
             };
         };
     };
+    AsignarReciboAlTurno: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    sessionId: string;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["CajaHecho"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    CajasFuertes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Lo que tiene la caja fuerte de cada sucursal activa */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CajaFuerte"][];
+                };
+            };
+        };
+    };
+    DepositarDeLaCajaFuerte: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description La sucursal */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: double */
+                    monto: number;
+                    motivo?: string;
+                    /** @description Una por intento */
+                    clave: string;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["CajaHecho"];
+            422: components["responses"]["Problema"];
+        };
+    };
     AsignarVentaAlTurno: {
         parameters: {
             query?: never;
@@ -634,6 +794,8 @@ export interface operations {
             query?: {
                 /** @description aaaa-mm (si falta */
                 periodo?: string;
+                limite?: number;
+                desplazamiento?: number;
             };
             header?: never;
             path?: never;
@@ -641,13 +803,26 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Lo emitido en el mostrador en el mes, lo más nuevo primero (hasta 200) */
+            /** @description Lo emitido en el mostrador en el mes, lo más nuevo primero, de a 200 si no se dice, con los totales del mes */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CajaEmitido"][];
+                    "application/json": {
+                        filas: components["schemas"]["CajaEmitido"][];
+                        resumen: {
+                            cantidad: number;
+                            /**
+                             * Format: double
+                             * @description Lo vendido
+                             */
+                            importe: number;
+                            anuladas: number;
+                            /** Format: double */
+                            importeAnuladas: number;
+                        };
+                    };
                 };
             };
         };

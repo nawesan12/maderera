@@ -90,6 +90,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mostrador/ventas/{id}/devolucion-sin-factura": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Lo que se puede devolver de una venta del mostrador sin factura, y cuánto queda por cada camino de la plata */
+        get: operations["DevolucionSinFacturaDatos"];
+        put?: never;
+        /** @description La devolución de una parte de una venta sin factura (pedidos.DevolverSinFacturaPor). A quien no es admin le pide el PIN. */
+        post: operations["DevolucionSinFacturaDeMostrador"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/mostrador/ventas/{id}/devolucion/calculo": {
         parameters: {
             query?: never;
@@ -374,6 +394,8 @@ export interface components {
             autorizacion?: components["schemas"]["MostradorAutorizacion"];
             /** @description un PIN ya tecleado para esta venta: si falló por otra cosa, se reenvía con la ficha */
             ficha?: string;
+            /** @description el número de una venta igual al mismo cliente de recién: se reenvía con repetidaOk para cobrarla igual */
+            repetida?: string;
         };
         MostradorRenglonADevolver: {
             itemId: string;
@@ -486,6 +508,8 @@ export interface components {
             estado: string;
             /** Format: double */
             limiteCredito?: number;
+            /** @description la cuenta corriente está bloqueada: no se le anota */
+            cuentaBloqueada?: boolean;
             priceListId: string | null;
         };
         MostradorAltaRapida: {
@@ -548,10 +572,14 @@ export interface components {
             createdAt: string;
             quien: string | null;
             /**
-             * @description a dónde fue un retiro
+             * @description a dónde fue un retiro, o de dónde vino un ingreso
              * @enum {string|null}
              */
             destino?: "banco" | "caja_fuerte" | "otro" | null;
+            /** @description el gasto o el pago del renglón se anuló después */
+            anulado?: boolean;
+            /** @description lo cargó alguien que no es quien abrió el turno */
+            otroPuesto?: boolean;
         };
         MostradorVentaDeHoy: {
             id: string;
@@ -583,10 +611,14 @@ export interface components {
             total: number;
             /** @description Ventas anuladas o devoluciones parciales durante el turno (la venta queda en el Z de su turno) */
             devolucion: boolean;
-            /** @description Quién hizo las devoluciones parciales del renglón */
+            /** @description Quién cobró el recibo si no es quien abrió el turno */
             quien: string | null;
-            /** @description lo cobrado por recibos de cuenta en el mostrador durante el turno */
+            /** @description lo cobrado por recibos durante el turno (los del mostrador, y el efectivo de los del panel que entró a este cajón) */
             cobranza: boolean;
+            /** @description el cobro es de un pedido, no de la cuenta */
+            dePedido?: boolean;
+            /** @description los pedidos de las devoluciones parciales, o los recibos que cobró otra persona */
+            pedidos?: string | null;
         };
         MostradorPantalla: {
             turno: components["schemas"]["MostradorTurno"] | null;
@@ -606,6 +638,36 @@ export interface components {
              * @description lo contado al cerrar el último turno de la sucursal: con eso abre el siguiente
              */
             ultimoContado: number | null;
+            /** @description el último turno cerrado hoy, para reimprimir su papel */
+            ultimoCierre?: components["schemas"]["MostradorTurnoCerrado"] | null;
+        };
+        MostradorTurnoCerrado: {
+            id: string;
+            sucursal: string;
+            /** Format: date-time */
+            abiertaAt: string;
+            /** Format: date-time */
+            cerradaAt: string | null;
+            /** Format: double */
+            contado: number | null;
+            notas: string | null;
+            abiertaPor: string;
+            /** Format: double */
+            esperado: number;
+            /** Format: double */
+            fondo: number;
+            /** Format: double */
+            ventas: number;
+            /** Format: double */
+            otrosIngresos: number;
+            /** Format: double */
+            retiros: number;
+            /** Format: double */
+            devoluciones: number;
+            /** Format: double */
+            gastos: number;
+            cierre: components["schemas"]["MostradorRenglonDelCierre"][];
+            movimientos: components["schemas"]["MostradorMovimiento"][];
         };
     };
     responses: {
@@ -743,6 +805,8 @@ export interface operations {
                     /** @description el PIN de un admin, o su contraseña si ninguno cargó PIN */
                     pin?: string;
                     ficha?: string;
+                    /** @description se anula para volver a cobrarla: el corte que no se terminó queda en la cola, sin venta, para atarlo a la nueva */
+                    rehacer?: boolean;
                 };
             };
         };
@@ -777,6 +841,30 @@ export interface operations {
                         }[];
                         /** @description la venta tenía un corte, que no se rehace solo */
                         conCorte?: boolean;
+                        /** @description el cliente de la venta, para rehacerla */
+                        customerId?: string | null;
+                        /** @description interno o fiscal */
+                        comprobante?: string | null;
+                        /** @description cómo se pagó, con los datos de la tarjeta y del cheque, para rehacerla */
+                        pagos?: {
+                            medio: string;
+                            /** Format: double */
+                            importe: number;
+                            nroLote: string | null;
+                            nroCupon: string | null;
+                            tarjeta: string | null;
+                            cuotas: number;
+                            cheque: {
+                                tipo: string;
+                                numero: string;
+                                banco: string;
+                                librador: string | null;
+                                /** @description AAAA-MM-DD */
+                                fechaPago: string;
+                            } | null;
+                        }[];
+                        /** @description los cortes que quedaron en la cola sin venta, para atarlos a la venta rehecha */
+                        cortes?: string[];
                         error?: string;
                         autorizacion?: components["schemas"]["MostradorAutorizacion"];
                     };
@@ -847,6 +935,98 @@ export interface operations {
                     "application/json": {
                         ok?: string;
                         notaId?: string | null;
+                        error?: string;
+                        autorizacion?: components["schemas"]["MostradorAutorizacion"];
+                    };
+                };
+            };
+            422: components["responses"]["Problema"];
+        };
+    };
+    DevolucionSinFacturaDatos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los renglones y los topes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        numero: string;
+                        /**
+                         * Format: double
+                         * @description lo cobrado en efectivo que todavía no se devolvió
+                         */
+                        efectivo: number;
+                        /**
+                         * Format: double
+                         * @description lo cobrado con los otros medios que todavía no se devolvió
+                         */
+                        afuera: number;
+                        renglones: {
+                            orderItemId: string;
+                            descripcion: string;
+                            unidad: string;
+                            /** Format: double */
+                            cantidad: number;
+                            /** Format: double */
+                            devuelto: number;
+                            /** Format: double */
+                            precioUnitario: number;
+                        }[];
+                    };
+                };
+            };
+            404: components["responses"]["Problema"];
+        };
+    };
+    DevolucionSinFacturaDeMostrador: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clave: string;
+                    /**
+                     * @description cuenta: la venta fue a cuenta corriente y vuelve a la cuenta (o baja lo que falta cobrar)
+                     * @enum {string}
+                     */
+                    destino: "caja" | "afuera" | "cuenta";
+                    motivo: string;
+                    renglones: {
+                        orderItemId: string;
+                        /** Format: double */
+                        cantidad: number;
+                    }[];
+                    pin?: string;
+                    ficha?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Hecha, o el PIN que falta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok?: string;
                         error?: string;
                         autorizacion?: components["schemas"]["MostradorAutorizacion"];
                     };
@@ -1172,6 +1352,8 @@ export interface operations {
                     motivo?: string;
                     /** @description la caja física de la PC que abre, si tiene una */
                     cajaId?: string;
+                    /** @description la diferencia es un conteo mal hecho: se corrige el arqueo del turno anterior en vez de cargar un movimiento entre turnos */
+                    corregir?: boolean;
                 };
             };
         };
@@ -1197,10 +1379,12 @@ export interface operations {
                     monto: number | null;
                     motivo: string;
                     /**
-                     * @description a dónde va un retiro; sin él se clasifica por el motivo
+                     * @description a dónde va un retiro, o de dónde viene un ingreso; sin él se clasifica por el motivo
                      * @enum {string}
                      */
                     destino?: "banco" | "caja_fuerte" | "otro";
+                    /** @description con destino otro, la categoría de gasto: el retiro es un gasto en efectivo */
+                    categoria?: string;
                 };
             };
         };

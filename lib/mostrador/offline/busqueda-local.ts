@@ -39,6 +39,21 @@ export function coincideLocal(terminos: string[], heno: string): boolean {
   return terminos.every((termino) => heno.includes(termino));
 }
 
+/**
+ * ¿Cada término empieza una palabra del heno? «laca» no es la mitad de
+ * «placa» (mes simulado, M2S1-187). Es `coincidePalabra` de buscar.go.
+ */
+export function coincidePorPalabra(terminos: string[], heno: string): boolean {
+  return terminos.every((termino) => {
+    let i = heno.indexOf(termino);
+    while (i >= 0) {
+      if (i === 0 || !/[\p{L}\p{N}]/u.test(heno[i - 1])) return true;
+      i = heno.indexOf(termino, i + 1);
+    }
+    return false;
+  });
+}
+
 export interface VarianteLocal {
   variantId: string;
   sku: string;
@@ -99,9 +114,13 @@ export function buscarVariantes(
     return 3 + sueltos;
   };
 
-  return indice
-    .filter((v) => coincideLocal(terminos, v.busqueda))
+  // Primero lo que tiene una palabra que empieza con cada término; si no hay
+  // nada, lo que lo contiene en cualquier lado (como buscar.go).
+  const contienen = indice.filter((v) => coincideLocal(terminos, v.busqueda));
+  const porPalabra = contienen.filter((v) => coincidePorPalabra(terminos, v.busqueda));
+  return (porPalabra.length > 0 ? porPalabra : contienen)
     .map((v) => ({ v, p: puntaje(v) }))
+
     .sort((a, b) => a.p - b.p || a.v.sortOrder - b.v.sortOrder)
     .slice(0, tope)
     .map((x) => x.v);

@@ -9,8 +9,7 @@ import (
 )
 
 // El retiro guarda a dónde va (H333): al banco y a la caja fuerte sin
-// escribir el motivo, «otro» con el motivo, y un ingreso nunca lleva
-// destino. El retiro sin conexión también lo guarda; el de un cliente viejo
+// escribir el motivo, «otro» con el motivo; el ingreso, de dónde viene. El retiro sin conexión también lo guarda; el de un cliente viejo
 // que no lo manda queda sin destino.
 func TestElRetiroGuardaADondeVa(t *testing.T) {
 	e := armar(t)
@@ -43,7 +42,8 @@ func TestElRetiroGuardaADondeVa(t *testing.T) {
 	}
 	got := e.txt(t, `select string_agg(motivo || ':' || coalesce(destino, '-'), ' ' order by created_at, monto) from cash_movements
 		where session_id = $1 and tipo in ('retiro', 'ingreso')`, sesion)
-	if got != "Depósito en el banco:banco A la caja fuerte:caja_fuerte Viáticos del flete:otro Cambio:-" {
+	// Desde la 00350 el ingreso también dice de dónde viene (M3S3-014).
+	if got != "Depósito en el banco:banco A la caja fuerte:caja_fuerte Viáticos del flete:otro Cambio:banco" {
 		t.Errorf("movimientos: %s", got)
 	}
 	// La pantalla dice el destino de cada retiro.
@@ -54,7 +54,7 @@ func TestElRetiroGuardaADondeVa(t *testing.T) {
 			destinos = append(destinos, d)
 		}
 	}
-	if fmt.Sprint(destinos) != "[otro caja_fuerte banco]" {
+	if fmt.Sprint(destinos) != "[banco otro caja_fuerte banco]" {
 		t.Errorf("pantalla: %v", destinos)
 	}
 

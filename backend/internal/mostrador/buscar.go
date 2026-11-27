@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"mjbj/internal/busqueda"
+	"regexp"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -72,6 +73,28 @@ func (a *args) coincide(texto string, columnas ...string) string {
 	return "(" + strings.Join(por, " AND ") + ")"
 }
 
+// coincidePalabra es coincide con cada palabra al principio de una palabra
+// de la columna: «laca» no trae las «placas» (mes simulado, M2S1-187).
+func (a *args) coincidePalabra(texto string, columnas ...string) string {
+	terminos := strings.FieldsFunc(zodjs.TrimJS(texto), zodjs.EspacioJS)
+	if len(terminos) > 6 {
+		terminos = terminos[:6]
+	}
+	if len(terminos) == 0 {
+		return ""
+	}
+	var por []string
+	for _, t := range terminos {
+		p := a.poner("(^|[^[:alnum:]])" + regexp.QuoteMeta(t))
+		var col []string
+		for _, c := range columnas {
+			col = append(col, "f_unaccent("+c+") ~* f_unaccent("+p+")")
+		}
+		por = append(por, "("+strings.Join(col, " OR ")+")")
+	}
+	return "(" + strings.Join(por, " AND ") + ")"
+}
+
 // joinDePrecios son los dos left join de la lista propia y la general.
 func joinDePrecios(a *args, l Lista, propia, general string) string {
 	on := func(alias string, lista *string) string {
@@ -121,8 +144,17 @@ func soloDigitos(t string) bool {
 	return t != ""
 }
 
-// Buscar es buscarParaMostrador.
+// Buscar es buscarParaMostrador. Primero lo que tiene una palabra que empieza
+// con cada término; si no hay nada, lo que lo contiene en cualquier lado.
 func (s *Servicio) Buscar(ctx context.Context, texto, sucursal string, cliente *string) ([]ResultadoDeMostrador, error) {
+	out, err := s.buscar(ctx, texto, sucursal, cliente, true)
+	if err != nil || len(out) > 0 {
+		return out, err
+	}
+	return s.buscar(ctx, texto, sucursal, cliente, false)
+}
+
+func (s *Servicio) buscar(ctx context.Context, texto, sucursal string, cliente *string, porPalabra bool) ([]ResultadoDeMostrador, error) {
 	consulta := zodjs.TrimJS(texto)
 	out := []ResultadoDeMostrador{}
 	if zodjs.LargoJS(consulta) < 2 {
@@ -141,9 +173,14 @@ func (s *Servicio) Buscar(ctx context.Context, texto, sucursal string, cliente *
 	exacto := a.poner(consulta)
 	// El lector de código de barras escribe el número entero y un Enter.
 	cond := "(v.sku = " + exacto + " OR v.codigo_barras = " + exacto + " OR v.sku ILIKE " + prefijo + ")"
-	if t := a.coincide(consulta, "p.name", "v.label", "p.brand", "c.name"); t != "" {
+	coincide := a.coincide
+	if porPalabra {
+		coincide = a.coincidePalabra
+	}
+	if t := coincide(consulta, "p.name", "v.label", "p.brand", "c.name"); t != "" {
 		cond = "(" + cond + " OR " + t + ")"
 	}
+
 	joins := joinDePrecios(&a, lista, "propio", "general")
 	pr := precio(&a, lista, "propio", "general")
 	suc := a.poner(sucursal)
@@ -271,13 +308,16 @@ type ClienteDelMostrador struct {
 	Direccion     *string  `json:"direccion"`
 	Estado        string   `json:"estado"`
 	LimiteCredito *float64 `json:"limiteCredito,omitempty"`
-	PriceListID   *string  `json:"priceListId"`
+	// CuentaBloqueada: la pantalla apaga «Cuenta corriente» apenas se elige
+	// al cliente, y no recién al cobrar (mes simulado, M3S3-050).
+	CuentaBloqueada bool    `json:"cuentaBloqueada"`
+	PriceListID     *string `json:"priceListId"`
 	// Para completar el presupuesto al elegir al cliente.
 	Telefono *string `json:"telefono"`
 	Email    *string `json:"email"`
 }
 
-const columnasCliente = `id, nombre, razon_social, cuit, condicion_iva::text, direccion, estado::text, limite_credito, price_list_id, telefono, email`
+const columnasCliente = `id, nombre, razon_social, cuit, condicion_iva::text, direccion, estado::text, limite_credito, price_list_id, telefono, email, cuenta_bloqueada`
 
 func leerClientes(filas pgx.Rows) ([]ClienteDelMostrador, error) {
 	defer filas.Close()
@@ -286,7 +326,7 @@ func leerClientes(filas pgx.Rows) ([]ClienteDelMostrador, error) {
 		var c ClienteDelMostrador
 		var lim jsmath.Num
 		if err := filas.Scan(&c.ID, &c.Nombre, &c.RazonSocial, &c.Cuit, &c.CondicionIva, &c.Direccion, &c.Estado, &lim, &c.PriceListID,
-			&c.Telefono, &c.Email); err != nil {
+			&c.Telefono, &c.Email, &c.CuentaBloqueada); err != nil {
 			return nil, err
 		}
 		l := lim.F()
@@ -372,9 +412,11 @@ func (s *Servicio) ClientePorID(ctx context.Context, id string) (*ClienteDelMost
 	if err != nil || len(cs) == 0 {
 		return nil, err
 	}
+	// Con el límite: la pantalla apaga «Cuenta corriente» a quien no tiene
+	// (M2S4-061). clientePorId no lo traía.
 	c := cs[0]
-	c.LimiteCredito = nil // clientePorId no lo trae
 	return &c, nil
+
 }
 
 // PedidoSinCobrar es un pedido del cliente con mercadería que salió y algo

@@ -1,12 +1,15 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { OPCIONES_DE_REGLAS, valorDeRegla } from "@/lib/reglas";
 
-const migracion = readFileSync(
-  join(__dirname, "../backend/db/migraciones/00290_reglas_que_esperan_al_contador.sql"),
-  "utf8",
-);
+// Las de la 00290 y las que sumaron migraciones después (00351, las del
+// mostrador del mes simulado): cada regla nace en la migración que la trae.
+const carpeta = join(__dirname, "../backend/db/migraciones");
+const migracion = readdirSync(carpeta)
+  .filter((f) => f.endsWith(".sql") && f >= "00290")
+  .map((f) => readFileSync(join(carpeta, f), "utf8"))
+  .join("\n");
 const go = readFileSync(join(__dirname, "../backend/internal/reglas/reglas.go"), "utf8");
 
 describe("reglas que esperan al contador", () => {

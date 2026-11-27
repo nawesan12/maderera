@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { flushSync } from "react-dom";
 import { toast } from "sonner";
 import { Loader2, UserPlus, UserRound, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -31,7 +32,10 @@ export function BuscadorDeCliente({
   buscarLocal,
   aCuenta = 0,
   sinFicha = null,
+  onSaldo,
 }: {
+  /** El saldo del cliente elegido, al leerlo. */
+  onSaldo?: (de: string, monto: number) => void;
   /** Lo que la venta de ahora carga a cuenta corriente: se mide contra el límite. */
   aCuenta?: number;
   cliente: Cliente | null;
@@ -51,6 +55,21 @@ export function BuscadorDeCliente({
   const [marcado, setMarcado] = useState(0);
   const [alta, setAlta] = useState<{ nombre: string; documento: string } | null>(null);
   const campo = useRef<HTMLInputElement>(null);
+  /*
+   * Buscando otro cliente con uno ya elegido. Alt+C caía en el botón
+   * «Cambiar» y lo tipeado enseguida se perdía —la barra espaciadora lo
+   * apretaba y el campo nacía recién después—: «Techos Costa» llegaba como
+   * «osta» y la venta salía a otro cliente (mes simulado, M2S1-021). Ahora el
+   * campo aparece y toma el foco en el mismo pulso, con el elegido todavía
+   * puesto: Esc lo deja como estaba.
+   */
+  const [cambiando, setCambiando] = useState(false);
+  if (cambiando && !cliente) setCambiando(false);
+
+  function empezarACambiar() {
+    flushSync(() => setCambiando(true));
+    campo.current?.focus();
+  }
 
   const consulta = texto.trim();
 
@@ -98,6 +117,7 @@ export function BuscadorDeCliente({
 
   function elegir(c: Cliente) {
     onCliente(c);
+    setCambiando(false);
     setTexto("");
     setDelServidor([]);
     setMarcado(0);
@@ -112,7 +132,7 @@ export function BuscadorDeCliente({
     setAbierto(false);
   }
 
-  if (cliente) {
+  if (cliente && !cambiando) {
     return (
       <div className="space-y-2">
         <div className="flex items-center gap-2.5 rounded-xl border border-linea bg-background px-3.5 py-2.5">
@@ -132,15 +152,11 @@ export function BuscadorDeCliente({
               </span>
             )}
           </span>
-          {/* Alt + C cae acá y Enter cambia de cliente: antes caía en la X y
-              Enter lo sacaba sin dejar buscar otro. */}
+          {/* Alt + C cae acá y el campo aparece en el acto, con el foco: lo
+              que se tipea enseguida llega entero. */}
           <button
-            onClick={() => {
-              onCliente(null);
-              setRecientes(null);
-              // El campo recién existe en el próximo render.
-              requestAnimationFrame(() => enfocar("cliente"));
-            }}
+            onFocus={empezarACambiar}
+            onClick={empezarACambiar}
             data-foco="cliente"
             className="shrink-0 rounded-lg px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-hundida hover:text-foreground"
           >
@@ -154,7 +170,7 @@ export function BuscadorDeCliente({
             <X className="h-4 w-4" />
           </button>
         </div>
-        <SaldoDelCliente cliente={cliente} branchId={branchId} enLinea={enLinea} aCuenta={aCuenta} />
+        <SaldoDelCliente cliente={cliente} branchId={branchId} enLinea={enLinea} aCuenta={aCuenta} onSaldo={onSaldo} />
       </div>
     );
   }
@@ -171,7 +187,13 @@ export function BuscadorDeCliente({
             setMarcado(0);
           }}
           onFocus={alEnfocar}
-          onBlur={() => setTimeout(() => setAbierto(false), 150)}
+          onBlur={() =>
+            setTimeout(() => {
+              setAbierto(false);
+              // Sin tipear nada, sigue el que estaba.
+              if (campo.current && campo.current.value === "") setCambiando(false);
+            }, 150)
+          }
           data-foco="cliente"
           role="combobox"
           aria-expanded={opciones > 0}
@@ -198,13 +220,18 @@ export function BuscadorDeCliente({
               }
               return;
             }
-            // Sin nada tipeado, Escape devuelve el foco a la venta.
+            // Sin nada tipeado, Escape devuelve el foco a la venta (y al
+            // cliente que estaba, si se estaba cambiando).
             if (e.key === "Escape") {
-              if (texto === "") enfocar("buscador");
+              if (texto === "") {
+                setCambiando(false);
+                enfocar("buscador");
+              }
               setTexto("");
             }
           }}
-          placeholder={`${sinFicha || "Consumidor final"} — buscá por nombre, CUIT o DNI`}
+          placeholder={`${cliente?.nombre ?? (sinFicha || "Consumidor final")} — buscá por nombre, CUIT o DNI`}
+
           className="h-11 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
         />
       </div>
@@ -345,8 +372,10 @@ export function CuitSuelto({
             }
           }}
           inputMode="numeric"
+          data-foco="cuit"
           aria-invalid={Boolean(problema)}
           aria-required={obligatorio}
+
           placeholder={obligatorio ? undefined : "Consumidor final"}
           className="tabular mt-1.5 h-12 w-full rounded-lg border border-linea bg-background px-3 text-base"
         />

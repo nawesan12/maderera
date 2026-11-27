@@ -91,6 +91,9 @@ type PedidoDeDevolucion struct {
 	Renglones []RenglonADevolver
 	// Importe es lo que la persona confirmó (nil: no se controla).
 	Importe *float64
+	// DelMostrador: la hace el puesto del mostrador (devoluciones.origen). El
+	// cierre Z de un turno cuenta solo las suyas, además de las de la caja.
+	DelMostrador bool
 }
 
 // Devolucion es lo que quedó hecho.
@@ -812,9 +815,13 @@ func (s *Servicio) devolverEnTransaccion(ctx context.Context, tx pgx.Tx, pedido,
 		sinStock = &p.SinStock
 	}
 	var id string
+	origen := "panel"
+	if p.DelMostrador {
+		origen = "mostrador"
+	}
 	if err := tx.QueryRow(ctx, `INSERT INTO devoluciones (clave, order_id, invoice_id, nota_id, importe, destino, branch_id, sin_stock, motivo,
-		created_by_user_id) VALUES ($1, $2, $3, $4, $5::numeric, $6, $7, $8, $9, $10) RETURNING id`,
-		p.Clave, pedido, o.id, nota, jsmath.Fijo2(total), p.Destino, sucursalID, sinStock, p.Motivo, userID).Scan(&id); err != nil {
+		created_by_user_id, origen) VALUES ($1, $2, $3, $4, $5::numeric, $6, $7, $8, $9, $10, $11) RETURNING id`,
+		p.Clave, pedido, o.id, nota, jsmath.Fijo2(total), p.Destino, sucursalID, sinStock, p.Motivo, userID, origen).Scan(&id); err != nil {
 		return Devolucion{}, err
 	}
 	// Lo que se llevó cada renglón, según la nota.
@@ -1021,7 +1028,14 @@ func (s *Servicio) devolverEnTransaccion(ctx context.Context, tx pgx.Tx, pedido,
 // no lo toca y la anulación lo puede devolver entero. Los cobros de una venta
 // del mostrador nacen en la misma transacción, con el mismo created_at: entre
 // débito y transferencia decide el id, y da igual porque los dos van a Banco.
+// TramosDeLosPagos es tramosDeLosPagos para la devolución sin factura del
+// mostrador (pedidos.DevolverSinFacturaPor): la misma regla del tramo.
+func TramosDeLosPagos(ctx context.Context, tx pgx.Tx, pedido, devolucion string, importe float64, referencia string, enEfectivo bool) (float64, error) {
+	return tramosDeLosPagos(ctx, tx, pedido, devolucion, importe, referencia, enEfectivo)
+}
+
 func tramosDeLosPagos(ctx context.Context, tx pgx.Tx, pedido, devolucion string, importe float64, referencia string, enEfectivo bool) (float64, error) {
+
 	filas, err := tx.Query(ctx, `SELECT p.id, p.monto::float8, coalesce((SELECT sum(t.importe) FROM payment_refunds t WHERE t.payment_id = p.id), 0)::float8,
 		coalesce(p.medio = $5, false)
 		FROM payments p WHERE p.order_id = $1 AND p.estado = 'aprobado'

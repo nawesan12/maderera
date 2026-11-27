@@ -717,6 +717,12 @@ type FichaDePedido struct {
 	// Facturado: tiene una factura viva (no se corrige ni se devuelve desde
 	// el pedido: va por la factura).
 	Facturado bool `json:"facturado"`
+	// EfectivoRecibido: con cuánto pagó en efectivo en el mostrador (00350):
+	// el ticket dice el vuelto (mes simulado, M3S1-061).
+	EfectivoRecibido *float64 `json:"efectivoRecibido"`
+	// FacturaID: la factura viva de la venta, si tiene: el papel que vale es
+	// ese y no el ticket (M2S1-083).
+	FacturaID *string `json:"facturaId"`
 }
 
 // ReciboDelPedido es un recibo que cobró el pedido.
@@ -744,7 +750,9 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 		       to_char(o.entregar_el, 'YYYY-MM-DD'), `+fragmentos.SinCobrarDelPedido+`::float8,
 		       `+fragmentos.CobradoDelPedido+`::float8, `+fragmentos.ACobrarDelPedido+`::float8, o.comprobante, `+sqlAcopio+`,
 		       EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id AND f.estado NOT IN ('anulada', 'borrador') AND f.tipo::text LIKE 'factura%'),
-		       o.a_cuenta::float8
+		       o.a_cuenta::float8, o.efectivo_recibido::float8,
+		       (SELECT f.id::text FROM invoices f WHERE f.order_id = o.id AND f.estado NOT IN ('anulada', 'borrador') AND f.tipo::text LIKE 'factura%'
+		        ORDER BY f.created_at LIMIT 1)
 		FROM orders o
 		LEFT JOIN customers c ON c.id = o.customer_id
 		LEFT JOIN branches b ON b.id = o.branch_id
@@ -753,7 +761,8 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 		&p.BranchID, &p.CustomerID, &p.Sucursal, &p.Estado, &p.Origen, &p.TipoEntrega, &p.DireccionEntrega,
 		&p.ZonaEnvio, &p.CostoEnvio, &p.Subtotal, &p.Descuento, &p.DescuentoMotivo, &p.Total,
 		&p.MedioPago, &p.EstadoPago, &p.Notas, &p.CreatedAt, &p.QuoteID, &p.NumeroPresupuesto, &p.SaldoCliente, &p.EntregarEl, &p.SinCobrar,
-		&p.Cobrado, &p.ACobrar, &p.Comprobante, &p.Acopio, &p.Facturado, &p.ACuenta)
+		&p.Cobrado, &p.ACobrar, &p.Comprobante, &p.Acopio, &p.Facturado, &p.ACuenta, &p.EfectivoRecibido, &p.FacturaID)
+
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

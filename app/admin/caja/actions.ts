@@ -61,6 +61,36 @@ export async function asignarVentaAlTurno(orderId: string, sessionId: string): P
 }
 
 /**
+ * Mete en un turno el efectivo de un recibo cobrado sin caja abierta: el
+ * asiento lo mandaba a Caja y ningún arqueo lo contaba (mes simulado,
+ * M3S1-013).
+ */
+export async function asignarReciboAlTurno(receiptId: string, sessionId: string): Promise<EstadoCajas> {
+  const r = await (await api()).POST("/api/v1/admin/caja/fuera-de-caja/recibos/{id}/asignar", {
+    params: { path: { id: receiptId } },
+    body: { sessionId },
+  });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
+  refrescar();
+  return { ok: r.data.ok };
+}
+
+/**
+ * Lo que se lleva de la caja fuerte al banco. La clave es por intento: el
+ * doble clic no deposita dos veces.
+ */
+export async function depositarDeLaCajaFuerte(branchId: string, monto: number, clave: string): Promise<EstadoCajas> {
+  if (!Number.isFinite(monto) || monto <= 0) return { error: "El monto tiene que ser mayor a cero." };
+  const r = await (await api()).POST("/api/v1/admin/caja/cajas-fuertes/{id}/deposito", {
+    params: { path: { id: branchId } },
+    body: { monto, clave },
+  });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
+  refrescar();
+  return { ok: r.data.ok };
+}
+
+/**
  * Fija el cambio que tiene que quedar en el cajón de una sucursal. Solo el
  * administrador.
  */

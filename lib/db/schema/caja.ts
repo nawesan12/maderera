@@ -92,7 +92,13 @@ export const cashSessions = pgTable(
     /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */
     /** El puesto (caja física) desde el que se abrió el turno, si tenía uno. */
     posDeviceId: uuid("pos_device_id"),
+    /** La corrección del conteo hecha al abrir el turno siguiente; `contado` no se pisa (00350). */
+    contadoCorregido: numeric("contado_corregido", { precision: 12, scale: 2 }),
+    correccionMotivo: text("correccion_motivo"),
+    corregidoPor: text("corregido_por").references(() => user.id),
+    corregidoAt: timestamp("corregido_at", { withTimezone: true }),
   },
+
   (t) => [
     /*
      * Un solo turno abierto por sucursal. El índice es parcial —solo mira las

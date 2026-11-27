@@ -220,20 +220,24 @@ type CorteDelPedido struct {
 	VariantID     *string `json:"variantId"`
 	PlacasEnteras float64 `json:"placasEnteras"`
 	SinCargo      bool    `json:"sinCargo"`
+	// Piezas del despiece: el ticket de la venta las dice junto al número
+	// del corte, que es con lo que el cliente vuelve a retirar (M2S3-095).
+	Piezas int `json:"piezas"`
 }
 
 // DelPedido son los cortes que salieron de un pedido, el más nuevo primero.
 func (s *Servicio) DelPedido(ctx context.Context, orderID string) ([]CorteDelPedido, error) {
 	filas, err := s.pool.Query(ctx, `
 		SELECT id::text, numero, material_descripcion, estado::text, urgente, created_at, variant_id::text,
-		       (CASE WHEN mitad IS NULL THEN placas ELSE placas / 2.0 END)::float8, sin_cargo
+		       (CASE WHEN mitad IS NULL THEN placas ELSE placas / 2.0 END)::float8, sin_cargo,
+		       (SELECT coalesce(sum(ci.cantidad), 0)::int FROM cutting_items ci WHERE ci.cutting_order_id = cutting_orders.id)
 		FROM cutting_orders WHERE order_id = $1 ORDER BY created_at DESC`, orderID)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(filas, func(r pgx.CollectableRow) (CorteDelPedido, error) {
 		var c CorteDelPedido
-		err := r.Scan(&c.ID, &c.Numero, &c.Material, &c.Estado, &c.Urgente, &c.CreatedAt, &c.VariantID, &c.PlacasEnteras, &c.SinCargo)
+		err := r.Scan(&c.ID, &c.Numero, &c.Material, &c.Estado, &c.Urgente, &c.CreatedAt, &c.VariantID, &c.PlacasEnteras, &c.SinCargo, &c.Piezas)
 		return c, err
 	})
 }

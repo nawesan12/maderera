@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { cortesDelPedido } from "@/lib/dal/admin/cortes";
 import { Hoja, MUESTRA_DEL_BUILD } from "../../preparando";
 import { requireStaffRole } from "@/lib/dal/session";
 import { quienEntra } from "@/lib/roles";
@@ -58,9 +59,16 @@ async function Contenido({
   const pedido = await obtenerPedido(id);
   if (!pedido) notFound();
 
-  const [sucursales, ajustes] = await Promise.all([
+  const anulada = pedido.estado === "cancelado";
+  // Con factura viva, el papel que vale es la factura: el ticket «no válido
+  // como factura» de una venta facturada podía circular igual (mes simulado,
+  // M2S1-083). La anulada imprime su ticket marcado.
+  if (pedido.facturaId && !anulada) redirect(`/comprobante/${pedido.facturaId}`);
+
+  const [sucursales, ajustes, cortes] = await Promise.all([
     listarSucursalesPublicas(),
     ajustesDelSitio(),
+    cortesDelPedido(id).catch(() => []),
   ]);
 
   const sucursal =
@@ -91,6 +99,7 @@ async function Contenido({
       unidad: item.unidad,
       precioUnitario: Number(item.precioUnitario),
       subtotal: Number(item.subtotal),
+      presentacion: item.presentacion,
     })),
     subtotal: Number(pedido.subtotal ?? pedido.total),
     descuento: Number(pedido.descuento ?? 0),
@@ -114,7 +123,11 @@ async function Contenido({
     // mercadería espera los retiros.
     acopio: pedido.origen === "mostrador" && pedido.estado === "listo",
     whatsapp: ajustes.whatsapp_principal ?? null,
+    anulada,
+    recibido: pedido.efectivoRecibido ?? null,
+    cortes: cortes.filter((c) => c.estado !== "cancelado").map((c) => ({ numero: c.numero, piezas: c.piezas })),
   };
+
 
   return <TicketImpreso documento={documento} />;
 }

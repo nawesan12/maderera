@@ -26,12 +26,15 @@ export function SaldoDelCliente({
   branchId,
   enLinea,
   aCuenta = 0,
+  onSaldo,
 }: {
   cliente: Cliente;
   branchId: string;
   enLinea: boolean;
   /** Lo que la venta de ahora carga a cuenta corriente (0 si no carga). */
   aCuenta?: number;
+  /** El saldo leído (negativo: a favor), para saber si se le puede anotar. */
+  onSaldo?: (de: string, monto: number) => void;
 }) {
   const [saldo, setSaldo] = useState<{
     de: string;
@@ -44,11 +47,15 @@ export function SaldoDelCliente({
     if (!enLinea) return;
     let vigente = true;
     cuentaDelCliente(cliente.id).then((c) => {
-      if (vigente) setSaldo({ de: cliente.id, monto: c.saldo, sinCobrar: c.sinCobrar });
+      if (!vigente) return;
+      setSaldo({ de: cliente.id, monto: c.saldo, sinCobrar: c.sinCobrar });
+      onSaldo?.(cliente.id, c.saldo);
     });
     return () => {
       vigente = false;
     };
+    // onSaldo es de la pantalla y cambia en cada render: no vuelve a pedir.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cliente.id, enLinea, abierto]);
 
   // El saldo es del cliente que se pidió: si se cambió en el medio, no se muestra.
@@ -61,14 +68,31 @@ export function SaldoDelCliente({
   const limite = cliente.limiteCredito ?? 0;
   const quedan = monto !== null && limite > 0 ? Math.round((limite - Math.max(monto, 0)) * 100) / 100 : null;
   const pasa = quedan !== null && aCuenta > 0 ? Math.round((aCuenta - quedan) * 100) / 100 : 0;
+  /*
+   * El límite en gris, en su renglón, y lo que la venta pasa destacado al
+   * lado del «Debe»: todo junto quedaba apretado en cuatro renglones rojos al
+   * lado del botón (mes simulado, M2S3-101).
+   */
   const lineaDelLimite =
     quedan !== null ? (
-      <span className={`tabular block ${pasa > 0 || quedan <= 0 ? "estado-problema font-semibold" : "text-muted-foreground"}`}>
+      <span className={`tabular block text-sm ${quedan <= 0 ? "estado-problema font-semibold" : "text-muted-foreground"}`}>
         límite {formatearMonto(limite)} · {quedan > 0 ? `quedan ${formatearMonto(quedan)}` : "sin margen"}
-        {pasa > 0 && ` · pasa ${formatearMonto(pasa)} · PIN admin`}
       </span>
     ) : null;
-  if (monto === null) return null;
+  const pasaElLimite =
+    pasa > 0 ? (
+      <span className="tabular estado-problema whitespace-nowrap font-semibold">pasa {formatearMonto(pasa)} · PIN</span>
+    ) : null;
+  // La cuenta bloqueada se ve al elegir al cliente, no recién al cobrar
+  // (M3S3-050); la que no tiene cuenta, también (M2S4-061).
+  const estadoDeLaCuenta = cliente.cuentaBloqueada ? (
+    <span className="estado-problema whitespace-nowrap rounded-md bg-[var(--estado-fondo)] px-1.5 py-0.5 text-sm font-semibold text-[var(--estado-tinta)]">
+      Cuenta bloqueada
+    </span>
+  ) : cliente.limiteCredito === 0 && !(monto !== null && monto < 0) ? (
+    <span className="whitespace-nowrap rounded-md bg-hundida px-1.5 py-0.5 text-sm text-muted-foreground">Sin cuenta corriente</span>
+  ) : null;
+  if (monto === null) return estadoDeLaCuenta ? <p className="px-1">{estadoDeLaCuenta}</p> : null;
   /*
    * Los pedidos entregados sin cobrar no están en la cuenta: se ven acá, con
    * el enlace a su ficha, que es donde se cobran. Antes el pedido
@@ -97,10 +121,19 @@ export function SaldoDelCliente({
       </ul>
     ) : null;
   if (Math.abs(monto) < 0.01) {
-    if (!sinCobrar && !(quedan !== null && aCuenta > 0)) return null;
+    if (!sinCobrar && !(quedan !== null && aCuenta > 0) && !estadoDeLaCuenta) return null;
     return (
       <div className="space-y-1.5">
-        {quedan !== null && aCuenta > 0 && <p className="px-1 text-sm">Sin deuda{lineaDelLimite}</p>}
+        {(estadoDeLaCuenta || (quedan !== null && aCuenta > 0)) && (
+          <div className="px-1 text-sm">
+            <p className="flex flex-wrap items-baseline gap-x-2">
+              {quedan !== null && aCuenta > 0 && <span>Sin deuda</span>}
+              {pasaElLimite}
+              {estadoDeLaCuenta}
+            </p>
+            {aCuenta > 0 && lineaDelLimite}
+          </div>
+        )}
         {sinCobrar}
       </div>
     );
@@ -111,7 +144,8 @@ export function SaldoDelCliente({
       <div className="space-y-1.5">
         <p className="px-1 text-sm text-muted-foreground">
           Tiene <strong className="tabular text-saldo-favor">{formatearMonto(-monto)}</strong> a
-          favor: se usa cobrando con «Cuenta corriente».
+          favor{cliente.cuentaBloqueada ? " " : ": se usa cobrando con «Cuenta corriente»."}
+          {estadoDeLaCuenta}
         </p>
         {sinCobrar}
       </div>
@@ -120,15 +154,21 @@ export function SaldoDelCliente({
 
   return (
     <div className="space-y-1.5">
-    {/* El límite va en su renglón y el botón, sin partirse: con los dos en
-        uno, el botón quedaba apretado en tres renglones y el texto se le
-        salía. Si no entran juntos, el botón baja. */}
-    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-1">
-      <p className="min-w-0 flex-1 basis-56 text-sm">
-        Debe <strong className="tabular text-saldo-debe">{formatearMonto(monto)}</strong>
+    {/* Lo que debe y lo que la venta pasa del límite, juntos y destacados; el
+        límite en gris abajo, y el cobro de la cuenta en su propia fila. */}
+    <div className="space-y-1.5 px-1">
+      <div className="text-sm">
+        <p className="flex flex-wrap items-baseline gap-x-2">
+          <span>
+            Debe <strong className="tabular text-saldo-debe">{formatearMonto(monto)}</strong>
+          </span>
+          {pasaElLimite}
+          {estadoDeLaCuenta}
+        </p>
         {lineaDelLimite}
-      </p>
+      </div>
       <button
+
         type="button"
         data-foco="recibo"
         onClick={() => setAbierto(true)}

@@ -5,15 +5,16 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Lock, Printer } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { fechaHora, formatearImporte, importeIlegible, importeParaElCampo } from "@/lib/formato";
+import { fechaHora, formatearImporte, hora, importeIlegible, importeParaElCampo } from "@/lib/formato";
 import { importeDeCaja, nombreDeLaDiferencia, TOLERANCIA_ARQUEO } from "@/lib/mostrador/arqueo";
 import { encolarMovimiento } from "@/lib/mostrador/offline/cola";
 import type { RenglonDelCierre } from "@/lib/mostrador/tipos";
 import type { LineaDeVenta } from "@/lib/mostrador/importes";
 import { abrirCaja, cerrarCaja, registrarMovimientoDeCaja } from "./actions";
 import { NOMBRE_DEL_MEDIO } from "./medios";
-import type { Sucursal, Turno, Movimiento, VentaDeHoy } from "./tipos";
-import { VentasDeHoy } from "./ventas-de-hoy";
+import type { Sucursal, Turno, Movimiento, TurnoCerradoDelMostrador, VentaDeHoy } from "./tipos";
+import { VentasDeHoy, type DatosParaRehacer } from "./ventas-de-hoy";
+
 
 type Destino = "banco" | "caja_fuerte" | "otro";
 
@@ -24,27 +25,83 @@ const DESTINO: Record<Destino, { motivo: string; chip: string }> = {
   otro: { motivo: "", chip: "" },
 };
 
-/** El retiro dice a dónde va la plata (H333): al banco y a la caja fuerte, sin escribir nada. */
-const MOVIMIENTOS: { tipo: "ingreso" | "retiro"; destino?: Destino; texto: string }[] = [
-  { tipo: "ingreso", texto: "Ingreso" },
-  { tipo: "retiro", destino: "banco", texto: "Al banco" },
-  { tipo: "retiro", destino: "caja_fuerte", texto: "A caja fuerte" },
-  { tipo: "retiro", destino: "otro", texto: "Otro retiro" },
+/** Lo que dice un ingreso sin motivo escrito (MotivoDelOrigen en Go). */
+const ORIGEN: Record<Destino, string> = {
+  banco: "Extracción del banco",
+  caja_fuerte: "De la caja fuerte",
+  otro: "",
+};
+
+/*
+ * El retiro dice a dónde va la plata (H333) y el ingreso de dónde viene
+ * (M3S3-014): de la caja fuerte y del banco, sin escribir nada; «otro», con
+ * el motivo. Una fila para lo que entra y otra para lo que sale.
+ */
+const ENTRA: { destino: Destino; texto: string }[] = [
+  { destino: "caja_fuerte", texto: "De caja fuerte" },
+  { destino: "banco", texto: "Del banco" },
+  { destino: "otro", texto: "Otro ingreso" },
+];
+const SALE: { destino: Destino; texto: string }[] = [
+  { destino: "banco", texto: "Al banco" },
+  { destino: "caja_fuerte", texto: "A caja fuerte" },
+  { destino: "otro", texto: "Otro retiro" },
 ];
 
-/** El turno recién cerrado, como estaba en pantalla: es lo que se imprime. */
+/**
+ * Lo que se paga del cajón es un gasto, con su categoría: el flete pagado en
+ * mano no aparecía en ningún archivo (mes simulado, M3S1-005). Las de
+ * categoria_gasto.
+ */
+const PAGOS: [string, string][] = [
+  ["flete", "Flete"],
+  ["combustible", "Combustible"],
+  ["mantenimiento", "Mantenimiento"],
+  ["servicios", "Servicios"],
+  ["librería", "Librería"],
+  ["sueldos", "Sueldos"],
+  ["otros", "Otro gasto"],
+];
+
+/** El turno cerrado, como se imprime: el recién cerrado o el último de hoy. */
 interface TurnoCerrado {
-  turno: Turno;
+  turno: Pick<Turno, "sucursal" | "abiertaPor" | "abiertaAt" | "fondoInicial" | "ventasEnEfectivo" | "otrosIngresos" | "retiros" | "devoluciones" | "gastos" | "esperado">;
   cierre: RenglonDelCierre[];
+  movimientos: Movimiento[];
   contado: number;
   notas: string;
   mensaje: string;
   cerradoAt: Date;
 }
 
+/** El último turno cerrado hoy (de la pantalla), como se imprime. */
+function papelDelUltimo(u: TurnoCerradoDelMostrador): TurnoCerrado {
+  return {
+    turno: {
+      sucursal: u.sucursal,
+      abiertaPor: u.abiertaPor,
+      abiertaAt: new Date(u.abiertaAt),
+      fondoInicial: u.fondo,
+      ventasEnEfectivo: u.ventas,
+      otrosIngresos: u.otrosIngresos,
+      retiros: u.retiros,
+      devoluciones: u.devoluciones,
+      gastos: u.gastos,
+      esperado: u.esperado,
+    },
+    cierre: u.cierre,
+    movimientos: u.movimientos,
+    contado: u.contado ?? 0,
+    notas: u.notas ?? "",
+    mensaje: "",
+    cerradoAt: u.cerradaAt ? new Date(u.cerradaAt) : new Date(),
+  };
+}
+
 export function PanelDeCaja({
   sucursal,
   turno,
+  ultimoCierre = null,
   fondoBase,
   ultimoContado,
   cajaId,
@@ -60,6 +117,8 @@ export function PanelDeCaja({
 }: {
   sucursal: Sucursal;
   turno: Turno | null;
+  /** El último turno cerrado hoy, para reimprimir su papel (M2S2-064). */
+  ultimoCierre?: TurnoCerradoDelMostrador | null;
   /**
    * El cambio de la sucursal, para poder decirlo **antes** de abrir la caja:
    * con el turno cerrado no hay de dónde leerlo.
@@ -77,8 +136,8 @@ export function PanelDeCaja({
   movimientos: Movimiento[];
   ventas: VentaDeHoy[];
   enLinea: boolean;
-  /** «Anular y rehacer» una venta de hoy: sus renglones vuelven a la venta. */
-  onRehacer?: (renglones: LineaDeVenta[], conCorte: boolean, venta: VentaDeHoy) => void;
+  /** «Anular y rehacer» una venta de hoy: sus renglones, su cliente, cómo pagó y su corte vuelven a la venta. */
+  onRehacer?: (renglones: LineaDeVenta[], conCorte: boolean, venta: VentaDeHoy, datos?: DatosParaRehacer) => void;
   onEncolado: () => void;
   /** Se abrió el turno, con el mensaje de Go. */
   onAbierta?: (mensaje: string) => void;
@@ -89,14 +148,24 @@ export function PanelDeCaja({
   const router = useRouter();
   const [trabajando, empezar] = useTransition();
   // El fondo arranca con lo que quedó contado: es lo normal, y Enter abre.
-  const [fondo, setFondo] = useState(() => (ultimoContado !== null ? importeParaElCampo(ultimoContado) : ""));
+  // La primera vez, con el cambio fijo (M2S1-177).
+  const [fondo, setFondo] = useState(() =>
+    ultimoContado !== null ? importeParaElCampo(ultimoContado) : fondoBase > 0 ? importeParaElCampo(fondoBase) : "",
+  );
   const [motivoApertura, setMotivoApertura] = useState("");
+  /*
+   * La diferencia con lo que quedó, ¿es un conteo mal hecho o plata que
+   * entró o salió? Contar mal no es sacar plata: cargado como retiro, la
+   * caja fuerte sumaba lo que no existía y el sobrante quedaba como ganancia
+   * (mes simulado, M2S3-002).
+   */
+  const [contoMal, setContoMal] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
+  const [cerrado, setCerrado] = useState<TurnoCerrado | null>(null);
   const [contado, setContado] = useState("");
   const [notas, setNotas] = useState("");
   const [monto, setMonto] = useState("");
   const [motivo, setMotivo] = useState("");
-  const [aviso, setAviso] = useState<string | null>(null);
-  const [cerrado, setCerrado] = useState<TurnoCerrado | null>(null);
 
   const efectivoContado = importeDeCaja(contado);
   const diferencia =
@@ -115,7 +184,7 @@ export function PanelDeCaja({
   function abrir() {
     if (!puedeAbrir || fondoTipeado === null) return;
     empezar(async () => {
-      const r = await abrirCaja(sucursal.id, fondoTipeado, { motivo: motivoApertura, cajaId });
+      const r = await abrirCaja(sucursal.id, fondoTipeado, { motivo: motivoApertura, cajaId, corregir: entreTurnos !== 0 && contoMal });
       setAviso(r.error ?? r.ok ?? null);
       if (!r.error) {
         setFondo("");
@@ -123,6 +192,63 @@ export function PanelDeCaja({
         setCerrado(null);
         router.refresh();
         onAbierta?.(r.ok ?? "Caja abierta.");
+      }
+    });
+  }
+
+  /** Un ingreso, un retiro o un pago del cajón (con categoría: un gasto). */
+  function mover(turnoAbierto: Turno, t: "ingreso" | "retiro", destino: Destino, categoria?: string) {
+    empezar(async () => {
+      if (importeDelMovimiento === null) return;
+      /*
+       * El piso de cambio también sin conexión: el servidor lo controla al
+       * registrar el retiro, pero sin conexión no hay servidor y la cuenta
+       * se hace con el esperado que ya está en pantalla. Sin base de cambio,
+       * el piso es cero: el retiro no deja el cajón en negativo (como Go).
+       */
+      const piso = Math.max(0, turnoAbierto.fondoBase);
+      if (t === "retiro" && turnoAbierto.esperado - importeDelMovimiento - piso < -0.009) {
+        const disponible = Math.max(0, Math.round((turnoAbierto.esperado - piso) * 100) / 100);
+        setAviso(
+          piso > 0 && disponible > 0
+            ? `Ese retiro deja el cajón sin el cambio de la base (${formatearImporte(turnoAbierto.fondoBase)}). Podés retirar hasta ${formatearImporte(disponible)}.`
+            : piso > 0
+              ? `No se puede retirar: en el cajón hay ${formatearImporte(turnoAbierto.esperado)} y la base de cambio es ${formatearImporte(turnoAbierto.fondoBase)}.`
+              : disponible > 0
+                ? `En el cajón hay ${formatearImporte(turnoAbierto.esperado)}. Podés retirar hasta ${formatearImporte(disponible)}.`
+                : "No se puede retirar: el cajón no tiene efectivo.",
+        );
+        return;
+      }
+      const motivoFinal = motivo.trim() || (t === "ingreso" ? ORIGEN[destino] : DESTINO[destino].motivo);
+      /*
+       * Sin conexión el movimiento se encola en vez de perderse. La plata
+       * sale del cajón en el momento, no cuando vuelve el wifi: si el retiro
+       * no queda anotado, el arqueo de la noche muestra un faltante que nadie
+       * va a poder explicar.
+       */
+      if (!enLinea) {
+        await encolarMovimiento({
+          clave: crypto.randomUUID(),
+          branchId: sucursal.id,
+          tipo: t,
+          monto: importeDelMovimiento,
+          motivo: motivoFinal,
+          destino,
+          hechoAt: new Date().toISOString(),
+        });
+        setAviso(`${t === "retiro" ? "Retiro" : "Ingreso"} anotado. Se sube cuando vuelva la conexión.`);
+        setMonto("");
+        setMotivo("");
+        onEncolado();
+        return;
+      }
+      const r = await registrarMovimientoDeCaja(turnoAbierto.id, t, importeDelMovimiento, motivo, destino, categoria);
+      setAviso(r.error ?? r.ok ?? null);
+      if (!r.error) {
+        setMonto("");
+        setMotivo("");
+        router.refresh();
       }
     });
   }
@@ -159,8 +285,14 @@ export function PanelDeCaja({
           )}
 
           {/* El turno que se acaba de cerrar, con su papel: al cerrar no
-              quedaba nada para guardar con la plata (H024). */}
-          {cerrado && <ResumenDelCierre cerrado={cerrado} />}
+              quedaba nada para guardar con la plata (H024). Y sin turno
+              abierto, el último cerrado hoy, para reimprimirlo si la
+              impresora falló o se recargó la página (M2S2-064). */}
+          {cerrado ? (
+            <ResumenDelCierre cerrado={cerrado} />
+          ) : (
+            !turno && ultimoCierre && <ResumenDelCierre cerrado={papelDelUltimo(ultimoCierre)} />
+          )}
 
           {!turno ? (
             <div>
@@ -207,24 +339,47 @@ export function PanelDeCaja({
                 />
               </label>
               {entreTurnos !== 0 && (
-                <input
-                  data-foco="entre-turnos"
-                  value={motivoApertura}
-                  onChange={(e) => setMotivoApertura(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      abrir();
+                <>
+                  <div className="mt-2.5 grid grid-cols-2 gap-2" role="group" aria-label="La diferencia">
+                    {[
+                      { valor: false, texto: entreTurnos > 0 ? "Se retiró" : "Se agregó" },
+                      { valor: true, texto: "Se contó mal" },
+                    ].map((o) => (
+                      <button
+                        key={o.texto}
+                        type="button"
+                        aria-pressed={contoMal === o.valor}
+                        onClick={() => setContoMal(o.valor)}
+                        className={`h-11 rounded-xl border text-base font-medium transition-colors ${
+                          contoMal === o.valor ? "border-accion bg-accion text-white" : "border-linea hover:bg-hundida"
+                        }`}
+                      >
+                        {o.texto}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    data-foco="entre-turnos"
+                    value={motivoApertura}
+                    onChange={(e) => setMotivoApertura(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        abrir();
+                      }
+                    }}
+                    placeholder={
+                      contoMal
+                        ? `Había ${formatearImporte(fondoTipeado ?? 0)}, no ${formatearImporte(ultimoContado ?? 0)}`
+                        : entreTurnos > 0
+                          ? `Adónde fueron los ${formatearImporte(entreTurnos)}`
+                          : `De dónde salieron los ${formatearImporte(-entreTurnos)}`
                     }
-                  }}
-                  placeholder={
-                    entreTurnos > 0
-                      ? `Adónde fueron los ${formatearImporte(entreTurnos)}`
-                      : `De dónde salieron los ${formatearImporte(-entreTurnos)}`
-                  }
-                  className="estado-espera mt-2.5 h-12 w-full rounded-lg border border-[var(--estado-acento)] bg-background px-3 text-base"
-                />
+                    className="estado-espera mt-2 h-12 w-full rounded-lg border border-[var(--estado-acento)] bg-background px-3 text-base"
+                  />
+                </>
               )}
+
               <button
                 disabled={!puedeAbrir}
                 onClick={abrir}
@@ -297,96 +452,50 @@ export function PanelDeCaja({
                       className="h-12 min-w-0 flex-1 rounded-lg border border-linea bg-background px-3 text-base"
                     />
                   </div>
+                  {/* Lo que entra y lo que sale, cada uno en su fila. */}
                   <div className="flex flex-wrap gap-2">
-                    {MOVIMIENTOS.map(({ tipo: t, destino, texto }) => (
+                    {ENTRA.map(({ destino, texto }) => (
                       <button
-                        key={texto}
-                        disabled={
-                          trabajando ||
-                          !(importeDelMovimiento !== null && importeDelMovimiento > 0) ||
-                          (!motivo.trim() && (t === "ingreso" || destino === "otro"))
-                        }
-                        onClick={() =>
-                          empezar(async () => {
-                            if (importeDelMovimiento === null) return;
-                            /*
-                             * Sin conexión el movimiento se encola en vez de
-                             * perderse. La plata sale del cajón en el momento,
-                             * no cuando vuelve el wifi: si el retiro no queda
-                             * anotado, el arqueo de la noche muestra un faltante
-                             * que nadie va a poder explicar.
-                             */
-                            /*
-                             * El piso de cambio también sin conexión.
-                             *
-                             * El servidor lo controla al registrar el retiro,
-                             * pero sin conexión no hay servidor: acá la cuenta se
-                             * hace con el esperado que ya está en pantalla. Sin
-                             * esto, la regla que la clienta pidió se caía justo
-                             * el día que se corta internet.
-                             */
-                            // Sin base de cambio, el piso es cero: el
-                            // retiro no deja el cajón en negativo (como Go).
-                            const piso = Math.max(0, turno.fondoBase);
-                            if (
-                              t === "retiro" &&
-                              turno.esperado - importeDelMovimiento - piso < -0.009
-                            ) {
-                              const disponible = Math.max(
-                                0,
-                                Math.round((turno.esperado - piso) * 100) / 100,
-                              );
-                              setAviso(
-                                piso > 0 && disponible > 0
-                                  ? `Ese retiro deja el cajón sin el cambio de la base (${formatearImporte(turno.fondoBase)}). Podés retirar hasta ${formatearImporte(disponible)}.`
-                                  : piso > 0
-                                    ? `No se puede retirar: en el cajón hay ${formatearImporte(turno.esperado)} y la base de cambio es ${formatearImporte(turno.fondoBase)}.`
-                                    : disponible > 0
-                                      ? `En el cajón hay ${formatearImporte(turno.esperado)}. Podés retirar hasta ${formatearImporte(disponible)}.`
-                                      : "No se puede retirar: el cajón no tiene efectivo.",
-                              );
-                              return;
-                            }
-
-                            if (!enLinea) {
-                              await encolarMovimiento({
-                                clave: crypto.randomUUID(),
-                                branchId: sucursal.id,
-                                tipo: t,
-                                monto: importeDelMovimiento,
-                                motivo: motivo.trim() || (destino ? DESTINO[destino].motivo : ""),
-                                ...(destino ? { destino } : {}),
-                                hechoAt: new Date().toISOString(),
-                              });
-                              setAviso(
-                                `${t === "retiro" ? "Retiro" : "Ingreso"} anotado. Se sube cuando vuelva la conexión.`,
-                              );
-                              setMonto("");
-                              setMotivo("");
-                              onEncolado();
-                              return;
-                            }
-
-                            const r = await registrarMovimientoDeCaja(
-                              turno.id,
-                              t,
-                              importeDelMovimiento,
-                              motivo,
-                              destino,
-                            );
-                            setAviso(r.error ?? r.ok ?? null);
-                            if (!r.error) {
-                              setMonto("");
-                              setMotivo("");
-                              router.refresh();
-                            }
-                          })
-                        }
+                        key={`entra-${destino}`}
+                        disabled={trabajando || !(importeDelMovimiento !== null && importeDelMovimiento > 0) || (destino === "otro" && !motivo.trim())}
+                        onClick={() => mover(turno, "ingreso", destino)}
                         className="h-12 rounded-lg border border-linea px-4 text-base font-medium transition-colors hover:bg-hundida disabled:opacity-40"
                       >
                         {texto}
                       </button>
                     ))}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {SALE.map(({ destino, texto }) => (
+                      <button
+                        key={`sale-${destino}`}
+                        disabled={trabajando || !(importeDelMovimiento !== null && importeDelMovimiento > 0) || (destino === "otro" && !motivo.trim())}
+                        onClick={() => mover(turno, "retiro", destino)}
+                        className="h-12 rounded-lg border border-linea px-4 text-base font-medium transition-colors hover:bg-hundida disabled:opacity-40"
+                      >
+                        {texto}
+                      </button>
+                    ))}
+                    {/* El pago del cajón, con su categoría: va como gasto. Sin
+                        conexión no, porque el gasto lo registra el servidor. */}
+                    <label className="contents">
+                      <span className="sr-only">Pago del cajón</span>
+                      <select
+                        value=""
+                        disabled={trabajando || !enLinea || !(importeDelMovimiento !== null && importeDelMovimiento > 0) || !motivo.trim()}
+                        onChange={(e) => {
+                          if (e.target.value) mover(turno, "retiro", "otro", e.target.value);
+                        }}
+                        className="h-12 rounded-lg border border-linea bg-background px-3 text-base font-medium transition-colors hover:bg-hundida disabled:opacity-40"
+                      >
+                        <option value="">Pago…</option>
+                        {PAGOS.map(([valor, texto]) => (
+                          <option key={valor} value={valor}>
+                            {texto}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                   </div>
                 </div>
               </section>
@@ -485,6 +594,7 @@ export function PanelDeCaja({
                         setCerrado({
                           turno,
                           cierre,
+                          movimientos,
                           contado: efectivoContado,
                           notas: notas.trim(),
                           mensaje: r.ok ?? "Caja cerrada.",
@@ -518,11 +628,21 @@ export function PanelDeCaja({
                   </h3>
                   <ul className="mt-2 divide-y divide-linea">
                     {movimientos.map((m) => (
-                      <li key={m.id} className="flex items-center gap-3 py-2.5">
+                      <li
+                        key={m.id}
+                        className={`flex items-center gap-3 py-2.5 ${m.anulado ? "text-muted-foreground line-through" : ""}`}
+                      >
                         <span className="min-w-0 flex-1 truncate text-base">
                           {m.motivo ?? m.tipo}
                         </span>
-                        {m.destino && m.destino !== "otro" && !m.motivo?.startsWith(DESTINO[m.destino].motivo) && (
+                        {/* Lo que cargó otra persona (un recibo cobrado desde el
+                            panel), con su nombre: entraba en silencio (M2S2-063). */}
+                        {m.otroPuesto && m.quien && (
+                          <span className="estado-info shrink-0 rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm text-[var(--estado-tinta)]">
+                            {m.quien}
+                          </span>
+                        )}
+                        {m.tipo === "retiro" && m.destino && m.destino !== "otro" && !m.motivo?.startsWith(DESTINO[m.destino].motivo) && (
                           <span className="shrink-0 rounded-full bg-hundida px-2.5 py-0.5 text-sm text-muted-foreground">
                             {DESTINO[m.destino].chip}
                           </span>
@@ -604,7 +724,10 @@ export function CuentaDelTurno({
 function CierreZ({ cierre }: { cierre: RenglonDelCierre[] }) {
   const grupos: [string, RenglonDelCierre[]][] = [
     ["Cobrado en el turno", cierre.filter((r) => !r.devolucion && !r.cobranza && r.medioPago !== "cuenta_corriente")],
-    ["Cobros de cuenta", cierre.filter((r) => r.cobranza)],
+    // El cobro de un pedido en efectivo entraba como «otro ingreso» y no
+    // figuraba acá (M2S2-130).
+    ["Cobros de pedidos", cierre.filter((r) => r.cobranza && r.dePedido)],
+    ["Cobros de cuenta", cierre.filter((r) => r.cobranza && !r.dePedido)],
     ["Vendido a cuenta", cierre.filter((r) => !r.devolucion && !r.cobranza && r.medioPago === "cuenta_corriente")],
     ["Devoluciones", cierre.filter((r) => r.devolucion)],
   ];
@@ -621,8 +744,13 @@ function CierreZ({ cierre }: { cierre: RenglonDelCierre[] }) {
                   key={`${r.medioPago}-${r.quien ?? ""}`}
                   className="flex items-baseline justify-between gap-3 px-4 py-2.5"
                 >
+                  {/* El medio real y el pedido de cada devolución, y el
+                      recibo y quién cobró lo que tomó otra persona: decía
+                      «Cuenta corriente · Sim Mostrador» de una transferencia
+                      (M2S1-081, M3S1-060, M2S2-007). */}
                   <dt className="min-w-0 text-base">
                     {NOMBRE_DEL_MEDIO[r.medioPago] ?? r.medioPago}
+                    {r.pedidos && <span className="codigo"> · {r.pedidos}</span>}
                     {r.quien && ` · ${r.quien}`}
                     <span className="ml-1.5 text-sm text-muted-foreground">({r.cantidad})</span>
                   </dt>
@@ -642,15 +770,29 @@ function CierreZ({ cierre }: { cierre: RenglonDelCierre[] }) {
  * al imprimir se ve solo ella, sin el mostrador de atrás.
  */
 function ResumenDelCierre({ cerrado }: { cerrado: TurnoCerrado }) {
-  const { turno, cierre, contado, notas, mensaje, cerradoAt } = cerrado;
+  const { turno, cierre, movimientos, contado, notas, mensaje, cerradoAt } = cerrado;
   const diferencia = contado - turno.esperado;
+  /*
+   * Los retiros por destino, con su motivo: el papel decía «Retiros −$
+   * 620.000» en una línea, y es lo que el cajero firma y entrega con el
+   * depósito (mes simulado, M2S3-098).
+   */
+  const retiros = movimientos.filter((m) => m.tipo === "retiro");
+  const porDestino = (["banco", "caja_fuerte", "otro"] as const)
+    .map((d) => ({
+      destino: d,
+      filas: retiros.filter((m) => (m.destino ?? "otro") === d),
+    }))
+    .filter((g) => g.filas.length > 0);
   return (
     <section className="tarjeta-hundida mb-5 rounded-xl p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-base font-semibold">{mensaje}</p>
+        <p className="text-base font-semibold">
+          {mensaje || `Último cierre · ${hora.format(cerradoAt)}`}
+        </p>
         <button
           type="button"
-          autoFocus
+          autoFocus={Boolean(mensaje)}
           onClick={() => window.print()}
           className="inline-flex h-11 items-center gap-2 rounded-lg border border-linea bg-background px-4 text-base font-medium transition-colors hover:bg-hundida"
         >
@@ -677,12 +819,30 @@ function ResumenDelCierre({ cerrado }: { cerrado: TurnoCerrado }) {
               ] as [string, number][]
             )
               .filter(([t, v]) => v !== 0 || t === "Fondo inicial")
-              .map(([t, v]) => (
-                <p key={t} className="linea-datos">
-                  <span>{t}</span>
-                  <span>{formatearImporte(v)}</span>
-                </p>
-              ))}
+              .map(([t, v]) =>
+                t === "Retiros" && porDestino.length > 0 ? (
+                  porDestino.map((g) => (
+                    <div key={g.destino}>
+                      <p className="linea-datos">
+                        <span>{g.destino === "banco" ? "Al banco" : g.destino === "caja_fuerte" ? "A caja fuerte" : "Otros retiros"}</span>
+                        <span>{formatearImporte(g.filas.reduce((s, m) => s + m.monto, 0))}</span>
+                      </p>
+                      {g.destino === "otro" &&
+                        g.filas.map((m) => (
+                          <p key={m.id} className="linea-datos">
+                            <span>· {m.motivo ?? "Retiro"}</span>
+                            <span>{formatearImporte(m.monto)}</span>
+                          </p>
+                        ))}
+                    </div>
+                  ))
+                ) : (
+                  <p key={t} className="linea-datos">
+                    <span>{t}</span>
+                    <span>{formatearImporte(v)}</span>
+                  </p>
+                ),
+              )}
             <p className="linea-datos total">
               <span>Debería haber</span>
               <span>{formatearImporte(turno.esperado)}</span>
@@ -700,8 +860,17 @@ function ResumenDelCierre({ cerrado }: { cerrado: TurnoCerrado }) {
             {cierre.map((r) => (
               <p key={`${r.devolucion ? "d" : r.cobranza ? "c" : "v"}-${r.medioPago}-${r.quien ?? ""}`} className="linea-datos">
                 <span>
-                  {r.devolucion ? "Devolución · " : r.cobranza ? "Cobro de cuenta · " : r.medioPago === "cuenta_corriente" ? "A cuenta · " : ""}
-                  {NOMBRE_DEL_MEDIO[r.medioPago] ?? r.medioPago} ({r.cantidad})
+                  {r.devolucion
+                    ? "Devolución · "
+                    : r.cobranza
+                      ? r.dePedido
+                        ? "Cobro de pedido · "
+                        : "Cobro de cuenta · "
+                      : r.medioPago === "cuenta_corriente"
+                        ? "A cuenta · "
+                        : ""}
+                  {NOMBRE_DEL_MEDIO[r.medioPago] ?? r.medioPago}
+                  {r.pedidos && ` · ${r.pedidos}`} ({r.cantidad})
                 </span>
                 <span>{formatearImporte(r.total)}</span>
               </p>

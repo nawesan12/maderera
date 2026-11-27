@@ -359,10 +359,11 @@ paths:
                 type: array
                 items:
                   type: object
-                  required: [id, numero, material, estado, urgente, createdAt, variantId, placasEnteras, sinCargo]
+                  required: [id, numero, material, estado, urgente, createdAt, variantId, placasEnteras, sinCargo, piezas]
                   properties:
                     id: { type: string }
                     numero: { type: string }
+                    piezas: { type: integer, description: "las piezas del despiece (el ticket dice «Corte CRT-16 · 6 piezas»)" }
                     material: { type: string }
                     estado: { type: string }
                     urgente: { type: integer }

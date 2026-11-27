@@ -67,8 +67,13 @@ export interface RenglonDelCierre {
    * devoluciones parciales hechas en este turno.
    */
   devolucion: boolean;
-  /** Quién hizo las devoluciones parciales de la fila. */
+  /** Quién cobró el recibo, si no es quien abrió el turno. */
   quien?: string | null;
-  /** Lo cobrado por recibos de cuenta en el mostrador durante el turno. */
+  /** Lo cobrado por recibos durante el turno. */
   cobranza?: boolean;
+  /** El cobro es de un pedido, no de la cuenta. */
+  dePedido?: boolean;
+  /** Los pedidos de las devoluciones, o los recibos que cobró otra persona. */
+  pedidos?: string | null;
 }
+

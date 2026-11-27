@@ -1640,6 +1640,8 @@ export interface operations {
                     "application/json": {
                         id: string;
                         numero: string;
+                        /** @description las piezas del despiece (el ticket dice «Corte CRT-16 · 6 piezas») */
+                        piezas: number;
                         material: string;
                         estado: string;
                         urgente: number;

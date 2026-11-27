@@ -29,6 +29,9 @@ import * as schema from "../lib/db/schema";
 const SOLO_EN_GO = new Set([
   "goose_db_version",
   "bases_de_retencion",
+  // Lo que sale de la caja fuerte al banco (00350): lo escribe solo Go.
+  "caja_fuerte_movimientos",
+
   "purchase_invoice_receipts",
   "supplier_payment_cheques",
   "cheque_estados",

@@ -457,7 +457,11 @@ const RetiroAlBanco = `coalesce(m.destino = 'banco', m.motivo ~* '(banco|dep[oó
 // que no fue al banco se tomaba como de la caja fuerte, y se sigue tomando
 // así; el que dice «otro» (un pago en mano, el dueño que se lleva plata) no
 // es plata de la casa que esté en algún lado.
-const RetiroACajaFuerte = `coalesce(m.destino = 'caja_fuerte', NOT coalesce(m.motivo ~* '(banco|dep[oó]sit)', false))`
+//
+// La diferencia «entre turnos» sin destino no fue a la caja fuerte: era un
+// conteo mal hecho, y la caja fuerte sumaba plata que no existía (mes
+// simulado, M2S3-002).
+const RetiroACajaFuerte = `coalesce(m.destino = 'caja_fuerte', NOT coalesce(m.motivo ~* '(banco|dep[oó]sit)', false) AND coalesce(m.motivo, '') NOT LIKE 'Entre turnos:%')`
 
 // PlataHoy: las cajas (abiertas, o la de hoy ya cerrada), lo retirado hoy a
 // la caja fuerte, lo que entró y salió hoy del banco, lo cobrado por Mercado

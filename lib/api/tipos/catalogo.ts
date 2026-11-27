@@ -429,6 +429,8 @@ export interface components {
             cuidados: string | null;
             documentos: components["schemas"]["DocumentoDeFicha"][];
             documentosReservados: number;
+            /** @description Los ids de los reservados */
+            reservados?: string[];
         };
         DocumentoDeFicha: {
             id: string;

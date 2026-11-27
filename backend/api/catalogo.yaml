@@ -493,6 +493,7 @@ components:
         cuidados: { type: string, nullable: true }
         documentos: { type: array, items: { $ref: "#/components/schemas/DocumentoDeFicha" } }
         documentosReservados: { type: integer }
+        reservados: { type: array, items: { type: string }, description: Los ids de los reservados, sin título }
     DocumentoDeFicha:
       type: object
       required: [id, titulo, descripcion, url, formato, tamanoBytes]

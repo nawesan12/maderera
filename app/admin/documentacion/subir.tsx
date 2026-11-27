@@ -1,8 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
+import { toast } from "sonner";
 import {
-  Check,
   FileText,
   HardHat,
   Loader2,
@@ -24,12 +24,20 @@ const inicial: EstadoDocumento = {};
  */
 export function SubirDocumento({ categorias }: { categorias: string[] }) {
   const [estado, accion, subiendo] = useActionState(subirDocumento, inicial);
+  const formulario = useRef<HTMLFormElement>(null);
+  // La confirmación junto al botón no se veía (M2S1-171): el aviso y el
+  // formulario limpio dicen que se publicó.
+  useEffect(() => {
+    if (!estado.ok) return;
+    toast.success(estado.ok);
+    formulario.current?.reset();
+  }, [estado]);
 
   return (
     <section className="space-y-4">
       <h2 className="text-base font-medium">Publicar un documento</h2>
 
-      <form action={accion} className="space-y-4">
+      <form ref={formulario} action={accion} className="space-y-4">
         <Hoja>
           <Seccion titulo="Documento" icono={FileText}>
             <div className="md:col-span-2">
@@ -110,13 +118,6 @@ export function SubirDocumento({ categorias }: { categorias: string[] }) {
           <p className="flex items-start gap-2 text-base text-destructive">
             <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
             {estado.error}
-          </p>
-        )}
-
-        {estado.ok && (
-          <p className="flex items-center gap-2 text-base text-muted-foreground">
-            <Check className="h-4 w-4 text-brand-green" />
-            {estado.ok}
           </p>
         )}
 

@@ -151,7 +151,7 @@ func (q *Queries) DocumentosDelPanel(ctx context.Context) ([]DocumentosDelPanelR
 }
 
 const documentosReservados = `-- name: DocumentosReservados :one
-SELECT count(*)::int FROM technical_documents WHERE activo AND solo_profesionales
+SELECT count(*)::int FROM technical_documents WHERE activo AND solo_profesionales AND tamano_bytes IS NOT NULL
 `
 
 func (q *Queries) DocumentosReservados(ctx context.Context) (int32, error) {
@@ -164,7 +164,7 @@ func (q *Queries) DocumentosReservados(ctx context.Context) (int32, error) {
 const documentosVisibles = `-- name: DocumentosVisibles :many
 SELECT id, titulo, descripcion, categoria, url, formato, tamano_bytes, solo_profesionales
 FROM technical_documents
-WHERE activo AND ($1::boolean OR NOT solo_profesionales)
+WHERE activo AND tamano_bytes IS NOT NULL AND ($1::boolean OR NOT solo_profesionales)
 ORDER BY orden, titulo
 `
 
@@ -180,7 +180,9 @@ type DocumentosVisiblesRow struct {
 }
 
 // El permiso va dentro de la consulta: listar todo y filtrar en la pantalla
-// ya sería haber leído lo que no corresponde.
+// ya sería haber leído lo que no corresponde. Sin archivo subido (tamaño
+// nulo: los de la semilla apuntaban a /fichas/, que la API no sirve) no se
+// lista: daba 404 al tocarlo (mes simulado, M2S1-025).
 func (q *Queries) DocumentosVisibles(ctx context.Context, profesional bool) ([]DocumentosVisiblesRow, error) {
 	rows, err := q.db.Query(ctx, documentosVisibles, profesional)
 	if err != nil {

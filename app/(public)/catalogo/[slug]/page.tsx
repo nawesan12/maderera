@@ -5,10 +5,11 @@ import { notFound } from "next/navigation";
 import {
   ChevronRight,
   FileText,
-  Lock,
   Store,
   Truck,
 } from "lucide-react";
+import { DocumentosReservados } from "@/components/catalogo/documentos-reservados";
+import { reservadosParaQuienMira } from "@/lib/dal/profesionales";
 import { ProductCard } from "@/components/product-card";
 import { GaleriaProducto } from "@/components/catalogo/galeria-producto";
 import { MedidaElegida } from "@/components/catalogo/medida-elegida";
@@ -519,19 +520,10 @@ function FichaTecnica({
                   </li>
                 ))}
                 {producto.documentosReservados > 0 && (
-                  <li>
-                    <Link
-                      href="/profesionales"
-                      className="flex items-center gap-3 px-4 py-3 text-texto-2 transition-colors hover:bg-sitio-alt"
-                    >
-                      <Lock className="h-5 w-5 shrink-0" />
-                      <span className="flex-1">
-                        {producto.documentosReservados === 1
-                          ? "1 documento para profesionales"
-                          : `${producto.documentosReservados} documentos para profesionales`}
-                      </span>
-                    </Link>
-                  </li>
+                  <DocumentosReservados
+                    cantidad={producto.documentosReservados}
+                    paraQuienMira={reservadosParaQuienMira(producto.reservados)}
+                  />
                 )}
               </ul>
             </div>

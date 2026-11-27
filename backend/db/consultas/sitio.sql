@@ -11,14 +11,16 @@ SELECT EXISTS (
 
 -- name: DocumentosVisibles :many
 -- El permiso va dentro de la consulta: listar todo y filtrar en la pantalla
--- ya sería haber leído lo que no corresponde.
+-- ya sería haber leído lo que no corresponde. Sin archivo subido (tamaño
+-- nulo: los de la semilla apuntaban a /fichas/, que la API no sirve) no se
+-- lista: daba 404 al tocarlo (mes simulado, M2S1-025).
 SELECT id, titulo, descripcion, categoria, url, formato, tamano_bytes, solo_profesionales
 FROM technical_documents
-WHERE activo AND (sqlc.arg(profesional)::boolean OR NOT solo_profesionales)
+WHERE activo AND tamano_bytes IS NOT NULL AND (sqlc.arg(profesional)::boolean OR NOT solo_profesionales)
 ORDER BY orden, titulo;
 
 -- name: DocumentosReservados :one
-SELECT count(*)::int FROM technical_documents WHERE activo AND solo_profesionales;
+SELECT count(*)::int FROM technical_documents WHERE activo AND solo_profesionales AND tamano_bytes IS NOT NULL;
 
 -- name: EventosProximos :many
 SELECT e.id, e.slug, e.titulo, e.resumen, e.imagen_url, e.lugar, e.inicia, e.termina, e.cupo, e.precio,

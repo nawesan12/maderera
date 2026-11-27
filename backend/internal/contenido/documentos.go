@@ -7,6 +7,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"golang.org/x/text/unicode/norm"
+
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/auth"
@@ -132,33 +134,70 @@ func URLDelDocumento(id string) string { return "/api/v1/contenido/documentos/" 
 // sesión: el abierto, para cualquiera; el reservado, para los profesionales
 // aprobados; el dado de baja, solo para el panel. «No existe» y «no te
 // corresponde» son lo mismo (nil): un 403 confirmaría que el documento está.
-func (s *Servicio) ArchivoDeDocumento(ctx context.Context, ses *auth.Sesion, id string) (datos []byte, tipo string, publico bool, err error) {
+//
+// Nombre es como se guarda al bajarlo: el título del documento con su
+// formato («tabla-de-cargas.pdf»), no «archivo.pdf», que es lo último de la
+// ruta (mes simulado, M2S1-171).
+func (s *Servicio) ArchivoDeDocumento(ctx context.Context, ses *auth.Sesion, id string) (datos []byte, tipo string, publico bool, nombre string, err error) {
 	if !plataforma.UUIDValido(id) {
-		return nil, "", false, nil
+		return nil, "", false, "", nil
 	}
-	var ref string
+	var ref, titulo, formato string
 	var activo, reservado bool
-	err = s.pool.QueryRow(ctx, `SELECT url, activo, solo_profesionales FROM technical_documents WHERE id = $1`, id).Scan(&ref, &activo, &reservado)
+	err = s.pool.QueryRow(ctx, `SELECT url, activo, solo_profesionales, titulo, formato FROM technical_documents WHERE id = $1`, id).
+		Scan(&ref, &activo, &reservado, &titulo, &formato)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, "", false, nil
+		return nil, "", false, "", nil
 	}
 	if err != nil {
-		return nil, "", false, err
+		return nil, "", false, "", err
 	}
+	nombre = NombreDeArchivo(titulo, formato)
 	puede := activo && !reservado
 	if !puede && ses.Tiene(roles.QuienEntra("/admin/documentacion")...) {
 		puede = true
 	}
 	if !puede && activo && reservado {
 		if puede, err = s.esProfesional(ctx, ses); err != nil {
-			return nil, "", false, err
+			return nil, "", false, "", err
 		}
 	}
 	if !puede {
-		return nil, "", false, nil
+		return nil, "", false, "", nil
 	}
 	datos, tipo = s.disco.LeerGuardado(ref)
-	return datos, tipo, activo && !reservado, nil
+	return datos, tipo, activo && !reservado, nombre, nil
+}
+
+// NombreDeArchivo es el título sin tildes, en minúsculas y con guiones, más
+// el formato: «Sim ficha técnica de prueba» → «sim-ficha-tecnica-de-prueba.pdf».
+func NombreDeArchivo(titulo, formato string) string {
+	var b strings.Builder
+	guion := false
+	for _, r := range norm.NFD.String(strings.ToLower(titulo)) {
+		switch {
+		case r >= 0x300 && r <= 0x36f:
+		case r >= 'a' && r <= 'z' || r >= '0' && r <= '9':
+			if guion && b.Len() > 0 {
+				b.WriteByte('-')
+			}
+			guion = false
+			b.WriteRune(r)
+		default:
+			guion = true
+		}
+	}
+	n := b.String()
+	if len(n) > 80 {
+		n = strings.TrimRight(n[:80], "-")
+	}
+	if n == "" {
+		n = "documento"
+	}
+	if formato != "" {
+		n += "." + formato
+	}
+	return n
 }
 
 // Destino es un producto o una categoría a la que está atado un documento.

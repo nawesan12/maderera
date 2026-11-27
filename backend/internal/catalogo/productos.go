@@ -788,6 +788,8 @@ type ProductoDetalle struct {
 	// vista de cualquiera. De los reservados va la cantidad.
 	Documentos           []DocumentoDeFicha `json:"documentos"`
 	DocumentosReservados int                `json:"documentosReservados"`
+	// Reservados son los ids de esos documentos, sin título.
+	Reservados []string `json:"reservados"`
 }
 
 // DocumentoDeFicha es un documento técnico en la ficha del producto.
@@ -972,10 +974,11 @@ func quitarTildes(s string) string {
 // reservados a profesionales.
 func (s *Servicio) documentosDeFicha(ctx context.Context, p *ProductoDetalle, categoriaID string) error {
 	p.Documentos = []DocumentoDeFicha{}
+	p.Reservados = []string{}
 	filas, err := s.pool.Query(ctx, `
 		SELECT d.id::text, d.titulo, d.descripcion, d.url, d.formato, d.tamano_bytes, d.solo_profesionales
 		FROM technical_documents d
-		WHERE d.activo AND EXISTS (
+		WHERE d.activo AND d.tamano_bytes IS NOT NULL AND EXISTS (
 			SELECT 1 FROM technical_document_targets t
 			WHERE t.document_id = d.id AND (t.product_id = $1 OR t.category_id = $2::uuid))
 		ORDER BY d.orden, d.titulo`, p.ID, categoriaID)
@@ -994,7 +997,10 @@ func (s *Servicio) documentosDeFicha(ctx context.Context, p *ProductoDetalle, ca
 		// archivo se sirve por la API, que decide quién lo puede bajar.
 		d.URL = "/api/v1/contenido/documentos/" + d.ID + "/archivo"
 		if reservado {
+			// El id solo: quien es profesional lo baja desde la ficha
+			// (la API mira la sesión); el título no va a la caché compartida.
 			p.DocumentosReservados++
+			p.Reservados = append(p.Reservados, d.ID)
 			continue
 		}
 		p.Documentos = append(p.Documentos, d)

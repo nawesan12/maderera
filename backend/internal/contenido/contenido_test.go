@@ -719,6 +719,34 @@ func TestPanelDeDocumentacion(t *testing.T) {
 		t.Errorf("abierto a todos y no se ve: %s", b)
 	}
 	baja("anónimo, abierto", anon, 200)
+	// M2S1-171: se guarda con el nombre del documento, no «archivo.pdf».
+	if r, err := anon.Get(archivo); err != nil {
+		t.Fatal(err)
+	} else {
+		_ = r.Body.Close()
+		if d := r.Header.Get("Content-Disposition"); d != `inline; filename="tabla-de-cargas.pdf"` {
+			t.Errorf("el nombre al bajarlo: %q", d)
+		}
+	}
+	// M2S1-025: uno sin archivo subido (los de la semilla, tamaño nulo) no
+	// se lista ni cuenta: daba 404 al tocarlo.
+	if _, err := e.pool.Exec(context.Background(), `insert into technical_documents (titulo, categoria, url, formato, solo_profesionales)
+		values ('Placa OSB estructural', 'Placas', '/fichas/ficha-tecnica-osb.pdf', 'pdf', false),
+		       ('Tirantería de pino', 'Estructura', '/fichas/tabla-de-cargas-tirantes.pdf', 'pdf', true)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, b := pedir(t, anon, "GET", e.srv.URL+"/api/v1/contenido/documentos", nil); strings.Contains(string(b), "OSB") {
+		t.Errorf("se lista un documento sin archivo: %s", b)
+	}
+	if _, b := pedir(t, pro, "GET", e.srv.URL+"/api/v1/contenido/documentos", nil); strings.Contains(string(b), "Tirantería") {
+		t.Errorf("se lista al profesional un documento sin archivo: %s", b)
+	}
+	if _, b := pedir(t, anon, "GET", e.srv.URL+"/api/v1/contenido/documentos/reservados", nil); string(b) != "0\n" {
+		t.Errorf("cuenta un reservado sin archivo: %s", b)
+	}
+	if _, err := e.pool.Exec(context.Background(), `delete from technical_documents where tamano_bytes is null`); err != nil {
+		t.Fatal(err)
+	}
 	if c, _ := pedir(t, adm, "POST", u+"/"+docs[0].ID+"/activo", map[string]bool{"activo": false}); c != 204 {
 		t.Fatal("baja")
 	}

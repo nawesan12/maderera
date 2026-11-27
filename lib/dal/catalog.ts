@@ -157,6 +157,8 @@ export interface ProductoDetalle {
   documentos: DocumentoDeFicha[];
   /** Cuántos hay reservados a profesionales: de esos va solo el número. */
   documentosReservados: number;
+  /** Los ids de esos reservados, sin título (los baja el profesional). */
+  reservados: string[];
 }
 
 export interface DocumentoDeFicha {
@@ -414,7 +416,7 @@ const fichaCacheada = cachearPublico(
 
 export const obtenerProductoPublico = cache(async (slug: string): Promise<ProductoDetalle | null> => {
   const p = await fichaCacheada(slug);
-  return p && { ...p, usos: p.usos ?? null, cuidados: p.cuidados ?? null, documentos: p.documentos ?? [], documentosReservados: p.documentosReservados ?? 0 };
+  return p && { ...p, usos: p.usos ?? null, cuidados: p.cuidados ?? null, documentos: p.documentos ?? [], documentosReservados: p.documentosReservados ?? 0, reservados: p.reservados ?? [] };
 });
 
 /**

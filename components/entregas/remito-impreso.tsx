@@ -275,7 +275,11 @@ export function RemitoImpreso({
 /** La unidad concordada: «placas», «rollos»; lo abreviado no cambia. */
 function unidadDe(unidad: string, cantidad: number, descripcion: string): string {
   if (unidad === "pasada") return cantidad === 1 ? "corte" : "cortes";
-  const u = formatearUnidad(unidadDeVenta(unidad, descripcion));
+  const deVenta = unidadDeVenta(unidad, descripcion);
+  // «1 media», como la firma, el PDF y el formulario (cantidadConUnidad):
+  // acá decía «1 media placa» (mes 23).
+  if (deVenta === "media_placa") return cantidad === 1 ? "media" : "medias";
+  const u = formatearUnidad(deVenta);
   return cantidad === 1 ? u : unidadEnPlural(u);
 }
 

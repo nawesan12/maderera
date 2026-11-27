@@ -78,7 +78,6 @@ export function FormularioDatos({
               type="tel"
               defaultValue={telefono}
               autoComplete="tel"
-              placeholder="223 590-3118"
             />
           </div>
         </div>
@@ -109,7 +108,10 @@ export function FormularioDatos({
             ].map(([etiqueta, valor]) => (
               <div key={etiqueta} className="min-w-0">
                 <dt className="text-sm text-muted-foreground">{etiqueta}</dt>
-                <dd className="tabular mt-0.5 font-medium [overflow-wrap:anywhere]">
+                {/* La letra del texto: en monoespaciada la razón social
+                    parecía código (M3S1-047). Solo el CUIT va en cifras
+                    tabulares. */}
+                <dd className={`mt-0.5 font-medium [overflow-wrap:anywhere] ${etiqueta === "CUIT" ? "tabular" : ""}`}>
                   {valor}
                 </dd>
               </div>
@@ -132,7 +134,6 @@ export function FormularioDatos({
                   id="razonSocial"
                   name="razonSocial"
                   defaultValue={razonSocial}
-                  placeholder="Constructora del Sur S.R.L."
                 />
               </div>
               <div className="space-y-2">
@@ -141,7 +142,6 @@ export function FormularioDatos({
                   id="cuit"
                   name="cuit"
                   defaultValue={cuit}
-                  placeholder="20-12345678-9"
                   inputMode="numeric"
                   className="tabular"
                 />

@@ -5,6 +5,7 @@ import { Loader2, Search, UserRound, X } from "lucide-react";
 import { buscarClientes } from "@/app/mostrador/actions";
 import { camposDelFormulario, enfocarCampo } from "@/components/admin/enter-avanza";
 import { enterEnBuscador } from "@/lib/teclado/avance";
+import { formatearCuit } from "@/lib/formato";
 
 export interface ClienteElegido {
   id: string;
@@ -141,14 +142,14 @@ export function ElegirCliente({
         {oculto}
         <div className={`tarjeta-hundida flex ${alto} items-center gap-3 px-4 py-1.5`}>
           <UserRound className="h-5 w-5 shrink-0 text-muted-foreground" />
-          <span className="min-w-0 flex-1 truncate text-base font-medium">
+          <span className="min-w-0 flex-1">
             {/* El nombre, como la ficha y la lista de clientes; la razón
-                social va en la lista de resultados, debajo (mes simulado). */}
-            {elegido.nombre || elegido.razonSocial}
+                social va en la lista de resultados, debajo (mes simulado).
+                Entero, sin cortar, y el CUIT con guiones abajo: a 375 px
+                quedaba «Sim Techos C…» (M2S1-041). */}
+            <span className="block break-words text-base font-medium">{elegido.nombre || elegido.razonSocial}</span>
             {elegido.cuit && (
-              <span className="tabular ml-2 font-normal text-muted-foreground">
-                {elegido.cuit}
-              </span>
+              <span className="tabular block text-sm text-muted-foreground">{formatearCuit(elegido.cuit)}</span>
             )}
           </span>
           <button

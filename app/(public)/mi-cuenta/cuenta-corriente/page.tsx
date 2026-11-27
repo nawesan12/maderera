@@ -272,7 +272,9 @@ export default async function CuentaCorrientePage({
                   <div className="min-w-0 flex-1">
                     <p className="flex min-w-0 items-baseline gap-2 text-[15px]">
                       <span className="tabular shrink-0 text-sm text-muted-foreground">{fechaCorta.format(m.createdAt)}</span>
-                      <span className="min-w-0 truncate">
+                      {/* Parte en dos renglones antes que cortar: a 375 se
+                          perdía el número («Factura A 00…», mes 23). */}
+                      <span className="min-w-0 [overflow-wrap:anywhere]">
                         {rechazo ? (
                           <span className="font-medium text-saldo-debe">Cheque rechazado</span>
                         ) : concepto ? (

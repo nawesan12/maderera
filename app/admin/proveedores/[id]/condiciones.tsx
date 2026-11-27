@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState, useTransition } from "react";
+import { useActionState, useState, useTransition } from "react";
 import { Confirmar } from "@/components/admin/confirmar";
 import {
   ArrowRightLeft,
@@ -150,16 +150,14 @@ export function CondicionesDelProveedor({
  * ficha. Arranca en el plazo de la ficha.
  */
 function AltaDeCondicion({ supplierId, diasPago }: { supplierId: string; diasPago: number }) {
-  const [estado, guardar, guardando] = useActionState(
-    guardarCondicion,
-    inicial,
-  );
   const [abierta, setAbierta] = useState(false);
   // Agregada, el formulario se cierra y vuelve «Sumar una condición»
   // (M2S2-082): quedaba abierto y el botón desaparecía.
-  useEffect(() => {
-    if (estado.ok) setAbierta(false);
-  }, [estado]);
+  const [estado, guardar, guardando] = useActionState(async (previo: EstadoCondicion, datos: FormData) => {
+    const r = await guardarCondicion(previo, datos);
+    if (r.ok) setAbierta(false);
+    return r;
+  }, inicial);
 
   if (!abierta) {
     return (

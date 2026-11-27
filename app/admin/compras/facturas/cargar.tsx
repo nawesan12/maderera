@@ -180,7 +180,10 @@ export function CargarFactura({
   const [diferenciaVista, setDiferenciaVista] = useState(false);
   // Lo que una nota de crédito devuelve (M3S2-016): por renglón de las
   // recepciones del proveedor, la cantidad que sale del stock.
-  const [devolvibles, setDevolvibles] = useState<Awaited<ReturnType<typeof verDevolvibles>>>([]);
+  const [devolviblesDe, setDevolviblesDe] = useState<{ de: string; filas: Awaited<ReturnType<typeof verDevolvibles>> }>({
+    de: "",
+    filas: [],
+  });
   const [devuelve, setDevuelve] = useState<Record<string, string>>({});
 
   const proveedor = proveedores.find((p) => p.id === supplierId);
@@ -192,19 +195,19 @@ export function CargarFactura({
         .sort((a, b) => (a.numeroRemito ?? "").localeCompare(b.numeroRemito ?? "", "es", { numeric: true }));
   const esCredito = tipo.startsWith("nota_credito");
 
+  const pideDevolvibles = esCredito && Boolean(supplierId) && !corregir;
   useEffect(() => {
-    if (!esCredito || !supplierId || corregir) {
-      setDevolvibles([]);
-      return;
-    }
+    if (!pideDevolvibles) return;
     let vivo = true;
     void verDevolvibles(supplierId).then((filas) => {
-      if (vivo) setDevolvibles(filas);
+      if (vivo) setDevolviblesDe({ de: supplierId, filas });
     });
     return () => {
       vivo = false;
     };
-  }, [esCredito, supplierId, corregir]);
+  }, [pideDevolvibles, supplierId]);
+  // Los del proveedor elegido, solo en una nota de crédito.
+  const devolvibles = pideDevolvibles && devolviblesDe.de === supplierId ? devolviblesDe.filas : [];
   const aCorregir = corregir || !esCredito ? [] : porPagar.filter((f) => f.supplierId === supplierId);
   const netoRecibido =
     Math.round(delProveedor.filter((r) => remitos.includes(r.id)).reduce((s, r) => s + r.neto, 0) * 100) / 100;

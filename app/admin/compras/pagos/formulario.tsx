@@ -210,9 +210,6 @@ export function FormularioPago({
   const [partes, setPartes] = useState<ParteUI[] | null>(null);
   const [cartera, setCartera] = useState<ChequeDeCartera[]>([]);
 
-  const [acumulado, setAcumulado] = useState<
-    Record<string, { base: number; retenido: number }>
-  >({});
   /** La cuenta de cada retención prendida, como la va a hacer el certificado. */
   const [simuladas, setSimuladas] = useState<Record<string, RetencionSimulada>>({});
   /** El renglón del cheque al que le falta la fecha, para marcarlo. */
@@ -221,16 +218,10 @@ export function FormularioPago({
   useEffect(() => {
     if (!supplierId) return;
     let vivo = true;
+    // El acumulado del mes lo trae la simulación (con el cálculo entero);
+    // acá solo decide qué interruptores arrancan prendidos.
     void verAcumulado(supplierId).then((filas) => {
       if (!vivo) return;
-      setAcumulado(
-        Object.fromEntries(
-          filas.map((f) => [
-            f.codigoRegimen,
-            { base: Number(f.base), retenido: Number(f.retenido) },
-          ]),
-        ),
-      );
       // Si el proveedor ya tuvo base este mes en un régimen, el interruptor
       // arranca prendido: un pago con los dos apagados no retenía y el
       // acumulado quedaba mal para el siguiente (M2S2-013).
@@ -342,10 +333,9 @@ export function FormularioPago({
 
   useEffect(() => {
     const pedidas = JSON.parse(claveSimulacion)[2] as { regimenId: string; base: number }[];
-    if (pedidas.length === 0) {
-      setSimuladas({});
-      return;
-    }
+    // Sin retenciones prendidas no hay nada que pedir: lo simulado de antes
+    // no cuenta (el retenido suma solo las prendidas).
+    if (pedidas.length === 0) return;
     let vivo = true;
     const t = setTimeout(() => {
       void simularRetenciones(supplierId, fechaPago, pedidas).then((filas) => {
@@ -994,15 +984,7 @@ export function FormularioPago({
                 setPartes(null);
                 router.refresh();
                 void verFacturasConSaldo(supplierId).then(setFacturas);
-                // El acumulado del mes cambió con este pago, y el cheque que
-                // se entregó ya no está en la cartera.
-                void verAcumulado(supplierId).then((filas) =>
-                  setAcumulado(
-                    Object.fromEntries(
-                      filas.map((f) => [f.codigoRegimen, { base: Number(f.base), retenido: Number(f.retenido) }]),
-                    ),
-                  ),
-                );
+                // El cheque que se entregó ya no está en la cartera.
                 void verChequesEnCartera().then(setCartera);
               }
             })

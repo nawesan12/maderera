@@ -433,20 +433,18 @@ export function AltaDeCheque() {
   const [circuito, setCircuito] = useState("blanco");
   const [cliente, setCliente] = useState<ClienteElegido | null>(null);
   // Lo que debe el cliente, arriba del cobro (M3S2-045): decía «Suma $ 0».
-  const [deuda, setDeuda] = useState(0);
+  const [deudas, setDeudas] = useState<Record<string, number>>({});
   useEffect(() => {
-    if (!cliente) {
-      setDeuda(0);
-      return;
-    }
+    if (!cliente) return;
     let vivo = true;
     void deudaDelCliente(cliente.id).then((d) => {
-      if (vivo) setDeuda(d);
+      if (vivo) setDeudas((p) => ({ ...p, [cliente.id]: d }));
     });
     return () => {
       vivo = false;
     };
   }, [cliente]);
+  const deuda = cliente ? (deudas[cliente.id] ?? 0) : 0;
   const id = useId();
 
   return (

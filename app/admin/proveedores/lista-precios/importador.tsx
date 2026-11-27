@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { useActionState, useRef, useState, useTransition } from "react";
 import { AlertCircle, ArrowDown, ArrowUp, Check, FileSpreadsheet, Loader2, Upload } from "lucide-react";
 import { Confirmar } from "@/components/admin/confirmar";
 import { moneda } from "@/lib/formato";
@@ -67,19 +67,20 @@ export function ImportadorDeLista({
   const [usado, setUsado] = useState<Record<string, string> | null>(null);
   const [mirando, mirar] = useTransition();
   const [nombreArchivo, setNombreArchivo] = useState<string | null>(null);
-  const [estado, aplicar, aplicando] = useActionState(aplicarLista, inicial);
   const [elegidas, setElegidas] = useState<Set<string>>(new Set());
   const [confirmando, setConfirmando] = useState(false);
   const formAplicar = useRef<HTMLFormElement>(null);
   // Después de aplicar, la vista previa ya no se ofrece de nuevo: el botón
   // seguía activo y se podía volver a tocar (M2S3-056).
   const [aplicada, setAplicada] = useState(false);
-  useEffect(() => {
-    if (estado.ok) {
+  const [estado, aplicar, aplicando] = useActionState(async (previo: EstadoLista, datos: FormData) => {
+    const r = await aplicarLista(previo, datos);
+    if (r.ok) {
       setAplicada(true);
       setConfirmando(false);
     }
-  }, [estado]);
+    return r;
+  }, inicial);
 
   // Las columnas que ofrece el select salen del archivo que se acaba de subir.
   const columnas = vista?.columnas ?? [];

@@ -419,7 +419,7 @@ func (s *Servicio) Agregar(ctx context.Context, q Quien, m map[string]any) (Resu
 			VALUES ($1, $2, $3, $4, $5::numeric, $6, $7::numeric, $8, $9)`,
 			cart, item.VariantID, item.Descripcion, item.Unidad, jsmath.Fijo2(item.Cantidad), item.Presentacion, precio,
 			item.Origen, item.Notas)
-		r.Ok = item.Descripcion + " va al presupuesto."
+		r.Ok = item.Descripcion + " va al carrito."
 		return err
 	})
 	return r, err
@@ -451,7 +451,7 @@ func (s *Servicio) AgregarVarios(ctx context.Context, q Quien, items []any) (Res
 			return r, nil
 		}
 	}
-	return Resultado{Ok: fmt.Sprintf("Se agregaron %d productos al presupuesto.", len(items)), TokenNuevo: token}, nil
+	return Resultado{Ok: fmt.Sprintf("Se agregaron %d productos al carrito.", len(items)), TokenNuevo: token}, nil
 }
 
 // CambiarCantidad es cambiarCantidad: cero o menos quita el renglón. Filtra

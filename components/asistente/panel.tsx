@@ -607,7 +607,7 @@ function AgregarAlPresupuesto({ producto }: { producto: ProductoDelAsistente }) 
         });
         setPuesto(true);
       }}
-      aria-label={`Agregar ${producto.nombre} al presupuesto`}
+      aria-label={`Agregar ${producto.nombre} al carrito`}
       className={`flex w-11 shrink-0 items-center justify-center rounded-xl shadow-sm transition-colors ${
         puesto
           ? "bg-brand-green/15 text-brand-green"

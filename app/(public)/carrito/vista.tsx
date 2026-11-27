@@ -563,7 +563,7 @@ function Encabezado({ productos, cortes }: { productos: number; cortes: number }
       <p className="mt-1.5 text-base text-texto-2">
         {partes.length === 0
           ? "Todavía no agregaste nada."
-          : `${partes.join(" y ")} · los precios se confirman cuando te respondemos`}
+          : partes.join(" y ")}
       </p>
     </div>
   );

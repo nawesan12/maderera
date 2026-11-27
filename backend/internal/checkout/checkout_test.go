@@ -175,7 +175,7 @@ func TestCarritoAnonimo(t *testing.T) {
 	}
 	// El primer agregar crea el carrito y la cookie.
 	code, b := pedir(t, c, "POST", u+"/items", map[string]any{"variantId": e.placa, "descripcion": "Fenólico 18 mm", "cantidad": 2})
-	if code != 200 || !strings.Contains(b, "va al presupuesto") {
+	if code != 200 || !strings.Contains(b, "va al carrito") {
 		t.Fatalf("agregar: %d %s", code, b)
 	}
 	req, _ := http.NewRequest("GET", e.srv.URL, nil)

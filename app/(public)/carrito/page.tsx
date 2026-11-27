@@ -15,8 +15,7 @@ import { VistaDelCarrito } from "./vista";
 
 export const metadata: Metadata = {
   title: "Tu carrito",
-  description:
-    "Armá tu presupuesto de materiales y pedilo por escrito. Te contestamos con el detalle y los precios cerrados.",
+  description: "Los materiales que elegiste en MJBJ.",
 };
 
 /**

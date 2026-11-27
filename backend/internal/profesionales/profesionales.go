@@ -458,7 +458,7 @@ func (s *Servicio) Solicitar(ctx context.Context, ses *auth.Sesion, f Solicitud)
 		return "", err
 	}
 	if pendiente {
-		return "Ya tenemos tu solicitud y la estamos revisando. Te contestamos dentro de las próximas 24 horas hábiles.", nil
+		return "Ya tenemos tu solicitud. Un asesor la está revisando.", nil
 	}
 	var cu, userID *string
 	if f.DocumentoTipo == "cuit" {
@@ -479,7 +479,8 @@ func (s *Servicio) Solicitar(ctx context.Context, ses *auth.Sesion, f Solicitud)
 		s.avisos.Despachar(ctx, avisos.Despacho{Evento: "solicitud_profesional", Para: f.Email, EntidadTipo: "professional_application",
 			EntidadID: id, Correo: avisos.Correo(AcuseDeRecibo(s.sitio, PrimeraPalabra(f.Nombre)))})
 	})
-	return "Recibimos tu solicitud. Te contestamos dentro de las próximas 24 horas hábiles.", nil
+	// Sin plazo, como «Cómo funciona»: nadie confirmó las 24 horas (M2S1-201).
+	return "Recibimos tu solicitud. Un asesor la va a revisar.", nil
 }
 
 // SolicitudEnCurso es la última solicitud de quien mira.

@@ -186,6 +186,29 @@ func (e *entorno) uno(t *testing.T, q string, args ...any) string {
 	return s
 }
 
+// M3S2-033: el freno cuenta por documento; cuatro personas desde la misma
+// conexión piden su cuenta sin chocar, y la misma persona sí se frena.
+func TestElFrenoEsPorDocumento(t *testing.T) {
+	e := armar(t)
+	anon := &http.Client{}
+	u := e.srv.URL + "/api/v1/profesionales/solicitud"
+	form := func(doc string) map[string]any {
+		return map[string]any{"nombre": "Ana Pérez", "documentoTipo": "dni", "documentoNumero": doc, "email": "ana@prueba.test",
+			"telefono": "0223 474-3328", "rubro": "carpintero"}
+	}
+	for _, doc := range []string{"30111222", "30111223", "30111224", "30111225"} {
+		if st, p := pedir(t, anon, "POST", u, form(doc)); st != 200 {
+			t.Fatalf("%s desde la misma conexión: %d %v", doc, st, p)
+		}
+	}
+	for i := 0; i < 2; i++ {
+		pedir(t, anon, "POST", u, form("30111222"))
+	}
+	if st, _ := pedir(t, anon, "POST", u, form("30111222")); st != 429 {
+		t.Fatalf("el mismo documento muchas veces: %d", st)
+	}
+}
+
 func TestSolicitudYAprobacion(t *testing.T) {
 	e := armar(t)
 	ven := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
@@ -196,11 +219,17 @@ func TestSolicitudYAprobacion(t *testing.T) {
 	// La solicitud pública: zod, y una pendiente por documento.
 	form := map[string]any{"nombre": "Ana Pérez", "documentoTipo": "cuit", "documentoNumero": "20-12345678-9", "email": "ana@prueba.test",
 		"telefono": "0223 474-3328", "rubro": "carpintero", "razonSocial": ""}
-	if st, p := pedir(t, anon, "POST", e.srv.URL+"/api/v1/profesionales/solicitud", form); st != 422 || primerError(p) != "Revisá el número: no coincide con el tipo de documento." {
+	if st, p := pedir(t, anon, "POST", e.srv.URL+"/api/v1/profesionales/solicitud", form); st != 422 || primerError(p) != "El CUIT no es válido: revisá el último número." {
 		t.Fatalf("CUIT mal: %d %v", st, p)
 	}
+	// M2S1-172: el verificador mal no es un problema de tipo; un DNI corto sí.
+	form["documentoTipo"], form["documentoNumero"] = "dni", "123"
+	if st, p := pedir(t, anon, "POST", e.srv.URL+"/api/v1/profesionales/solicitud", form); st != 422 || primerError(p) != "Revisá el número: no coincide con el tipo de documento." {
+		t.Fatalf("DNI corto: %d %v", st, p)
+	}
+	form["documentoTipo"] = "cuit"
 	form["documentoNumero"] = "20-12345678-6"
-	if st, p := pedir(t, anon, "POST", e.srv.URL+"/api/v1/profesionales/solicitud", form); st != 200 || p["ok"] != "Recibimos tu solicitud. Te contestamos dentro de las próximas 24 horas hábiles." {
+	if st, p := pedir(t, anon, "POST", e.srv.URL+"/api/v1/profesionales/solicitud", form); st != 200 || p["ok"] != "Recibimos tu solicitud. Un asesor la va a revisar." {
 		t.Fatalf("solicitud: %d %v", st, p)
 	}
 	if st, p := pedir(t, anon, "POST", e.srv.URL+"/api/v1/profesionales/solicitud", form); st != 200 || !strings.HasPrefix(p["ok"].(string), "Ya tenemos tu solicitud") {

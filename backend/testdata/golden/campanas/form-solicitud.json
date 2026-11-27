@@ -26911,7 +26911,7 @@
   },
   "ok": false,
   "campo": "documentoNumero",
-  "mensaje": "Revisá el número: no coincide con el tipo de documento."
+  "mensaje": "El CUIT no es válido: revisá el último número."
  },
  {
   "entrada": {
@@ -38832,7 +38832,7 @@
   },
   "ok": false,
   "campo": "documentoNumero",
-  "mensaje": "Revisá el número: no coincide con el tipo de documento."
+  "mensaje": "El CUIT no es válido: revisá el último número."
  },
  {
   "entrada": {
@@ -40923,7 +40923,7 @@
   },
   "ok": false,
   "campo": "documentoNumero",
-  "mensaje": "Revisá el número: no coincide con el tipo de documento."
+  "mensaje": "El CUIT no es válido: revisá el último número."
  },
  {
   "entrada": {
@@ -42716,7 +42716,7 @@
   },
   "ok": false,
   "campo": "documentoNumero",
-  "mensaje": "Revisá el número: no coincide con el tipo de documento."
+  "mensaje": "El CUIT no es válido: revisá el último número."
  },
  {
   "entrada": {
@@ -43798,7 +43798,7 @@
   },
   "ok": false,
   "campo": "documentoNumero",
-  "mensaje": "Revisá el número: no coincide con el tipo de documento."
+  "mensaje": "El CUIT no es válido: revisá el último número."
  },
  {
   "entrada": {

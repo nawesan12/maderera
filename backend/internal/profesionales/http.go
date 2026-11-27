@@ -8,6 +8,7 @@ import (
 
 	"mjbj/internal/api/profesionalesapi"
 	"mjbj/internal/auth"
+	"mjbj/internal/cuit"
 	"mjbj/internal/limites"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
@@ -158,11 +159,17 @@ func (a *API) SolicitarAccesoProfesional(ctx context.Context, r profesionalesapi
 	if err := l.Problema(); err != nil {
 		return nil, err
 	}
-	// El freno, además de la de una pendiente por documento: sin él, la cola
-	// del panel se llena desde un solo lugar cambiando un dígito.
-	ip := plataforma.IPDelCliente(plataforma.PedidoDe(ctx))
-	if v := a.lim.Permitido(ctx, limites.Profesional, "ip:"+ip); !v.Permitido {
+	// El freno, además de la de una pendiente por documento: por documento
+	// (el que probó varias veces) y, con un techo alto, por conexión (la cola
+	// del panel no se llena desde un solo lugar cambiando un dígito). Por IP
+	// sola culpaba a quien compartía la conexión (M3S2-033).
+	if v := a.lim.Permitido(ctx, limites.Profesional, "doc:"+cuit.SoloDigitos(f.DocumentoNumero)); !v.Permitido {
 		return nil, espera(v)
+	}
+	ip := plataforma.IPDelCliente(plataforma.PedidoDe(ctx))
+	if v := a.lim.Permitido(ctx, limites.ProfesionalPorIP, "ip:"+ip); !v.Permitido {
+		return nil, plataforma.NuevoProblema(http.StatusTooManyRequests,
+			"Recibimos muchas solicitudes desde esta conexión. Esperá "+limites.CuantoFalta(v.EsperaSegundos)+" o escribinos por WhatsApp.")
 	}
 	m, err := a.s.Solicitar(ctx, auth.DeContexto(ctx), f)
 	if err != nil {

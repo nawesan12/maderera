@@ -114,11 +114,12 @@ export function TableroDeCortes({
             titulo={columna.titulo}
             cantidad={enColumna.length}
             // Con la misma función que las tarjetas: si el encabezado
-            // dice 4 y las tarjetas suman 4,32, parece que falta algo. Sin
-            // decimales fijos: es una sola cifra, no una columna que alinear.
+            // dice 4 y las tarjetas suman 4,32, parece que falta algo. Con
+            // dos decimales siempre: «2,6» al lado de «9,77» parecía otra
+            // precisión (mes 23).
             detalle={
               enColumna.length > 0 && columna.estado !== "terminado" && columna.estado !== "retirado"
-                ? `${formatearDecimal(metros)} m²`
+                ? `${formatearDecimal(metros, 2, { fijo: true })} m²`
                 : undefined
             }
             estado={columna.estado}
@@ -166,7 +167,7 @@ function TableroDelTaller({
   const maquina = de("en-proceso");
   const terminados = de("terminado").sort(recientePrimero);
   const m2 = (lista: CorteListado[]) =>
-    lista.length > 0 ? `${formatearDecimal(lista.reduce((s, c) => s + c.metrosCuadrados, 0))} m²` : undefined;
+    lista.length > 0 ? `${formatearDecimal(lista.reduce((s, c) => s + c.metrosCuadrados, 0), 2, { fijo: true })} m²` : undefined;
   const tarjetas = (lista: CorteListado[], enCola = false) =>
     lista.map((corte, i) => (
       <TarjetaCorte

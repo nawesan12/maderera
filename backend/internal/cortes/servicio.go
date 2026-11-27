@@ -134,9 +134,11 @@ func (s *Servicio) Listar(ctx context.Context, busqueda, estado string, sucursal
 		SELECT co.id::text, co.numero, co.contacto_nombre, co.material_descripcion, co.placas, co.pasadas,
 		       co.estado::text, co.urgente, co.notas, b.name, co.created_at, co.updated_at, r.piezas, r.superficie,
 		       co.mitad::text, co.sin_cargo, co.branch_id::text,
-		       CASE WHEN co.estado IN ('terminado', 'retirado') THEN coalesce(co.terminado_at, co.updated_at) END
+		       CASE WHEN co.estado IN ('terminado', 'retirado') THEN coalesce(co.terminado_at, co.updated_at) END,
+		       pv.largo_mm, pv.ancho_mm
 		FROM cutting_orders co
 		LEFT JOIN branches b ON b.id = co.branch_id
+		LEFT JOIN product_variants pv ON pv.id = co.variant_id
 		LEFT JOIN (
 			-- Las piezas solo de los cortes del tablero: antes se agrupaba
 			-- cutting_items entero, con todo lo cortado desde el primer día.
@@ -158,10 +160,12 @@ func (s *Servicio) Listar(ctx context.Context, busqueda, estado string, sucursal
 		var urgente int32
 		var piezas *int32
 		var sup *jsmath.Num
+		var vl, va *int32
 		if err := filas.Scan(&c.ID, &c.Numero, &c.Cliente, &c.Material, &c.Placas, &c.Pasadas, &c.Estado, &urgente,
-			&c.Notas, &c.Sucursal, &c.CreatedAt, &c.UpdatedAt, &piezas, &sup, &c.Mitad, &c.SinCargo, &c.BranchID, &c.SalioAt); err != nil {
+			&c.Notas, &c.Sucursal, &c.CreatedAt, &c.UpdatedAt, &piezas, &sup, &c.Mitad, &c.SinCargo, &c.BranchID, &c.SalioAt, &vl, &va); err != nil {
 			return nil, err
 		}
+		c.Material = MaterialEnOrden(c.Material, vl, va)
 		c.Urgente = urgente == 1
 		if piezas != nil {
 			c.Piezas = *piezas
@@ -352,6 +356,7 @@ func (s *Servicio) Obtener(ctx context.Context, id string) (*Corte, error) {
 		return nil, err
 	}
 	c.VarianteLargoMm, c.VarianteAnchoMm, c.PropiaLargoMm, c.PropiaAnchoMm, c.PrecioMediaPct = i32f(vl), i32f(va), i32f(pl), i32f(pa), i32f(pct)
+	c.Material = MaterialEnOrden(c.Material, vl, va)
 	c.AnchoSierraMm = sierra.F()
 	c.Urgente = urgente == 1
 

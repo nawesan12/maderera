@@ -41,3 +41,55 @@ func TestPendientesDelTaller(t *testing.T) {
 		t.Errorf("en la máquina: %d %s", code, b)
 	}
 }
+
+// M2S1-064 y M2S2-106: el espesor del PTX es el del tablero, no la primera
+// medida con «mm».
+func TestEspesorConLaMedidaDeLaPlaca(t *testing.T) {
+	casos := map[string]float64{
+		"Fenólico — 1220 x 2440mm — 15mm":        15,
+		"Fenólico — 2440 × 1220 mm — 12mm":       12,
+		"MDF — 1830 x 2600mm — 3mm":              3,
+		"Melamina Blanca — 1830 x 2600mm — 18mm": 18,
+	}
+	for m, quiere := range casos {
+		if got, ok := EspesorDelMaterial(m); !ok || got != quiere {
+			t.Errorf("%q: %v %v", m, got, ok)
+		}
+	}
+}
+
+// M2S1-063: la misma placa sale con un solo nombre, la cargue el panel o el
+// sitio.
+func TestMaterialEnOrden(t *testing.T) {
+	l, a := int32(2600), int32(1830)
+	if got := MaterialEnOrden("Melamina Blanca — 1830 x 2600mm — 18mm", &l, &a); got != "Melamina Blanca — 2600 × 1830 mm — 18mm" {
+		t.Errorf("del panel: %q", got)
+	}
+	if got := MaterialEnOrden("Melamina Blanca — 2600 × 1830 mm — 18mm", &l, &a); got != "Melamina Blanca — 2600 × 1830 mm — 18mm" {
+		t.Errorf("del sitio: %q", got)
+	}
+	if got := MaterialEnOrden("MDF que trae el cliente", nil, nil); got != "MDF que trae el cliente" {
+		t.Errorf("a mano: %q", got)
+	}
+}
+
+// M2S1-065, M3S1-041 y M2S3-067: el archivo de una media placa dice de qué
+// tablero parte, los cantos van en número y la pieza sin etiqueta lleva su
+// medida.
+func TestArchivoDeLaMediaPlaca(t *testing.T) {
+	e := armar(t)
+	ven := e.staff(t, "vendedor@prueba.test", "vendedor")
+	id := alta(t, e, ven, map[string]any{"contactoNombre": "Gómez", "materialDescripcion": "Fenólico — 1220 x 2440mm — 15mm",
+		"variantId": e.fenolico, "mitad": "largo",
+		"piezas": []any{pieza(600, 300, 2, "cantoLargo", 1), pieza(500, 200, 1, "etiqueta", "Tapa")}})
+	code, b := pedir(t, ven, "GET", e.srv.URL+"/api/cortes/"+id+"/lista", nil)
+	if code != 200 {
+		t.Fatalf("lista: %d %s", code, b)
+	}
+	if !strings.Contains(b, "Fenólico — 2440 × 1220 mm — 15mm — media placa 2440 × ") {
+		t.Errorf("sin la media: %q", b)
+	}
+	if !strings.Contains(b, ";600 x 300;No;1;0\r\n") || !strings.Contains(b, ";Tapa;No;0;0\r\n") {
+		t.Errorf("cantos o etiqueta: %q", b)
+	}
+}

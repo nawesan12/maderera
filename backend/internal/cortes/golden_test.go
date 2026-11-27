@@ -260,7 +260,7 @@ func TestGoldenSueltos(t *testing.T) {
 		igualJSON(t, fmt.Sprintf("acomodo %d", i), LeerAcomodoManual(crudo), a.Fijadas)
 	}
 	for i, l := range g.Listas {
-		if got := ArmarArchivoDeCorte(l.Corte, l.Perfil); got != l.Archivo {
+		if got := armarArchivo(l.Corte, l.Perfil, true); got != l.Archivo {
 			t.Errorf("lista %d:\n go: %q\n ts: %q", i, got, l.Archivo)
 		}
 		if got := NombreDeArchivo(l.Corte.Numero, l.Perfil.Separador); got != l.Nombre {

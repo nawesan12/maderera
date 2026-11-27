@@ -845,7 +845,7 @@ func (a *API) lista_(w http.ResponseWriter, r *http.Request) {
 		textoPlano(w, http.StatusConflict, "El corte no tiene piezas cargadas.")
 		return
 	}
-	corte := CorteParaExportar{Numero: c.Numero, Cliente: c.Cliente, Material: c.Material}
+	corte := CorteParaExportar{Numero: c.Numero, Cliente: c.Cliente, Material: MaterialParaLaMaquina(c)}
 	for _, p := range c.Piezas {
 		corte.Piezas = append(corte.Piezas, PiezaParaExportar{p.LargoMm, p.AnchoMm, p.Cantidad, p.RespetaVeta, p.CantoLargo, p.CantoAncho, p.Etiqueta})
 	}

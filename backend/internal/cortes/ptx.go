@@ -115,15 +115,16 @@ func NombreDeArchivoPtx(numero string) string {
 // El \s de JS: más que el de RE2.
 var reEspesor = regexp.MustCompile(`(?i)([0-9]+(?:[.,][0-9]+)?)[\t\n\v\f\r \x{a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}\x{feff}]*mm`)
 
-// EspesorDelMaterial: «Melamina 18mm blanca» → 18.
+// EspesorDelMaterial: «Melamina 18mm blanca» → 18. Es el primer número
+// con «mm» que puede ser un espesor: en «Fenólico — 1220 x 2440mm — 15mm» el
+// primero es la medida de la placa, y quedarse con ese ponía 18 a todos los
+// tableros (mes simulado, M2S1-064).
 func EspesorDelMaterial(material string) (float64, bool) {
-	m := reEspesor.FindStringSubmatch(material)
-	if m == nil {
-		return 0, false
-	}
-	n := jsmath.Numero(strings.Replace(m[1], ",", ".", 1))
-	if n > 0 && n < 100 {
-		return n, true
+	for _, m := range reEspesor.FindAllStringSubmatch(material, -1) {
+		n := jsmath.Numero(strings.Replace(m[1], ",", ".", 1))
+		if n > 0 && n < 100 {
+			return n, true
+		}
 	}
 	return 0, false
 }

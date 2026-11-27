@@ -114,13 +114,16 @@ export function DialogoTraslado({ sucursales }: { sucursales: { id: string; name
           <DialogTitle>Traslado entre sucursales</DialogTitle>
         </DialogHeader>
 
-        {/* El ⇆ a la altura de los selectores: los tres miden 44 px y se
-            alinean abajo (caía 8 px más abajo, M2S1-166). A 375 px, Desde y
-            Hacia uno arriba del otro con el ⇆ al costado: en tres columnas
-            «Casa Central» se cortaba. */}
-        <div className="grid grid-cols-[1fr_auto] items-end gap-x-2 gap-y-3 sm:grid-cols-[1fr_auto_1fr]">
-          <div className="min-w-0 space-y-2">
-            <Label htmlFor="traslado-origen">Desde</Label>
+        {/* Etiquetas y controles en filas propias de la grilla: el ⇆ queda
+            en la fila de los selectores y no depende de lo que el Select
+            agrega debajo del botón (caía 8 px más abajo, M2S1-166). A 375 px,
+            Desde y Hacia uno arriba del otro con el ⇆ al costado, entre los
+            dos: en tres columnas «Casa Central» se cortaba. */}
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+          <Label htmlFor="traslado-origen" className="col-start-1 row-start-1">
+            Desde
+          </Label>
+          <div className="min-w-0 col-start-1 row-start-2">
             <Select value={origen} onValueChange={(v) => v && setOrigen(v)} items={nombres}>
               <SelectTrigger id="traslado-origen" className="h-11 w-full text-base data-[size=default]:h-11">
                 <SelectValue />
@@ -138,12 +141,14 @@ export function DialogoTraslado({ sucursales }: { sucursales: { id: string; name
             type="button"
             onClick={invertir}
             aria-label="Invertir origen y destino"
-            className="flex h-11 w-11 items-center justify-center rounded-lg border text-muted-foreground hover:bg-muted hover:text-foreground max-sm:row-span-2 max-sm:self-center"
+            className="col-start-2 row-span-3 row-start-2 flex h-11 w-11 items-center justify-center self-center rounded-lg border text-muted-foreground hover:bg-muted hover:text-foreground sm:row-span-1 sm:self-start"
           >
             <ArrowLeftRight className="h-4 w-4" aria-hidden="true" />
           </button>
-          <div className="min-w-0 space-y-2">
-            <Label htmlFor="traslado-destino">Hacia</Label>
+          <Label htmlFor="traslado-destino" className="col-start-1 row-start-3 mt-1 sm:col-start-3 sm:row-start-1 sm:mt-0">
+            Hacia
+          </Label>
+          <div className="min-w-0 col-start-1 row-start-4 sm:col-start-3 sm:row-start-2">
             <Select value={destino} onValueChange={(v) => v && setDestino(v)} items={nombres}>
               <SelectTrigger id="traslado-destino" className="h-11 w-full text-base data-[size=default]:h-11">
                 <SelectValue />
@@ -200,7 +205,7 @@ export function DialogoTraslado({ sucursales }: { sucursales: { id: string; name
                     </p>
                     <label
                       htmlFor={`traslado-cant-${r.medida.id}`}
-                      className="ml-auto flex h-11 shrink-0 items-center gap-1.5 rounded-md bg-hundida pr-3 focus-within:ring-2 focus-within:ring-ring sm:ml-0"
+                      className="ml-auto flex h-11 w-40 shrink-0 items-center gap-1.5 rounded-md bg-hundida pr-3 focus-within:ring-2 focus-within:ring-ring sm:ml-0"
                     >
                       <span className="sr-only">Cantidad de {nombre}</span>
                       <input
@@ -226,9 +231,11 @@ export function DialogoTraslado({ sucursales }: { sucursales: { id: string; name
                         aria-invalid={r.mal || r.sinStock || undefined}
                         aria-describedby={`traslado-hay-${r.medida.id}`}
                         placeholder={admiteDecimales(r.medida.unidad) ? "2,5" : "4"}
-                        className="tabular h-11 w-16 bg-transparent text-right text-lg text-foreground outline-none"
+                        className="tabular h-11 w-16 min-w-0 flex-1 bg-transparent text-right text-lg text-foreground outline-none"
                       />
-                      <span className="text-sm text-muted-foreground">
+                      {/* Todos los campos del mismo ancho, con la unidad que
+                          sea: «placas» y «u.» los dejaban desparejos. */}
+                      <span className="shrink-0 text-sm text-muted-foreground">
                         {unidadConcordada(Number.isFinite(r.n) ? r.n : 2, r.medida.unidad, nombre)}
                       </span>
                     </label>

@@ -260,7 +260,6 @@ export function DialogoCliente({
                 <Input
                   id="cuit"
                   name="cuit"
-                  placeholder="20-12345678-9"
                   inputMode="numeric"
                   defaultValue={cliente?.cuit ?? ""}
                   aria-invalid={cuitMal || undefined}

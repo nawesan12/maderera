@@ -228,7 +228,6 @@ export function FormularioRecepcion({
             <input
               value={numeroRemito}
               onChange={(e) => setNumeroRemito(e.target.value)}
-              placeholder="0002-00034512"
               className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
             />
           </label>

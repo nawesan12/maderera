@@ -147,7 +147,6 @@ export function AccionesDeOrden({
             <input
               value={remito}
               onChange={(e) => setRemito(e.target.value)}
-              placeholder="0002-00034512"
               className="tabular mt-1 h-12 w-full rounded-lg border border-linea bg-background px-3 text-base"
             />
           </label>

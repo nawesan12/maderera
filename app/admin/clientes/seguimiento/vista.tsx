@@ -375,7 +375,7 @@ export function NuevaGestion({
             onChange={() => setSinAsunto(false)}
             autoFocus={Boolean(clienteInicial) && !asunto}
             defaultValue={asunto}
-            placeholder="Cobrar la factura 0015-00001234"
+            placeholder="Cobrar la factura"
             className="mt-1 h-10 w-full rounded-lg border border-linea bg-background px-3 text-base"
           />
         </label>

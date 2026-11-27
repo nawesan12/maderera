@@ -60,7 +60,6 @@ export function EditorDePromo({ promo }: { promo: PromoEditable | null }) {
             nombre="medio"
             etiqueta="Con qué se paga"
             valorInicial={promo?.medio ?? ""}
-            placeholder="Banco Nación"
             requerido
           />
           <Campo

@@ -215,7 +215,6 @@ export function FormularioFacturaManual({
             <input
               id="receptorCuit"
               name="receptorCuit"
-              placeholder="30-12345678-9"
               value={receptor.cuit}
               onChange={(e) =>
                 setReceptor((r) => ({ ...r, cuit: e.target.value }))

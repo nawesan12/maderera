@@ -143,7 +143,7 @@ export function DialogoMovimiento({
                 <Input
                   id="detalle"
                   name="detalle"
-                  placeholder="Nota de crédito por devolución, factura 0001-00012847…"
+                  placeholder="Nota de crédito por devolución…"
                 />
               </div>
             </Seccion>

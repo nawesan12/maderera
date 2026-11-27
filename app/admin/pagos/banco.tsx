@@ -83,19 +83,16 @@ export function FormularioBanco({
               nombre="titular"
               etiqueta="Titular"
               valor={datos?.titular}
-              placeholder="Maderera Juan B. Justo SRL"
             />
             <Campo
               nombre="banco"
               etiqueta="Banco"
               valor={datos?.banco}
-              placeholder="Banco Nación"
             />
             <Campo
               nombre="cuit"
               etiqueta="CUIT"
               valor={datos?.cuit}
-              placeholder="30-12345678-9"
             />
             <Campo
               nombre="alias"

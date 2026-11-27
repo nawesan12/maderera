@@ -222,7 +222,6 @@ export function CobroMultimedio({
                       onChange={(e) => cambiar(r.clave, "banco", e.target.value)}
                       required
                       list={`${id}-bancos`}
-                      placeholder="Banco Nación"
                       className="mt-1 block h-11 w-full rounded-lg border border-linea bg-background px-3 text-base text-foreground"
                     />
                   </label>
@@ -233,7 +232,6 @@ export function CobroMultimedio({
                       onChange={(e) => cambiar(r.clave, "numero", e.target.value)}
                       required
                       inputMode="numeric"
-                      placeholder="00012345"
                       className="tabular mt-1 block h-11 w-full rounded-lg border border-linea bg-background px-3 text-base text-foreground"
                     />
                   </label>

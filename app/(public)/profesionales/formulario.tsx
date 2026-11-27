@@ -79,7 +79,6 @@ export function FormularioProfesional({
                   name="documentoNumero"
                   required
                   defaultValue={previo?.documentoNumero}
-                  placeholder="30-71234567-1"
                   inputMode="numeric"
                   className="h-12 w-full rounded-[10px] border border-linea bg-background px-3 text-base"
                 />

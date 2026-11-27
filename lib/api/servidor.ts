@@ -3,6 +3,7 @@ import "server-only";
 import createClient from "openapi-fetch";
 import { traducirMensaje } from "@/lib/api/mensajes";
 import { cookies, headers } from "next/headers";
+import { unstable_rethrow } from "next/navigation";
 import { cache } from "react";
 import type { paths } from "./tipos";
 
@@ -27,15 +28,38 @@ export const API_URL = process.env.API_URL ?? "http://127.0.0.1:8080";
  * la petición, rompe el prerender. Leyendo primero, la página ya es dinámica.
  */
 export async function cabecerasDelPedido(): Promise<Record<string, string>> {
-  const [h, c] = await Promise.all([headers(), cookies()]);
+  const h = await headers();
   const out: Record<string, string> = {};
-  const cookie = c.toString();
+  const cookie = await cookieDelPedido(h);
   if (cookie) out.cookie = cookie;
   const ip = h.get("x-forwarded-for") ?? h.get("x-real-ip");
   if (ip) out["x-forwarded-for"] = ip;
   const agente = h.get("user-agent");
   if (agente) out["user-agent"] = agente;
   return out;
+}
+
+/**
+ * La cookie para mandarle a Go. Normalmente sale de cookies(), que dentro de
+ * una server action ya ve lo que la acción escribió.
+ *
+ * **Si cookies() falla, se usa la cabecera del pedido.** Pasa en `next dev`
+ * cuando un formulario se manda antes de que la página termine de cargar
+ * (acción «MPA») y la acción no revalida nada, por ejemplo al devolver un
+ * error de validación: Next arma la página entera todavía en la fase de la
+ * acción y cookies() tira «Invariant: Received an underlying cookies object
+ * that does not match». Sin esto, guardar un WhatsApp inválido en Textos del
+ * sitio tiraba el panel entero (mes 23, M2S2-089).
+ */
+async function cookieDelPedido(h: Awaited<ReturnType<typeof headers>>): Promise<string> {
+  try {
+    return (await cookies()).toString();
+  } catch (error) {
+    // Lo que Next usa para controlar el render (el prerender que se corta,
+    // una redirección) tiene que seguir de largo.
+    unstable_rethrow(error);
+    return h.get("cookie") ?? "";
+  }
 }
 
 /**

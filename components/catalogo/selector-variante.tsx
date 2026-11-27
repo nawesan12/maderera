@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { DisponibilidadPorSucursal } from "@/components/catalogo/disponibilidad";
 import { useCarrito } from "@/lib/carrito-context";
 import { useTienda } from "@/lib/tienda-context";
-import { formatearPrecio, formatearUnidad } from "@/lib/formato";
+import { formatearPrecio, formatearUnidad, unidadDeVenta } from "@/lib/formato";
 import { PrecioSecundario } from "@/components/precio";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
 import { useEstado } from "@/lib/estado-context";
@@ -107,9 +107,13 @@ export function SelectorVariante({
   const conMedia = admiteMedia(producto);
   const porM2 = seVendePorM2(producto);
   const unidadVendida = unidadDeLinea(producto);
-  // Metros y m² se piden con decimales; placas, tablas y bisagras, enteras.
-  const fraccionable = admiteDecimales(unidadVendida) && unidadVendida !== "placa";
-  const paso = fraccionable ? pasoDeCantidad(unidadVendida) : 1;
+  // La lata de 4 L se vende y se cuenta por lata: la ficha decía «por l» y el
+  // contador «l», y el carrito ya decía «u.» (mes 23). La misma regla del
+  // carrito, el remito y el stock.
+  const unidadMostrada = unidadDeVenta(unidadVendida, `${productName} ${medida?.label ?? ""}`) ?? unidadVendida;
+  // Metros y m² se piden con decimales; placas, tablas, latas y bisagras, enteras.
+  const fraccionable = admiteDecimales(unidadMostrada) && unidadMostrada !== "placa";
+  const paso = fraccionable ? pasoDeCantidad(unidadMostrada) : 1;
 
   function fijarCantidad(n: number) {
     const valor = Math.max(paso, Math.round(n * 100) / 100);
@@ -264,7 +268,7 @@ export function SelectorVariante({
           productName={productName}
           medida={elegida}
           presentacion={conMedia ? presentacion : null}
-          unidad={unidadVendida}
+          unidad={unidadMostrada}
           area={area}
           aPedido={aPedido}
           stockVisible={tienda.stockVisible}
@@ -299,7 +303,7 @@ export function SelectorVariante({
             <p className="mt-1.5 text-[14.5px] text-texto-2">
               {conMedia && presentacion
                 ? nombreDePresentacion(presentacion)?.toLowerCase()
-                : `por ${formatearUnidad(unidadVendida)}`}
+                : `por ${formatearUnidad(unidadMostrada)}`}
               {vistaVigente === "final" && " · IVA incluido"}
               {elegida.material && ` · ${elegida.material}`}
               {elegida.color && ` · ${elegida.color}`}
@@ -351,7 +355,7 @@ export function SelectorVariante({
                           producto: productName,
                           medida: elegida.label,
                           como: conMedia && presentacion ? nombreDePresentacion(presentacion)?.toLowerCase() : null,
-                          unidad: unidadVendida,
+                          unidad: unidadMostrada,
                           codigo: elegida.sku,
                         }),
                       )
@@ -378,7 +382,7 @@ export function SelectorVariante({
                     <input
                       value={cantidadTexto}
                       inputMode="decimal"
-                      aria-label={`Cantidad, en ${formatearUnidad(unidadVendida)}`}
+                      aria-label={`Cantidad, en ${formatearUnidad(unidadMostrada)}`}
                       onChange={(e) => {
                         setCantidadTexto(e.target.value);
                         const n = leerCantidad(e.target.value);
@@ -401,7 +405,7 @@ export function SelectorVariante({
                   </button>
                   {fraccionable && (
                     <span className="pr-3 text-[14.5px] text-texto-2">
-                      {formatearUnidad(unidadVendida)}
+                      {formatearUnidad(unidadMostrada)}
                     </span>
                   )}
                 </div>
@@ -455,7 +459,7 @@ export function SelectorVariante({
                           producto: productName,
                           medida: elegida.label,
                           como: conMedia && presentacion ? nombreDePresentacion(presentacion)?.toLowerCase() : null,
-                          unidad: unidadVendida,
+                          unidad: unidadMostrada,
                           codigo: elegida.sku,
                         }),
                       )

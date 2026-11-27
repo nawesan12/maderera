@@ -144,14 +144,8 @@ func (s *Servicio) CobrarPedido(ctx context.Context, ses *auth.Sesion, pedido, p
 		if r.Repetido {
 			return nil
 		}
-		var pagado bool
-		if err := tx.QueryRow(ctx, `SELECT `+fragmentos.CobradoDelPedido+` + 0.005 >= `+fragmentos.ACobrarFueraDeLaCuenta+` FROM orders o WHERE o.id = $1`, pedido).Scan(&pagado); err != nil {
+		if err := CerrarElPedidoCobrado(ctx, tx, pedido); err != nil {
 			return err
-		}
-		if pagado {
-			if err := q.PedidoPagado(ctx, pedido); err != nil {
-				return err
-			}
 		}
 		if p.cliente != nil {
 			_, err = cola.Encolar(ctx, q, TrabajoAvisoDeRecibo, map[string]string{"receiptId": r.ReceiptID}, time.Time{})

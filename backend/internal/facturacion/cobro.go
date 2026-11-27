@@ -16,6 +16,7 @@ import (
 	"mjbj/internal/jsmath"
 	"mjbj/internal/precios"
 	"mjbj/internal/sqlc"
+	"mjbj/internal/ventas/fragmentos"
 )
 
 // medioDeFactura es MEDIO_DE_FACTURA: cómo se anota cada medio del recibo en
@@ -112,8 +113,20 @@ func (s *Servicio) Cobrar(ctx context.Context, ses *auth.Sesion, id, modo, monto
 	var r cobros.ReciboEmitido
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var err error
-		r, err = cobrarConRecibo(ctx, tx, ses, c.id, c.cliente, c.receptor, c.sucursal, et, partes)
-		return err
+		// La factura de un pedido de contado: la deuda no está en la cuenta,
+		// y el pago tampoco (dejaba un saldo a favor igual a lo cobrado y el
+		// pedido «Sin cobrar», mes simulado 2, M2S2-010).
+		fuera := false
+		if c.pedido != nil && !enCuenta {
+			if err := tx.QueryRow(ctx, `SELECT `+fragmentos.DeudaFueraDeLaCuenta+` FROM orders o WHERE o.id = $1`, *c.pedido).Scan(&fuera); err != nil {
+				return err
+			}
+		}
+		r, err = cobrarConRecibo(ctx, tx, ses, c.id, c.cliente, c.receptor, c.sucursal, et, partes, fuera)
+		if err != nil || c.pedido == nil {
+			return err
+		}
+		return cobros.CerrarElPedidoCobrado(ctx, tx, *c.pedido)
 	})
 	if err != nil {
 		var ec *cobros.ErrorDeCobro
@@ -137,10 +150,11 @@ func (s *Servicio) Cobrar(ctx context.Context, ses *auth.Sesion, id, modo, monto
 // aviso al cliente. Lo usan el cobro desde la ficha y la factura manual de
 // contado.
 func cobrarConRecibo(ctx context.Context, tx pgx.Tx, ses *auth.Sesion, factura string, cliente *string, receptor string,
-	sucursal *string, et string, partes []cobros.Parte) (cobros.ReciboEmitido, error) {
+	sucursal *string, et string, partes []cobros.Parte, fueraDeLaCuenta bool) (cobros.ReciboEmitido, error) {
 	concepto := "Cobro de " + et
 	r, err := cobros.EmitirRecibo(ctx, tx, cobros.Cobro{CustomerID: cliente, RecibidoDe: receptor, BranchID: sucursal,
-		Origen: "factura", Concepto: &concepto, Partes: partes, Caja: &cobros.Caja{Buscar: true}, UsuarioID: &ses.UserID})
+		Origen: "factura", Concepto: &concepto, Partes: partes, Caja: &cobros.Caja{Buscar: true}, UsuarioID: &ses.UserID,
+		FueraDeLaCuenta: fueraDeLaCuenta})
 	if err != nil {
 		return r, err
 	}

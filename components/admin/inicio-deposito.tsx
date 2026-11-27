@@ -26,7 +26,9 @@ const BOTON = "shrink-0 [&_button]:max-sm:w-full [&_a]:max-sm:w-full";
  * enlace. Con un botón naranja a lo ancho en cada pedido, la lista eran
  * cuatro llamados iguales.
  */
-const FILA = "relative flex items-center gap-3 px-4 py-3 transition-colors hover:bg-hundida/60";
+// flex-wrap: a 375 px el botón baja abajo antes de dejarle al nombre una
+// columna de una letra («E2E ventas 1794…» se partía letra por letra).
+const FILA = "relative flex flex-wrap items-center gap-3 px-4 py-3 transition-colors hover:bg-hundida/60";
 const BOTON_CHICO = "relative z-10 shrink-0";
 
 /**
@@ -259,8 +261,8 @@ function Pedido({
   filaEntera?: boolean;
 }) {
   return (
-    <div className="min-w-0 flex-1">
-      <p className="flex min-w-0 items-baseline gap-2">
+    <div className="min-w-[11rem] flex-1">
+      <p className="flex min-w-0 flex-wrap items-baseline gap-x-2 sm:flex-nowrap">
         <Link
           href={`/admin/pedidos/${id}`}
           className={`codigo shrink-0 whitespace-nowrap hover:underline ${
@@ -269,7 +271,7 @@ function Pedido({
         >
           {numero}
         </Link>
-        <span className="min-w-0 break-words text-base font-semibold sm:truncate">{cliente}</span>
+        <span className="min-w-0 [overflow-wrap:anywhere] text-base font-semibold sm:truncate">{cliente}</span>
       </p>
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-texto-2">
         <span>

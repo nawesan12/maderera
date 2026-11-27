@@ -64,7 +64,7 @@ func CreditoDeLaSesion(ctx context.Context, pool *pgxpool.Pool, ses *auth.Sesion
 	case estado == "moroso":
 		v.Motivo = motivo("Tu cuenta está con pagos pendientes. Escribinos y lo vemos.")
 	case monto > 0 && saldo+monto > limite:
-		v.Motivo = motivo("Esta compra supera tu límite de crédito. Tenés " + formato.Numero(v.Disponible) + " disponibles.")
+		v.Motivo = motivo("Esta compra supera tu límite de crédito. Tenés " + formato.Importe(v.Disponible) + " disponibles.")
 	default:
 		v.Habilitado = true
 	}

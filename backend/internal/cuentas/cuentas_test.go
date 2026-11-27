@@ -331,7 +331,7 @@ func TestPortalYVinculo(t *testing.T) {
 	if _, b := pedir(t, web, "GET", u+"cuenta/corriente", nil); !strings.Contains(b, `"sinEntregar":50`) {
 		t.Errorf("sin entregar del acopio en parte: %s", b)
 	}
-	if _, b := pedir(t, web, "GET", u+"cuenta/credito?monto=700", nil); !strings.Contains(b, "Tenés 600 disponibles.") {
+	if _, b := pedir(t, web, "GET", u+"cuenta/credito?monto=700", nil); !strings.Contains(b, "Tenés $\u00a0600 disponibles.") {
 		t.Errorf("crédito: %s", b)
 	}
 	if _, b := pedir(t, web, "GET", u+"cuenta/movimientos", nil); !strings.Contains(b, "Compra a cuenta") {

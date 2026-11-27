@@ -3273,3 +3273,42 @@ después). Las dos salidas de cada una tienen prueba. Lo que falta construido:
 
 Cambiar una regla con un PUT directo a Go no invalida la caché de ajustes de
 Next: las pruebas de pantalla la cambian desde `/admin/reglas`.
+
+## 27/11/2026: el mes 23, cierre, asientos y reportes (rama `mes23-cierre-reportes`)
+
+Lo que encontró el mes simulado en el cierre, los archivos A y B, Deudores,
+Cuentas a pagar, Reportes, Reposición y la Bitácora. Migraciones 00370
+(`cheques.circuito_reparto`), 00371 (regla `deuda_sin_comprobante`) y 00372
+(`liquidaciones_tarjeta`). Lo aprendido:
+
+- **Cada cobro va al archivo de su venta.** El cobro del mostrador de una
+  factura que espera el CAE entra a Caja o Banco del estudio contra
+  Anticipos (o 2.1.12 con «transitoria») y se imputa con el CAE: la regla
+  `asiento_sin_cae` decide solo contra qué espera. Lo que un recibo cobra de
+  una factura sin CAE (atado por `invoice_payments`, por eso
+  `cobrarConRecibo` vuelve a fijar el reparto) va entero a sus Anticipos
+  (`RepartoDeRecibo(..., reservado)`).
+- **El pase y la vuelta** (`cobros.EventoPase`, `EventoVuelta`): lo que un
+  recibo o un cobro de la conciliación mandó al B pasa a Anticipos el día que
+  se emite la factura de su pedido (por la cuenta corriente, hasta lo que la
+  cuenta dice pagado); la seña de un pedido que se entrega sin factura
+  vuelve al B. `ResultadoDelReparto.Pases` y `Pasado` los llevan; la
+  anulación los devuelve (`ConPase`).
+- **El cheque de un recibo va por el archivo por el que entró**
+  (`ChequesBlanco`, `Rechazos`): se acredita y rebota partido por su
+  reparto, y el rechazo sale de Anticipos si el cobro seguía ahí.
+  `circuito_reparto` lo guarda para el endoso.
+- **El costo espera el CAE** como la venta (`asientosDeCosto`).
+- **Deudores para el estudio es el saldo de la ficha** (cuenta + facturas
+  fuera de la cuenta + entregado sin cobrar), partido en con CAE (el mayor
+  de 1.1.03), sin CAE y B, con los saldos a favor. Sustituye la decisión M7.
+- Cuentas nuevas: 1.1.13 Tarjetas a acreditar, 2.1.13 Movimientos de fondos
+  a imputar (retiro «otro», cheque sin cobro, devolución por otro medio) y
+  3.1.01 Saldos iniciales y ajustes (ajustes del libro de proveedores; la
+  deuda a mano de clientes con la regla en «saldo_inicial»).
+- El diario se ordena por día (`OrdenarAsientos`). Los avisos del cierre
+  traen sus casos (`PendienteDelCierre.Casos`).
+- Reposición por sucursal (`PorSucursal`): primero traer de la otra, después
+  comprar; por encima del mínimo; lo negativo arriba.
+- Reportes: el total con IVA es el de los pedidos en todos los cortes
+  (`TotalesDelReporte.Renglones` para el renglón de envíos y descuentos).

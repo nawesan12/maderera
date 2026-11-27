@@ -368,10 +368,12 @@ func (s *Servicio) ObtenerFactura(ctx context.Context, id string) (*FichaDeFactu
 // movimiento, el monto y el detalle.
 func cargoDeFactura(tipo string, total float64, conRecepcion bool, yaCargado float64) (string, float64, string) {
 	mov, monto, detalle := "factura", total, "Factura de compra"
+	// La nota se nombra como nota: el renglón decía «Nota de crédito ·
+	// Factura de compra» (mes 23).
 	if strings.HasPrefix(tipo, "nota_credito") {
-		mov, monto = "nota_credito", -total
+		mov, monto, detalle = "nota_credito", -total, "Nota de crédito de compra"
 	} else if strings.HasPrefix(tipo, "nota_debito") {
-		mov = "nota_debito"
+		mov, detalle = "nota_debito", "Nota de débito de compra"
 	}
 	if conRecepcion {
 		// Si la factura vino por menos, la diferencia baja la deuda.

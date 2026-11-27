@@ -297,7 +297,8 @@ export function CuentaDelProveedor({
                   )}
                 </span>
                 <span className="order-3 col-span-2 min-w-0 text-base text-muted-foreground @2xl:order-none @2xl:col-span-1">
-                  {m.detalle ?? ""}
+                  {/* Las notas cargadas antes decían «Factura de compra». */}
+                  {m.tipo !== "factura" && m.detalle === "Factura de compra" ? "" : (m.detalle ?? "")}
                 </span>
                 <span
                   className={`tabular order-2 text-right font-semibold @2xl:order-none ${

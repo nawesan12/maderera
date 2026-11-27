@@ -125,7 +125,7 @@ export default async function FacturaDeCompraPage({
         </p>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className={`grid gap-6 ${esCredito && !f.aplicaA ? "" : "lg:grid-cols-[minmax(0,1fr)_22rem]"}`}>
         <section className="tarjeta p-5">
           <dl className="divide-y divide-linea-suave">
             {importes.map(([nombre, valor]) => (
@@ -160,6 +160,22 @@ export default async function FacturaDeCompraPage({
           {f.observaciones && <p className="mt-2 text-base">{f.observaciones}</p>}
         </section>
 
+        {/* Una nota de crédito no se paga: resta. En vez de «Pagos: Ninguno»,
+            a qué factura se aplicó, si se aplicó (mes 23). */}
+        {esCredito ? (
+          f.aplicaA && (
+            <section className="tarjeta p-5">
+              <h2 className="text-[19px] font-bold tracking-tight">Aplicada a</h2>
+              {f.aplicaAId ? (
+                <Link href={`/admin/compras/facturas/${f.aplicaAId}`} className="codigo mt-3 inline-block text-base font-medium hover:underline">
+                  {f.aplicaA}
+                </Link>
+              ) : (
+                <p className="codigo mt-3 text-base font-medium">{f.aplicaA}</p>
+              )}
+            </section>
+          )
+        ) : (
         <section className="tarjeta p-5">
           <h2 className="text-[19px] font-bold tracking-tight">Pagos</h2>
           {f.pagos.length === 0 && f.creditos.length === 0 ? (
@@ -204,6 +220,7 @@ export default async function FacturaDeCompraPage({
             </ul>
           )}
         </section>
+        )}
       </div>
 
       {f.renglones.length > 0 && (

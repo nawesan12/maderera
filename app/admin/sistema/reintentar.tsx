@@ -6,7 +6,8 @@ import { Loader2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { reintentarTrabajo } from "./actions";
 
-export function Reintentar({ id }: { id: string }) {
+/** Reintenta todos los del renglón: el mismo trabajo con el mismo error. */
+export function Reintentar({ ids }: { ids: string[] }) {
   const router = useRouter();
   const [pendiente, empezar] = useTransition();
   return (
@@ -15,9 +16,13 @@ export function Reintentar({ id }: { id: string }) {
       disabled={pendiente}
       onClick={() =>
         empezar(async () => {
-          const r = await reintentarTrabajo(id);
-          if (r.error) toast.error(r.error);
-          else toast.success(r.ok ?? "Vuelve a la cola.");
+          let error: string | undefined;
+          for (const id of ids) {
+            const r = await reintentarTrabajo(id);
+            error ??= r.error;
+          }
+          if (error) toast.error(error);
+          else toast.success("Vuelve a la cola.");
           router.refresh();
         })
       }

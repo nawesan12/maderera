@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"mjbj/internal/cola"
@@ -57,12 +58,16 @@ func Manejador(cfg Config) cola.Manejador {
 		req.Header.Set("Authorization", "Bearer "+cfg.Secreto)
 		r, err := cliente.Do(req)
 		if err != nil {
-			return fmt.Errorf("Next no respondió: %w", err)
+			return fmt.Errorf("El sitio no respondió: %w", err)
 		}
 		defer r.Body.Close()
 		if r.StatusCode != http.StatusOK {
+			// Sin el cuerpo vacío colgando de «Next contestó 404:» (mes 23).
 			cuerpo, _ := io.ReadAll(io.LimitReader(r.Body, 300))
-			return fmt.Errorf("Next contestó %d: %s", r.StatusCode, cuerpo)
+			if c := strings.TrimSpace(string(cuerpo)); c != "" {
+				return fmt.Errorf("El sitio contestó %d: %s", r.StatusCode, c)
+			}
+			return fmt.Errorf("El sitio contestó %d.", r.StatusCode)
 		}
 		return nil
 	}

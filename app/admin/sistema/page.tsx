@@ -7,6 +7,7 @@ import { api, datos } from "@/lib/api/servidor";
 import { requireStaff } from "@/lib/dal/session";
 import { puedeEntrar } from "@/lib/roles";
 import { fechaHora, plural } from "@/lib/formato";
+import { nombreDeLaTarea, nombreDelTrabajo } from "@/lib/sistema";
 import { Reintentar } from "./reintentar";
 
 export const metadata: Metadata = { title: "Sistema" };
@@ -22,6 +23,22 @@ export default async function SistemaPage() {
   if (!puedeEntrar("/admin/sistema", staffRole)) notFound();
   const estado = datos(await (await api()).GET("/api/v1/admin/sistema"));
   const fallidos = estado.trabajos.filter((t) => t.estado === "fallido").length;
+  // El mismo trabajo con el mismo error va en un renglón con la cantidad:
+  // veinte «next.revalidar» iguales tapaban todo lo demás (mes 23). Vienen
+  // del más nuevo al más viejo: el primero de cada grupo es el que se ve.
+  const grupos: { t: (typeof estado.trabajos)[number]; fallidos: string[]; cantidad: number }[] = [];
+  const porClave = new Map<string, (typeof grupos)[number]>();
+  for (const t of estado.trabajos) {
+    const clave = [t.tipo, t.estado === "fallido" ? "f" : "r", t.ultimoError ?? ""].join("\n");
+    let g = porClave.get(clave);
+    if (!g) {
+      g = { t, fallidos: [], cantidad: 0 };
+      porClave.set(clave, g);
+      grupos.push(g);
+    }
+    g.cantidad++;
+    if (t.estado === "fallido") g.fallidos.push(t.id);
+  }
 
   return (
     <div className="space-y-6">
@@ -37,11 +54,12 @@ export default async function SistemaPage() {
             <Vacio icono={CircleCheck} titulo="Nada falló en los últimos 30 días" />
           ) : (
             <ul className="divide-y divide-linea-suave">
-              {estado.trabajos.map((t) => (
+              {grupos.map(({ t, fallidos: ids, cantidad }) => (
                 <li key={t.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:gap-4">
                   <div className="min-w-0 flex-1">
                     <p className="flex flex-wrap items-center gap-2">
-                      <span className="codigo break-all text-base font-semibold">{t.tipo}</span>
+                      <span className="text-base font-semibold">{nombreDelTrabajo(t.tipo)}</span>
+                      {cantidad > 1 && <span className="tabular text-base font-semibold text-texto-2">× {cantidad}</span>}
                       <span
                         className={`${t.estado === "fallido" ? "estado-problema" : "estado-espera"} rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)]`}
                       >
@@ -53,7 +71,7 @@ export default async function SistemaPage() {
                     )}
                     <p className="tabular mt-1 text-sm text-texto-3">{fechaHora.format(new Date(t.terminadoAt ?? t.createdAt))}</p>
                   </div>
-                  {t.estado === "fallido" && <Reintentar id={t.id} />}
+                  {ids.length > 0 && <Reintentar ids={ids} />}
                 </li>
               ))}
             </ul>
@@ -66,7 +84,7 @@ export default async function SistemaPage() {
         <ul className="tarjeta divide-y divide-linea-suave overflow-hidden">
           {estado.tareas.map((t) => (
             <li key={t.tarea} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3">
-              <span className="codigo min-w-0 break-all text-base font-semibold">{t.tarea}</span>
+              <span className="min-w-0 text-base font-semibold">{nombreDeLaTarea(t.tarea)}</span>
               <span
                 className={`tabular text-sm ${t.estado === "error" ? "estado-problema font-semibold text-[var(--estado-tinta)]" : "text-texto-2"}`}
               >

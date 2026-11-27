@@ -179,4 +179,3 @@ func TestLibroIvaDigitalSinVentasAutorizadas(t *testing.T) {
 		t.Errorf("omitidos: %q", nombres["OMITIDOS.txt"])
 	}
 }
-

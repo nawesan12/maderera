@@ -256,7 +256,8 @@ export default async function DetallePedidoPage({
 
       {!cancelado && (
         <section className="rounded-xl bg-card p-5 tarjeta">
-          <Pasos etapas={etapas} actual={estadoVisible} />
+          {/* El que falta firmar ya lo retiró: el paso es «Retirado». */}
+          <Pasos etapas={etapas} actual={estadoVisible === "por-firmar" ? "entregado" : estadoVisible} />
         </section>
       )}
 
@@ -646,7 +647,7 @@ export default async function DetallePedidoPage({
                 )}
                 {/* Ya retirado no es «lo retirás» (M2S1-159). */}
                 {pedido.tipoEntrega === "retiro"
-                  ? estadoVisible === "entregado"
+                  ? estadoVisible === "entregado" || estadoVisible === "por-firmar"
                     ? "Retiro en"
                     : "Lo retirás en"
                   : estadoVisible === "entregado"

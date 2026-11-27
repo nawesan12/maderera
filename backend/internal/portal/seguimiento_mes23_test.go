@@ -53,8 +53,9 @@ func TestSeguimientoDiceEnQueEsta(t *testing.T) {
 
 // La venta del mostrador queda «entregado» con el retiro para firmar: el
 // portal la listaba «Entregado», «Qué fue pasando» decía «Entregado» y el
-// detalle «Listo» (mes 23, M2S1-071). Hasta la firma es «Listo» en todos
-// lados.
+// detalle «Listo» (mes 23, M2S1-071). Hasta la firma es «por-firmar» en
+// todos lados: «Listo para retirar» se lo decía al que ya se la había
+// llevado (PED-1150).
 func TestElRetiroSinFirmarEsListo(t *testing.T) {
 	e := armar(t)
 	ctx := context.Background()
@@ -93,7 +94,7 @@ func TestElRetiroSinFirmarEsListo(t *testing.T) {
 		}
 		return ps[0].Estado, p.Estado, entregados
 	}
-	if l, d, h := estado(); l != "listo" || d != "listo" || h != 0 {
+	if l, d, h := estado(); l != "por-firmar" || d != "por-firmar" || h != 0 {
 		t.Errorf("sin firmar: lista %s, detalle %s, %d «entregado» en el historial", l, d, h)
 	}
 	if _, err := e.pool.Exec(ctx, `update deliveries set estado = 'entregada' where id = $1`, remito); err != nil {

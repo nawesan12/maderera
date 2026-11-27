@@ -273,8 +273,8 @@ func (s *Servicio) MiPedido(ctx context.Context, c *Cliente, numero string) (*Pe
 		return nil, err
 	}
 	// Mientras el retiro espera la firma, «Qué fue pasando» no dice
-	// «Entregado» con el pedido arriba en «Listo» (mes 23, M2S1-071).
-	if p.Estado == "listo" {
+	// «Entregado» con el pedido arriba en «Para firmar» (mes 23, M2S1-071).
+	if p.Estado == "listo" || p.Estado == "por-firmar" {
 		h := p.Historial[:0]
 		for _, e := range p.Historial {
 			if e.Estado != "entregado" {

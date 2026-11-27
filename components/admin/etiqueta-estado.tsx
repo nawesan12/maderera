@@ -50,6 +50,8 @@ const ESTADOS: Record<string, Estilo> = {
   // Pedidos
   preparando: { etiqueta: "Preparando", familia: "espera", abierto: true },
   listo: { etiqueta: "Listo", familia: "ok", abierto: true },
+  // Lo que ve el cliente de un retiro que se llevó y no firmó (lib/cuenta/portal).
+  "por-firmar": { etiqueta: "Para firmar", familia: "espera", abierto: true },
   "en-camino": { etiqueta: "En camino", familia: "info", abierto: true },
   entregado: { etiqueta: "Entregado", familia: "cerrado", abierto: false },
   cancelado: { etiqueta: "Cancelado", familia: "cerrado", abierto: false },

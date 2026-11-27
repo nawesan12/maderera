@@ -257,6 +257,8 @@ const MotivoDelDescuento = `coalesce((SELECT pd2.etiqueta FROM payment_discounts
 // 23, M2S1-071).
 const RetiroSinFirmar = `EXISTS (SELECT 1 FROM deliveries rs WHERE rs.order_id = o.id AND rs.estado = 'preparada' AND rs.tipo = 'retiro')`
 
-// EstadoParaElCliente es el estado que ve el cliente: «listo» hasta que
-// firma el retiro.
-const EstadoParaElCliente = `(CASE WHEN o.estado = 'entregado' AND ` + RetiroSinFirmar + ` THEN 'listo' ELSE o.estado::text END)`
+// EstadoParaElCliente es el estado que ve el cliente: «por-firmar» hasta que
+// firma el retiro. Era «listo», y el que ya se había llevado la compra del
+// mostrador leía «Listo para retirar» mientras el panel decía «Entregado»
+// (mes 23, PED-1150). Se lo llevó; lo que falta es la firma.
+const EstadoParaElCliente = `(CASE WHEN o.estado = 'entregado' AND ` + RetiroSinFirmar + ` THEN 'por-firmar' ELSE o.estado::text END)`

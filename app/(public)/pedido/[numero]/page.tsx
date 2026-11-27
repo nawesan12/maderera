@@ -11,6 +11,7 @@ import {
   Check,
   Package,
   PackageCheck,
+  PenLine,
   Store,
   Truck,
   UserRound,
@@ -242,7 +243,7 @@ async function Seguimiento({
             <p className="flex items-start gap-2 text-sm">
               <Store className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
               <span>
-                {pedido.estado === "entregado" ? "Retiraste en" : "Retirás en"} {pedido.sucursal}
+                {pedido.estado === "entregado" || pedido.estado === "por-firmar" ? "Retiraste en" : "Retirás en"} {pedido.sucursal}
                 <span className="block text-muted-foreground">
                   {sucursalPublicada(pedido.sucursalSlug ?? "")?.direccion}
                 </span>
@@ -338,6 +339,10 @@ function cabeceraDelEstado(p: PedidoSeguido): {
         fondo: verde,
       };
     }
+    // Se lo llevó y falta la firma del remito (fragmentos.EstadoParaElCliente):
+    // decía «Listo para retirar» con el panel en «Entregado» (mes 23, PED-1150).
+    case "por-firmar":
+      return { titulo: "Falta firmar el remito", icono: PenLine, fondo: naranja };
     case "en-camino":
       return { titulo: "Tu pedido está en camino", icono: Truck, fondo: naranja };
     case "listo":

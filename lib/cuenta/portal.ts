@@ -47,15 +47,16 @@ export function importeAInformar(saldo: number, enRevision: number): number | nu
 /**
  * El estado que el portal muestra. Un retiro con su remito preparado y sin
  * firmar todavía no está entregado: el pedido figuraba «Entregado» con el
- * remito sin firmar (mes simulado, M2S1-071 y M2S2-115). Queda «Listo» hasta
- * la firma.
+ * remito sin firmar (mes simulado, M2S1-071 y M2S2-115). Queda «Para firmar»
+ * hasta la firma: «Listo para retirar» se lo decía al que ya se lo había
+ * llevado (mes 23, PED-1150). Go manda lo mismo (fragmentos.EstadoParaElCliente).
  */
 export function estadoVisibleDelPedido(
   estado: string,
   remitos: { estado: string; tipo: string }[],
 ): string {
   if (estado !== "entregado") return estado;
-  return remitos.some((r) => r.estado === "preparada" && r.tipo === "retiro") ? "listo" : estado;
+  return remitos.some((r) => r.estado === "preparada" && r.tipo === "retiro") ? "por-firmar" : estado;
 }
 
 /**
@@ -116,7 +117,8 @@ const ABONA_AL_RETIRAR: Record<string, string> = {
  *   se debe, sin la frase de «al retirar».
  */
 export function estadoDelPago(p: PagoDelPedido): EstadoDelPago | null {
-  const entregado = p.estado === "entregado";
+  // El que falta firmar ya se lo llevó: no es «Abonás al retirar».
+  const entregado = p.estado === "entregado" || p.estado === "por-firmar";
   if (p.estado === "cancelado") {
     // Cancelado sin plata de por medio, no hay nada que decir del pago: «Sin
     // cobrar» se leía como una deuda (H310).

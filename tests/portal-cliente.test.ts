@@ -204,7 +204,7 @@ describe("el encabezado del resumen impreso", () => {
 
 describe("los remitos del pedido en el portal (mes simulado, tanda 23)", () => {
   it("con el retiro sin firmar el pedido no figura entregado (M2S1-071)", () => {
-    expect(estadoVisibleDelPedido("entregado", [{ estado: "preparada", tipo: "retiro" }])).toBe("listo");
+    expect(estadoVisibleDelPedido("entregado", [{ estado: "preparada", tipo: "retiro" }])).toBe("por-firmar");
     expect(estadoVisibleDelPedido("entregado", [{ estado: "entregada", tipo: "retiro" }])).toBe("entregado");
     expect(estadoVisibleDelPedido("en-camino", [{ estado: "preparada", tipo: "envio" }])).toBe("en-camino");
   });

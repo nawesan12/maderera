@@ -439,7 +439,8 @@ func TestEventos(t *testing.T) {
 			este = x.(map[string]any)
 		}
 	}
-	if este["manana"] != true || este["porRecordar"] != 1.0 || este["empezo"] != false {
+	// Mes 23: sin la asistencia tomada no hay «asistentes», hay anotados.
+	if este["manana"] != true || este["porRecordar"] != 1.0 || este["empezo"] != false || este["sinMarcar"] != 1.0 || este["asistieron"] != 0.0 {
 		t.Fatalf("mañana y por recordar: %v", este)
 	}
 

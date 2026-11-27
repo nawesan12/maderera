@@ -359,6 +359,10 @@ export interface components {
             } | null;
         };
         EventoAdmin: {
+            /** @description los marcados «vino» */
+            asistieron: number;
+            /** @description los que tienen el lugar y todavía no se marcó si vinieron */
+            sinMarcar: number;
             /** @description ya empezó (desde ahí se toma asistencia) */
             empezo: boolean;
             /** @description empieza mañana */

@@ -36,7 +36,13 @@ type EventoAdmin struct {
 	Inscriptos        int        `json:"inscriptos"`
 	Confirmados       int        `json:"confirmados"`
 	Reservados        int        `json:"reservados"`
-	// Lo cobrado de verdad: solo las inscripciones confirmadas.
+	// Asistieron: los marcados «vino». SinMarcar: los que tienen el lugar y
+	// todavía no se marcó si vinieron. El evento pasado decía «1 asistente»
+	// con el anotado todavía «Confirmado» (mes 23).
+	Asistieron int `json:"asistieron"`
+	SinMarcar  int `json:"sinMarcar"`
+	// Lo cobrado de verdad: las inscripciones con el lugar pago, también la
+	// de quien no vino.
 	Recaudado float64 `json:"recaudado"`
 	Proximo   bool    `json:"proximo"`
 	// Empezo: desde ahí se toma asistencia (M2S1-129, M3S2-038).
@@ -60,7 +66,10 @@ func (s *Servicio) Eventos(ctx context.Context) ([]EventoAdmin, error) {
 		(select count(*)::int from event_registrations er where er.event_id = e.id and er.estado <> 'cancelada'),
 		(select count(*)::int from event_registrations er where er.event_id = e.id and er.estado in ('confirmada', 'asistio')),
 		(select count(*)::int from event_registrations er where er.event_id = e.id and er.estado = 'reservada'),
-		(select count(*)::int from event_registrations er where er.event_id = e.id and er.estado in `+QuienesSeRecuerdan+` and er.recordado_at is null)
+		(select count(*)::int from event_registrations er where er.event_id = e.id and er.estado in `+QuienesSeRecuerdan+` and er.recordado_at is null),
+		(select count(*)::int from event_registrations er where er.event_id = e.id and er.estado = 'asistio'),
+		(select count(*)::int from event_registrations er where er.event_id = e.id and er.estado = 'confirmada'),
+		(select count(*)::int from event_registrations er where er.event_id = e.id and er.estado in `+QuienesSeRecuerdan+`)
 		from events e left join branches b on b.id = e.branch_id
 		order by e.inicia desc`)
 	if err != nil {
@@ -72,12 +81,13 @@ func (s *Servicio) Eventos(ctx context.Context) ([]EventoAdmin, error) {
 	for filas.Next() {
 		var e EventoAdmin
 		var precio jsmath.Num
+		var pagaron int
 		if err := filas.Scan(&e.ID, &e.Slug, &e.Titulo, &e.Resumen, &e.Descripcion, &e.Lugar, &e.Sucursal, &e.Inicia, &e.Termina, &e.Cupo, &precio,
-			&e.SoloProfesionales, &e.Estado, &e.Inscriptos, &e.Confirmados, &e.Reservados, &e.PorRecordar); err != nil {
+			&e.SoloProfesionales, &e.Estado, &e.Inscriptos, &e.Confirmados, &e.Reservados, &e.PorRecordar, &e.Asistieron, &e.SinMarcar, &pagaron); err != nil {
 			return nil, err
 		}
 		e.Precio = precio.F()
-		e.Recaudado = float64(e.Precio * float64(e.Confirmados))
+		e.Recaudado = float64(e.Precio * float64(pagaron))
 		e.Proximo = !e.Inicia.Before(ahora)
 		e.Empezo = !e.Proximo
 		desde, hasta := manana(ahora)

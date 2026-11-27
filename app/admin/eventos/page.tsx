@@ -148,9 +148,14 @@ export default async function EventosAdminPage() {
                           {fechaLarga.format(evento.inicia)}
                         </span>
                       </span>
-                      <span className="text-base text-muted-foreground">
-                        {evento.confirmados === 1 ? "1 asistente" : `${evento.confirmados} asistentes`}
-                      </span>
+                      {/* Con la asistencia sin tomar, la cuenta la dice la
+                          lista de abajo («1 anotado»): decía «1 asistente»
+                          con el anotado todavía «Confirmado» (mes 23). */}
+                      {evento.sinMarcar === 0 && (
+                        <span className="text-base text-muted-foreground">
+                          {evento.asistieron === 1 ? "1 asistente" : `${evento.asistieron} asistentes`}
+                        </span>
+                      )}
                       {evento.precio > 0 && (
                         <span className="tabular text-base">
                           {moneda.format(evento.recaudado)}

@@ -60,6 +60,12 @@ func TestSaldoDeFacturasACuentaPorAntiguedad(t *testing.T) {
 	if suma != 321400 {
 		t.Fatalf("la columna suma %v y la cuenta debe 321.400", suma)
 	}
+	// Las de la ficha que todavía deben: lo que propone la carga de una
+	// retención sufrida (M2S1-113).
+	_, b = pedir(t, admin, "GET", e.srv.URL+"/api/v1/admin/facturacion/comprobantes/pagina?conSaldo=true&cliente="+cliente, nil)
+	if p := leerJSON[PaginaDeComprobantes](t, b); p.Total != 1 || p.Filas[0].Pedido == nil || *p.Filas[0].Pedido != "PED-1019" {
+		t.Fatalf("con saldo: %s", b)
+	}
 
 	// Una devolución a la cuenta por 25.650 sobre la nueva: la factura debe
 	// lo que queda de ella, no su total.

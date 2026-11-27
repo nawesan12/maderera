@@ -453,6 +453,8 @@ export interface operations {
                         saldo: number;
                         /** Format: double */
                         limiteCredito: number;
+                        /** @description La cuenta corriente está bloqueada */
+                        cuentaPausada?: boolean;
                     };
                 };
             };

@@ -37,6 +37,7 @@ paths:
                   presupuestosAResponder: { type: integer }
                   saldo: { type: number, format: double }
                   limiteCredito: { type: number, format: double }
+                  cuentaPausada: { type: boolean, description: La cuenta corriente está bloqueada }
   /api/v1/cuenta/pedidos:
     get:
       operationId: MisPedidos

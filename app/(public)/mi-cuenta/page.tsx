@@ -162,7 +162,11 @@ export default async function ResumenCuentaPage() {
             </Link>
           </div>
 
-          {resumen.limiteCredito > 0 && (
+          {/* Bloqueada, no se ofrece lo disponible (M3S1-017). */}
+          {resumen.limiteCredito > 0 && resumen.cuentaPausada && (
+            <p className="border-t bg-sitio-alt px-5 py-4 text-sm font-medium text-saldo-debe">Cuenta corriente pausada</p>
+          )}
+          {resumen.limiteCredito > 0 && !resumen.cuentaPausada && (
             <MedidorCredito
               saldo={resumen.saldo}
               limite={resumen.limiteCredito}

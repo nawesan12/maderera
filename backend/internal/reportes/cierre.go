@@ -938,7 +938,7 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 		SELECT
 		  (SELECT count(*)::int FROM goods_receipts WHERE estado = 'borrador' AND fecha >= $1 AND fecha <= $2),
 		  (SELECT count(*)::int FROM cash_sessions WHERE estado = 'abierta' AND abierta_at <= $3),
-		  (SELECT count(*)::int FROM goods_receipts g WHERE g.estado = 'confirmada' AND g.fecha >= $1 AND g.fecha <= $2
+		  (SELECT count(*)::int FROM goods_receipts g WHERE g.estado = 'confirmada' AND g.fecha <= $2
 		     AND `+RecepcionSinFactura+`),
 		  (SELECT count(*)::int FROM orders o WHERE o.estado = 'cancelado' AND o.created_at <= $3 AND (`+fragmentos.FacturaViva+` OR `+fragmentos.FacturaSinBaja+`))`, desde, hasta, ihasta).
 		Scan(&borradores, &cajas, &sinFactura, &facturasVivas)
@@ -954,6 +954,10 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 		out = append(out, pendiente("caja", "Turnos de caja sin cerrar",
 			"Efectivo sin arquear: la diferencia del mes no se puede calcular.", cajas, "/admin/caja"))
 	}
+	// Las recepciones sin factura cuentan hasta el fin del mes, también las
+	// de meses anteriores: el crédito fiscal sigue sin computarse, y el
+	// inicio y la lista las cuentan todas. El cierre de noviembre decía 1 y
+	// el inicio 2, con la del 18/08 afuera (M2S2-043, mes 23).
 	if sinFactura > 0 {
 		p := pendiente("facturas", "Recepciones sin factura de compra",
 			"Entró la mercadería pero falta el papel: ese IVA todavía no se computa como crédito.", sinFactura, "/admin/recepciones")
@@ -962,8 +966,8 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 		rs, err := s.lectura.Query(ctx, `SELECT g.id::text, coalesce('Remito ' || nullif(g.numero_remito, ''), 'Recepción'), coalesce(s.nombre, ''),
 			  coalesce((SELECT sum(i.cantidad * i.costo_unitario) FROM goods_receipt_items i WHERE i.receipt_id = g.id), 0)::float8
 			FROM goods_receipts g LEFT JOIN suppliers s ON s.id = g.supplier_id
-			WHERE g.estado = 'confirmada' AND g.fecha >= $1 AND g.fecha <= $2 AND `+RecepcionSinFactura+`
-			ORDER BY g.fecha, g.created_at`, desde, hasta)
+			WHERE g.estado = 'confirmada' AND g.fecha <= $1 AND `+RecepcionSinFactura+`
+			ORDER BY g.fecha, g.created_at`, hasta)
 		if err != nil {
 			return nil, err
 		}

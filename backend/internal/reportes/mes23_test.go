@@ -53,3 +53,34 @@ func TestAjusteDeProveedorSeAsienta(t *testing.T) {
 		t.Errorf("Saldos iniciales: %v", v)
 	}
 }
+
+// M2S2-043 (mes 23): el cierre de un mes cuenta también las recepciones sin
+// factura de meses anteriores, como el inicio y la lista; la que cubre una
+// factura de varios remitos no cuenta.
+func TestElCierreCuentaLasRecepcionesSinFacturaDeAntes(t *testing.T) {
+	e := armar(t)
+	prov := e.id(t, `insert into suppliers (nombre) values ('Tableros') returning id`)
+	e.exec(t, `insert into goods_receipts (supplier_id, branch_id, estado, numero_remito, fecha) values ($1, $2, 'confirmada', 'vieja', '2026-08-18')`, prov, e.central)
+	e.exec(t, `insert into goods_receipts (supplier_id, branch_id, estado, numero_remito, fecha) values ($1, $2, 'confirmada', 'del-mes', '2026-10-05')`, prov, e.central)
+	e.exec(t, `insert into goods_receipts (supplier_id, branch_id, estado, numero_remito, fecha) values ($1, $2, 'confirmada', 'despues', '2026-11-05')`, prov, e.central)
+	r1 := e.id(t, `insert into goods_receipts (supplier_id, branch_id, estado, numero_remito, fecha) values ($1, $2, 'confirmada', 'a', '2026-10-06') returning id`, prov, e.central)
+	r2 := e.id(t, `insert into goods_receipts (supplier_id, branch_id, estado, numero_remito, fecha) values ($1, $2, 'confirmada', 'b', '2026-09-06') returning id`, prov, e.central)
+	f := e.id(t, `insert into purchase_invoices (supplier_id, tipo, punto_venta, numero, neto, iva21, iva105, iva27, percepciones, total, fecha_emision, receipt_id)
+		values ($1, 'factura_a', 3, 22044, 1000, 210, 0, 0, 0, 1210, '2026-10-10T00:00:00Z', $2) returning id`, prov, r1)
+	e.exec(t, `insert into purchase_invoice_receipts (purchase_invoice_id, goods_receipt_id) values ($1, $2), ($1, $3) on conflict do nothing`, f, r1, r2)
+
+	p := PeriodoDelCierre("2026-10", ahoraDePrueba)
+	pendientes, err := e.s.PendientesDelCierre(context.Background(), p.Desde, p.Hasta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range pendientes {
+		if x.Clave == "facturas" {
+			if x.Cantidad != 2 || len(x.Casos) != 2 {
+				t.Errorf("recepciones sin factura: %+v", x)
+			}
+			return
+		}
+	}
+	t.Errorf("el cierre no las marca: %+v", pendientes)
+}

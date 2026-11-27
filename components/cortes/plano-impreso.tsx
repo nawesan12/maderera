@@ -103,6 +103,16 @@ export function PlanoImpreso({
           .plano-piezas td { width: auto; }
           .plano-piezas td::before { content: none !important; }
           .plano-piezas .solo-papel { display: none; }
+          /* Cada sobrante en un renglón (dos si no entra): placa, medida y
+             m², y de quién es; eran cinco renglones de ficha por sobrante. */
+          .plano-sobrantes tr { display: flex; flex-wrap: wrap; gap: 0 3mm; align-items: baseline; }
+          .plano-sobrantes td { width: auto; }
+          .plano-sobrantes td::before { content: none !important; }
+          .plano-sobrantes td.placa::before { content: "Placa " !important; color: #666; }
+          .plano-sobrantes td.indice { display: none; }
+          .plano-sobrantes td.num::after { content: " m²"; }
+          .plano-sobrantes td.quien { color: #555; }
+          .plano-barra .boton-imprimir { white-space: nowrap; }
         }
       `}</style>
 
@@ -125,7 +135,7 @@ export function PlanoImpreso({
           {/* La secuencia para tipear en la seccionadora, del mismo plano. */}
           {corte.id && (
             <a href={`/hoja-de-corte/${corte.id}`} className="boton-imprimir">
-              Hoja para la seccionadora
+              Hoja de corte
             </a>
           )}
         </div>
@@ -504,7 +514,7 @@ function TablaDePiezas({ plano }: { plano: PlanoDeCorte }) {
 function TablaDeSobrantes({ plano, sierra, quien }: { plano: PlanoDeCorte; sierra: number; quien: QuienSeQueda }) {
   return (
     <>
-      <table className="plano-tabla">
+      <table className="plano-tabla plano-sobrantes">
         <thead>
           <tr>
             <th>Placa</th>
@@ -519,14 +529,14 @@ function TablaDeSobrantes({ plano, sierra, quien }: { plano: PlanoDeCorte; sierr
             placa.recortes.length === 0
               ? [
                   <tr key={`v${placa.numero}`}>
-                    <td>{placa.numero}</td>
+                    <td className="placa">{placa.numero}</td>
                     <td colSpan={4}>Sin pedazos enteros que valga guardar</td>
                   </tr>,
                 ]
               : placa.recortes.map((r, i) => (
                   <tr key={`${placa.numero}-s${i}`}>
-                    <td data-label="Placa">{placa.numero}</td>
-                    <td data-label="Sobrante">{i + 1}</td>
+                    <td className="placa" data-label="Placa">{placa.numero}</td>
+                    <td className="indice" data-label="Sobrante">{i + 1}</td>
                     <td data-label="Medida">
                       {r.ancho} × {r.alto} mm
                     </td>
@@ -535,7 +545,7 @@ function TablaDeSobrantes({ plano, sierra, quien }: { plano: PlanoDeCorte; sierr
                         fijo: true,
                       })}
                     </td>
-                    <td data-label="De quién es">
+                    <td className="quien" data-label="De quién es">
                       {sobraDelCliente(placa.seVendeEntera, quien) ? "Del cliente" : "Al stock de la maderera"}
                     </td>
                   </tr>
@@ -545,8 +555,9 @@ function TablaDeSobrantes({ plano, sierra, quien }: { plano: PlanoDeCorte; sierr
       </table>
 
       <p className="plano-pie">
-        De lo comprado, el{" "}
-        {Math.round(plano.aprovechadoTotal * 100)}% sale en piezas. La sierra se
+        {/* Sin «de lo comprado»: el que paga el corte no compró la placa
+            (M2S2-107). */}
+        El {Math.round(plano.aprovechadoTotal * 100)}% sale en piezas. La sierra se
         come {(sierra / 1_000_000).toFixed(2).replace(".", ",")} m² en{" "}
         {plano.pasadas} {plano.pasadas === 1 ? "pasada" : "pasadas"} de{" "}
         {formatearSierra(plano.anchoSierra)}, y el resto queda en los sobrantes de la tabla.

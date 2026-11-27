@@ -130,6 +130,26 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Ok" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/clientes/{id}/invitacion:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: InvitarAlPortal
+      description: |
+        Le abre la cuenta web a un cliente cargado en el panel, con el correo
+        de la ficha, y le manda el link de activación (M2S1-097).
+      responses:
+        "200":
+          description: Lo que pasó y el link, para mandarlo también por WhatsApp
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, url]
+                properties:
+                  ok: { type: string }
+                  url: { type: string }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/clientes/{id}/bloqueo:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string } }

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -215,7 +216,11 @@ const noSePudo = "No pudimos habilitar esta cuenta. Fijate si el cliente ya tien
 // Aprobar habilita el acceso, en una transacción: vincula o crea la ficha
 // (gana la del CUIT; la cuenta web se muda a ella), asigna la lista y el
 // límite, y marca el perfil de la cuenta web. Devuelve el mensaje.
-func (s *Servicio) Aprobar(ctx context.Context, ses *auth.Sesion, id string, lista, limiteTexto *string) (string, error) {
+func (s *Servicio) Aprobar(ctx context.Context, ses *auth.Sesion, id string, lista, limiteTexto *string, opciones ...Aprobacion) (string, error) {
+	var op Aprobacion
+	if len(opciones) > 0 {
+		op = opciones[0]
+	}
 	sol, err := s.leerSolicitud(ctx, s.pool, id)
 	if err != nil {
 		return "", err
@@ -232,6 +237,12 @@ func (s *Servicio) Aprobar(ctx context.Context, ses *auth.Sesion, id string, lis
 	}
 	if math.IsNaN(limite) || math.IsInf(limite, 0) || limite < 0 {
 		return "", invalido("Revisá el límite de cuenta corriente.")
+	}
+	if op.CondicionIva != "" && !slices.Contains(CondicionesIva, op.CondicionIva) {
+		return "", invalido("Elegí la condición frente al IVA.")
+	}
+	if op.DiasCredito != nil && (*op.DiasCredito < 0 || *op.DiasCredito > 365) {
+		return "", invalido("Revisá a cuántos días paga.")
 	}
 
 	var nombreLista *string
@@ -344,6 +355,21 @@ func (s *Servicio) Aprobar(ctx context.Context, ses *auth.Sesion, id string, lis
 				d.VincularCuentaWeb, sol.userID); err != nil {
 				return err
 			}
+			// El CUIT de la solicitud pasa a la ficha que no tenía (M2S1-020):
+			// quedaba «CUIT —, Consumidor final» y se le facturaba B a quien
+			// pidió la cuenta con CUIT. Solo si ninguna otra ficha lo tiene.
+			if sol.cuit != nil && *sol.cuit != "" && porCuit == nil {
+				if _, err := tx.Exec(ctx, `update customers c set cuit = $2 where c.id = $1 and (c.cuit is null or c.cuit = '')
+					and not exists (select 1 from customers o where o.id <> c.id and o.cuit = any($3::text[]))`,
+					*d.Destino, cuit.SoloDigitos(*sol.cuit), cuit.Variantes(*sol.cuit)); err != nil {
+					return err
+				}
+			}
+			if op.CondicionIva != "" {
+				if _, err := tx.Exec(ctx, `update customers set condicion_iva = $2::condicion_iva where id = $1`, *d.Destino, op.CondicionIva); err != nil {
+					return err
+				}
+			}
 			customerID = *d.Destino
 		} else {
 			nombre := sol.nombre
@@ -356,6 +382,12 @@ func (s *Servicio) Aprobar(ctx context.Context, ses *auth.Sesion, id string, lis
 			if sol.cuit != nil && *sol.cuit != "" {
 				condicion = "responsable_inscripto"
 			}
+			// La elige quien aprueba (M3S2-092): un CUIT 27 de persona puede
+			// ser monotributista, y antes quedaba inscripto sin que nadie lo
+			// eligiera.
+			if op.CondicionIva != "" {
+				condicion = op.CondicionIva
+			}
 			if err := tx.QueryRow(ctx, `insert into customers (tipo, rubro, price_list_id, limite_credito, nombre, razon_social, cuit,
 				condicion_iva, email, telefono, user_id, estado)
 				values ('profesional', $1, $2, $3, $4, $5, $6, $7::condicion_iva, $8, $9, $10, 'activo')
@@ -367,6 +399,13 @@ func (s *Servicio) Aprobar(ctx context.Context, ses *auth.Sesion, id string, lis
 			}
 		}
 
+		// El plazo de pago junto con el límite (M2S1-137: la ficha quedaba
+		// «Paga a __ días»).
+		if op.DiasCredito != nil {
+			if _, err := tx.Exec(ctx, `update customers set dias_credito = $2 where id = $1`, customerID, *op.DiasCredito); err != nil {
+				return err
+			}
+		}
 		// La cuenta web: el rol (el personal conserva el suyo) y la lista, para
 		// que el catálogo le muestre los precios nuevos apenas recargue.
 		if sol.userID != nil {
@@ -587,3 +626,15 @@ func (s *Servicio) EnlaceDeAcceso(ctx context.Context, ses *auth.Sesion, id stri
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "profesional", sol.id, "Generó un link de acceso para "+sol.nombre, nil)
 	return strings.TrimSuffix(s.sitio, "/") + "/entrar/" + token, sol.nombre, sol.telefono, nil
 }
+
+// Aprobacion es lo que elige quien aprueba además de la lista y el límite.
+type Aprobacion struct {
+	// CondicionIva: la condición frente al IVA de la ficha. Vacía, la de
+	// antes (inscripto con CUIT en una ficha nueva; la existente no cambia).
+	CondicionIva string
+	// DiasCredito: a cuántos días paga. Nil, el de la ficha.
+	DiasCredito *int
+}
+
+// CondicionesIva son las de condicion_iva.
+var CondicionesIva = []string{"responsable_inscripto", "monotributista", "exento", "consumidor_final", "no_categorizado"}

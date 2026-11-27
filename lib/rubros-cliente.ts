@@ -39,7 +39,8 @@ export type RubroCliente = (typeof RUBROS_CLIENTE)[number]["valor"];
 
 /** Cómo se muestra un rubro. Lo que no está en la lista se muestra tal cual. */
 export function etiquetaDeRubro(valor: string | null | undefined): string {
-  if (!valor) return "Sin rubro";
+  // Sin rubro es particular, como lo dice la ficha y el alta (M2S1-115).
+  if (!valor) return "Particular";
   return (
     RUBROS_CLIENTE.find((r) => r.valor === valor)?.etiqueta ?? valor
   );

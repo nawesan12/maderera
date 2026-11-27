@@ -81,6 +81,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"CobrarACliente":                 "plata",                         // POST /api/v1/admin/clientes/{id}/cobros
 	"CreditoDeCliente":               "/admin/clientes",               // GET /api/v1/admin/clientes/{id}/credito
 	"VincularCuentaWeb":              "/admin/clientes",               // POST /api/v1/admin/clientes/{id}/cuenta-web
+	"InvitarAlPortal":                "/admin/clientes",               // POST /api/v1/admin/clientes/{id}/invitacion
 	"HistorialDeCliente":             "/admin/clientes",               // GET /api/v1/admin/clientes/{id}/historial
 	"RegistrarMovimiento":            "admin",                         // POST /api/v1/admin/clientes/{id}/movimientos
 	"CambiarPlazo":                   "admin",                         // PUT /api/v1/admin/clientes/{id}/plazo
@@ -165,6 +166,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"FichaDeCorte":                   "/admin/cortes",                 // GET /api/v1/admin/cortes/{id}
 	"ListarCortes":                   "/admin/cortes",                 // GET /api/v1/admin/cortes
 	"CrearCorte":                     "cola",                          // POST /api/v1/admin/cortes
+	"ContactoDeLaConsulta":           "/admin/cortes/nuevo",           // GET /api/v1/admin/cortes/consulta/{token}/contacto
 	"CategoriasDeDocumentos":         "/admin/documentacion",          // GET /api/v1/admin/documentos/categorias
 	"ActivarDocumento":               "/admin/documentacion",          // POST /api/v1/admin/documentos/{id}/activo
 	"VisibilidadDocumento":           "/admin/documentacion",          // POST /api/v1/admin/documentos/{id}/visibilidad

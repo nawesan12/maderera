@@ -128,6 +128,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/clientes/{id}/invitacion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Le abre la cuenta web a un cliente cargado en el panel, con el correo
+         *     de la ficha, y le manda el link de activación (M2S1-097).
+         */
+        post: operations["InvitarAlPortal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/clientes/{id}/bloqueo": {
         parameters: {
             query?: never;
@@ -1122,6 +1144,32 @@ export interface operations {
         };
         responses: {
             200: components["responses"]["Ok"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    InvitarAlPortal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Lo que pasó y el link, para mandarlo también por WhatsApp */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok: string;
+                        url: string;
+                    };
+                };
+            };
             422: components["responses"]["Problema"];
         };
     };

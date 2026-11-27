@@ -260,6 +260,7 @@ function Fila({
             nombre={solicitud.razonSocial || solicitud.nombre}
             listas={listas}
             clienteExistente={solicitud.clienteExistente}
+            cuit={solicitud.documentoTipo === "cuit" ? solicitud.documentoNumero : null}
           />
         </div>
       )}

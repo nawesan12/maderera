@@ -24,18 +24,30 @@ export function CreditoDelCliente({
   bloqueada,
   motivo,
   editable,
+  sinCuenta = false,
 }: {
   customerId: string;
-  diasCredito: number;
+  diasCredito: number | null;
   bloqueada: boolean;
   motivo: string | null;
   /** Solo el admin cambia el plazo y bloquea. */
   editable: boolean;
+  /**
+   * Sin límite no tiene cuenta corriente: el plazo y el bloqueo no dicen
+   * nada (M2S1-114). El plazo aparece cuando se carga un límite.
+   */
+  sinCuenta?: boolean;
 }) {
-  const [dias, setDias] = useState(String(diasCredito));
+  // Sin plazo guardado, el de siempre (M2S1-137: «Paga a __ días»).
+  const plazo = diasCredito ?? 30;
+  const [dias, setDias] = useState(String(plazo));
   const [texto, setTexto] = useState(motivo ?? "");
   const [aviso, setAviso] = useState<string | null>(null);
   const [trabajando, empezar] = useTransition();
+
+  if (sinCuenta && !bloqueada) {
+    return <p className="mt-4 border-t border-linea pt-4 text-base text-muted-foreground">Sin cuenta corriente</p>;
+  }
 
   return (
     <div className="mt-4 space-y-4 border-t border-linea pt-4">
@@ -58,7 +70,7 @@ export function CreditoDelCliente({
             className="tabular h-10 w-20 rounded-lg bg-hundida px-2.5 text-right text-base"
           />
           <span className="text-base">días</span>
-          {dias !== "" && Number(dias) !== diasCredito && (
+          {dias !== "" && Number(dias) !== plazo && (
             <button
               type="button"
               disabled={trabajando}
@@ -77,7 +89,7 @@ export function CreditoDelCliente({
         </div>
       ) : (
         <p className="text-base">
-          Paga a <span className="tabular font-semibold">{diasCredito}</span> días
+          Paga a <span className="tabular font-semibold">{plazo}</span> días
         </p>
       )}
 

@@ -37,6 +37,9 @@ export interface FilaPrevia {
   resumen: string;
   errores: string[];
   avisos: string[];
+  /** Cae sobre una ficha que ya existe; `cambios` dice qué le cambia. */
+  actualiza?: boolean;
+  cambios?: string[];
 }
 
 export interface VistaPrevia {
@@ -44,6 +47,8 @@ export interface VistaPrevia {
   validas?: number;
   conAviso?: number;
   conError?: number;
+  /** Las válidas que caen sobre una ficha que ya existe (clientes y proveedores). */
+  actualizan?: number;
   muestra?: FilaPrevia[];
   rechazos?: RechazoMigracion[];
 }

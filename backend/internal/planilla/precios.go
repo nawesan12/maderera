@@ -82,18 +82,58 @@ type FilaImportada struct {
 	Error             string  `json:"error,omitempty"`
 }
 
-func precio(campos []string, i int) *string {
+// precio lee una celda de precio: nil si está vacía, y un problema que nombra
+// la columna si tiene algo que no es un precio. Antes un «abc» o un «-100»
+// se salteaban callados y la fila se aplicaba con el otro precio (M2S1-044).
+func precio(campos []string, i int, columna string) (*string, string) {
 	if i < 0 {
-		return nil
+		return nil, ""
 	}
 	c := ""
 	if i < len(campos) {
-		c = campos[i]
+		c = trimJS(campos[i])
+	}
+	if c == "" {
+		return nil, ""
+	}
+	if decimalesDeMas(c) {
+		return nil, columna + ": «" + c + "» tiene más de dos decimales."
 	}
 	if n, ok := InterpretarPrecio(c); ok {
-		return &n
+		return &n, ""
 	}
-	return nil
+	return nil, columna + ": «" + c + "» no es un precio."
+}
+
+// decimalesDeMas: el precio trae más de dos decimales, o una coma seguida de
+// tres cifras. En la planilla que sale de acá la coma es el decimal, así que
+// «12,345» no se lee como doce mil: puede ser 12,35 mal tipeado, y redondear
+// o multiplicar por mil sin avisar es peor que preguntar.
+func decimalesDeMas(texto string) bool {
+	var sb strings.Builder
+	for i := 0; i < len(texto); i++ {
+		if c := texto[i]; c >= '0' && c <= '9' || c == '.' || c == ',' {
+			sb.WriteByte(c)
+		}
+	}
+	cuerpo := sb.String()
+	comas, puntos := strings.Count(cuerpo, ","), strings.Count(cuerpo, ".")
+	ultimo := strings.LastIndexAny(cuerpo, ".,")
+	if ultimo < 0 {
+		return false
+	}
+	decimales := len(cuerpo) - ultimo - 1
+	switch {
+	case comas > 0 && puntos > 0:
+		// «1.234,567»: el último separador es el decimal.
+		return decimales > 2
+	case comas == 1:
+		return decimales > 2
+	case puntos == 1:
+		// «96.500» son miles; «12.3456», decimales de más.
+		return decimales > 3
+	}
+	return false
 }
 
 func indiceDe(columnas []string, cumple func(string) bool) int {
@@ -152,8 +192,12 @@ func LeerFilas(grilla [][]string) []FilaImportada {
 			salida = append(salida, FilaImportada{Linea: linea, Error: "Esta fila no tiene código de producto."})
 			continue
 		}
-		general := precio(campos, iGeneral)
-		profesional := precio(campos, iProfesional)
+		general, malGeneral := precio(campos, iGeneral, "Precio de lista")
+		profesional, malProfesional := precio(campos, iProfesional, "Precio profesional")
+		if malGeneral != "" || malProfesional != "" {
+			salida = append(salida, FilaImportada{Linea: linea, Sku: sku, Error: strings.TrimSpace(malGeneral + " " + malProfesional)})
+			continue
+		}
 		if general == nil && profesional == nil {
 			salida = append(salida, FilaImportada{Linea: linea, Sku: sku, Error: "No se pudo leer ningún precio de esta fila."})
 			continue

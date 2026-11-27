@@ -29,3 +29,39 @@ func TestArreglosDeLaTanda13(t *testing.T) {
 		}
 	}
 }
+
+// M2S1-044: una celda de precio mala marca la fila y dice cuál; la vacía no
+// cambia nada; «12,345» no se adivina.
+func TestCeldaDePrecioMala(t *testing.T) {
+	grilla := [][]string{
+		{"SKU", "Producto", "Precio lista", "Precio profesional"},
+		{"A", "x", "abc", "20000"},
+		{"B", "x", "-100", ""},
+		{"C", "x", "30000", "xyz"},
+		{"D", "x", "12,345", ""},
+		{"E", "x", "49800", ""},
+		{"F", "x", "96.500", "84500,50"},
+		{"G", "x", "12,3456", ""},
+	}
+	f := LeerFilas(grilla)
+	esperado := []string{
+		"Precio de lista: «abc» no es un precio.",
+		"Precio de lista: «-100» no es un precio.",
+		"Precio profesional: «xyz» no es un precio.",
+		"Precio de lista: «12,345» tiene más de dos decimales.",
+		"",
+		"",
+		"Precio de lista: «12,3456» tiene más de dos decimales.",
+	}
+	for i, e := range esperado {
+		if f[i].Error != e {
+			t.Errorf("fila %s: error %q; se esperaba %q", f[i].Sku, f[i].Error, e)
+		}
+	}
+	if f[4].PrecioGeneral == nil || *f[4].PrecioGeneral != "49800.00" || f[4].PrecioProfesional != nil {
+		t.Errorf("E: %+v", f[4])
+	}
+	if f[5].PrecioGeneral == nil || *f[5].PrecioGeneral != "96500.00" || *f[5].PrecioProfesional != "84500.50" {
+		t.Errorf("F: %+v", f[5])
+	}
+}

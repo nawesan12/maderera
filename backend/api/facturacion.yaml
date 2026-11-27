@@ -707,7 +707,7 @@ components:
         corridos: { type: array, items: { $ref: "#/components/schemas/Corrimiento" } }
     DadoDeBaja:
       type: object
-      required: [id, tipo, puntoVenta, numero, receptorNombre, total, fechaEmision, motivo, usuarioNombre, createdAt, renumerados]
+      required: [id, tipo, puntoVenta, numero, receptorNombre, total, fechaEmision, motivo, usuarioNombre, createdAt, renumerados, reuso]
       properties:
         id: { type: string }
         tipo: { type: string }
@@ -720,6 +720,15 @@ components:
         usuarioNombre: { type: string }
         createdAt: { type: string, format: date-time }
         renumerados: { type: array, items: { $ref: "#/components/schemas/Corrimiento" } }
+        reuso:
+          description: el comprobante vivo que tiene hoy ese número
+          nullable: true
+          type: object
+          required: [invoiceId, receptorNombre, pedido]
+          properties:
+            invoiceId: { type: string }
+            receptorNombre: { type: string }
+            pedido: { type: string, nullable: true }
     RenglonesADevolver:
       type: array
       items:

@@ -29,6 +29,15 @@ import (
 // (internal/notificaciones).
 const TrabajoAvisoDeFactura = "factura.aviso"
 
+// TrabajoAvisoDeRenumerada es el reenvío al cliente de un comprobante sin
+// CAE que cambió de número por una baja: {invoiceId, anterior}. Tenía el PDF
+// con el número viejo (M2S1-010).
+const TrabajoAvisoDeRenumerada = "factura.renumerada"
+
+// TrabajoAvisoDeBaja avisa al cliente que el comprobante que recibió se dio
+// de baja: {bajaId} (M3S4-009).
+const TrabajoAvisoDeBaja = "factura.baja"
+
 func (s *Servicio) encolarAviso(ctx context.Context, tx pgx.Tx, id string) error {
 	_, err := cola.Encolar(ctx, s.q.WithTx(tx), TrabajoAvisoDeFactura, map[string]string{"invoiceId": id}, time.Time{})
 	return err

@@ -649,6 +649,12 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             renumerados: components["schemas"]["Corrimiento"][];
+            /** @description el comprobante vivo que tiene hoy ese número */
+            reuso: {
+                invoiceId: string;
+                receptorNombre: string;
+                pedido: string | null;
+            } | null;
         };
         RenglonesADevolver: {
             itemId: string;

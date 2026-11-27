@@ -460,6 +460,20 @@ func mediodia(v string) (*time.Time, error) {
 	return &t, nil
 }
 
+// noEnElPasado: la próxima acción es de hoy en adelante, en el día
+// argentino.
+func noEnElPasado(cuando *time.Time, ahora time.Time) error {
+	if cuando == nil {
+		return nil
+	}
+	a := ahora.In(argentina)
+	hoy := time.Date(a.Year(), a.Month(), a.Day(), 0, 0, 0, 0, argentina)
+	if cuando.Before(hoy) {
+		return mal("proximaAccion", "La fecha ya pasó: poné de hoy en adelante.")
+	}
+	return nil
+}
+
 // CrearGestion abre un seguimiento de cobranza o de venta.
 func (s *Servicio) CrearGestion(ctx context.Context, ses *auth.Sesion, cliente, asunto, notas, proxima string) error {
 	a, n := strings.TrimSpace(asunto), strings.TrimSpace(notas)
@@ -475,6 +489,10 @@ func (s *Servicio) CrearGestion(ctx context.Context, ses *auth.Sesion, cliente, 
 	}
 	cuando, err := mediodia(proxima)
 	if err != nil {
+		return err
+	}
+	// Una fecha pasada nacía vencida (mes simulado 2).
+	if err := noEnElPasado(cuando, time.Now()); err != nil {
 		return err
 	}
 	if err := s.q.CrearGestion(ctx, sqlc.CrearGestionParams{CustomerID: cliente, Asunto: a, Notas: nulo(n),
@@ -517,7 +535,14 @@ func (s *Servicio) MoverGestion(ctx context.Context, ses *auth.Sesion, id, etapa
 	if p, err := mediodia(proxima); err != nil {
 		return "", err
 	} else if p != nil {
+		if err := noEnElPasado(p, ahora); err != nil {
+			return "", err
+		}
 		actual = p
+	} else if etapa == "promesa" && (actual == nil || !actual.After(ahora)) {
+		// «Prometió» es para cuándo (mes simulado 2: quedaba en rojo con la
+		// fecha vieja).
+		return "", mal("proximaAccion", "Poné para cuándo prometió.")
 	}
 	var cerrado *time.Time
 	if etapa == "cerrado" {

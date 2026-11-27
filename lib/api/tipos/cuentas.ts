@@ -901,6 +901,11 @@ export interface components {
             vencida: boolean;
             /** Format: date-time */
             createdAt: string;
+            /**
+             * Format: double
+             * @description lo que debe el cliente en la cuenta (positivo, debe)
+             */
+            saldo?: number;
         };
     };
     responses: {

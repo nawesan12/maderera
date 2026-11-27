@@ -578,13 +578,17 @@ type Gestion struct {
 	ProximaAccionAt *time.Time `json:"proximaAccionAt"`
 	Vencida         bool       `json:"vencida"`
 	CreatedAt       time.Time  `json:"createdAt"`
+	// Saldo es lo que debe el cliente en la cuenta (positivo, debe): la
+	// tarjeta no lo decía y había que escribirlo en el asunto (mes simulado 2).
+	Saldo float64 `json:"saldo"`
 }
 
 // Gestiones es listarGestiones (y gestionesDelCliente, con un cliente): las
 // abiertas, o todas; la próxima acción más cercana primero.
 func (s *Servicio) Gestiones(ctx context.Context, incluirCerradas bool, cliente string, hoy time.Time) ([]Gestion, error) {
 	filas, err := s.pool.Query(ctx, `
-		SELECT g.id, g.customer_id, coalesce(c.razon_social, c.nombre), g.etapa::text, g.asunto, g.notas, g.proxima_accion_at, g.created_at
+		SELECT g.id, g.customer_id, coalesce(c.razon_social, c.nombre), g.etapa::text, g.asunto, g.notas, g.proxima_accion_at, g.created_at,
+		       c.cuenta_saldo::float8
 		FROM customer_follow_ups g JOIN customers c ON c.id = g.customer_id
 		WHERE ($1 OR g.etapa <> 'cerrado') AND ($2 = '' OR g.customer_id::text = $2)
 		ORDER BY g.proxima_accion_at ASC NULLS LAST, g.created_at DESC`, incluirCerradas, cliente)
@@ -593,7 +597,7 @@ func (s *Servicio) Gestiones(ctx context.Context, incluirCerradas bool, cliente 
 	}
 	return pgx.CollectRows(filas, func(r pgx.CollectableRow) (Gestion, error) {
 		var g Gestion
-		err := r.Scan(&g.ID, &g.CustomerID, &g.Cliente, &g.Etapa, &g.Asunto, &g.Notas, &g.ProximaAccionAt, &g.CreatedAt)
+		err := r.Scan(&g.ID, &g.CustomerID, &g.Cliente, &g.Etapa, &g.Asunto, &g.Notas, &g.ProximaAccionAt, &g.CreatedAt, &g.Saldo)
 		g.Vencida = g.ProximaAccionAt != nil && !g.ProximaAccionAt.After(hoy)
 		return g, err
 	})

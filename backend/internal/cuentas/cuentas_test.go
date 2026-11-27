@@ -363,9 +363,16 @@ func TestVendedoresYSeguimiento(t *testing.T) {
 
 	var cliente string
 	_ = e.pool.QueryRow(context.Background(), `insert into customers (nombre) values ('Pérez') returning id`).Scan(&cliente)
-	if c, b := pedir(t, ven, "POST", u+"seguimiento", map[string]string{"customerId": cliente, "asunto": "Llamar por la deuda", "proximaAccion": "2020-01-01"}); c != 200 {
+	// Mes simulado 2 (M3S2-021): una fecha pasada no se acepta (nacía vencida).
+	if c, b := pedir(t, ven, "POST", u+"seguimiento", map[string]string{"customerId": cliente, "asunto": "Llamar por la deuda", "proximaAccion": "2020-01-01"}); c != 422 ||
+		!strings.Contains(b, "La fecha ya pasó") {
+		t.Fatalf("fecha pasada: %d %s", c, b)
+	}
+	if c, b := pedir(t, ven, "POST", u+"seguimiento", map[string]string{"customerId": cliente, "asunto": "Llamar por la deuda"}); c != 200 {
 		t.Fatalf("gestión: %d %s", c, b)
 	}
+	// Vencida desde antes (la fecha llegó).
+	_, _ = e.pool.Exec(context.Background(), `update customer_follow_ups set proxima_accion_at = '2020-01-01 12:00-03'`)
 	if _, b := pedir(t, ven, "GET", u+"seguimiento/vencidas", nil); b != "{\"cuantas\":1}\n" {
 		t.Errorf("vencidas: %s", b)
 	}
@@ -375,8 +382,19 @@ func TestVendedoresYSeguimiento(t *testing.T) {
 	if len(gs) != 1 || !gs[0].Vencida {
 		t.Fatalf("gestiones: %s", b)
 	}
-	if c, b := pedir(t, ven, "PUT", u+"seguimiento/"+gs[0].ID, map[string]string{"etapa": "promesa", "nota": "paga el viernes"}); c != 200 || !strings.Contains(b, cliente) {
+	// M2S1-095, M3S4-028: «Prometió» pide para cuándo, y con la fecha deja
+	// de estar vencida.
+	if c, b := pedir(t, ven, "PUT", u+"seguimiento/"+gs[0].ID, map[string]string{"etapa": "promesa", "nota": "paga el viernes"}); c != 422 || !strings.Contains(b, "Poné para cuándo prometió.") {
+		t.Errorf("prometió sin fecha: %d %s", c, b)
+	}
+	cuando := time.Now().AddDate(0, 0, 3).Format("2006-01-02")
+	if c, b := pedir(t, ven, "PUT", u+"seguimiento/"+gs[0].ID, map[string]string{"etapa": "promesa", "nota": "paga el viernes", "proximaAccion": cuando}); c != 200 || !strings.Contains(b, cliente) {
 		t.Errorf("mover: %d %s", c, b)
+	}
+	_, b = pedir(t, ven, "GET", u+"seguimiento", nil)
+	_ = json.Unmarshal([]byte(b), &gs)
+	if len(gs) != 1 || gs[0].Vencida {
+		t.Errorf("sigue vencida: %s", b)
 	}
 	var notas string
 	_ = e.pool.QueryRow(context.Background(), `select notas from customer_follow_ups`).Scan(&notas)

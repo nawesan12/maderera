@@ -3273,3 +3273,43 @@ después). Las dos salidas de cada una tienen prueba. Lo que falta construido:
 
 Cambiar una regla con un PUT directo a Go no invalida la caché de ajustes de
 Next: las pruebas de pantalla la cambian desde `/admin/reglas`.
+
+## 27/11/2026: el mes simulado 2, pedidos y entregas (rama `mes23-pedidos-entregas`)
+
+Migraciones 00380 (regla `entregar_sin_cobrar`) y 00381 (el canal en vivo
+de pedidos avisa todo pedido nuevo y cada cambio de estado, con `origen` y
+`nuevo`; el aviso «Entró un pedido web» queda para la tienda).
+
+- **Soltar lo que no se cobró** (`entregas.AutorizarSinCobrar`): el remito,
+  «Marcar entregado» y «Despachar» de un pedido que debe algo fuera de la
+  cuenta piden el PIN de un admin (`autorizacion.SinCobrar`) al depósito; con
+  la regla en `fuera_de_la_cuenta`, también a quien vende si no hay cuenta
+  corriente o pasa el límite.
+- **El remito no saca lo que no hay** (`alcanzaElGalpon`, la cuenta de
+  «Marcar listo»); `galponEnStock` dice el galpón en placas de una media.
+- **El corte va en un solo remito** (`cortesDelRemito`): el que se hizo
+  después de que el corte salió de la máquina, y ninguno anterior vivo lo
+  llevó. El papel firmado no cambia; las medias placas se dicen en medias
+  (`pdf.UnidadDeVenta` y `unidadDeVenta`: «media_placa»).
+- **Remito R**: razón social, CUIT, condición de IVA y el domicilio de la
+  ficha; `final` («Remito de entrega final»); el documento de quien retira se
+  valida (`RevisarDocumento`, fuera del golden de `LeerRemito`). Golden del
+  remito rehechos (`PDF_ACTUALIZAR=remito`).
+- **El pedido del corte** (`entregas.RemitoDelCorte`): sale con un remito de
+  las piezas para firmar; retirar el corte entrega el pedido que solo lo
+  cobró; volver el corte a la máquina deja el pedido en preparando.
+- **Devolución de lo ya cobrado** (`facturacion.PrepararPlata` y `Mover`):
+  sin factura o desde el pedido facturado, por la caja o por afuera, con los
+  topes y los tramos de `DevolucionParcial`. La ficha lista devoluciones y
+  comprobantes (para quien no entra a Facturación).
+- **El cobro cierra el pedido** (`cobros.CerrarElPedidoCobrado`): pagado y con
+  la forma de pago del cobro, también desde la factura (que ya no deja saldo
+  a favor en la cuenta: `FueraDeLaCuenta`).
+- **El presupuesto pasado a pedido** lleva el descuento por forma de pago.
+- **La factura sin CAE no sale sola por correo**: sale con el CAE.
+- **Corregir** suma renglones y cambia retiro por envío; un pedido entregado
+  no se corrige.
+
+Quedó para decidir: el pedido web cobrado en línea no lleva recibo (el pago
+es la constancia; un recibo encima lo contaría dos veces en el cierre), y un
+retiro pasa a «entregado» al generar el remito, con la firma enseguida.

@@ -16,6 +16,7 @@ import {
 } from "@/lib/dal/admin/pagos";
 import { leerPagina, Paginador, POR_PAGINA } from "@/components/admin/paginador";
 import { AccionesCobro } from "./acciones";
+import { RefrescarEnVivo } from "@/components/vivo/refrescar-en-vivo";
 import { DatosBancarios } from "./banco";
 import { RefrescarEnVivo } from "@/components/vivo/refrescar-en-vivo";
 
@@ -97,9 +98,10 @@ export default async function PagosPage({
 
   return (
     <div className="space-y-6">
-      {/* Se factura, se cobra o se cancela en otra pantalla: esta se
-          refresca sola (canal «ventas», M2S2-099 y M3S1-034). */}
-      <RefrescarEnVivo canales={["ventas"]} />
+      {/* Se factura, se cobra o se cancela en otra pantalla, o se acredita
+          un cobro en otra pestaña: esta se refresca sola (canales «ventas» y
+          «cobros», M2S2-099, M3S1-034 y M3S3-045). */}
+      <RefrescarEnVivo canales={["ventas", "cobros"]} />
       {/* El mismo nombre que el menú (mes simulado, H137). */}
       <EncabezadoPanel titulo="Cobranzas" resumen={periodo.etiqueta}>
         <FiltroPeriodo actual={periodo.clave} />

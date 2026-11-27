@@ -37,6 +37,10 @@ export default async function PagoPage({
   const retenido = Math.round((p.total - p.neto) * 100) / 100;
   const aplicado = p.facturas.reduce((s, f) => s + f.aplicado, 0);
   const aCuenta = Math.round((p.total - aplicado) * 100) / 100;
+  // Los medios con que salió, todos: un pago partido en transferencia y
+  // e-Cheq decía solo «Transferencia» (M2S1-037).
+  const medios = [...new Set((p.partes.length > 0 ? p.partes.map((x) => x.medio) : [p.medio]).map((m) => NOMBRE_DEL_MEDIO[m] ?? m))];
+  const anulado = Boolean(p.anuladoAt);
 
   return (
     <div className="space-y-6">
@@ -49,8 +53,8 @@ export default async function PagoPage({
         }
         detalle={[
           fechaCorta.format(p.fecha),
-          NOMBRE_DEL_MEDIO[p.medio] ?? p.medio,
-          p.referencia,
+          medios.join(" + "),
+          p.partes.length > 1 ? null : p.referencia,
           etiquetaDeCircuito(p.circuito, etiquetasDelCircuito(circuito)),
         ]
           .filter(Boolean)
@@ -105,21 +109,35 @@ export default async function PagoPage({
         <section className="tarjeta p-5">
           <h2 className="text-[19px] font-bold tracking-tight">Facturas</h2>
           <ul className="mt-3 divide-y divide-linea-suave">
-            {p.facturas.map((f) => (
-              <li key={f.id}>
-                <Link
-                  href={`/admin/compras/facturas/${f.id}`}
-                  className="flex items-baseline justify-between gap-3 py-2.5 hover:underline"
-                >
+            {/* Lo que canceló: facturas, cheques repuestos y ajustes. Anulado,
+                lo que cubría, tachado (M2S2-078). */}
+            {p.facturas.map((f) => {
+              const factura = f.tipo !== "cheque_rechazado" && f.tipo !== "ajuste";
+              const contenido = (
+                <>
                   <span>
                     <span className="tabular font-medium">{f.numero}</span>
-                    <span className="text-muted-foreground"> · del {fechaCorta.format(f.fechaEmision)}</span>
+                    {factura && (
+                      <span className="text-muted-foreground"> · del {fechaCorta.format(f.fechaEmision)}</span>
+                    )}
                   </span>
                   <span className="tabular font-semibold">{formatearMonto(f.aplicado)}</span>
-                </Link>
-              </li>
-            ))}
-            {aCuenta > 0.009 && (
+                </>
+              );
+              const clase = `flex items-baseline justify-between gap-3 py-2.5 ${anulado ? "text-muted-foreground line-through" : ""}`;
+              return (
+                <li key={f.id}>
+                  {factura ? (
+                    <Link href={`/admin/compras/facturas/${f.id}`} className={`${clase} hover:underline`}>
+                      {contenido}
+                    </Link>
+                  ) : (
+                    <div className={clase}>{contenido}</div>
+                  )}
+                </li>
+              );
+            })}
+            {aCuenta > 0.009 && !anulado && (
               <li className="flex items-baseline justify-between gap-3 py-2.5">
                 <span className="text-muted-foreground">A cuenta, sin aplicar</span>
                 <span className="tabular font-semibold">{formatearMonto(aCuenta)}</span>

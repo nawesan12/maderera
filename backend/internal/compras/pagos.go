@@ -176,9 +176,18 @@ func (s *Servicio) FacturasConSaldo(ctx context.Context, proveedor string) ([]Fa
 	filas, err := s.pool.Query(ctx, `
 		SELECT f.id, f.punto_venta, f.numero, f.tipo::text, f.fecha_emision, f.fecha_vencimiento, f.total,
 		  `+AplicadoA("f")+`,
-		  f.neto + f.exento
+		  `+netoProporcional("f")+`
 		FROM purchase_invoices f
 		WHERE f.supplier_id = $1 AND f.anulada_at IS NULL AND (f.tipo::text NOT LIKE 'nota_credito%' OR f.aplica_a_id IS NULL)
+		UNION ALL
+		-- Un ajuste a mano que subió la deuda (un saldo inicial): se paga
+		-- como una factura (M2S1-125).
+		SELECT m.id, 0, 0, 'ajuste', m.created_at, NULL::timestamptz, m.monto,
+		  coalesce((SELECT sum(k.importe) FROM supplier_payment_ajustes k JOIN supplier_payments p ON p.id = k.payment_id
+		            WHERE k.movement_id = m.id AND p.anulado_at IS NULL), 0), 0
+		FROM supplier_movements m
+		WHERE m.supplier_id = $1 AND m.tipo = 'ajuste' AND m.monto > 0 AND m.cheque_id IS NULL AND m.supplier_payment_id IS NULL
+		  AND m.purchase_invoice_id IS NULL AND m.goods_receipt_id IS NULL
 		UNION ALL
 		-- El cheque que le dimos y rebotó: se le debe hasta que se reponga.
 		SELECT c.id, 0, 0, 'cheque_rechazado', m.created_at, NULL::timestamptz, m.monto,
@@ -200,8 +209,13 @@ func (s *Servicio) FacturasConSaldo(ctx context.Context, proveedor string) ([]Fa
 		}
 		f.Numero, f.Total, f.Imputado, f.NetoSinIva = NumeroDeCompra(pv, n), float64(total), float64(imputado), float64(netoSinIva)
 		f.Saldo = SaldoDeFactura(f.Total, f.Imputado)
-		if f.Tipo == "cheque_rechazado" {
+		switch f.Tipo {
+		case "cheque_rechazado":
 			if err := s.pool.QueryRow(ctx, `SELECT 'Cheque ' || numero FROM cheques WHERE id = $1`, f.ID).Scan(&f.Numero); err != nil {
+				return nil, err
+			}
+		case "ajuste":
+			if err := s.pool.QueryRow(ctx, `SELECT 'Ajuste' || coalesce(' ' || nullif(referencia, ''), '') FROM supplier_movements WHERE id = $1`, f.ID).Scan(&f.Numero); err != nil {
 				return nil, err
 			}
 		}
@@ -210,6 +224,19 @@ func (s *Servicio) FacturasConSaldo(ctx context.Context, proveedor string) ([]Fa
 		}
 	}
 	return out, filas.Err()
+}
+
+// netoProporcional es el neto sin IVA que le corresponde al total de la
+// factura una vez descontadas las notas de crédito aplicadas: la pantalla
+// del pago saca la base con pagado × netoSinIva / total. Con la proporción
+// de la factura sola, una nota con otra composición (sin percepciones, por
+// ejemplo) dejaba la base unos pesos de más (M2S2-077).
+func netoProporcional(f string) string {
+	return `CASE WHEN ` + f + `.tipo::text LIKE 'nota_credito%' THEN ` + f + `.neto + ` + f + `.exento ELSE coalesce(
+	  (` + f + `.neto + ` + f + `.exento - coalesce((SELECT sum(n.neto + n.exento) FROM purchase_invoices n WHERE n.aplica_a_id = ` + f + `.id AND n.anulada_at IS NULL), 0))
+	  * ` + f + `.total
+	  / nullif(` + f + `.total - coalesce((SELECT sum(n.total) FROM purchase_invoices n WHERE n.aplica_a_id = ` + f + `.id AND n.anulada_at IS NULL), 0), 0),
+	  ` + f + `.neto + ` + f + `.exento) END`
 }
 
 // RegimenDeRetencion es una fila de regimenes_retencion (los numeric como
@@ -302,6 +329,8 @@ type Certificado struct {
 	Imponible     *string    `json:"imponible"`
 	RetenidoAntes *string    `json:"retenidoAntes"`
 	AnuladaAt     *time.Time `json:"anuladaAt"`
+	// Comprobantes son los que cancela el pago («Factura A 0003-00008811»).
+	Comprobantes string `json:"comprobantes"`
 }
 
 // CertificadoParaImprimir es certificadoParaImprimir: por número, que es lo
@@ -322,7 +351,86 @@ func (s *Servicio) CertificadoParaImprimir(ctx context.Context, numero string) (
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
-	return &c, err
+	if err != nil {
+		return nil, err
+	}
+	// Con qué se pagó, todos los medios con su número, y qué comprobantes
+	// cancela: decía «por echeq (SIM-TRF-0502)», con la clave cruda y el
+	// número de la transferencia, y no citaba la factura (M2S1-037,
+	// M3S1-030).
+	filas, err := s.pool.Query(ctx, `
+		SELECT p.medio, coalesce(c.numero, p.referencia, '')
+		FROM retenciones_practicadas r JOIN supplier_payment_parts p ON p.payment_id = r.payment_id
+		LEFT JOIN cheques c ON c.id = p.cheque_id
+		WHERE r.numero = $1 ORDER BY p.importe DESC`, numero)
+	if err != nil {
+		return nil, err
+	}
+	var medios []string
+	for filas.Next() {
+		var medio, ref string
+		if err := filas.Scan(&medio, &ref); err != nil {
+			filas.Close()
+			return nil, err
+		}
+		if ref != "" {
+			medio = NombreDelMedio(medio) + " " + ref
+		} else {
+			medio = NombreDelMedio(medio)
+		}
+		medios = append(medios, medio)
+	}
+	filas.Close()
+	if err := filas.Err(); err != nil {
+		return nil, err
+	}
+	if len(medios) > 0 {
+		c.PagoMedio = unirConY(medios)
+		// La referencia de la cabecera, solo si no la dicen ya los medios.
+		if c.PagoReferencia != nil && strings.Contains(c.PagoMedio, *c.PagoReferencia) {
+			c.PagoReferencia = nil
+		}
+	} else {
+		c.PagoMedio = NombreDelMedio(c.PagoMedio)
+	}
+	filas, err = s.pool.Query(ctx, `
+		SELECT f.tipo::text, f.punto_venta, f.numero
+		FROM retenciones_practicadas r
+		JOIN (SELECT payment_id, purchase_invoice_id FROM supplier_payment_allocations
+		      UNION ALL SELECT payment_id, purchase_invoice_id FROM supplier_payment_anulado_items WHERE purchase_invoice_id IS NOT NULL) a
+		  ON a.payment_id = r.payment_id
+		JOIN purchase_invoices f ON f.id = a.purchase_invoice_id
+		WHERE r.numero = $1 ORDER BY f.fecha_emision, f.numero`, numero)
+	if err != nil {
+		return nil, err
+	}
+	var comprobantes []string
+	for filas.Next() {
+		var tipo string
+		var pv, n int64
+		if err := filas.Scan(&tipo, &pv, &n); err != nil {
+			filas.Close()
+			return nil, err
+		}
+		comprobantes = append(comprobantes, NombreComprobanteCompra(tipo)+" "+NumeroDeCompra(pv, n))
+	}
+	filas.Close()
+	if err := filas.Err(); err != nil {
+		return nil, err
+	}
+	c.Comprobantes = unirConY(comprobantes)
+	return &c, nil
+}
+
+// unirConY es «a, b y c».
+func unirConY(xs []string) string {
+	switch len(xs) {
+	case 0:
+		return ""
+	case 1:
+		return xs[0]
+	}
+	return strings.Join(xs[:len(xs)-1], ", ") + " y " + xs[len(xs)-1]
 }
 
 // DatosDelCertificadoPdf pasa el certificado a lo que dibuja internal/pdf
@@ -344,7 +452,7 @@ func DatosDelCertificadoPdf(c *Certificado, emisor *pdf.Emisor) pdf.DatosDelCert
 	}
 	d.Proveedor.Nombre, d.Proveedor.RazonSocial = c.ProveedorNombre, de(c.ProveedorRazonSocial)
 	d.Proveedor.Cuit, d.Proveedor.Domicilio = de(c.ProveedorCuit), de(c.ProveedorDomicilio)
-	d.Pago.Fecha, d.Pago.Medio, d.Pago.Referencia = c.PagoFecha, c.PagoMedio, de(c.PagoReferencia)
+	d.Pago.Fecha, d.Pago.Medio, d.Pago.Referencia, d.Pago.Comprobantes = c.PagoFecha, c.PagoMedio, de(c.PagoReferencia), c.Comprobantes
 	if c.Acumulado != nil && c.Imponible != nil && c.RetenidoAntes != nil {
 		d.Calculo = &pdf.CalculoDelCertificado{Acumulado: jsmath.Numero(*c.Acumulado), Imponible: jsmath.Numero(*c.Imponible),
 			RetenidoAntes: jsmath.Numero(*c.RetenidoAntes)}
@@ -476,6 +584,12 @@ func (s *Servicio) PagarAProveedor(ctx context.Context, ses *auth.Sesion, m map[
 			imputaciones = append(imputaciones, i)
 		}
 	}
+	var ajustes []Imputacion
+	for _, a := range d.Ajustes {
+		if a.Importe > 0 {
+			ajustes = append(ajustes, a)
+		}
+	}
 	var reposiciones []Imputacion
 	for _, c := range d.Cheques {
 		if c.Importe > 0 {
@@ -538,46 +652,18 @@ func (s *Servicio) PagarAProveedor(ctx context.Context, ses *auth.Sesion, m map[
 			return err
 		}
 		retenido := 0.0
+		pedidos := map[string]bool{}
 		for _, pedida := range retenciones {
-			var reg Regimen
-			var regID string
-			var a, ani, mni, mr jsmath.Num
-			err := tx.QueryRow(ctx, `
-				SELECT id, codigo, nombre, impuesto::text, alicuota, alicuota_no_inscripto, minimo_no_imponible, minimo_retencion
-				FROM regimenes_retencion WHERE id = $1 AND activo`, pedida.RegimenID).Scan(&regID, &reg.Codigo, &reg.Nombre, &reg.Impuesto, &a, &ani, &mni, &mr)
-			if errors.Is(err, pgx.ErrNoRows) {
-				return fallo("Ese régimen de retención no existe o está apagado.")
-			}
+			c, err := calcularLaRetencion(ctx, tx, d.SupplierID, prov, pedida, fecha)
 			if err != nil {
 				return err
 			}
-			reg.Alicuota, reg.AlicuotaNoInscripto, reg.MinimoNoImponible, reg.MinimoRetencion = float64(a), float64(ani), float64(mni), float64(mr)
-			// Antes de anotar la base: si no corresponde, el pago entero se
-			// frena y no queda ni base ni certificado.
-			aplica, inscripto, porque := SujetoARetencion(reg.Impuesto, prov, diaArgentino(fecha))
-			if !aplica {
-				return fallo(reg.Nombre + ": " + porque)
-			}
-			// El acumulado del mes, que es lo que mira ARCA.
-			// La base sale de todos los pagos del mes, hayan retenido o no
-			// (bases_de_retencion); lo retenido, de los certificados que no
-			// se anularon (las bases de un pago anulado se borran con él).
-			var base, ret jsmath.Num
-			if err := tx.QueryRow(ctx, `
-				SELECT (SELECT coalesce(sum(base), 0) FROM bases_de_retencion
-				        WHERE supplier_id = $1 AND codigo_regimen = $2 AND fecha >= $3 AND fecha < $4),
-				       (SELECT coalesce(sum(importe), 0) FROM retenciones_practicadas
-				        WHERE supplier_id = $1 AND codigo_regimen = $2 AND fecha >= $3 AND fecha < $4 AND anulada_at IS NULL)`,
-				// Con tope al fin del mes: un pago fechado en un mes anterior
-				// sumaba lo del mes en curso y retenía de más.
-				d.SupplierID, reg.Codigo, inicioDeMes(fecha), inicioDeMes(fecha).AddDate(0, 1, 0)).Scan(&base, &ret); err != nil {
-				return err
-			}
+			reg, regID, base, ret, r := c.reg, c.regID, c.baseMes, c.retenidoMes, c.r
+			pedidos[reg.Codigo] = true
 			if _, err := tx.Exec(ctx, `INSERT INTO bases_de_retencion (payment_id, supplier_id, codigo_regimen, base, fecha)
 				VALUES ($1, $2, $3, $4::numeric, $5)`, pagoID, d.SupplierID, reg.Codigo, jsmath.Fijo2(pedida.Base), fecha); err != nil {
 				return err
 			}
-			r := CalcularRetencion(pedida.Base, float64(base), float64(ret), reg, inscripto)
 			if r.Retencion <= 0 {
 				continue
 			}
@@ -589,17 +675,25 @@ func (s *Servicio) PagarAProveedor(ctx context.Context, ses *auth.Sesion, m map[
 			// Con el cálculo entero: el certificado tiene que poder seguirse
 			// (acumulado − mínimo = sujeto; sujeto × alícuota − ya retenido =
 			// retenido), y con la base del pago sola no cierra.
-			acumulado := math.Max(0, float64(base)+pedida.Base)
+			acumulado := math.Max(0, base+pedida.Base)
 			if _, err := tx.Exec(ctx, `
 				INSERT INTO retenciones_practicadas (payment_id, supplier_id, regimen_id, numero, codigo_regimen, impuesto, base, alicuota, importe, fecha,
 				  created_by_user_id, acumulado, imponible, retenido_antes)
 				VALUES ($1, $2, $3, $4, $5, $6::impuesto_retenido, $7::numeric, $8::numeric, $9::numeric, $10, $11, $12::numeric, $13::numeric, $14::numeric)`,
 				pagoID, d.SupplierID, regID, numero, reg.Codigo, reg.Impuesto, jsmath.Fijo2(pedida.Base), jsmath.ToFixed(r.Alicuota, 3),
-				jsmath.Fijo2(r.Retencion), fecha, ses.UserID, jsmath.Fijo2(acumulado), jsmath.Fijo2(r.Imponible), jsmath.Fijo2(float64(ret))); err != nil {
+				jsmath.Fijo2(r.Retencion), fecha, ses.UserID, jsmath.Fijo2(acumulado), jsmath.Fijo2(r.Imponible), jsmath.Fijo2(ret)); err != nil {
 				return err
 			}
 			retenido = jsmath.Redondear2(retenido + r.Retencion)
 			certificados = append(certificados, CertificadoEmitido{numero, reg.Impuesto, r.Retencion})
+		}
+		// Un pago sin el interruptor prendido también suma al acumulado del
+		// mes de los regímenes en los que el proveedor ya tiene base este
+		// mes (M2S2-013): si no, el pago siguiente retenía sobre un
+		// acumulado que no lo contaba. La base sale de las facturas
+		// imputadas, con la misma proporción que la pantalla.
+		if err := anotarBasesSinRetener(ctx, tx, pagoID, d.SupplierID, imputaciones, fecha, pedidos); err != nil {
+			return err
 		}
 		neto = jsmath.Redondear2(d.Total - retenido)
 		if neto < 0 {
@@ -667,6 +761,29 @@ func (s *Servicio) PagarAProveedor(ctx context.Context, ses *auth.Sesion, m map[
 				return err
 			}
 		}
+		// Los ajustes que subieron la deuda y se cancelan con este pago.
+		for _, a := range ajustes {
+			importes = append(importes, a.Importe)
+			var debe, pagado jsmath.Num
+			err := tx.QueryRow(ctx, `
+				SELECT m.monto, coalesce((SELECT sum(k.importe) FROM supplier_payment_ajustes k JOIN supplier_payments p ON p.id = k.payment_id
+				                          WHERE k.movement_id = m.id AND p.anulado_at IS NULL), 0)
+				FROM supplier_movements m WHERE m.id = $1 AND m.supplier_id = $2 AND m.tipo = 'ajuste' AND m.monto > 0 FOR UPDATE`,
+				a.PurchaseInvoiceID, d.SupplierID).Scan(&debe, &pagado)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return fallo("Ese ajuste no es de este proveedor.")
+			}
+			if err != nil {
+				return err
+			}
+			if a.Importe-jsmath.Redondear2(debe.F()-pagado.F()) > 0.01 {
+				return fallo("Al ajuste le faltan " + formato.Importe(jsmath.Redondear2(debe.F()-pagado.F())) + ": no se le aplica más.")
+			}
+			if _, err := tx.Exec(ctx, `INSERT INTO supplier_payment_ajustes (payment_id, movement_id, importe) VALUES ($1, $2, $3::numeric)`,
+				pagoID, a.PurchaseInvoiceID, jsmath.Fijo2(a.Importe)); err != nil {
+				return err
+			}
+		}
 		// Las notas de crédito a favor que se descuentan: cada una se aplica
 		// a la primera factura del pago a la que le queda lugar.
 		for _, nota := range d.NotasDeCredito {
@@ -725,12 +842,17 @@ func (s *Servicio) PagarAProveedor(ctx context.Context, ses *auth.Sesion, m map[
 			sinMonto = append(sinMonto, renglon)
 		}
 		// La referencia de la cabecera, si no vino: las de los renglones.
+		// Partido en varios medios, todos con su número: el asiento decía
+		// «Pago … · SIM-TRF-0002» de un pago con un e-Cheq (M2S1-037).
 		if d.Referencia == nil && len(partes) > 0 {
 			var refs []string
 			for _, parte := range partes {
 				if parte.Referencia != nil && *parte.Referencia != "" {
 					refs = append(refs, *parte.Referencia)
 				}
+			}
+			if len(partes) > 1 {
+				refs = []string{strings.Join(sinMonto, " y ")}
 			}
 			if len(refs) > 0 {
 				r := strings.Join(refs, " · ")
@@ -791,9 +913,184 @@ func (s *Servicio) PagarAProveedor(ctx context.Context, ses *auth.Sesion, m map[
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "pago_proveedor", pagoID, desc, nil)
 	out.ID, out.Certificados = pagoID, certificados
-	out.Ok = "Pago registrado por " + Monto(neto) + "."
+	// Con centavos: «Salieron $ 9.839.191» no cerraba con lo que se
+	// transfirió (M2S1-036).
+	out.Ok = "Pago registrado por " + formato.Importe(neto) + "."
 	if len(certificados) > 0 {
-		out.Ok = "Pago registrado. Salieron " + Monto(neto) + " y se retuvieron " + Monto(d.Total-neto) + "."
+		out.Ok = "Pago registrado. Salieron " + formato.Importe(neto) + " y se retuvieron " + formato.Importe(jsmath.Redondear2(d.Total-neto)) + "."
+	}
+	return out, nil
+}
+
+// calculoDeRetencion es la cuenta de una retención pedida, antes de anotar
+// nada: la usan el pago y la simulación de la pantalla.
+type calculoDeRetencion struct {
+	reg                  Regimen
+	regID                string
+	inscripto            bool
+	baseMes, retenidoMes float64
+	r                    Retencion
+}
+
+type consultor interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
+// calcularLaRetencion lee el régimen, revisa que le corresponda al
+// proveedor y calcula sobre el acumulado del mes, que es lo que mira ARCA:
+// la base sale de todos los pagos del mes, hayan retenido o no
+// (bases_de_retencion); lo retenido, de los certificados que no se anularon
+// (las bases de un pago anulado se borran con él).
+func calcularLaRetencion(ctx context.Context, q consultor, proveedor string, prov ProveedorParaRetener, pedida RetencionPedida, fecha time.Time) (calculoDeRetencion, error) {
+	var c calculoDeRetencion
+	var a, ani, mni, mr jsmath.Num
+	err := q.QueryRow(ctx, `
+		SELECT id, codigo, nombre, impuesto::text, alicuota, alicuota_no_inscripto, minimo_no_imponible, minimo_retencion
+		FROM regimenes_retencion WHERE id = $1 AND activo`, pedida.RegimenID).Scan(&c.regID, &c.reg.Codigo, &c.reg.Nombre, &c.reg.Impuesto, &a, &ani, &mni, &mr)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return c, fallo("Ese régimen de retención no existe o está apagado.")
+	}
+	if err != nil {
+		return c, err
+	}
+	c.reg.Alicuota, c.reg.AlicuotaNoInscripto, c.reg.MinimoNoImponible, c.reg.MinimoRetencion = float64(a), float64(ani), float64(mni), float64(mr)
+	// Antes de anotar la base: si no corresponde, el pago entero se frena y
+	// no queda ni base ni certificado.
+	aplica, inscripto, porque := SujetoARetencion(c.reg.Impuesto, prov, diaArgentino(fecha))
+	if !aplica {
+		return c, fallo(c.reg.Nombre + ": " + porque)
+	}
+	c.inscripto = inscripto
+	var base, ret jsmath.Num
+	if err := q.QueryRow(ctx, `
+		SELECT (SELECT coalesce(sum(base), 0) FROM bases_de_retencion
+		        WHERE supplier_id = $1 AND codigo_regimen = $2 AND fecha >= $3 AND fecha < $4),
+		       (SELECT coalesce(sum(importe), 0) FROM retenciones_practicadas
+		        WHERE supplier_id = $1 AND codigo_regimen = $2 AND fecha >= $3 AND fecha < $4 AND anulada_at IS NULL)`,
+		// Con tope al fin del mes: un pago fechado en un mes anterior sumaba
+		// lo del mes en curso y retenía de más.
+		proveedor, c.reg.Codigo, inicioDeMes(fecha), inicioDeMes(fecha).AddDate(0, 1, 0)).Scan(&base, &ret); err != nil {
+		return c, err
+	}
+	c.baseMes, c.retenidoMes = float64(base), float64(ret)
+	c.r = CalcularRetencion(pedida.Base, c.baseMes, c.retenidoMes, c.reg, inscripto)
+	return c, nil
+}
+
+// anotarBasesSinRetener suma la base del pago al acumulado del mes de los
+// regímenes en que el proveedor ya tiene base este mes y que el pago no
+// pidió retener.
+func anotarBasesSinRetener(ctx context.Context, tx pgx.Tx, pagoID, proveedor string, imputaciones []Imputacion, fecha time.Time, pedidos map[string]bool) error {
+	if len(imputaciones) == 0 {
+		return nil
+	}
+	ids := make([]string, len(imputaciones))
+	importes := make([]string, len(imputaciones))
+	for i, imp := range imputaciones {
+		ids[i], importes[i] = imp.PurchaseInvoiceID, jsmath.Fijo2(imp.Importe)
+	}
+	var base, total jsmath.Num
+	if err := tx.QueryRow(ctx, `
+		SELECT coalesce(sum(x.importe::numeric * (`+netoProporcional("f")+`) / nullif(f.total, 0)), 0), coalesce(sum(x.importe::numeric), 0)
+		FROM unnest($1::uuid[], $2::text[]) AS x(id, importe) JOIN purchase_invoices f ON f.id = x.id`, ids, importes).Scan(&base, &total); err != nil {
+		return err
+	}
+	b := jsmath.Redondear2(float64(base))
+	if b <= 0 {
+		return nil
+	}
+	ivaSobreTotal := reglas.Es(ctx, tx, reglas.BaseRetencionIva, "total")
+	filas, err := tx.Query(ctx, `
+		SELECT DISTINCT b.codigo_regimen, coalesce((SELECT g.impuesto::text FROM regimenes_retencion g WHERE g.codigo = b.codigo_regimen LIMIT 1), '')
+		FROM bases_de_retencion b
+		WHERE b.supplier_id = $1 AND b.fecha >= $2 AND b.fecha < $3 AND b.payment_id <> $4`, proveedor, inicioDeMes(fecha), inicioDeMes(fecha).AddDate(0, 1, 0), pagoID)
+	if err != nil {
+		return err
+	}
+	type codigoImpuesto struct{ codigo, impuesto string }
+	codigos, err := pgx.CollectRows(filas, func(r pgx.CollectableRow) (codigoImpuesto, error) {
+		var c codigoImpuesto
+		err := r.Scan(&c.codigo, &c.impuesto)
+		return c, err
+	})
+	if err != nil {
+		return err
+	}
+	for _, c := range codigos {
+		if pedidos[c.codigo] {
+			continue
+		}
+		esta := b
+		if c.impuesto == "iva" && ivaSobreTotal {
+			esta = jsmath.Redondear2(float64(total))
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO bases_de_retencion (payment_id, supplier_id, codigo_regimen, base, fecha)
+			VALUES ($1, $2, $3, $4::numeric, $5)`, pagoID, proveedor, c.codigo, jsmath.Fijo2(esta), fecha); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RetencionSimulada es lo que retendría el pago, para mostrarlo antes de
+// confirmar (M2S1-026, M2S1-036, M2S1-110): la misma cuenta que el
+// certificado.
+type RetencionSimulada struct {
+	RegimenID string  `json:"regimenId"`
+	Base      float64 `json:"base"`
+	// Acumulado es la base del mes con este pago; Minimo, el mínimo no
+	// imponible que se resta (cero para el no inscripto).
+	Acumulado     float64 `json:"acumulado"`
+	Minimo        float64 `json:"minimo"`
+	Imponible     float64 `json:"imponible"`
+	Alicuota      float64 `json:"alicuota"`
+	RetenidoAntes float64 `json:"retenidoAntes"`
+	Retencion     float64 `json:"retencion"`
+	Motivo        *string `json:"motivo"`
+}
+
+// SimularRetenciones hace la cuenta del pago sin anotar nada. Un régimen
+// que no le corresponde al proveedor vuelve con el motivo y sin retención.
+func (s *Servicio) SimularRetenciones(ctx context.Context, proveedor string, dia *string, pedidas []RetencionPedida) ([]RetencionSimulada, error) {
+	out := []RetencionSimulada{}
+	if !plataforma.UUIDValido(proveedor) {
+		return out, nil
+	}
+	fecha, err := fechaDelPago(dia, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	var prov ProveedorParaRetener
+	err = s.pool.QueryRow(ctx, `SELECT cuit, condicion_iva::text, condicion_ganancias, to_char(exento_ganancias_hasta, 'YYYY-MM-DD')
+		FROM suppliers WHERE id = $1`, proveedor).Scan(&prov.Cuit, &prov.CondicionIva, &prov.CondicionGanancias, &prov.ExentoHasta)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return out, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range pedidas {
+		if !plataforma.UUIDValido(p.RegimenID) || !(p.Base > 0) {
+			continue
+		}
+		c, err := calcularLaRetencion(ctx, s.pool, proveedor, prov, p, fecha)
+		if err != nil {
+			var pr *plataforma.Problema
+			if errors.As(err, &pr) {
+				m := mensajeDelProblema(err)
+				out = append(out, RetencionSimulada{RegimenID: p.RegimenID, Base: p.Base, Motivo: &m})
+				continue
+			}
+			return nil, err
+		}
+		minimo := 0.0
+		if c.inscripto {
+			minimo = c.reg.MinimoNoImponible
+		}
+		out = append(out, RetencionSimulada{
+			RegimenID: p.RegimenID, Base: p.Base, Acumulado: jsmath.Redondear2(math.Max(0, c.baseMes+p.Base)), Minimo: minimo,
+			Imponible: c.r.Imponible, Alicuota: c.r.Alicuota, RetenidoAntes: c.retenidoMes, Retencion: c.r.Retencion, Motivo: c.r.Motivo,
+		})
 	}
 	return out, nil
 }

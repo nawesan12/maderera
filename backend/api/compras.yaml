@@ -255,6 +255,32 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Hecho" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/ordenes/{id}/cerrar:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: CerrarOrdenConFaltante
+      description: La orden de la que llegó una parte y no va a llegar el resto queda completa, con lo que faltó a la vista.
+      requestBody: { $ref: "#/components/requestBodies/Motivo" }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/ordenes/{id}/fecha:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: CambiarFechaDeOrden
+      description: La fecha prometida, mientras la orden no llegó entera.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fechaPrometida]
+              properties:
+                fechaPrometida: { type: string, description: aaaa-mm-dd; vacía la saca }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/compras/ordenes/{id}/recibir:
     parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
     post:
@@ -298,6 +324,7 @@ paths:
       parameters:
         - { name: texto, in: query, schema: { type: string, maxLength: 200 } }
         - { name: ids, in: query, description: ids separados por coma (hasta 40), schema: { type: string } }
+        - { name: proveedor, in: query, description: a quién se le compra (el costo sale de su lista si la tiene), schema: { type: string } }
       responses:
         "200":
           description: Las variantes con lo que cuestan hoy
@@ -348,6 +375,16 @@ paths:
                   type: object
                   required: [id, numero, estado, proveedor, sucursal, fechaPrometida, pendientes, lineas]
                   properties:
+                    faltantes:
+                      type: array
+                      description: lo que falta de una orden de la que llegó una parte, en unidades
+                      items:
+                        type: object
+                        required: [descripcion, cantidad, unidad]
+                        properties:
+                          descripcion: { type: string }
+                          cantidad: { type: number, format: double }
+                          unidad: { type: string, nullable: true }
                     id: { type: string }
                     numero: { type: string }
                     estado: { type: string }
@@ -594,6 +631,75 @@ paths:
             application/pdf:
               schema: { type: string, format: binary }
         "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/devolucion:
+    get:
+      operationId: RenglonesDevolvibles
+      description: Lo recibido del proveedor que todavía se le puede devolver con una nota de crédito.
+      parameters:
+        - { name: proveedor, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Los renglones de sus recepciones confirmadas de los últimos 120 días
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, remito, fecha, descripcion, unidad, recibido, devuelto, costoUnitario]
+                  properties:
+                    id: { type: string }
+                    remito: { type: string, nullable: true }
+                    fecha: { type: string, format: date-time }
+                    descripcion: { type: string }
+                    unidad: { type: string, nullable: true }
+                    recibido: { type: number, format: double }
+                    devuelto: { type: number, format: double }
+                    costoUnitario: { type: number, format: double }
+  /api/v1/admin/compras/pagos/simular:
+    post:
+      operationId: SimularRetenciones
+      description: Lo que retendría un pago, con la cuenta del certificado, sin anotar nada.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [supplierId, retenciones]
+              properties:
+                supplierId: { type: string }
+                fecha: { type: string, description: aaaa-mm-dd; si falta, hoy }
+                retenciones:
+                  type: array
+                  maxItems: 20
+                  items:
+                    type: object
+                    required: [regimenId, base]
+                    properties:
+                      regimenId: { type: string }
+                      base: { type: number, format: double }
+      responses:
+        "200":
+          description: Una por régimen pedido
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [regimenId, base, acumulado, minimo, imponible, alicuota, retenidoAntes, retencion, motivo]
+                  properties:
+                    regimenId: { type: string }
+                    base: { type: number, format: double }
+                    acumulado: { type: number, format: double }
+                    minimo: { type: number, format: double }
+                    imponible: { type: number, format: double }
+                    alicuota: { type: number, format: double }
+                    retenidoAntes: { type: number, format: double }
+                    retencion: { type: number, format: double }
+                    motivo: { type: string, nullable: true }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/compras/pagos/{id}/anular:
     parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
     post:
@@ -612,12 +718,14 @@ paths:
       operationId: RetencionesPracticadasCsv
       parameters:
         - { name: periodo, in: query, description: aaaa-mm (si falta, el mes en curso), schema: { type: string } }
+        - { name: formato, in: query, description: csv (de siempre) o sicore (el TXT de importación; con la regla exportar_sicore), schema: { type: string, enum: [csv, sicore] } }
       responses:
         "200":
-          description: Las retenciones practicadas del mes, en CSV
+          description: Las retenciones practicadas del mes, en CSV o en el TXT de SICORE
           content:
             application/octet-stream:
               schema: { type: string, format: binary }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/compras/certificados/{numero}:
     parameters: [{ name: numero, in: path, required: true, schema: { type: string } }]
     get:
@@ -897,6 +1005,8 @@ components:
               supplierPaymentId: { type: string, nullable: true, description: el pago del que salió }
               goodsReceiptId: { type: string, nullable: true, description: la recepción (el remito) que lo cargó }
               facturaDelRemito: { type: string, nullable: true, description: la factura que cubrió ese remito }
+              chequeId: { type: string, nullable: true, description: el cheque que le dimos y rebotó }
+              aplicaA: { type: string, nullable: true, description: la factura a la que se aplicó un ajuste }
         gastos:
           type: array
           description: los gastos pagados en el acto a este proveedor
@@ -934,7 +1044,7 @@ components:
           type: array
           items:
             type: object
-            required: [codigo, descripcion, costo, precioSugerido, fila, variantId, nuestro, precioActual]
+            required: [codigo, descripcion, costo, precioSugerido, fila, variantId, nuestro, precioActual, costoNeto, costoAnterior, cambio]
             properties:
               codigo: { type: string }
               descripcion: { type: string }
@@ -944,6 +1054,9 @@ components:
               variantId: { type: string, nullable: true }
               nuestro: { type: string, nullable: true }
               precioActual: { type: number, format: double, nullable: true }
+              costoNeto: { type: number, format: double }
+              costoAnterior: { type: number, format: double, nullable: true }
+              cambio: { type: string, description: "sube, baja, igual, nuevo, sin_sugerido o vacío (sin aparear)" }
         problemas:
           type: array
           items:
@@ -954,6 +1067,7 @@ components:
               motivo: { type: string }
         apareadas: { type: integer }
         sinAparear: { type: integer }
+        sinCambios: { type: integer }
         columnas: { type: array, items: { type: string } }
         error: { type: string }
     OrdenListada:
@@ -972,6 +1086,7 @@ components:
         neto: { type: number, format: double }
         pendientes: { type: integer }
         porLlegar: { type: number, format: double }
+        recibido: { type: number, format: double, description: el neto de lo que ya llegó }
     Orden:
       type: object
       required: [id, numero, estado, fechaPrometida, notas, createdAt, enviadaAt, supplierId, proveedor, branchId, sucursal, borradorAbierto, items]
@@ -1010,10 +1125,32 @@ components:
               costoUnitario: { type: string }
               alicuotaIva: { type: string }
               orden: { type: integer }
+              costoRecibido: { type: string, nullable: true, description: el costo promedio con que llegó (de las recepciones confirmadas) }
+        recepciones:
+          type: array
+          items:
+            type: object
+            required: [id, numeroRemito, fecha, estado]
+            properties:
+              id: { type: string }
+              numeroRemito: { type: string, nullable: true }
+              fecha: { type: string, format: date-time }
+              estado: { type: string }
     RecepcionListada:
       type: object
       required: [id, numeroRemito, fecha, estado, gastos, proveedor, supplierId, sucursal, lineas, neto, facturada]
       properties:
+        faltantes:
+          type: array
+          description: lo que de su orden no llegó (solo de las confirmadas sin factura)
+          items:
+            type: object
+            required: [descripcion, cantidad, unidad]
+            properties:
+              descripcion: { type: string }
+              cantidad: { type: number, format: double }
+              unidad: { type: string, nullable: true }
+        faltanteNeto: { type: number, format: double, description: el neto de lo que no llegó, al costo pedido }
         id: { type: string }
         numeroRemito: { type: string, nullable: true }
         fecha: { type: string, format: date-time }
@@ -1060,6 +1197,11 @@ components:
               costoAnterior: { type: string, nullable: true }
               costoResultante: { type: string, nullable: true }
               orden: { type: integer }
+              unidad: { type: string, nullable: true }
+              pedido: { type: string, nullable: true, description: lo pedido en el renglón de la orden }
+              yaRecibido: { type: string, nullable: true, description: lo que ya llegó de ese renglón de la orden }
+        purchaseOrderId: { type: string, nullable: true }
+        ordenNumero: { type: string, nullable: true }
     RenglonLibro:
       type: object
       required: [id, fechaEmision, tipo, puntoVenta, numero, proveedor, cuit, neto, iva21, iva105, iva27, exento, percepciones, total, cae]
@@ -1221,6 +1363,8 @@ components:
               cantidad: { type: number, format: double }
               costoUnitario: { type: number, format: double }
               alicuotaIva: { type: number, format: double }
+        flete: { type: number, format: double, description: el de las recepciones que cubre }
+        devolucion: { type: boolean, description: los renglones son lo que devolvió la nota de crédito }
     FichaDePago:
       type: object
       required: [id, fecha, total, neto, medio, circuito, referencia, notas, supplierId, proveedor, razonSocial, cuit, anuladoAt, motivoAnulacion,
@@ -1304,6 +1448,7 @@ components:
         imponible: { type: string, nullable: true, description: el monto sujeto a retención (acumulado − mínimo no imponible) }
         retenidoAntes: { type: string, nullable: true, description: lo retenido en el mes antes de este certificado }
         anuladaAt: { type: string, format: date-time, nullable: true }
+        comprobantes: { type: string, description: los que cancela el pago («Factura A 0003-00008811») }
     Regimen:
       type: object
       required: [id, codigo, nombre, impuesto, alicuota, alicuotaNoInscripto, minimoNoImponible, minimoRetencion, activo, createdAt, updatedAt, jurisdiccion]

@@ -3456,3 +3456,41 @@ retiro pasa a «entregado» al generar el remito, con la firma enseguida.
   contenido.
 - Las pasadas a cobrar las cambia `ManejanPlata`; bajarlas del plano, solo
   un admin.
+## 27/11/2026: el mes simulado 23, compras y pagos (rama `mes23-compras-pagos`)
+
+Migraciones 00400–00404. Lo que cambió de comportamiento:
+
+- **El costo promedio pondera contra el stock que hay** (`inventory`, todas
+  las sucursales), no contra `variant_costs.cantidad_base`, que solo crecía:
+  sin stock, el costo nuevo es el que se pagó.
+- **La lista del proveedor**: sin margen escrito mantiene el de cada
+  producto (el precio se mueve como el costo); escribe `price_history`
+  (`importacion`, «Lista de …») y guarda el costo neto en
+  `supplier_variant_codes.costo_neto` (00400), que `BuscarMercaderia` con
+  `proveedor=` propone en la orden.
+- **Pagos**: `POST /compras/pagos/simular` (la cuenta del certificado antes
+  de pagar); un pago sin el interruptor suma su base al acumulado de los
+  regímenes en que el proveedor ya tiene base ese mes; la base de una
+  factura con nota de crédito sale de los netos de las dos
+  (`netoProporcional`); anular avisa qué certificados posteriores lo
+  contaron. Los ajustes que suben la deuda se pagan
+  (`supplier_payment_ajustes`), los que la bajan se aplican a una factura
+  (`supplier_movements.aplica_a_id`, entran en `AplicadoA`) y tienen asiento
+  (5.1.13, a definir); lo que cubría un pago anulado queda en
+  `supplier_payment_anulado_items` (00401).
+- **Reglas** (00402): `exportar_sicore` (el TXT de ancho fijo, de arranque
+  «no») y `base_retencion_iva` (neto o total, de arranque «neto»).
+- **Órdenes**: una de la que llegó algo no se anula, se cierra con faltante
+  (`/ordenes/{id}/cerrar`); la fecha prometida se corrige enviada
+  (`/ordenes/{id}/fecha`).
+- **Devolución al proveedor** con la nota de crédito
+  (`purchase_return_items`, 00403): sale del stock donde entró y corrige el
+  costo; anulada la nota, vuelve. Una diferencia que es justo lo que no
+  llegó de la orden no se pasa al costo.
+- **Cheques**: `CircuitoDelCheque` manda al B el de un recibo con el reparto
+  entero en el B y vuelve blanco el de una factura que espera el CAE si
+  `asiento_sin_cae` es «transitoria» (`ChequeEsperaCAE` para la pantalla).
+  Un recibido sin origen no se asienta y el cierre lo marca. Desde la
+  cartera, «rechazado» es devolverlo al cliente.
+- **En vivo** (00404): canales `cobros` (payments) y `estado_pedidos`.
+- El CSV de retenciones toma el mes y la fecha argentinos.

@@ -39,6 +39,8 @@ export interface DatosPago {
   imputaciones?: { purchaseInvoiceId: string; importe: number }[];
   /** Los cheques rechazados que se reponen con este pago. */
   cheques?: { chequeId: string; importe: number }[];
+  /** Los ajustes que subieron la deuda (un saldo inicial) que se pagan. */
+  ajustes?: { movimientoId: string; importe: number }[];
   /** Las notas de crédito a favor que se descuentan. */
   notasDeCredito?: string[];
   partes?: {
@@ -61,6 +63,34 @@ export async function pagarAProveedor(datos: DatosPago): Promise<EstadoPago> {
   revalidatePath("/admin/compras/facturas");
   revalidatePath(`/admin/proveedores/${datos.supplierId}`);
   return { ok: r.data.ok, id: r.data.id, aviso: r.data.aviso, certificados: r.data.certificados };
+}
+
+export interface RetencionSimulada {
+  regimenId: string;
+  base: number;
+  acumulado: number;
+  minimo: number;
+  imponible: number;
+  alicuota: number;
+  retenidoAntes: number;
+  retencion: number;
+  motivo: string | null;
+}
+
+/**
+ * Lo que retendría el pago, con la misma cuenta que el certificado, sin
+ * anotar nada: la pantalla lo muestra antes de confirmar.
+ */
+export async function simularRetenciones(
+  supplierId: string,
+  fecha: string,
+  retenciones: { regimenId: string; base: number }[],
+): Promise<RetencionSimulada[]> {
+  if (!supplierId || retenciones.length === 0) return [];
+  const r = await (await api()).POST("/api/v1/admin/compras/pagos/simular", {
+    body: { supplierId, ...(fecha ? { fecha } : {}), retenciones },
+  });
+  return (r.data ?? []) as RetencionSimulada[];
 }
 
 /** Lo ya retenido este mes, para mostrarlo antes de pagar. */

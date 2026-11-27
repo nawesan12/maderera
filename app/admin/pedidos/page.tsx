@@ -89,9 +89,10 @@ export default async function PedidosPage({
 
   return (
     <div>
-      {/* Se factura, se cobra o se cancela en otra pantalla: esta se
-          refresca sola (canal «ventas», M2S2-099 y M3S1-034). */}
-      <RefrescarEnVivo canales={["ventas"]} />
+      {/* Se factura, se cobra, se cancela o entra un pedido en otra
+          pantalla: esta se refresca sola (canales «ventas» y «pedidos»,
+          M2S2-099, M3S1-034 y M3S3-045). */}
+      <RefrescarEnVivo canales={["ventas", "pedidos"]} />
       <EncabezadoPanel
         titulo="Pedidos"
         resumen={
@@ -291,6 +292,8 @@ async function Historial({
 
   return (
     <div>
+      {/* Un pedido cancelado o cobrado en otra pestaña sale solo (M3S3-045). */}
+      <RefrescarEnVivo canales={["ventas", "pedidos"]} />
       <EncabezadoPanel
         titulo="Pedidos"
         resumen={

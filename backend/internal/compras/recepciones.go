@@ -31,6 +31,11 @@ type RecepcionListada struct {
 	Neto         float64   `json:"neto"`
 	// Facturada dice si ya hay una factura de compra vinculada.
 	Facturada bool `json:"facturada"`
+	// Faltantes es lo que de su orden no llegó, y FaltanteNeto su neto al
+	// costo pedido: una factura que cobra eso no es una diferencia de
+	// precio y no se pasa al costo (M3S3-009).
+	Faltantes    []Faltante `json:"faltantes"`
+	FaltanteNeto float64    `json:"faltanteNeto"`
 }
 
 // ListarRecepciones es listarRecepciones: el neto de las líneas más el flete.
@@ -47,14 +52,51 @@ func (s *Servicio) ListarRecepciones(ctx context.Context, limite int) ([]Recepci
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(filas, func(r pgx.CollectableRow) (RecepcionListada, error) {
+	lista, err := pgx.CollectRows(filas, func(r pgx.CollectableRow) (RecepcionListada, error) {
 		var x RecepcionListada
 		var neto *jsmath.Num
 		var gastos jsmath.Num
 		err := r.Scan(&x.ID, &x.NumeroRemito, &x.Fecha, &x.Estado, &x.Gastos, &x.Proveedor, &x.SupplierID, &x.Sucursal, &x.Lineas, &neto, &gastos, &x.Facturada)
 		x.Neto = numOCero(neto) + float64(gastos)
+		x.Faltantes = []Faltante{}
 		return x, err
 	})
+	if err != nil || len(lista) == 0 {
+		return lista, err
+	}
+	indice := map[string]int{}
+	var sinFacturar []string
+	for i, x := range lista {
+		if x.Estado == "confirmada" && !x.Facturada {
+			indice[x.ID] = i
+			sinFacturar = append(sinFacturar, x.ID)
+		}
+	}
+	if len(sinFacturar) == 0 {
+		return lista, nil
+	}
+	filas, err = s.pool.Query(ctx, `
+		SELECT r.id, i.descripcion, i.cantidad - i.cantidad_recibida, p.unit::text, i.costo_unitario
+		FROM goods_receipts r JOIN purchase_order_items i ON i.purchase_order_id = r.purchase_order_id
+		LEFT JOIN product_variants v ON v.id = i.variant_id LEFT JOIN products p ON p.id = v.product_id
+		WHERE r.id = ANY($1::uuid[]) AND i.cantidad_recibida < i.cantidad ORDER BY r.id, i.orden`, sinFacturar)
+	if err != nil {
+		return nil, err
+	}
+	defer filas.Close()
+	for filas.Next() {
+		var id string
+		var f Faltante
+		var cantidad, costo jsmath.Num
+		if err := filas.Scan(&id, &f.Descripcion, &cantidad, &f.Unidad, &costo); err != nil {
+			return nil, err
+		}
+		f.Cantidad = float64(cantidad)
+		x := &lista[indice[id]]
+		x.Faltantes = append(x.Faltantes, f)
+		x.FaltanteNeto = jsmath.Redondear2(x.FaltanteNeto + float64(f.Cantidad*costo.F()))
+	}
+	return lista, filas.Err()
 }
 
 // LineaDeRecepcion es una línea con la cuenta del costo, si ya se confirmó.
@@ -72,6 +114,13 @@ type LineaDeRecepcion struct {
 	CostoAnterior    *string `json:"costoAnterior"`
 	CostoResultante  *string `json:"costoResultante"`
 	Orden            int32   `json:"orden"`
+	// Unidad es la del producto («20 u.», «5 placas»: decía «20 ·»,
+	// M3S4-037). Pedido y YaRecibido son los del renglón de la orden, si la
+	// recepción salió de una: el borrador dice «Vino [20] de 30» y la
+	// confirmada «16 de 20 · faltan 4» (M2S1-077, M3S3-026).
+	Unidad     *string `json:"unidad"`
+	Pedido     *string `json:"pedido"`
+	YaRecibido *string `json:"yaRecibido"`
 }
 
 // Recepcion es una recepción con sus líneas.
@@ -88,6 +137,9 @@ type Recepcion struct {
 	BranchID     string             `json:"branchId"`
 	Sucursal     *string            `json:"sucursal"`
 	Items        []LineaDeRecepcion `json:"items"`
+	// La orden de la que salió, para reclamar desde ahí.
+	PurchaseOrderID *string `json:"purchaseOrderId"`
+	OrdenNumero     *string `json:"ordenNumero"`
 }
 
 // ObtenerRecepcion es obtenerRecepcion.
@@ -97,10 +149,12 @@ func (s *Servicio) ObtenerRecepcion(ctx context.Context, id string) (*Recepcion,
 	}
 	var r Recepcion
 	err := s.pool.QueryRow(ctx, `
-		SELECT r.id, r.numero_remito, r.fecha, r.estado::text, r.gastos::text, r.notas, r.confirmada_at, r.supplier_id, s.nombre, r.branch_id, b.name
+		SELECT r.id, r.numero_remito, r.fecha, r.estado::text, r.gastos::text, r.notas, r.confirmada_at, r.supplier_id, s.nombre, r.branch_id, b.name,
+		  r.purchase_order_id, o.numero
 		FROM goods_receipts r JOIN suppliers s ON s.id = r.supplier_id LEFT JOIN branches b ON b.id = r.branch_id
+		LEFT JOIN purchase_orders o ON o.id = r.purchase_order_id
 		WHERE r.id = $1`, id).Scan(&r.ID, &r.NumeroRemito, &r.Fecha, &r.Estado, &r.Gastos, &r.Notas, &r.ConfirmadaAt, &r.SupplierID,
-		&r.Proveedor, &r.BranchID, &r.Sucursal)
+		&r.Proveedor, &r.BranchID, &r.Sucursal, &r.PurchaseOrderID, &r.OrdenNumero)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -109,10 +163,14 @@ func (s *Servicio) ObtenerRecepcion(ctx context.Context, id string) (*Recepcion,
 	}
 	filas, err := s.pool.Query(ctx, `
 		SELECT i.id, i.variant_id, p.name, v.label, v.sku, i.cantidad::text, i.costo_unitario::text, i.alicuota_iva::text,
-		  i.costo_con_gastos::text, i.cantidad_anterior::text, i.costo_anterior::text, i.costo_resultante::text, i.orden
+		  i.costo_con_gastos::text, i.cantidad_anterior::text, i.costo_anterior::text, i.costo_resultante::text, i.orden,
+		  p.unit::text, oi.cantidad::text, oi.cantidad_recibida::text
 		FROM goods_receipt_items i
+		JOIN goods_receipts r ON r.id = i.receipt_id
 		LEFT JOIN product_variants v ON v.id = i.variant_id
 		LEFT JOIN products p ON p.id = v.product_id
+		LEFT JOIN LATERAL (SELECT x.cantidad, x.cantidad_recibida FROM purchase_order_items x
+		  WHERE x.purchase_order_id = r.purchase_order_id AND x.variant_id = i.variant_id ORDER BY x.orden LIMIT 1) oi ON true
 		WHERE i.receipt_id = $1 ORDER BY i.orden`, id)
 	if err != nil {
 		return nil, err
@@ -133,8 +191,12 @@ type Mercaderia struct {
 	CostoActual *string `json:"costoActual"`
 }
 
-// BuscarParaRecibir es buscarParaRecibir: hasta 20, por nombre.
-func (s *Servicio) BuscarParaRecibir(ctx context.Context, texto string) ([]Mercaderia, error) {
+// BuscarParaRecibir es buscarParaRecibir: hasta 20, por nombre. Primero los
+// que empiezan con lo buscado y después los que lo tienen al empezar una
+// palabra: «laca» traía tres fenólicos antes que las lacas (M3S2-057),
+// porque «placa» la contiene. Con un proveedor, el costo que se propone es
+// el de su lista, si la tiene (M3S2-029).
+func (s *Servicio) BuscarParaRecibir(ctx context.Context, texto, proveedor string) ([]Mercaderia, error) {
 	consulta := trimJS(texto)
 	if plataforma.LargoJS(consulta) < 2 {
 		return []Mercaderia{}, nil
@@ -144,22 +206,39 @@ func (s *Servicio) BuscarParaRecibir(ctx context.Context, texto string) ([]Merca
 	if c := a.coincide(consulta, "p.name", "v.label", "v.sku", "p.brand", "c.name"); c != "" {
 		cond = append(cond, c)
 	}
+	prefijo := a.poner(consulta)
+	costo, union := costoPropuestoSQL(&a, proveedor)
 	filas, err := s.pool.Query(ctx, `
-		SELECT v.id, p.name, v.label, v.sku, p.unit::text, p.alicuota_iva::text, vc.costo_promedio::text
+		SELECT v.id, p.name, v.label, v.sku, p.unit::text, p.alicuota_iva::text, `+costo+`
 		FROM product_variants v
 		JOIN products p ON p.id = v.product_id
 		JOIN categories c ON c.id = p.category_id
-		LEFT JOIN variant_costs vc ON vc.variant_id = v.id
-		WHERE `+strings.Join(cond, " AND ")+` ORDER BY p.name LIMIT 20`, a...)
+		LEFT JOIN variant_costs vc ON vc.variant_id = v.id`+union+`
+		WHERE `+strings.Join(cond, " AND ")+`
+		ORDER BY CASE WHEN f_unaccent(p.name) ILIKE f_unaccent(`+prefijo+`) || '%' THEN 0
+		  WHEN f_unaccent(p.name) ILIKE '% ' || f_unaccent(`+prefijo+`) || '%' THEN 1 ELSE 2 END, p.name LIMIT 20`, a...)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(filas, pgx.RowToStructByPos[Mercaderia])
 }
 
+// costoPropuestoSQL es la columna del costo: el de la lista del proveedor,
+// si se sabe a quién se le compra y la tiene, y si no el promedio.
+func costoPropuestoSQL(a *argumentos, proveedor string) (string, string) {
+	if !plataforma.UUIDValido(proveedor) {
+		return "vc.costo_promedio::text", ""
+	}
+	p := a.poner(proveedor)
+	return "coalesce(svc.costo_neto, vc.costo_promedio)::text", `
+		LEFT JOIN LATERAL (SELECT x.costo_neto FROM supplier_variant_codes x
+		  WHERE x.supplier_id = ` + p + `::uuid AND x.variant_id = v.id AND x.costo_neto IS NOT NULL
+		  ORDER BY x.costo_at DESC NULLS LAST LIMIT 1) svc ON true`
+}
+
 // VariantesParaPedir es variantesParaPedir: las mismas, por id (hasta 40),
 // para abrir una orden con los renglones del reporte de reposición.
-func (s *Servicio) VariantesParaPedir(ctx context.Context, ids []string) ([]Mercaderia, error) {
+func (s *Servicio) VariantesParaPedir(ctx context.Context, ids []string, proveedor string) ([]Mercaderia, error) {
 	var acotados []string
 	for _, id := range ids {
 		if id != "" {
@@ -178,10 +257,12 @@ func (s *Servicio) VariantesParaPedir(ctx context.Context, ids []string) ([]Merc
 	if len(validos) == 0 {
 		return []Mercaderia{}, nil
 	}
+	a := argumentos{validos}
+	costo, union := costoPropuestoSQL(&a, proveedor)
 	filas, err := s.pool.Query(ctx, `
-		SELECT v.id, p.name, v.label, v.sku, p.unit::text, p.alicuota_iva::text, vc.costo_promedio::text
-		FROM product_variants v JOIN products p ON p.id = v.product_id LEFT JOIN variant_costs vc ON vc.variant_id = v.id
-		WHERE v.id = ANY($1::uuid[])`, validos)
+		SELECT v.id, p.name, v.label, v.sku, p.unit::text, p.alicuota_iva::text, `+costo+`
+		FROM product_variants v JOIN products p ON p.id = v.product_id LEFT JOIN variant_costs vc ON vc.variant_id = v.id`+union+`
+		WHERE v.id = ANY($1::uuid[])`, a...)
 	if err != nil {
 		return nil, err
 	}
@@ -378,9 +459,16 @@ func (s *Servicio) ConfirmarRecepcion(ctx context.Context, ses *auth.Sesion, id 
 		var deuda float64
 		neto, deuda, err = CuentaDeRecepcion(recibidas, float64(c.gastos),
 			func(v string) (EstadoDeCosto, error) {
+				// El promedio se pondera contra el stock que hay (en todas las
+				// sucursales, antes de que entre esta línea), no contra todo lo
+				// que entró en la historia: cantidad_base solo crecía con las
+				// recepciones y ninguna venta la bajaba, así que una laca sin
+				// stock quedaba con un costo más bajo que el que se pagó
+				// (M3S2-007). Sin stock, el costo nuevo es el que se pagó.
 				var e EstadoDeCosto
 				var base, costo jsmath.Num
-				err := tx.QueryRow(ctx, `SELECT cantidad_base, costo_promedio FROM variant_costs WHERE variant_id = $1`, v).Scan(&base, &costo)
+				err := tx.QueryRow(ctx, `SELECT greatest(coalesce((SELECT sum(qty) FROM inventory WHERE variant_id = $1), 0), 0), costo_promedio
+					FROM variant_costs WHERE variant_id = $1`, v).Scan(&base, &costo)
 				e.CantidadBase, e.CostoPromedio = float64(base), float64(costo)
 				antesDeMezclar(v)
 				return e, err

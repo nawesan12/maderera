@@ -442,6 +442,9 @@ type FormPago struct {
 	// del cheque) y las notas de crédito a favor que se descuentan.
 	Cheques        []Imputacion `json:"-"`
 	NotasDeCredito []string     `json:"-"`
+	// Los ajustes que subieron la deuda (un saldo inicial) que se pagan: el
+	// id es el del movimiento (M2S1-125).
+	Ajustes []Imputacion `json:"-"`
 }
 
 var mediosDePago = []string{"transferencia", "efectivo", "cheque", "echeq"}
@@ -468,6 +471,10 @@ func leerPago(m map[string]any) (FormPago, error) {
 	p.Cheques = []Imputacion{}
 	l.lista("cheques", true, 0, "", 30, func(_ int, e *lector) {
 		p.Cheques = append(p.Cheques, Imputacion{e.uuid("chequeId", ""), e.numero("importe", nil, minimo(0))})
+	})
+	p.Ajustes = []Imputacion{}
+	l.lista("ajustes", true, 0, "", 30, func(_ int, e *lector) {
+		p.Ajustes = append(p.Ajustes, Imputacion{e.uuid("movimientoId", ""), e.numero("importe", nil, minimo(0))})
 	})
 	p.NotasDeCredito = []string{}
 	if lista, ok := m["notasDeCredito"].([]any); ok {
@@ -602,6 +609,10 @@ type FilaAplicar struct {
 	VariantID      string  `json:"variantId"`
 	Costo          float64 `json:"costo"`
 	PrecioSugerido float64 `json:"precioSugerido"`
+	// CostoNeto es el de la planilla sin IVA; nil si no vino. Un
+	// PrecioSugerido 0 es «solo el costo»: sin margen escrito y sin costo
+	// anterior, el precio de venta no se toca.
+	CostoNeto *float64 `json:"costoNeto"`
 }
 
 // leerFilasAplicar es el z.array(...) de aplicarLista, sin coerción: los
@@ -621,10 +632,14 @@ func leerFilasAplicar(v any) ([]FilaAplicar, bool) {
 		variante, ok2 := m["variantId"].(string)
 		costo, ok3 := m["costo"].(float64)
 		precio, ok4 := m["precioSugerido"].(float64)
-		if !ok1 || !ok2 || !ok3 || !ok4 || !plataforma.UUIDValido(variante) || !(precio > 0) {
+		if !ok1 || !ok2 || !ok3 || !ok4 || !plataforma.UUIDValido(variante) || precio < 0 {
 			return nil, false
 		}
-		out = append(out, FilaAplicar{codigo, variante, costo, precio})
+		fila := FilaAplicar{Codigo: codigo, VariantID: variante, Costo: costo, PrecioSugerido: precio}
+		if n, ok := m["costoNeto"].(float64); ok && n > 0 {
+			fila.CostoNeto = &n
+		}
+		out = append(out, fila)
 	}
 	return out, true
 }

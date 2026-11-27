@@ -77,6 +77,14 @@ const (
 	// «fuera_de_la_cuenta»: también quien vende, si el cliente no tiene
 	// cuenta corriente o la deuda pasa su límite.
 	EntregarSinCobrar = "entregar_sin_cobrar"
+	// M2S1-145: si las retenciones practicadas también se bajan en el TXT
+	// de importación de SICORE (el diseño de registro lo confirma el
+	// estudio; hasta entonces, solo el CSV).
+	ExportarSicore = "exportar_sicore"
+	// M3S2-027: sobre qué se aplica la alícuota de la retención de IVA: el
+	// neto (como Ganancias) o el total con IVA (8,68 % = 10,5/121 es la
+	// mitad del IVA expresada sobre el total).
+	BaseRetencionIva = "base_retencion_iva"
 )
 
 // Opciones son los valores posibles de cada regla, el de arranque primero.
@@ -102,6 +110,8 @@ var Opciones = map[string][]string{
 	CaeEnCompras:                {"opcional", "exigido"},
 	DeudaSinComprobante:         {"circuito_b", "saldo_inicial"},
 	EntregarSinCobrar:           {"deposito", "fuera_de_la_cuenta"},
+	ExportarSicore:              {"no", "si"},
+	BaseRetencionIva:            {"neto", "total"},
 }
 
 // Arranque es el valor de una regla cuando la fila no está o tiene algo que

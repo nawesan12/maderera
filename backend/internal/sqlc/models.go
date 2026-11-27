@@ -6126,6 +6126,17 @@ type PurchaseOrderItem struct {
 	Orden            int32      `json:"orden"`
 }
 
+type PurchaseReturnItem struct {
+	ID                 string     `json:"id"`
+	PurchaseInvoiceID  string     `json:"purchaseInvoiceId"`
+	GoodsReceiptItemID string     `json:"goodsReceiptItemId"`
+	VariantID          string     `json:"variantId"`
+	BranchID           string     `json:"branchId"`
+	Cantidad           jsmath.Num `json:"cantidad"`
+	CostoUnitario      jsmath.Num `json:"costoUnitario"`
+	CreatedAt          time.Time  `json:"createdAt"`
+}
+
 type PushSubscription struct {
 	ID          string     `json:"id"`
 	UserID      string     `json:"userId"`
@@ -6422,6 +6433,7 @@ type SupplierMovement struct {
 	PurchaseInvoiceID *string                 `json:"purchaseInvoiceId"`
 	SupplierPaymentID *string                 `json:"supplierPaymentId"`
 	ChequeID          *string                 `json:"chequeId"`
+	AplicaAID         *string                 `json:"aplicaAId"`
 }
 
 type SupplierPayment struct {
@@ -6441,10 +6453,24 @@ type SupplierPayment struct {
 	AnuladoPorUserID *string            `json:"anuladoPorUserId"`
 }
 
+type SupplierPaymentAjuste struct {
+	PaymentID  string     `json:"paymentId"`
+	MovementID string     `json:"movementId"`
+	Importe    jsmath.Num `json:"importe"`
+}
+
 type SupplierPaymentAllocation struct {
 	ID                string     `json:"id"`
 	PaymentID         string     `json:"paymentId"`
 	PurchaseInvoiceID string     `json:"purchaseInvoiceId"`
+	Importe           jsmath.Num `json:"importe"`
+}
+
+type SupplierPaymentAnuladoItem struct {
+	PaymentID         string     `json:"paymentId"`
+	PurchaseInvoiceID *string    `json:"purchaseInvoiceId"`
+	ChequeID          *string    `json:"chequeId"`
+	MovementID        *string    `json:"movementId"`
 	Importe           jsmath.Num `json:"importe"`
 }
 
@@ -6489,11 +6515,13 @@ type SupplierTerm struct {
 }
 
 type SupplierVariantCode struct {
-	ID         string    `json:"id"`
-	SupplierID string    `json:"supplierId"`
-	VariantID  string    `json:"variantId"`
-	Codigo     string    `json:"codigo"`
-	CreatedAt  time.Time `json:"createdAt"`
+	ID         string      `json:"id"`
+	SupplierID string      `json:"supplierId"`
+	VariantID  string      `json:"variantId"`
+	Codigo     string      `json:"codigo"`
+	CreatedAt  time.Time   `json:"createdAt"`
+	CostoNeto  *jsmath.Num `json:"costoNeto"`
+	CostoAt    *time.Time  `json:"costoAt"`
 }
 
 type TareasCorrida struct {

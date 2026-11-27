@@ -40,7 +40,8 @@ export default async function ProveedoresPage({
         <DialogoProveedor />
       </header>
 
-      <section className="grid gap-3 sm:grid-cols-2">
+      {/* Las dos cifras en una fila también en el teléfono (M2S1-116). */}
+      <section className="grid grid-cols-2 gap-3">
         <article className="tarjeta p-4">
           <p className="text-sm text-muted-foreground">Deuda total</p>
           <p className="tabular mt-0.5 text-2xl font-bold text-saldo-debe">
@@ -128,8 +129,13 @@ export default async function ProveedoresPage({
                       </span>
                       <Saldo saldo={p.saldo} />
                     </span>
-                    <span className="tabular block text-base text-muted-foreground">
-                      {[p.cuit, p.diasPago === 0 ? "contado" : `a ${p.diasPago} días`, p.rubro].filter(Boolean).join(" · ")}
+                    {/* Monoespaciada solo el CUIT; el plazo y el rubro, en la
+                        letra del texto (M2S1-116). */}
+                    <span className="block text-base text-muted-foreground">
+                      {p.cuit && <span className="tabular whitespace-nowrap">{p.cuit}</span>}
+                      {[p.cuit ? "" : null, p.diasPago === 0 ? "contado" : `a ${p.diasPago} días`, p.rubro]
+                        .filter((x) => x !== null && x !== undefined)
+                        .join(" · ")}
                     </span>
                   </Link>
                 </li>

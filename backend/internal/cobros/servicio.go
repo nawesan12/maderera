@@ -622,6 +622,11 @@ func (s *Servicio) CambiarEstado(ctx context.Context, ses *auth.Sesion, id, nuev
 		}
 		if efecto == "debitar" && cheque.CustomerID != nil {
 			detalle := NombreDelCheque(string(cheque.Tipo), cheque.Banco, cheque.Numero) + " rechazado por el banco"
+			// Desde la cartera el banco nunca lo tuvo: se le devolvió al
+			// cliente (M2S3-088).
+			if desde == "cartera" {
+				detalle = NombreDelCheque(string(cheque.Tipo), cheque.Banco, cheque.Numero) + " devuelto al cliente"
+			}
 			if m != "" {
 				detalle += ": " + m
 			}
@@ -642,7 +647,9 @@ func (s *Servicio) CambiarEstado(ctx context.Context, ses *auth.Sesion, id, nuev
 				return err
 			}
 		}
-		if hacia == "rechazado" && cheque.Sentido == sqlc.SentidoChequeRecibido {
+		// Devuelto desde la cartera, el cliente lo tiene en la mano: no se le
+		// avisa que lo rechazó el banco.
+		if hacia == "rechazado" && cheque.Sentido == sqlc.SentidoChequeRecibido && desde != "cartera" {
 			if _, err := cola.Encolar(ctx, q, TrabajoChequeRechazado, map[string]any{"chequeId": id, "porElBanco": desde != "informado"}, time.Time{}); err != nil {
 				return err
 			}
@@ -660,6 +667,8 @@ func (s *Servicio) CambiarEstado(ctx context.Context, ses *auth.Sesion, id, nuev
 	switch {
 	case recibo.Numero != "":
 		return ResultadoDeCobro{Ok: "Cheque aceptado. Se emitió el recibo " + recibo.Numero + ".", ReceiptID: &recibo.ReceiptID}, nil
+	case debitado && desde == "cartera":
+		return ResultadoDeCobro{Ok: "Devuelto: la deuda volvió a la cuenta del cliente."}, nil
 	case debitado && desde == "entregado":
 		return ResultadoDeCobro{Ok: "Rechazado: la deuda volvió a la cuenta del cliente. El cheque estaba endosado: hay que reponérselo al proveedor."}, nil
 	case debitado:

@@ -155,6 +155,13 @@ func FechaLocal(t time.Time) string {
 	return strconv.Itoa(t.Day()) + "/" + strconv.Itoa(int(t.Month())) + "/" + strconv.Itoa(t.Year())
 }
 
+// FechaDelDia es una fecha que es un día y no un instante (guardada como la
+// medianoche UTC de ese día), con el mismo formato que FechaLocal.
+func FechaDelDia(t time.Time) string {
+	t = t.UTC()
+	return strconv.Itoa(t.Day()) + "/" + strconv.Itoa(int(t.Month())) + "/" + strconv.Itoa(t.Year())
+}
+
 // FechaSolaCorta es fechaSolaCorta de lib/formato.ts: «05/03/26», en UTC.
 // Es para fechas que son un día y no un instante (las que llegan ya como el
 // día argentino a medianoche UTC). Un instante —el created_at de un

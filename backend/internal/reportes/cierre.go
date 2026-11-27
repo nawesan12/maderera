@@ -438,7 +438,8 @@ func (s *Servicio) asientosAImputar(ctx context.Context, idesde, ihasta time.Tim
 // AjusteDeProveedor: el movimiento `m` del libro de un proveedor no sale de
 // una recepción, una factura, un pago ni un cheque: es el saldo inicial que
 // vino del sistema anterior o un ajuste a mano (una bonificación, un
-// redondeo). Tiene asiento contra Saldos iniciales y ajustes.
+// redondeo). El saldo inicial tiene asiento contra Saldos iniciales y
+// ajustes; el ajuste a mano, contra Ajustes con proveedores.
 const AjusteDeProveedor = `(m.goods_receipt_id IS NULL AND m.purchase_invoice_id IS NULL AND m.supplier_payment_id IS NULL AND m.cheque_id IS NULL)`
 
 // asientosDeAjustesDeProveedores son los saldos iniciales y los ajustes a
@@ -446,7 +447,8 @@ const AjusteDeProveedor = `(m.goods_receipt_id IS NULL AND m.purchase_invoice_id
 // (2.1.01) no daba lo que dice el libro (mes simulado, M3S1-019): el saldo
 // inicial de Corralón no estaba y su pago sí, y Corralón quedaba deudor.
 func (s *Servicio) asientosDeAjustesDeProveedores(ctx context.Context, idesde, ihasta time.Time) ([]Asiento, error) {
-	rs, err := s.lectura.Query(ctx, `SELECT m.created_at, s.nombre, m.monto::float8, coalesce(nullif(m.detalle, ''), 'Ajuste')
+	rs, err := s.lectura.Query(ctx, `SELECT m.created_at, s.nombre, m.monto::float8, coalesce(nullif(m.detalle, ''), 'Ajuste'),
+		  coalesce(m.referencia, '') = 'SALDO-INICIAL-PROV'
 		FROM supplier_movements m JOIN suppliers s ON s.id = m.supplier_id
 		WHERE `+AjusteDeProveedor+` AND m.created_at >= $1 AND m.created_at <= $2 AND m.monto <> 0
 		ORDER BY m.created_at`, idesde, ihasta)
@@ -457,7 +459,17 @@ func (s *Servicio) asientosDeAjustesDeProveedores(ctx context.Context, idesde, i
 	var fecha time.Time
 	var proveedor, detalle string
 	var monto float64
-	if _, err := pgx.ForEachRow(rs, []any{&fecha, &proveedor, &monto, &detalle}, func() error {
+	var saldoInicial bool
+	if _, err := pgx.ForEachRow(rs, []any{&fecha, &proveedor, &monto, &detalle, &saldoInicial}, func() error {
+		// El ajuste a mano (una bonificación, un redondeo) va contra Ajustes
+		// con proveedores (M3S2-028); el saldo que trajo la migración, contra
+		// Saldos iniciales. Un solo asiento por movimiento.
+		if !saldoInicial {
+			a := AsientoDeAjusteDeProveedor(fecha, proveedor, detalle, monto)
+			a.Instante = true
+			out = append(out, a)
+			return nil
+		}
 		r := []RenglonDeAsiento{renglon(Cuentas.SaldosIniciales, monto, 0), renglon(Cuentas.Proveedores, 0, monto)}
 		if monto < 0 {
 			r = []RenglonDeAsiento{renglon(Cuentas.Proveedores, -monto, 0), renglon(Cuentas.SaldosIniciales, 0, -monto)}
@@ -827,7 +839,11 @@ func (s *Servicio) asientosDeCheques(ctx context.Context, idesde, ihasta time.Ti
 		  EXISTS (SELECT 1 FROM account_movements m WHERE m.cheque_id = c.id AND m.tipo = 'nota_debito'),
 		  c.order_payment_id IS NOT NULL, c.id::text, coalesce(`+cobros.ReciboDelCheque("c")+`, '')
 		FROM cheque_estados e JOIN cheques c ON c.id = e.cheque_id
-		WHERE e.at <= $2 AND e.hacia IN ('acreditado', 'rechazado')) x
+		WHERE e.at <= $2 AND e.hacia IN ('acreditado', 'rechazado')
+		  -- Un cheque recibido sin origen (sin cliente, recibo ni venta) nunca
+		  -- entró a Valores a depositar: su acreditación cancelaba algo que no
+		  -- existía (M3S2-012). No se asienta y el cierre lo marca.
+		  AND NOT (`+chequeSinOrigen("c")+`)) x
 		WHERE x.asentado >= $1 AND x.asentado <= $2 ORDER BY x.asentado`, idesde, ihasta)
 	if err != nil {
 		return nil, err
@@ -905,6 +921,15 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 	if cajas > 0 {
 		out = append(out, pendiente("caja", "Turnos de caja sin cerrar",
 			"Efectivo sin arquear: la diferencia del mes no se puede calcular.", cajas, "/admin/caja"))
+	}
+	var sinOrigen int
+	if err := s.pool.QueryRow(ctx, `SELECT count(*)::int FROM cheques c WHERE `+chequeSinOrigen("c")+` AND c.estado NOT IN ('anulado')
+		AND c.created_at <= $1`, ihasta).Scan(&sinOrigen); err != nil {
+		return nil, err
+	}
+	if sinOrigen > 0 {
+		out = append(out, pendiente("cheques-sin-origen", "Cheques recibidos sin origen",
+			"Se cargaron sin cliente ni recibo: no entran a los asientos hasta saber de dónde vino la plata.", sinOrigen, "/admin/cheques"))
 	}
 	if sinFactura > 0 {
 		p := pendiente("facturas", "Recepciones sin factura de compra",

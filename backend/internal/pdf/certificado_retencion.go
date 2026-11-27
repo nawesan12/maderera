@@ -54,6 +54,8 @@ type DatosDelCertificado struct {
 		Fecha      time.Time `json:"fecha"`
 		Medio      string    `json:"medio"`
 		Referencia string    `json:"referencia"`
+		// Comprobantes son los que cancela el pago, si se saben.
+		Comprobantes string `json:"comprobantes,omitempty"`
 	} `json:"pago"`
 	Calculo *CalculoDelCertificado `json:"calculo,omitempty"`
 	// Anulado lleva la marca de agua: se anuló el pago que lo originó.
@@ -160,6 +162,11 @@ func CertificadoDeRetencion(d DatosDelCertificado, _ time.Time) ([]byte, error) 
 	}
 	h.Escribir("Retención practicada sobre el pago del "+FechaLocal(d.Pago.Fecha)+" por "+d.Pago.Medio+ref+".",
 		Opciones{X: Margen, Y: y, Tamano: 8.5, Color: TintaSuave})
+	if d.Pago.Comprobantes != "" {
+		y -= Mm(5)
+		h.Escribir(Elipsis("Cancela: "+d.Pago.Comprobantes+".", Normal, 8.5, AnchoA4-2*Margen),
+			Opciones{X: Margen, Y: y, Tamano: 8.5, Color: TintaSuave})
+	}
 
 	y -= Mm(24)
 

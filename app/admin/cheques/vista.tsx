@@ -2,10 +2,12 @@
 
 import {
   useActionState,
+  useEffect,
   useId,
   useState,
   useTransition,
 } from "react";
+import { fechaCorta, formatearMonto } from "@/lib/formato";
 import {
   AlertTriangle,
   Ellipsis,
@@ -36,6 +38,7 @@ import { useEtiquetasDelCircuito } from "@/components/admin/circuito";
 import {
   cambiarEstadoDeCheque,
   cargarCheque,
+  deudaDelCliente,
   type EstadoCheque,
 } from "./actions";
 import { CampoFecha } from "@/components/ui/campo-fecha";
@@ -57,9 +60,11 @@ const ACCIONES: Record<string, { a: string; texto: string }[]> = {
     { a: "cartera", texto: "Aceptar" },
     { a: "rechazado", texto: "Rechazar" },
   ],
+  // Desde la cartera el banco nunca lo tuvo: no se «rechaza», se le
+  // devuelve al cliente (M2S3-088). El rechazo del banco es del depositado.
   cartera: [
     { a: "depositado", texto: "Depositar" },
-    { a: "rechazado", texto: "Rechazado" },
+    { a: "rechazado", texto: "Devolver al cliente" },
   ],
   depositado: [
     { a: "acreditado", texto: "Se acreditó" },
@@ -74,8 +79,9 @@ const ACCIONES: Record<string, { a: string; texto: string }[]> = {
 /** Desde qué estados se puede anular. Lo dice `TRANSICIONES` en `actions.ts`. */
 const SE_PUEDE_ANULAR = ["cartera"];
 
-const pesos = (n: number) =>
-  n.toLocaleString("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 });
+// Con centavos: el diálogo decía «debe $ 2.762.359» y la tarjeta
+// «$ 2.762.358,52» (M3S3-044).
+const pesos = (n: number) => formatearMonto(n);
 
 /**
  * Lo que se hace con un cheque.
@@ -94,6 +100,8 @@ export function AccionesDeCheque({
   estado,
   sentido,
   numero,
+  banco = null,
+  fechaPago = null,
   importe,
   diasParaCobrar = null,
   cliente = null,
@@ -104,6 +112,9 @@ export function AccionesDeCheque({
   estado: string;
   sentido: string;
   numero: string;
+  /** Para el nombre accesible del menú: dos cheques con el mismo número (M3S1-037). */
+  banco?: string | null;
+  fechaPago?: Date | string | null;
   importe: number;
   /** Cuántos días faltan para la fecha de pago: antes no se deposita. */
   diasParaCobrar?: number | null;
@@ -117,20 +128,35 @@ export function AccionesDeCheque({
   const [aviso, setAviso] = useState<string | null>(null);
   const [confirmando, setConfirmando] = useState(false);
   const [aceptando, setAceptando] = useState(false);
+  /** «Debitó» o «Lo cobró el proveedor» piden confirmar (M3S1-012). */
+  const [cobrando, setCobrando] = useState(false);
   /** El rechazo pide motivo: lo lee el cliente en el correo y en Mi cuenta. */
   const [rechazando, setRechazando] = useState(false);
   const [motivo, setMotivo] = useState("");
   const idMotivo = useId();
 
-  const acciones = (ACCIONES[estado] ?? []).filter(
-    // Depositar solo tiene sentido para los recibidos: un cheque propio ya
-    // entregado lo deposita el proveedor, no nosotros.
-    (a) => !(sentido === "entregado" && a.a === "depositado"),
-  );
+  const acciones = (ACCIONES[estado] ?? [])
+    .filter(
+      // Depositar solo tiene sentido para los recibidos: un cheque propio ya
+      // entregado lo deposita el proveedor, no nosotros.
+      (a) => !(sentido === "entregado" && a.a === "depositado"),
+    )
+    // Un cheque de un tercero endosado no «debita»: lo cobra el proveedor
+    // (M3S1-012). «Debitó» queda para el propio.
+    .map((a) =>
+      estado === "entregado" && sentido === "recibido" && a.a === "acreditado" ? { ...a, texto: "Lo cobró el proveedor" } : a,
+    );
   const puedeAnular = SE_PUEDE_ANULAR.includes(estado);
   const principal = acciones.find((a) => a.a !== "rechazado");
   const secundarias = acciones.filter((a) => a !== principal);
-  const antesDeTiempo = principal?.a === "depositado" && diasParaCobrar !== null && diasParaCobrar > 0;
+  // Antes de su fecha no se deposita ni se da por cobrado un entregado: el
+  // de tercero pasaba a «Acreditado» con 29 días de anticipación y ya no se
+  // podía marcar que rebotó (M3S1-012).
+  const antesDeTiempo =
+    (principal?.a === "depositado" || (principal?.a === "acreditado" && estado === "entregado")) &&
+    diasParaCobrar !== null &&
+    diasParaCobrar > 0;
+  const fecha = fechaPago ? new Date(fechaPago) : null;
 
   if (acciones.length === 0 && !puedeAnular) return null;
 
@@ -143,10 +169,15 @@ export function AccionesDeCheque({
       setAceptando(true);
       return;
     }
+    if (estado === "entregado" && a === "acreditado" && !confirmado) {
+      setCobrando(true);
+      return;
+    }
     empezar(async () => {
       const r = await cambiarEstadoDeCheque(id, a, conMotivo);
       setConfirmando(false);
       setAceptando(false);
+      setCobrando(false);
       if (!r.error) {
         setRechazando(false);
         setMotivo("");
@@ -176,7 +207,14 @@ export function AccionesDeCheque({
   return (
     <div className="flex w-full flex-col gap-1.5 sm:w-auto sm:items-end">
       <div className="flex items-center gap-2">
-        {principal && (
+        {/* Antes de su fecha, en lugar del botón gris sin explicación, desde
+            cuándo se puede (M2S4-037). */}
+        {principal && antesDeTiempo && fecha && (
+          <p className="tabular flex h-11 flex-1 items-center text-base text-muted-foreground sm:flex-none">
+            {principal.a === "depositado" ? "Se deposita" : "Se cobra"} desde el {fechaCorta.format(fecha)}
+          </p>
+        )}
+        {principal && !(antesDeTiempo && fecha) && (
           <button
             type="button"
             disabled={pendiente || antesDeTiempo}
@@ -190,7 +228,7 @@ export function AccionesDeCheque({
         {(secundarias.length > 0 || puedeAnular) && (
           <DropdownMenu>
             <DropdownMenuTrigger
-              aria-label={`Más acciones del cheque ${numero}`}
+              aria-label={`Más acciones del cheque ${numero}${banco ? ` de ${banco}` : ""} por ${pesos(importe)}`}
               className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-linea hover:bg-muted"
             >
               <Ellipsis className="h-5 w-5" />
@@ -225,13 +263,18 @@ export function AccionesDeCheque({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {estado === "informado" ? "Rechazar" : "El banco rechazó"} el
-              cheque {numero}
+              {estado === "informado"
+                ? `Rechazar el cheque ${numero}`
+                : estado === "cartera"
+                  ? `Devolver al cliente el cheque ${numero}`
+                  : `El banco rechazó el cheque ${numero}`}
             </DialogTitle>
           </DialogHeader>
           <p className="text-base text-muted-foreground">
             {estado === "informado"
               ? "La cuenta del cliente no cambia: el cheque nunca bajó la deuda. Se le avisa con este motivo."
+              : estado === "cartera"
+                ? `Los ${pesos(importe)} vuelven a la cuenta del cliente con una nota de débito.`
               : sentido === "recibido"
                 ? estado === "entregado"
                   ? // Endosado: rebota en las dos cuentas (cobros.reabrirDeudaConElProveedor).
@@ -250,9 +293,9 @@ export function AccionesDeCheque({
                 casa («Los Pinos avisa…») le llegaba textual (mes simulado,
                 H304). Los motivos del banco, a un toque. */}
             <label htmlFor={idMotivo} className="block text-base font-medium">
-              Motivo que lee el cliente
+              {estado === "cartera" ? "Motivo" : "Motivo que lee el cliente"}
             </label>
-            {estado !== "informado" && sentido === "recibido" && (
+            {estado !== "informado" && estado !== "cartera" && sentido === "recibido" && (
               <div role="group" aria-label="Motivos del banco" className="flex flex-wrap gap-2">
                 {["Sin fondos", "Firma no coincide", "Cuenta cerrada", "Defecto de forma"].map((m) => (
                   <button
@@ -298,12 +341,27 @@ export function AccionesDeCheque({
                 className="inline-flex h-11 items-center gap-2 rounded-lg bg-destructive px-4 text-base font-medium text-white disabled:opacity-50"
               >
                 {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}
-                Rechazar
+                {estado === "cartera" ? "Devolver" : "Rechazar"}
               </button>
             </div>
           </form>
         </DialogContent>
       </Dialog>
+
+      <Confirmar
+        abierto={cobrando}
+        alCerrar={() => setCobrando(false)}
+        titulo={
+          sentido === "recibido"
+            ? `${proveedor ?? "El proveedor"} cobró el cheque ${numero} por ${pesos(importe)}`
+            : `Se debitó el cheque ${numero} por ${pesos(importe)}`
+        }
+        detalle="Pasa a terminados: si después rebota, ya no se puede marcar."
+        confirmar={sentido === "recibido" ? "Sí, lo cobró" : "Sí, se debitó"}
+        cancelar="Volver"
+        pendiente={pendiente}
+        alConfirmar={() => cambiar("acreditado", undefined, true)}
+      />
 
       <Confirmar
         abierto={aceptando}
@@ -374,6 +432,19 @@ export function AltaDeCheque() {
   const [tipo, setTipo] = useState("fisico");
   const [circuito, setCircuito] = useState("blanco");
   const [cliente, setCliente] = useState<ClienteElegido | null>(null);
+  // Lo que debe el cliente, arriba del cobro (M3S2-045): decía «Suma $ 0».
+  const [deudas, setDeudas] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (!cliente) return;
+    let vivo = true;
+    void deudaDelCliente(cliente.id).then((d) => {
+      if (vivo) setDeudas((p) => ({ ...p, [cliente.id]: d }));
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [cliente]);
+  const deuda = cliente ? (deudas[cliente.id] ?? 0) : 0;
   const id = useId();
 
   return (
@@ -409,10 +480,13 @@ export function AltaDeCheque() {
         )}
 
         {cliente && sentido === "recibido" ? (
+          /* Desde Cheques el cobro arranca en Cheque (y sin elegir caja, que
+             es del efectivo): había que cambiarlo a mano (M2S1-057). */
           <DialogoCobro
             customerId={cliente.id}
             nombre={cliente.razonSocial || cliente.nombre}
-            aCobrar={0}
+            aCobrar={deuda}
+            medio="cheque"
             etiqueta={`Cobrarle a ${cliente.razonSocial || cliente.nombre}`}
             claseBoton="boton-accion inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg text-base font-semibold"
             alCobrar={() => {

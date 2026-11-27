@@ -13,8 +13,10 @@ import (
 	"mjbj/internal/api/comprasapi"
 	"mjbj/internal/auth"
 	"mjbj/internal/documentos"
+	"mjbj/internal/fiscal"
 	"mjbj/internal/pdf"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/reglas"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
 )
@@ -87,6 +89,12 @@ func (o respuesta) VisitListarOrdenesDeCompraResponse(w http.ResponseWriter) err
 }
 func (o respuesta) VisitCrearOrdenDeCompraResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitOrdenDeCompraResponse(w http.ResponseWriter) error      { return o.escribir(w) }
+func (o respuesta) VisitCerrarOrdenConFaltanteResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitCambiarFechaDeOrdenResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
 func (o respuesta) VisitAnularOrdenDeCompraResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -95,7 +103,11 @@ func (o respuesta) VisitRecibirDeLaOrdenResponse(w http.ResponseWriter) error   
 func (o respuesta) VisitListarPagosAProveedoresResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
-func (o respuesta) VisitPagarAProveedorResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitPagarAProveedorResponse(w http.ResponseWriter) error    { return o.escribir(w) }
+func (o respuesta) VisitSimularRetencionesResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitRenglonesDevolviblesResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
 func (o respuesta) VisitAnularPagoAProveedorResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -452,6 +464,30 @@ func (a *API) MarcarOrdenEnviada(ctx context.Context, r comprasapi.MarcarOrdenEn
 	return hecho(m), nil
 }
 
+func (a *API) CerrarOrdenConFaltante(ctx context.Context, r comprasapi.CerrarOrdenConFaltanteRequestObject) (comprasapi.CerrarOrdenConFaltanteResponseObject, error) {
+	ses, err := compras(ctx)
+	if err != nil {
+		return nil, err
+	}
+	m, err := a.s.CerrarConFaltante(ctx, ses, r.Id, r.Body.Motivo)
+	if err != nil {
+		return nil, err
+	}
+	return hecho(m), nil
+}
+
+func (a *API) CambiarFechaDeOrden(ctx context.Context, r comprasapi.CambiarFechaDeOrdenRequestObject) (comprasapi.CambiarFechaDeOrdenResponseObject, error) {
+	ses, err := compras(ctx)
+	if err != nil {
+		return nil, err
+	}
+	m, err := a.s.CambiarFechaPrometida(ctx, ses, r.Id, r.Body.FechaPrometida)
+	if err != nil {
+		return nil, err
+	}
+	return hecho(m), nil
+}
+
 func (a *API) AnularOrdenDeCompra(ctx context.Context, r comprasapi.AnularOrdenDeCompraRequestObject) (comprasapi.AnularOrdenDeCompraResponseObject, error) {
 	ses, err := compras(ctx)
 	if err != nil {
@@ -503,10 +539,10 @@ func (a *API) BuscarMercaderia(ctx context.Context, r comprasapi.BuscarMercaderi
 		return nil, err
 	}
 	if r.Params.Ids != nil {
-		v, err := a.s.VariantesParaPedir(ctx, strings.Split(*r.Params.Ids, ","))
+		v, err := a.s.VariantesParaPedir(ctx, strings.Split(*r.Params.Ids, ","), deTexto(r.Params.Proveedor))
 		return ok(v), err
 	}
-	v, err := a.s.BuscarParaRecibir(ctx, deTexto(r.Params.Texto))
+	v, err := a.s.BuscarParaRecibir(ctx, deTexto(r.Params.Texto), deTexto(r.Params.Proveedor))
 	return ok(v), err
 }
 
@@ -737,6 +773,26 @@ func (a *API) OrdenDePagoPdf(ctx context.Context, r comprasapi.OrdenDePagoPdfReq
 
 // AnularPagoAProveedor es solo del admin (con nombre, no por pantalla):
 // deshace plata ya pagada y certificados ya entregados.
+func (a *API) RenglonesDevolvibles(ctx context.Context, r comprasapi.RenglonesDevolviblesRequestObject) (comprasapi.RenglonesDevolviblesResponseObject, error) {
+	if _, err := compras(ctx); err != nil {
+		return nil, err
+	}
+	v, err := a.s.RenglonesDevolvibles(ctx, r.Params.Proveedor)
+	return ok(v), err
+}
+
+func (a *API) SimularRetenciones(ctx context.Context, r comprasapi.SimularRetencionesRequestObject) (comprasapi.SimularRetencionesResponseObject, error) {
+	if _, err := compras(ctx); err != nil {
+		return nil, err
+	}
+	pedidas := make([]RetencionPedida, len(r.Body.Retenciones))
+	for i, x := range r.Body.Retenciones {
+		pedidas[i] = RetencionPedida{RegimenID: x.RegimenId, Base: x.Base}
+	}
+	v, err := a.s.SimularRetenciones(ctx, r.Body.SupplierId, r.Body.Fecha, pedidas)
+	return ok(v), err
+}
+
 func (a *API) AnularPagoAProveedor(ctx context.Context, r comprasapi.AnularPagoAProveedorRequestObject) (comprasapi.AnularPagoAProveedorResponseObject, error) {
 	ses, err := auth.Exigir(ctx, sqlc.StaffRoleAdmin)
 	if err != nil {
@@ -756,8 +812,22 @@ func (a *API) RetencionesPracticadasCsv(ctx context.Context, r comprasapi.Retenc
 	if _, err := compras(ctx); err != nil {
 		return nil, err
 	}
-	p := LeerPeriodoMensual(deTexto(r.Params.Periodo), time.Now())
-	filas, err := a.s.RetencionesDelPeriodo(ctx, p.Desde, p.Hasta)
+	// El mes y las fechas, en hora argentina: un pago del 26 a las 22 salía
+	// fechado el 27 y uno del 30 a la noche caía en el mes siguiente
+	// (M2S2-012, M2S3-001, M2S3-004).
+	p := LeerPeriodoMensual(deTexto(r.Params.Periodo), time.Now().In(fiscal.Argentina))
+	desde, hasta := MesArgentino(p)
+	if r.Params.Formato != nil && *r.Params.Formato == comprasapi.Sicore {
+		if !reglas.Es(ctx, a.s.pool, reglas.ExportarSicore, "si") {
+			return nil, fallo("El TXT de SICORE está apagado en Reglas del negocio.")
+		}
+		filas, err := a.s.RetencionesParaSicore(ctx, desde, hasta)
+		if err != nil {
+			return nil, err
+		}
+		return respuesta{csv: TxtSicore(filas), nombre: "retenciones-sicore-" + p.Clave + ".txt"}, nil
+	}
+	filas, err := a.s.RetencionesDelPeriodo(ctx, desde, hasta.Add(-time.Microsecond))
 	if err != nil {
 		return nil, err
 	}

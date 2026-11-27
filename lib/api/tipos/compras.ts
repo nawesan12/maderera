@@ -302,6 +302,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/compras/ordenes/{id}/cerrar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description La orden de la que llegó una parte y no va a llegar el resto queda completa, con lo que faltó a la vista. */
+        post: operations["CerrarOrdenConFaltante"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/compras/ordenes/{id}/fecha": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description La fecha prometida, mientras la orden no llegó entera. */
+        post: operations["CambiarFechaDeOrden"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/compras/ordenes/{id}/recibir": {
         parameters: {
             query?: never;
@@ -616,6 +654,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/compras/devolucion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Lo recibido del proveedor que todavía se le puede devolver con una nota de crédito. */
+        get: operations["RenglonesDevolvibles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/compras/pagos/simular": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Lo que retendría un pago, con la cuenta del certificado, sin anotar nada. */
+        post: operations["SimularRetenciones"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/compras/pagos/{id}/anular": {
         parameters: {
             query?: never;
@@ -909,6 +981,10 @@ export interface components {
                 goodsReceiptId: string | null;
                 /** @description la factura que cubrió ese remito */
                 facturaDelRemito: string | null;
+                /** @description el cheque que le dimos y rebotó */
+                chequeId?: string | null;
+                /** @description la factura a la que se aplicó un ajuste */
+                aplicaA?: string | null;
             }[];
             /** @description los gastos pagados en el acto a este proveedor */
             gastos: {
@@ -950,6 +1026,12 @@ export interface components {
                 nuestro: string | null;
                 /** Format: double */
                 precioActual: number | null;
+                /** Format: double */
+                costoNeto: number;
+                /** Format: double */
+                costoAnterior: number | null;
+                /** @description sube, baja, igual, nuevo, sin_sugerido o vacío (sin aparear) */
+                cambio: string;
             }[];
             problemas: {
                 fila: number;
@@ -957,6 +1039,7 @@ export interface components {
             }[];
             apareadas: number;
             sinAparear: number;
+            sinCambios?: number;
             columnas: string[];
             error?: string;
         };
@@ -977,6 +1060,11 @@ export interface components {
             pendientes: number;
             /** Format: double */
             porLlegar: number;
+            /**
+             * Format: double
+             * @description el neto de lo que ya llegó
+             */
+            recibido?: number;
         };
         Orden: {
             id: string;
@@ -1008,9 +1096,30 @@ export interface components {
                 costoUnitario: string;
                 alicuotaIva: string;
                 orden: number;
+                /** @description el costo promedio con que llegó (de las recepciones confirmadas) */
+                costoRecibido?: string | null;
+            }[];
+            recepciones?: {
+                id: string;
+                numeroRemito: string | null;
+                /** Format: date-time */
+                fecha: string;
+                estado: string;
             }[];
         };
         RecepcionListada: {
+            /** @description lo que de su orden no llegó (solo de las confirmadas sin factura) */
+            faltantes?: {
+                descripcion: string;
+                /** Format: double */
+                cantidad: number;
+                unidad: string | null;
+            }[];
+            /**
+             * Format: double
+             * @description el neto de lo que no llegó
+             */
+            faltanteNeto?: number;
             id: string;
             numeroRemito: string | null;
             /** Format: date-time */
@@ -1055,7 +1164,14 @@ export interface components {
                 costoAnterior: string | null;
                 costoResultante: string | null;
                 orden: number;
+                unidad?: string | null;
+                /** @description lo pedido en el renglón de la orden */
+                pedido?: string | null;
+                /** @description lo que ya llegó de ese renglón de la orden */
+                yaRecibido?: string | null;
             }[];
+            purchaseOrderId?: string | null;
+            ordenNumero?: string | null;
         };
         RenglonLibro: {
             id: string;
@@ -1233,6 +1349,13 @@ export interface components {
                 /** Format: double */
                 alicuotaIva: number;
             }[];
+            /**
+             * Format: double
+             * @description el de las recepciones que cubre
+             */
+            flete?: number;
+            /** @description los renglones son lo que devolvió la nota de crédito */
+            devolucion?: boolean;
         };
         FichaDePago: {
             id: string;
@@ -1320,6 +1443,8 @@ export interface components {
             retenidoAntes: string | null;
             /** Format: date-time */
             anuladaAt: string | null;
+            /** @description los que cancela el pago («Factura A 0003-00008811») */
+            comprobantes?: string;
         };
         Regimen: {
             id: string;
@@ -1853,6 +1978,43 @@ export interface operations {
             422: components["responses"]["Problema"];
         };
     };
+    CerrarOrdenConFaltante: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Motivo"];
+        responses: {
+            200: components["responses"]["Hecho"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    CambiarFechaDeOrden: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description aaaa-mm-dd; vacía la saca */
+                    fechaPrometida: string;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Hecho"];
+            422: components["responses"]["Problema"];
+        };
+    };
     RecibirDeLaOrden: {
         parameters: {
             query?: never;
@@ -1908,6 +2070,8 @@ export interface operations {
                 texto?: string;
                 /** @description ids separados por coma (hasta 40) */
                 ids?: string;
+                /** @description a quién se le compra (el costo sale de su lista si la tiene) */
+                proveedor?: string;
             };
             header?: never;
             path?: never;
@@ -1985,6 +2149,13 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
+                        /** @description lo que falta de una orden de la que llegó una parte, en unidades */
+                        faltantes?: {
+                            descripcion: string;
+                            /** Format: double */
+                            cantidad: number;
+                            unidad: string | null;
+                        }[];
                         id: string;
                         numero: string;
                         estado: string;
@@ -2377,6 +2548,92 @@ export interface operations {
             404: components["responses"]["Problema"];
         };
     };
+    RenglonesDevolvibles: {
+        parameters: {
+            query: {
+                proveedor: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los renglones de sus recepciones confirmadas de los últimos 120 días */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        remito: string | null;
+                        /** Format: date-time */
+                        fecha: string;
+                        descripcion: string;
+                        unidad: string | null;
+                        /** Format: double */
+                        recibido: number;
+                        /** Format: double */
+                        devuelto: number;
+                        /** Format: double */
+                        costoUnitario: number;
+                    }[];
+                };
+            };
+        };
+    };
+    SimularRetenciones: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    supplierId: string;
+                    /** @description aaaa-mm-dd; si falta */
+                    fecha?: string;
+                    retenciones: {
+                        regimenId: string;
+                        /** Format: double */
+                        base: number;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description Una por régimen pedido */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        regimenId: string;
+                        /** Format: double */
+                        base: number;
+                        /** Format: double */
+                        acumulado: number;
+                        /** Format: double */
+                        minimo: number;
+                        /** Format: double */
+                        imponible: number;
+                        /** Format: double */
+                        alicuota: number;
+                        /** Format: double */
+                        retenidoAntes: number;
+                        /** Format: double */
+                        retencion: number;
+                        motivo: string | null;
+                    }[];
+                };
+            };
+            422: components["responses"]["Problema"];
+        };
+    };
     AnularPagoAProveedor: {
         parameters: {
             query?: never;
@@ -2397,6 +2654,8 @@ export interface operations {
             query?: {
                 /** @description aaaa-mm (si falta */
                 periodo?: string;
+                /** @description csv (de siempre) o sicore (el TXT de importación; con la regla exportar_sicore) */
+                formato?: "csv" | "sicore";
             };
             header?: never;
             path?: never;
@@ -2404,7 +2663,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Las retenciones practicadas del mes, en CSV */
+            /** @description Las retenciones practicadas del mes, en CSV o en el TXT de SICORE */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2413,6 +2672,7 @@ export interface operations {
                     "application/octet-stream": string;
                 };
             };
+            422: components["responses"]["Problema"];
         };
     };
     CertificadoDeRetencion: {

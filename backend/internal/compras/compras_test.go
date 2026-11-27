@@ -313,6 +313,8 @@ func TestRecepcionesSimultaneasNoPierdenLaMezcla(t *testing.T) {
 	adm := e.staff(t, "admin@prueba.test", "admin")
 	ctx := context.Background()
 	_, _ = e.pool.Exec(ctx, `insert into variant_costs (variant_id, cantidad_base, costo_promedio) values ($1, 10, 100)`, e.placa)
+	// El promedio se pondera contra el stock (M3S2-007): las 10 a 100 están en el galpón.
+	_, _ = e.pool.Exec(ctx, `insert into inventory (variant_id, branch_id, qty) values ($1, $2, 10)`, e.placa, e.central)
 	crear := func(sucursal string, costo float64) string {
 		_, b := pedir(t, adm, "POST", e.u+"recepciones", map[string]any{"supplierId": e.proveedor, "branchId": sucursal,
 			"lineas": []any{map[string]any{"variantId": e.placa, "cantidad": 10, "costoUnitario": costo, "alicuotaIva": 21}}})
@@ -423,7 +425,7 @@ func TestPagoConRetencionesYCheques(t *testing.T) {
 		t.Errorf("acumulado: %s", b)
 	}
 	numero := fmt.Sprintf("IIB-%d-000001", time.Now().UTC().Year())
-	if _, b := pedir(t, adm, "GET", e.u+"compras/certificados/"+numero, nil); !strings.Contains(b, `"importe":"15.00"`) || !strings.Contains(b, `"pagoReferencia":"TR-9"`) {
+	if _, b := pedir(t, adm, "GET", e.u+"compras/certificados/"+numero, nil); !strings.Contains(b, `"importe":"15.00"`) || !strings.Contains(b, `"pagoMedio":"cheque 12345678 y transferencia"`) || !strings.Contains(b, `"pagoReferencia":"TR-9"`) {
 		t.Errorf("certificado: %s", b)
 	}
 	if c, b := pedir(t, adm, "GET", e.u+"compras/pagos/retenciones-csv", nil); c != 200 || !strings.Contains(b, `"`+numero+`";"IIBB";"IIBB-MI"`) || !strings.Contains(b, "1000,00;1000,00;1000,00;1,500;0,00;15,00") {
@@ -447,7 +449,7 @@ func TestPagoConRetencionesYCheques(t *testing.T) {
 	// Las partes tienen que sumar el neto.
 	c, b = pedir(t, adm, "POST", e.u+"compras/pagos", map[string]any{"supplierId": e.proveedor, "total": 100, "medio": "transferencia", "retenciones": []any{},
 		"partes": []any{map[string]any{"medio": "transferencia", "importe": 90}}})
-	if c != 422 || !strings.Contains(b, "Las partes del pago suman $90.00 y el neto a pagar es $100.00.") {
+	if c != 422 || !strings.Contains(b, "Los medios suman $\u00a090 y salen $\u00a0100: faltan $\u00a010.") {
 		t.Errorf("partes: %d %s", c, b)
 	}
 	// Y el libro IVA compras con la factura.
@@ -596,7 +598,7 @@ func TestListaDeProveedor(t *testing.T) {
 	if c, _ := pedir(t, ven, "POST", e.u+"compras/lista-proveedor/aplicar", aplicar); c != 403 {
 		t.Errorf("el vendedor no aplica precios: %d", c)
 	}
-	if c, b := pedir(t, adm, "POST", e.u+"compras/lista-proveedor/aplicar", aplicar); c != 200 || !strings.Contains(b, "Listo: 1 precios actualizados.") {
+	if c, b := pedir(t, adm, "POST", e.u+"compras/lista-proveedor/aplicar", aplicar); c != 200 || !strings.Contains(b, "Listo: 1 precio actualizado.") {
 		t.Fatalf("aplicar: %d %s", c, b)
 	}
 	if p := e.numero(t, `select price::float8 from price_list_items where variant_id = $1`, e.placa); p != 1573 {

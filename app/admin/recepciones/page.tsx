@@ -116,7 +116,11 @@ function Lista({ recepciones, veCostos }: { recepciones: Recepcion[]; veCostos: 
                   {r.proveedor}
                 </Link>
               </td>
-              <td className="codigo px-5 py-3 text-muted-foreground">{r.numeroRemito ?? "—"}</td>
+              {/* El chip va adentro de la celda: con la clase en la celda
+                  quedaba pegado arriba de la fila (M2S1-167). */}
+              <td className="px-5 py-3 align-middle text-muted-foreground">
+                {r.numeroRemito ? <span className="codigo">{r.numeroRemito}</span> : "—"}
+              </td>
               <td className="px-5 py-3 text-muted-foreground">{r.sucursal ?? "—"}</td>
               <td className="tabular px-5 py-3 text-right">{r.lineas}</td>
               {veCostos && <td className="tabular px-5 py-3 text-right font-semibold">{formatearMonto(r.neto)}</td>}

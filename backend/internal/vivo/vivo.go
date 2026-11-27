@@ -38,6 +38,9 @@ const (
 	// Ventas: se facturó, se cobró con un recibo o un pedido cambió de
 	// estado (00363). Lo escuchan Facturación, Cobranzas y Pedidos.
 	Ventas Canal = "ventas"
+	// Cobros es cualquier cambio en los cobros en línea y por transferencia
+	// (Cobranzas, M3S3-045, 00404).
+	Cobros Canal = "cobros"
 )
 
 // Quién recibe cada canal: los roles de la pantalla que lo muestra
@@ -49,6 +52,7 @@ var rolesDelCanal = map[Canal][]sqlc.StaffRole{
 	Pedidos:  roles.QuienEntra("/admin/pedidos"),
 	Precios:  roles.QuienEntra("/mostrador"),
 	Ventas:   unirRoles(roles.QuienEntra("/admin/pedidos"), roles.QuienEntra("/admin/facturacion"), roles.QuienEntra("/admin/pagos")),
+	Cobros:   roles.QuienEntra("/admin/pagos"),
 }
 
 // unirRoles junta listas de roles sin repetir.

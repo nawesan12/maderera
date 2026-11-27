@@ -143,6 +143,7 @@ function Fila({ regimen }: { regimen: RegimenEditable }) {
         </div>
 
         <Numeros
+          impuesto={regimen.impuesto}
           alicuota={alicuota}
           setAlicuota={setAlicuota}
           noInscripto={noInscripto}
@@ -179,6 +180,8 @@ function Fila({ regimen }: { regimen: RegimenEditable }) {
 
 /** Los cuatro números del régimen, en una grilla de anchos iguales. */
 function Numeros(p: {
+  /** El del régimen ya cargado; en el alta, cualquiera. */
+  impuesto?: string;
   alicuota: string;
   setAlicuota: (v: string) => void;
   noInscripto: string;
@@ -194,10 +197,15 @@ function Numeros(p: {
         <span className="text-sm text-muted-foreground">Alícuota %</span>
         <input value={p.alicuota} onChange={(e) => p.setAlicuota(e.target.value)} inputMode="decimal" className={CAMPO} />
       </label>
-      <label className="block">
-        <span className="text-sm text-muted-foreground">No inscripto %</span>
-        <input value={p.noInscripto} onChange={(e) => p.setNoInscripto(e.target.value)} inputMode="decimal" className={CAMPO} />
-      </label>
+      {/* A IVA solo se le retiene a un responsable inscripto
+          (compras.SujetoARetencion): la alícuota de no inscripto no se usa
+          nunca y confundía (M3S2-027). Se manda igual, sin tocarla. */}
+      {p.impuesto !== "iva" && (
+        <label className="block">
+          <span className="text-sm text-muted-foreground">No inscripto %</span>
+          <input value={p.noInscripto} onChange={(e) => p.setNoInscripto(e.target.value)} inputMode="decimal" className={CAMPO} />
+        </label>
+      )}
       {/* Los dos mínimos, en pesos. El no imponible se descuenta del
           acumulado del mes antes de aplicar la alícuota (solo al inscripto);
           por debajo del de retención no se retiene. Lo escrito se lee como

@@ -14,6 +14,9 @@ type FacturaDeLaOrden struct {
 	Comprobante string
 	Fecha       time.Time
 	Aplicado    float64
+	// Instante es que Fecha es un momento (un cheque rechazado, un ajuste) y
+	// no el día de una factura.
+	Instante bool
 }
 
 // RetencionDeLaOrden es un certificado que salió con el pago.
@@ -116,7 +119,13 @@ func OrdenDePago(d DatosOrdenDePago) ([]byte, error) {
 	if len(d.Facturas) > 0 {
 		seccion("Facturas que se cancelan")
 		for _, f := range d.Facturas {
-			renglon(f.Comprobante, "del "+FechaLocal(f.Fecha), f.Aplicado)
+			// La emisión de una factura es un día guardado como medianoche
+			// UTC: en hora argentina salía un día antes (M2S3-012).
+			dia := FechaDelDia(f.Fecha)
+			if f.Instante {
+				dia = FechaLocal(f.Fecha)
+			}
+			renglon(f.Comprobante, "del "+dia, f.Aplicado)
 		}
 		y -= Mm(4)
 	}

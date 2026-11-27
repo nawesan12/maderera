@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
+import { Confirmar } from "@/components/admin/confirmar";
 import {
   ArrowRightLeft,
   Banknote,
@@ -71,6 +72,11 @@ export function CondicionesDelProveedor({
   diasPago: number;
 }) {
   const [borrando, empezarBorrado] = useTransition();
+  // El tacho pide confirmar: pegado a la condición, en el teléfono se tocaba
+  // sin querer y la condición pactada desaparecía (M2S2-082, M3S4-022).
+  const [aBorrar, setABorrar] = useState<CondicionUI | null>(null);
+  const describir = (c: CondicionUI) =>
+    `${MODALIDADES[c.modalidad] ?? c.modalidad} ${c.plazoDias === 0 ? "contado" : `a ${c.plazoDias} días`}`;
 
   return (
     <Hoja>
@@ -101,13 +107,9 @@ export function CondicionesDelProveedor({
                 <button
                   type="button"
                   disabled={borrando}
-                  onClick={() =>
-                    empezarBorrado(async () => {
-                      await borrarCondicion(c.id, supplierId);
-                    })
-                  }
-                  aria-label="Borrar esta condición"
-                  className="h-9 w-9 rounded-lg border text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                  onClick={() => setABorrar(c)}
+                  aria-label={`Borrar la condición ${describir(c)}`}
+                  className="h-11 w-11 rounded-lg text-muted-foreground transition-colors hover:bg-hundida hover:text-saldo-debe disabled:opacity-50"
                 >
                   <Trash2 className="mx-auto h-4 w-4" />
                 </button>
@@ -115,6 +117,22 @@ export function CondicionesDelProveedor({
             ))}
           </ul>
         )}
+        <Confirmar
+          abierto={aBorrar !== null}
+          alCerrar={() => setABorrar(null)}
+          titulo={aBorrar ? `Borrar «${describir(aBorrar)}»` : ""}
+          detalle="La condición deja de figurar en la ficha."
+          confirmar="Borrar"
+          cancelar="Volver"
+          peligro
+          pendiente={borrando}
+          alConfirmar={() =>
+            empezarBorrado(async () => {
+              if (aBorrar) await borrarCondicion(aBorrar.id, supplierId);
+              setABorrar(null);
+            })
+          }
+        />
 
         <AltaDeCondicion supplierId={supplierId} diasPago={diasPago} />
       </Seccion>
@@ -132,11 +150,14 @@ export function CondicionesDelProveedor({
  * ficha. Arranca en el plazo de la ficha.
  */
 function AltaDeCondicion({ supplierId, diasPago }: { supplierId: string; diasPago: number }) {
-  const [estado, guardar, guardando] = useActionState(
-    guardarCondicion,
-    inicial,
-  );
   const [abierta, setAbierta] = useState(false);
+  // Agregada, el formulario se cierra y vuelve «Sumar una condición»
+  // (M2S2-082): quedaba abierto y el botón desaparecía.
+  const [estado, guardar, guardando] = useActionState(async (previo: EstadoCondicion, datos: FormData) => {
+    const r = await guardarCondicion(previo, datos);
+    if (r.ok) setAbierta(false);
+    return r;
+  }, inicial);
 
   if (!abierta) {
     return (
@@ -207,6 +228,13 @@ function AltaDeCondicion({ supplierId, diasPago }: { supplierId: string; diasPag
         >
           {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
           Agregar
+        </button>
+        <button
+          type="button"
+          onClick={() => setAbierta(false)}
+          className="tarjeta-hundida inline-flex h-11 items-center rounded-lg px-4 text-base font-medium"
+        >
+          Volver
         </button>
 
         {estado.error && (

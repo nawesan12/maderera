@@ -100,7 +100,7 @@ export function AnularConMotivo({
               onClick={() => setAbierto(false)}
               className="tarjeta-hundida h-11 rounded-lg px-4 text-base font-medium"
             >
-              Mejor no
+              Volver
             </button>
             <button
               type="button"

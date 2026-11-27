@@ -264,11 +264,16 @@ func (s *Servicio) ChequeRechazado(ctx context.Context, id string, porElBanco bo
 			paraWa = "lo rechazó el banco"
 		}
 	}
-	s.wa.AvisarPorWhatsapp(ctx, whatsapp.OpcionesAviso{
-		Evento: "cheque_rechazado", Telefono: telefono, Nombre: &nombre,
-		Valores: map[string]string{"cheque": cheque, "importe": formato.Importe(importe), "motivo": paraWa},
-		Entidad: &whatsapp.Entidad{Tipo: "cheque", ID: id},
-	})
+	// La plantilla de WhatsApp de este evento dice que el importe volvió a
+	// la cuenta: de un cheque que no se aceptó es falso (M2S4-017). Ese va
+	// solo por correo.
+	if porElBanco {
+		s.wa.AvisarPorWhatsapp(ctx, whatsapp.OpcionesAviso{
+			Evento: "cheque_rechazado", Telefono: telefono, Nombre: &nombre,
+			Valores: map[string]string{"cheque": cheque, "importe": formato.Importe(importe), "motivo": paraWa},
+			Entidad: &whatsapp.Entidad{Tipo: "cheque", ID: id},
+		})
+	}
 	if correo == nil || *correo == "" {
 		return nil
 	}
@@ -278,7 +283,8 @@ func (s *Servicio) ChequeRechazado(ctx context.Context, id string, porElBanco bo
 	}
 	s.correo.Despachar(ctx, avisos.Despacho{
 		Evento: "cheque_rechazado", Para: *correo, EntidadTipo: "cheque", EntidadID: id,
-		Correo: avisos.ChequeRechazado(s.sitio, primerNombre(nombre), cheque, importe, sinRecortar, porElBanco),
+		Correo:       avisos.ChequeRechazado(s.sitio, primerNombre(nombre), cheque, importe, sinRecortar, porElBanco),
+		AsuntoPropio: !porElBanco,
 	})
 	return nil
 }

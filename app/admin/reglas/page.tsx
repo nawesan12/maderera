@@ -243,6 +243,22 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
     titulo: "Compras",
     reglas: [
       {
+        clave: "base_retencion_iva",
+        pregunta: "La retención de IVA se calcula sobre…",
+        opciones: [
+          { valor: "neto", texto: "El neto, como Ganancias" },
+          { valor: "total", texto: "El total con IVA" },
+        ],
+      },
+      {
+        clave: "exportar_sicore",
+        pregunta: "Las retenciones del mes también en TXT para SICORE",
+        opciones: [
+          { valor: "no", texto: "No, solo el CSV" },
+          { valor: "si", texto: "Sí" },
+        ],
+      },
+      {
         clave: "anular_compra_con_pagos",
         pregunta: "Al anular una factura de compra que ya se pagó…",
         opciones: [

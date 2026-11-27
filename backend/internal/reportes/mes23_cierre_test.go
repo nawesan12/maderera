@@ -134,7 +134,7 @@ func TestProveedoresContraElMayor(t *testing.T) {
 	e := armar(t)
 	adm := e.staff(t, "admin@prueba.test", "admin")
 	prov := e.id(t, `insert into suppliers (nombre) values ('Tableros Costa') returning id`)
-	e.exec(t, `insert into supplier_movements (supplier_id, tipo, monto, detalle, created_at) values ($1, 'ajuste', 85000, 'Saldo inicial migrado del sistema anterior', '2026-10-01T15:00:00Z')`, prov)
+	e.exec(t, `insert into supplier_movements (supplier_id, tipo, monto, detalle, referencia, created_at) values ($1, 'ajuste', 85000, 'Saldo inicial migrado del sistema anterior', 'SALDO-INICIAL-PROV', '2026-10-01T15:00:00Z')`, prov)
 	a := DelCircuito(e.asientosDe(t, "2026-10"), "")
 	if x := buscarAsiento(a, "Saldo inicial migrado del sistema anterior · Tableros Costa"); x == nil || cuenta([]Asiento{*x}, Cuentas.Proveedores) != -85000 {
 		t.Errorf("el saldo inicial: %+v", x)

@@ -27,6 +27,8 @@ export const OPCIONES_DE_REGLAS = {
   cae_en_compras: ["opcional", "exigido"],
   deuda_sin_comprobante: ["circuito_b", "saldo_inicial"],
   entregar_sin_cobrar: ["deposito", "fuera_de_la_cuenta"],
+  exportar_sicore: ["no", "si"],
+  base_retencion_iva: ["neto", "total"],
 } as const;
 
 

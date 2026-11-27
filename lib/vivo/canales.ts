@@ -4,7 +4,7 @@
  * Sin `server-only`: lo importan también los componentes que escuchan, para
  * nombrar los canales con el mismo tipo.
  */
-export const CANALES = ["whatsapp", "taller", "pedidos", "precios", "ventas"] as const;
+export const CANALES = ["whatsapp", "taller", "pedidos", "precios", "ventas", "cobros"] as const;
 export type Canal = (typeof CANALES)[number];
 
 /**
@@ -21,6 +21,9 @@ export const PANTALLA_DEL_CANAL: Record<Canal, string> = {
   // Facturación, Cobranzas y Pedidos. Go deja entrar a quien abre cualquiera
   // de las tres.
   ventas: "/admin/pedidos",
+  // Los cobros en línea y por transferencia: Cobranzas se refresca sola
+  // (M3S3-045).
+  cobros: "/admin/pagos",
 };
 
 export interface EventoEnVivo {

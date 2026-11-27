@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { startTransition, useActionState, useState } from "react";
 import { ChevronDown, Loader2, Plus } from "lucide-react";
 import { importeDelCampo, importeIlegible, importeParaElCampo } from "@/lib/formato";
 import { CampoImporte } from "@/components/admin/campo-importe";
@@ -290,7 +290,19 @@ function Alta() {
   const a = alicuotaDelCampo(alicuota);
   const ni = alicuotaDelCampo(noInscripto);
   return (
-    <form action={guardar} className="space-y-3">
+    // onSubmit y no action: al volver de la acción React resetea el
+    // formulario, y el select controlado quedaba en la primera opción
+    // (Ganancias) con el estado en otra; el siguiente envío mandaba
+    // Ganancias. noValidate: el vacío lo contesta el servidor con su mensaje.
+    <form
+      noValidate
+      onSubmit={(e) => {
+        e.preventDefault();
+        const fd = new FormData(e.currentTarget);
+        startTransition(() => guardar(fd));
+      }}
+      className="space-y-3"
+    >
       <input type="hidden" name="activo" value="on" />
       <input type="hidden" name="alicuota" value={String(a)} />
       <input type="hidden" name="alicuotaNoInscripto" value={String(ni)} />

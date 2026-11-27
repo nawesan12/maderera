@@ -356,11 +356,19 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 			asientos = append(asientos, AsientosDeRecibo(ReciboAAsentar{Fecha: r.emitido, Numero: r.numero, Cliente: r.cliente,
 				Partes: r.partes, Reparto: &rep})...)
 		}
-		// La anulación, con el mismo reparto al revés.
+		// La anulación, con el mismo reparto al revés (con lo que pasó del B al
+		// archivo del estudio al facturarse su pedido, desde ahí).
 		if r.anulado != nil && entre(*r.anulado, idesde, ihasta) {
+			anula := ConPase(rep, reparto.Pasado[r.id])
 			asientos = append(asientos, AsientosDeRecibo(ReciboAAsentar{Fecha: *r.anulado, Numero: r.numero, Cliente: r.cliente,
-				Partes: r.partes, Anulacion: true, Reparto: &rep})...)
+				Partes: r.partes, Anulacion: true, Reparto: &anula})...)
 		}
+	}
+
+	// Lo que los recibos habían mandado al B y pasó al estudio porque su
+	// pedido se facturó (cobros.Pase).
+	if err := s.asientosDePases(ctx, idesde, ihasta, reparto, &asientos); err != nil {
+		return nil, err
 	}
 
 	// 3. El tramo de un reintegro parcial de un pago con recibo: solo el que
@@ -459,7 +467,10 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 		           THEN coalesce(o.cobrada_at, o.created_at) END, p.conciliado_at, p.created_at), p.created_at)),
 		       -- Cuándo llegó el CAE de esa factura (arca_log), como el reparto.
 		       coalesce((SELECT max(l.created_at) FROM arca_log l WHERE l.invoice_id = f.id AND l.exito
-		                   AND l.operacion IN ('FECAESolicitar', 'FECompConsultar')), f.fecha_emision)
+		                   AND l.operacion IN ('FECAESolicitar', 'FECompConsultar')), f.fecha_emision),
+		       -- Cuándo se emitió la primera factura del pedido, con CAE o sin él.
+		       (SELECT least(i.created_at, i.fecha_emision) FROM invoices i WHERE i.order_id = p.order_id AND i.tipo::text LIKE 'factura%'
+		         AND i.estado <> 'borrador' AND i.cae_ambiente IS DISTINCT FROM 'homologacion' ORDER BY i.created_at, i.id LIMIT 1)
 		FROM payments p
 		LEFT JOIN orders o ON o.id = p.order_id
 		LEFT JOIN customers c ON c.id = p.customer_id
@@ -490,7 +501,7 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 	for rs.Next() {
 		var id, tipo, medio, estado, cliente string
 		var facturadaAlCobrar bool
-		var caeAt *time.Time
+		var caeAt, emitida *time.Time
 		var monto jsmath.Num
 		var comision float64
 		var actualizado, cobrado time.Time
@@ -505,21 +516,31 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 			Devolucion bool `json:"devolucion"`
 		}
 		if err := rs.Scan(&id, &tipo, &medio, &monto, &comision, &estado, &actualizado, &cobrado, &factura, &tipoFactura, &pv, &nro, &pedido,
-			&cliente, &tramos, &facturadaAlCobrar, &caeAt); err != nil {
+			&cliente, &tramos, &facturadaAlCobrar, &caeAt, &emitida); err != nil {
 			rs.Close()
 			return nil, err
 		}
 		// El cobro de un pedido que no tenía factura con CAE el día que se
 		// cobró (H160): contra qué va hasta que la factura salga, según las
-		// reglas. Con la de arranque del CAE, la venta facturada espera su
-		// CAE sin asiento (y después va por el camino de siempre).
+		// reglas. La venta facturada que espera el CAE va al archivo del
+		// estudio contra Anticipos de clientes (o la transitoria, con esa
+		// regla) y se imputa a Deudores cuando llega el CAE: la plata entra a
+		// la Caja o al Banco el día que entró (mes simulado, M2S1-007). Antes
+		// no tenía asiento hasta el CAE y el depósito de la caja sí: la Caja
+		// del estudio terminaba el mes en −$ 3,8 millones. La regla
+		// «asiento_sin_cae» decide solo contra qué cuenta espera.
 		if tipo == "pedido" {
 			contra, circuito := "", ""
 			imputacion := factura
 			caeDespues := factura == nil || caeAt == nil || caeAt.After(cobrado)
+			espera := Cuentas.AnticiposDeClientes
+			if sinCae == "transitoria" {
+				espera = Cuentas.CobrosAImputar
+			}
+			var pase *time.Time
 			switch {
-			case facturadaAlCobrar && sinCae == "transitoria" && caeDespues:
-				contra = Cuentas.CobrosAImputar
+			case facturadaAlCobrar && caeDespues:
+				contra = espera
 				if factura != nil {
 					f := mayorFecha(cobrado, factura)
 					imputacion = &f
@@ -529,6 +550,9 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 				contra, circuito = Cuentas.VentasSinFactura, CircuitoNegro
 				if antes == "anticipos" {
 					contra, circuito = Cuentas.AnticiposDeClientes, ""
+				}
+				if circuito == CircuitoNegro && emitida != nil && emitida.After(cobrado) {
+					pase = emitida
 				}
 			}
 			if contra == "" && factura == nil {
@@ -543,7 +567,8 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 					deLaFactura = NombreComprobante(*tipoFactura) + " " + NumeroFormateado(*pv, *nro) + " (pedido " + deref(pedido) + ")"
 				}
 				c := CobroAntesDeLaFactura{CobroAAsentar: CobroAAsentar{Fecha: cobrado, Comprobante: "del pedido " + deref(pedido), Cliente: cliente,
-					Medio: medio, Importe: monto.F(), Comision: comision}, Contra: contra, Circuito: circuito, Factura: imputacion, DeLaFactura: deLaFactura}
+					Medio: medio, Importe: monto.F(), Comision: comision}, Contra: contra, Circuito: circuito, Factura: imputacion, DeLaFactura: deLaFactura,
+					Pase: pase, ContraDelPase: espera}
 				devuelto := 0.0
 				for _, t := range tramos {
 					devuelto = float64(devuelto + t.Importe)
@@ -614,4 +639,52 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 		asientos[i].Instante = true
 	}
 	return asientos, nil
+}
+
+// asientosDePases son los pases del período (cobros.Pase), con el número
+// del recibo y el nombre de la factura.
+func (s *Servicio) asientosDePases(ctx context.Context, idesde, ihasta time.Time, reparto cobros.ResultadoDelReparto, out *[]Asiento) error {
+	var del []cobros.Pase
+	for _, p := range reparto.Pases {
+		if entre(p.Fecha, idesde, ihasta) {
+			del = append(del, p)
+		}
+	}
+	if len(del) == 0 {
+		return nil
+	}
+	recibos, facturas := []string{}, []string{}
+	for _, p := range del {
+		recibos = append(recibos, p.Recibo)
+		if p.Factura != "" {
+			facturas = append(facturas, p.Factura)
+		}
+	}
+	nombres := map[string][2]string{}
+	rs, err := s.lectura.Query(ctx, `SELECT id::text, numero, recibido_de FROM receipts WHERE id = ANY($1::uuid[])`, recibos)
+	if err != nil {
+		return err
+	}
+	var id, a, b string
+	if _, err := pgx.ForEachRow(rs, []any{&id, &a, &b}, func() error { nombres[id] = [2]string{a, b}; return nil }); err != nil {
+		return err
+	}
+	rs, err = s.lectura.Query(ctx, `SELECT id::text, tipo::text, punto_venta, numero FROM invoices WHERE id = ANY($1::uuid[])`, facturas)
+	if err != nil {
+		return err
+	}
+	var tipo string
+	var pv, nro int64
+	deFactura := map[string]string{}
+	if _, err := pgx.ForEachRow(rs, []any{&id, &tipo, &pv, &nro}, func() error {
+		deFactura[id] = NombreComprobante(tipo) + " " + NumeroFormateado(pv, nro)
+		return nil
+	}); err != nil {
+		return err
+	}
+	for _, p := range del {
+		n := nombres[p.Recibo]
+		*out = append(*out, AsientosDePase(p, n[0], n[1], deFactura[p.Factura])...)
+	}
+	return nil
 }

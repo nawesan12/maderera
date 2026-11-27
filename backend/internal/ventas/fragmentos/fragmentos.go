@@ -154,22 +154,24 @@ const facturaSinAcreditar = `fv.estado <> 'borrador' AND fv.cae IS NOT NULL AND 
 // CircuitoDelCheque es, sobre la fila `ch` de cheques (con otro alias si se
 // pasa), el circuito en el que está el valor: «blanco» o «negro».
 //
-// **El cheque de una venta del mostrador no lo guarda, lo calcula.** Nace
-// con el «blanco» que pone cobros.RegistrarChequeRecibido, y una venta B
-// del mostrador no tiene asiento de cobro (la sección 4 de los asientos
-// solo asienta pagos de pedidos con factura con CAE): ese cheque nunca
-// debitó Valores a depositar del estudio. Con el dato guardado, su depósito
-// acreditaba esa cuenta en el estudio, donde nunca entró, y se podía endosar
-// en un pago blanco (la fuga que cierra la regla M8 de compras). Y no se
-// puede fijar al cobrar, porque la factura puede salir después de la venta:
-// el valor guardado quedaría viejo. Por eso es blanco solo si el pedido
-// tiene la misma factura que mira la sección 4 (con CAE y no de prueba).
-// Los demás cheques (los de un recibo, los entregados) llevan el suyo.
+// **El cheque de una venta del mostrador no lo guarda, lo calcula.** Va con
+// el cobro de su venta (la sección 4 de los asientos): es blanco si el pedido
+// tiene una factura emitida, con CAE o esperándolo (el cobro va al archivo
+// del estudio contra Anticipos hasta el CAE, y el que se cobró antes pasa
+// ahí el día de la factura), o si la regla «cobro_antes_de_facturar» manda
+// lo cobrado antes de facturar a Anticipos; si no, es del B. No se puede
+// fijar al cobrar, porque la factura puede salir después de la venta.
+//
+// **El de un recibo va adonde lo mandó el reparto** (circuito_reparto, que
+// fija cobros.FijarReparto): el que el recibo mandó entero al B es del B
+// aunque se haya cobrado «blanco» (mes simulado, M3S3-001). El partido queda
+// con el suyo. Los entregados llevan el suyo.
 func CircuitoDelCheque(ch string) string {
-	return strings.ReplaceAll(`(CASE WHEN ch.order_payment_id IS NULL THEN ch.circuito::text
+	return strings.ReplaceAll(`(CASE WHEN ch.order_payment_id IS NULL THEN coalesce(nullif(ch.circuito_reparto, 'partido'), ch.circuito::text)
 	  WHEN EXISTS (SELECT 1 FROM order_payments cop JOIN invoices cfi ON cfi.order_id = cop.order_id
 	               WHERE cop.id = ch.order_payment_id AND cfi.tipo::text LIKE 'factura%' AND cfi.estado <> 'borrador'
-	                 AND cfi.cae IS NOT NULL AND cfi.cae_ambiente IS DISTINCT FROM 'homologacion')
+	                 AND cfi.cae_ambiente IS DISTINCT FROM 'homologacion')
+	    OR EXISTS (SELECT 1 FROM site_settings crg WHERE crg.clave = 'cobro_antes_de_facturar' AND crg.valor = 'anticipos')
 	  THEN 'blanco' ELSE 'negro' END)`, "ch.", ch+".")
 }
 
@@ -187,8 +189,8 @@ func CircuitoDelCheque(ch string) string {
 // demás cheques (sin order_payment_id) llevan la fecha del evento.
 func FechaDelCheque(ch, at string) string {
 	return strings.NewReplacer("ch.", ch+".", "{AT}", at).Replace(`(CASE WHEN ch.order_payment_id IS NULL THEN {AT}
-	  ELSE greatest({AT}, coalesce((SELECT cfi.fecha_emision FROM order_payments cop JOIN invoices cfi ON cfi.order_id = cop.order_id
+	  ELSE greatest({AT}, coalesce((SELECT least(cfi.created_at, cfi.fecha_emision) FROM order_payments cop JOIN invoices cfi ON cfi.order_id = cop.order_id
 	               WHERE cop.id = ch.order_payment_id AND cfi.tipo::text LIKE 'factura%' AND cfi.estado <> 'borrador'
-	                 AND cfi.cae IS NOT NULL AND cfi.cae_ambiente IS DISTINCT FROM 'homologacion'
-	               ORDER BY (cfi.estado = 'anulada'), cfi.fecha_emision LIMIT 1), {AT})) END)`)
+	                 AND cfi.cae_ambiente IS DISTINCT FROM 'homologacion'
+	               ORDER BY cfi.created_at, cfi.id LIMIT 1), {AT})) END)`)
 }

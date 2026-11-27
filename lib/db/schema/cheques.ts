@@ -90,6 +90,11 @@ export const cheques = pgTable(
      */
     circuito: circuito().notNull().default("blanco"),
     /**
+     * El circuito que le dio el reparto del recibo (migración 00370):
+     * «blanco», «negro» o «partido». Su depósito y su rechazo van ahí.
+     */
+    circuitoReparto: text(),
+    /**
      * El recibo que lo trajo, si fue un cobro.
      *
      * Sin FK a propósito: `receipts` ya apunta a `cheques` por sus partes, y

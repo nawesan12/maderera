@@ -137,7 +137,7 @@ func (s *Servicio) asientosDeDeudores(ctx context.Context, desde, hasta time.Tim
 		return nil, err
 	}
 	asientos = append(asientos, cobros...)
-	cheques, err := s.asientosDeCheques(ctx, idesde, ihasta)
+	cheques, err := s.asientosDeCheques(ctx, idesde, ihasta, reparto)
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +258,7 @@ func (s *Servicio) asientosDelPeriodoCon(ctx context.Context, desde, hasta time.
 		return nil, err
 	}
 
-	cheques, err := s.asientosDeCheques(ctx, idesde, ihasta)
+	cheques, err := s.asientosDeCheques(ctx, idesde, ihasta, reparto)
 	if err != nil {
 		return nil, err
 	}
@@ -415,30 +415,40 @@ func (s *Servicio) asientosDeCaja(ctx context.Context, idesde, ihasta time.Time)
 	return out, nil
 }
 
-// asientosDeCosto son el costo de lo vendido de cada hecho de venta del
-// período (hechosDeVenta: la venta en la fecha de la regla, la devolución y
-// la cancelación en la suya), con el costo congelado de cada renglón (H160).
-// Va con la venta: al archivo del estudio si el pedido ya estaba facturado
-// en el mes del hecho, al B si no. Facturar después no lo mueve, así un mes
-// cerrado no cambia.
+// asientosDeCosto son el costo de lo vendido de cada hecho de venta (H160):
+// la venta en la fecha de la regla, la devolución y la cancelación en la
+// suya, con el costo congelado de cada renglón.
+//
+// **El costo va con la venta.** El del pedido sin factura va al B en la
+// fecha del hecho. El del pedido facturado espera el CAE igual que su venta:
+// en el archivo del estudio el día de la factura con CAE (mes simulado,
+// M2S1-060): con el costo en el mes del hecho y la venta en el del CAE, el
+// estudio veía 29 millones de costo y ninguna venta. Si el pedido del B se
+// factura después, el día del CAE el costo sale del B y entra al estudio.
+// Ninguno cambia un mes ya cerrado: lo que se mueve, se mueve en el mes del
+// CAE.
 func (s *Servicio) asientosDeCosto(ctx context.Context, idesde, ihasta time.Time) ([]Asiento, error) {
 	var out []Asiento
 	rs, err := s.lectura.Query(ctx, `
 		SELECT o.fecha, o.numero, coalesce(nullif(o.contacto_nombre, ''), ''), o.operaciones = 0 AND o.hecho <> o.id,
 		  o.facturado_at IS NOT NULL AND mes_de_instante(o.facturado_at) <= mes_de_instante(o.fecha),
+		  (SELECT min(i.fecha_emision) FROM invoices i WHERE i.order_id = o.id AND i.tipo::text LIKE 'factura%' AND i.estado <> 'borrador'
+		     AND i.cae IS NOT NULL AND i.cae_ambiente IS DISTINCT FROM 'homologacion'),
 		  coalesce(sum(`+costoDelRenglon+`) FILTER (WHERE `+costoConocido+`), 0)::float8
 		FROM `+hechosDeVenta+` o JOIN `+renglonesVendidos+` oi ON oi.hecho = o.hecho
-		WHERE o.fecha >= $1 AND o.fecha <= $2
+		WHERE o.fecha <= $2 AND (o.fecha >= $1 OR o.id IN (SELECT i.order_id FROM invoices i WHERE i.order_id IS NOT NULL
+		  AND i.fecha_emision >= $1 AND i.fecha_emision <= $2 AND i.cae IS NOT NULL AND i.tipo::text LIKE 'factura%'))
 		GROUP BY o.hecho, o.fecha, o.numero, o.contacto_nombre, o.operaciones, o.id, o.facturado_at
 		ORDER BY o.fecha, o.numero`, idesde, ihasta)
 	if err != nil {
 		return nil, err
 	}
 	var fecha time.Time
+	var cae *time.Time
 	var numero, cliente string
 	var vuelta, facturado bool
 	var costo float64
-	if _, err := pgx.ForEachRow(rs, []any{&fecha, &numero, &cliente, &vuelta, &facturado, &costo}, func() error {
+	if _, err := pgx.ForEachRow(rs, []any{&fecha, &numero, &cliente, &vuelta, &facturado, &cae, &costo}, func() error {
 		costo = jsmath.Redondear2(costo)
 		if math.Abs(costo) < toleranciaAsiento {
 			return nil
@@ -450,12 +460,33 @@ func (s *Servicio) asientosDeCosto(ctx context.Context, idesde, ihasta time.Time
 		if cliente != "" {
 			concepto += " · " + cliente
 		}
-		a := AsientoDeCosto(fecha, concepto, costo)
-		a.Instante = true
-		if !facturado {
-			a.Circuito = CircuitoNegro
+		conCae := func() {
+			f := mayorFecha(fecha, cae)
+			if entre(f, idesde, ihasta) {
+				a := AsientoDeCosto(f, concepto, costo)
+				a.Instante = true
+				out = append(out, a)
+			}
 		}
-		out = append(out, a)
+		if facturado {
+			if cae != nil {
+				conCae()
+			}
+			return nil
+		}
+		if entre(fecha, idesde, ihasta) {
+			a := AsientoDeCosto(fecha, concepto, costo)
+			a.Instante, a.Circuito = true, CircuitoNegro
+			out = append(out, a)
+		}
+		if cae != nil {
+			if f := mayorFecha(fecha, cae); entre(f, idesde, ihasta) {
+				a := AsientoDeCosto(f, "pasa al archivo del estudio · "+concepto, -costo)
+				a.Instante, a.Circuito = true, CircuitoNegro
+				out = append(out, a)
+			}
+			conCae()
+		}
 		return nil
 	}); err != nil {
 		return nil, err
@@ -466,7 +497,15 @@ func (s *Servicio) asientosDeCosto(ctx context.Context, idesde, ihasta time.Time
 // asientosDeCheques son los cambios de estado de los cheques del período
 // (cheque_estados, que anota el trigger de la base en cada cambio):
 // AsientoDeCheque decide cuáles mueven cuentas.
-func (s *Servicio) asientosDeCheques(ctx context.Context, idesde, ihasta time.Time) ([]Asiento, error) {
+//
+// **El cheque de un recibo va por el archivo por el que entró** (mes
+// simulado, M2S1-012 y M3S3-001): lo que el reparto del recibo llevó al
+// blanco se deposita, se acredita y rebota en el archivo del estudio, y el
+// resto en el del B (cobros.ResultadoDelReparto.ChequesBlanco). El rechazo
+// del blanco sale de Anticipos de clientes si el recibo había dejado ahí su
+// cobro y todavía no se aplicó (Rechazos), y el del B da vuelta la venta sin
+// factura que había cobrado.
+func (s *Servicio) asientosDeCheques(ctx context.Context, idesde, ihasta time.Time, reparto cobros.ResultadoDelReparto) ([]Asiento, error) {
 	// El período va sobre la fecha corrida (fragmentos.FechaDelCheque), que
 	// nunca es anterior al evento: por eso el evento ya puede filtrar el
 	// final del período adentro, con el índice.
@@ -477,7 +516,7 @@ func (s *Servicio) asientosDeCheques(ctx context.Context, idesde, ihasta time.Ti
 		  c.fecha_pago, (SELECT p.fecha FROM supplier_payment_parts x JOIN supplier_payments p ON p.id = x.payment_id
 		    WHERE x.cheque_id = c.id ORDER BY p.fecha LIMIT 1),
 		  EXISTS (SELECT 1 FROM account_movements m WHERE m.cheque_id = c.id AND m.tipo = 'nota_debito'),
-		  c.order_payment_id IS NOT NULL
+		  c.order_payment_id IS NOT NULL, c.id::text, coalesce(`+cobros.ReciboDelCheque("c")+`, '')
 		FROM cheque_estados e JOIN cheques c ON c.id = e.cheque_id
 		WHERE e.at <= $2 AND e.hacia IN ('acreditado', 'rechazado')) x
 		WHERE x.asentado >= $1 AND x.asentado <= $2 ORDER BY x.asentado`, idesde, ihasta)
@@ -490,11 +529,17 @@ func (s *Servicio) asientosDeCheques(ctx context.Context, idesde, ihasta time.Ti
 		var c ChequeAAsentar
 		var vence time.Time
 		var pagado *time.Time
+		var id, recibo string
 		if err := rs.Scan(&c.Fecha, &c.Numero, &c.Banco, &c.Sentido, &c.Desde, &c.Hacia, &c.Importe, &c.Circuito, &vence, &pagado,
-			&c.ADeudores, &c.DelMostradorEnB); err != nil {
+			&c.ADeudores, &c.DelMostradorEnB, &id, &recibo); err != nil {
 			return nil, err
 		}
 		c.Diferido = c.Sentido == "entregado" && pagado != nil && ChequeDiferido(vence, *pagado)
+		if bl, ok := reparto.ChequesBlanco[id]; ok && recibo != "" && c.Sentido == "recibido" &&
+			(c.Hacia == "acreditado" && c.Desde == "depositado" || c.Hacia == "rechazado" && c.Desde != "entregado") {
+			out = append(out, AsientosDeChequeDeRecibo(c, bl, reparto.Rechazos[id])...)
+			continue
+		}
 		if a, ok := AsientoDeCheque(c); ok {
 			out = append(out, a)
 		}
@@ -954,7 +999,7 @@ func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihas
 	enBanco, cuantos := 0.0, 0
 	for _, id := range orden {
 		if rep, ok := reparto.Recibos[id]; ok {
-			if x := BancarizadoEnB(partes[id], rep); x > toleranciaAsiento {
+			if x := BancarizadoEnB(partes[id], ConPase(rep, reparto.Pasado[id])); x > toleranciaAsiento {
 				enBanco, cuantos = float64(enBanco+x), cuantos+1
 			}
 		}
@@ -1018,6 +1063,9 @@ func (s *Servicio) pendientesDeRecibosEnB(ctx context.Context, idesde, ihasta ti
 	var despues bool
 	if _, err := pgx.ForEachRow(rs, []any{&id, &cliente, &pedido, &despues}, func() error {
 		rep, ok := reparto.Recibos[id]
+		// Lo que pasó al archivo del estudio al facturarse el pedido ya no
+		// está en el B (cobros.Pase).
+		rep = ConPase(rep, reparto.Pasado[id])
 		if !ok || rep.B < 0.005 {
 			return nil
 		}

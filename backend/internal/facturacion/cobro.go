@@ -158,12 +158,13 @@ func cobrarConRecibo(ctx context.Context, tx pgx.Tx, ses *auth.Sesion, factura s
 	if err := tx.SendBatch(ctx, lote).Close(); err != nil {
 		return r, err
 	}
-	// Sin cliente, el reparto entre los circuitos sale de la factura que
-	// cobra: recién ahora el recibo está atado a ella.
-	if cliente == nil {
-		if _, err := cobros.FijarReparto(ctx, tx, r.ReceiptID); err != nil {
-			return r, err
-		}
+	// El reparto entre los circuitos se vuelve a fijar ahora que el recibo
+	// está atado a la factura que cobra: sin cliente, la cuenta sale de ella;
+	// con cliente, lo que cobra de una factura que espera el CAE va a
+	// Anticipos atado a esa factura (cobros.RepartoDeRecibo), y no a cancelar
+	// otra deuda abierta (mes simulado, M2S4-002).
+	if _, err := cobros.FijarReparto(ctx, tx, r.ReceiptID); err != nil {
+		return r, err
 	}
 	// El aviso al cliente sale solo si el cobro se confirma.
 	_, err = cola.Encolar(ctx, sqlc.New(tx), cobros.TrabajoAvisoDeRecibo, map[string]string{"receiptId": r.ReceiptID}, time.Time{})

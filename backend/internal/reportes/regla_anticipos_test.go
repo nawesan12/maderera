@@ -80,13 +80,24 @@ func TestLoSinDestinoVaAlBOAAnticipos(t *testing.T) {
 				if rep.B != 824440 || repCons.B != 13000 || marcado {
 					t.Fatalf("al B: %+v %+v %v", rep, repCons, marcado)
 				}
-				if _, ok := p["b-facturadas-despues"]; !ok {
-					t.Errorf("sin la marca de la venta facturada después: %s", cuerpo)
+				// El cobro del pedido que se facturó al otro día pasa al archivo
+				// del estudio con la factura (mes simulado, M2S1-011): ya no es
+				// una venta del B.
+				if _, ok := p["b-facturadas-despues"]; ok {
+					t.Errorf("la venta facturada después ya pasó al estudio: %s", cuerpo)
 				}
 				if _, ok := p["recibos-partidos"]; !ok {
 					t.Errorf("sin la marca del recibo partido: %s", cuerpo)
 				}
-				if cuenta(b, Cuentas.VentasSinFactura) != -(824440 + 13000) {
+				if x := buscarAsiento(octubre, "Recibo REC-0037 · Factura B 0003-00000071"); x == nil || x.Circuito != "" ||
+					cuenta([]Asiento{*x}, Cuentas.Banco) != 824440 || cuenta([]Asiento{*x}, Cuentas.AnticiposDeClientes) != -824440 {
+					t.Errorf("el pase al estudio: %+v", x)
+				}
+				// Queda solo la seña de Constructora, que espera su CAE.
+				if n := cuenta(DelCircuito(octubre, ""), Cuentas.AnticiposDeClientes); n != -755000 {
+					t.Errorf("el anticipo se aplica a la factura con CAE: %v", n)
+				}
+				if cuenta(b, Cuentas.VentasSinFactura) != -13000 {
 					t.Errorf("ventas sin factura del B: %v", cuenta(b, Cuentas.VentasSinFactura))
 				}
 				return

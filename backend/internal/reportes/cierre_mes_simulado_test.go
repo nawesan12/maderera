@@ -305,15 +305,15 @@ func TestCierreRecibosConParteEnB(t *testing.T) {
 
 	_, cuerpo, _ := pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-10")
 	p := pendientesDe(t, cuerpo)
-	if f, ok := p["b-facturadas-despues"]; !ok || f.Cantidad != 1 || !strings.Contains(f.Detalle, "824.440") || f.Donde != "/admin/clientes/"+paz {
+	// El cobro de Paz pasó al archivo del estudio con la factura (mes
+	// simulado, M2S1-011): ni queda en el B ni se avisa.
+	if _, ok := p["b-facturadas-despues"]; ok {
 		t.Fatalf("cobro en el B de una venta facturada después: %s", cuerpo)
 	}
 	if f, ok := p["recibos-partidos"]; !ok || f.Cantidad != 1 || !strings.Contains(f.Detalle, "13.000") || f.Donde != "/admin/clientes/"+cons {
 		t.Fatalf("recibo partido: %s", cuerpo)
 	}
-	// La transferencia de Paz quedó en el B: «Resolver» lleva a las
-	// cobranzas del mes (H378).
-	if b, ok := p["banco-b"]; !ok || b.Donde != "/admin/pagos" {
-		t.Fatalf("banco en el B: %s", cuerpo)
+	if _, ok := p["banco-b"]; ok {
+		t.Fatalf("la transferencia de Paz ya no está en el B: %s", cuerpo)
 	}
 }

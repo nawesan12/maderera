@@ -66,15 +66,16 @@ func TestListadosDelContador(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// El pago de 300 cancela lo más viejo: quedan 700 de julio (más de 90) y 500 al día.
-	if !strings.Contains(d, "Obra Pérez") || !strings.Contains(d, "500,00") || !strings.Contains(d, "700,00") || !strings.Contains(d, "1200,00") {
+	// Una fila por cliente con todo lo que debe, partida en lo que está en
+	// el mayor de 1.1.03, lo que espera el CAE y el resto, del B (mes
+	// simulado, M2S1-008): Obra Pérez debe la cuenta (9999) y sus dos
+	// facturas con CAE fuera de la cuenta (1000 de julio y 500); en el mayor, 1200
+	// (el recibo de 300 canceló lo más viejo).
+	if !strings.Contains(d, `"Obra Pérez";"20-12345678-9";"";10499,00;0,00;0,00;1000,00;11499,00;140;1200,00;2420,00;7879,00`) {
 		t.Fatalf("deudores:\n%s", d)
 	}
-	if !strings.Contains(d, "Dado de Baja") || !strings.Contains(d, "4321,00") {
+	if !strings.Contains(d, `"Dado de Baja";"";"";4321,00;0,00;0,00;0,00;4321,00;17;4321,00;0,00;0,00`) {
 		t.Fatalf("el dado de baja que debe no está:\n%s", d)
-	}
-	if strings.Contains(d, "9999") || strings.Contains(d, "11199") {
-		t.Fatalf("la deuda del B en el listado del estudio:\n%s", d)
 	}
 	if !strings.Contains(d, "Juan del Pedido") || !strings.Contains(d, "PED-9") || !strings.Contains(d, "777,00") {
 		t.Fatalf("el pedido sin cliente facturado no está:\n%s", d)

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"mjbj/internal/api/reportesapi"
 	"mjbj/internal/auth"
@@ -314,15 +315,28 @@ func (a *API) CerrarElMes(ctx context.Context, r reportesapi.CerrarElMesRequestO
 	if err != nil {
 		return nil, err
 	}
+	// Reabrir un mes cambia lo que el estudio ya tiene: pide por qué (mes
+	// simulado, M2S1-056), y queda en la bitácora.
+	motivo := ""
+	if r.Body.Motivo != nil {
+		motivo = strings.TrimSpace(*r.Body.Motivo)
+	}
+	if !r.Body.Cerrado && motivo == "" {
+		return nil, plataforma.Invalido(map[string]string{"motivo": "Escribí por qué se reabre el mes."})
+	}
 	v, err := a.s.CerrarElMes(ctx, r.Body.Periodo, r.Body.Cerrado, ses.UserID, ses.Nombre)
 	if err != nil {
 		return nil, err
 	}
-	accion := "Reabrió "
-	if r.Body.Cerrado {
-		accion = "Cerró "
+	texto := "Cerró " + plataforma.NombreDelMes(r.Body.Periodo)
+	if !r.Body.Cerrado {
+		texto = "Reabrió " + plataforma.NombreDelMes(r.Body.Periodo) + ": " + motivo
 	}
-	bitacora.Anotar(ctx, sqlc.New(a.s.pool), a.s.log, ses, sqlc.AccionAuditoriaEditar, "cierre", "", accion+"el mes "+r.Body.Periodo, nil)
+	var detalle map[string]any
+	if motivo != "" {
+		detalle = map[string]any{"motivo": motivo}
+	}
+	bitacora.Anotar(ctx, sqlc.New(a.s.pool), a.s.log, ses, sqlc.AccionAuditoriaEditar, "cierre", r.Body.Periodo, texto, detalle)
 	return ok(v), nil
 }
 
@@ -422,3 +436,4 @@ func (a *API) CuentasAPagarCsv(ctx context.Context, _ reportesapi.CuentasAPagarC
 	}
 	return csv("cuentas-a-pagar-"+ahora.Format("2006-01-02")+".csv", v), nil
 }
+

@@ -610,7 +610,11 @@ func (s *Servicio) ResultadoEntre(ctx context.Context, idesde, ihasta, ddesde, d
 	var neto, sinCosto, costo, gastos, envios jsmath.Num
 	sinIva := s.ajuste(ctx, "ganancia_gastos", "con_iva") == "sin_iva"
 	r.ConDescuento = s.ajuste(ctx, "ganancia_descuento", "no") == "si"
-	gasto := "e.importe"
+	// El IVA que da crédito fiscal (la factura A o M del gasto) no es gasto:
+	// se computa en el IVA del mes. Contarlo en los dos restaba el alquiler
+	// con su IVA y el asiento lo llevaba sin él (mes simulado, M2S2-003). Con
+	// «sin_iva», también el IVA de las demás facturas queda afuera.
+	gasto := "CASE WHEN f.total > 0 AND f.tipo::text IN ('factura_a', 'factura_m', 'nota_debito_a') THEN e.importe * (f.total - (f.iva21 + f.iva105 + f.iva27)) / f.total ELSE e.importe END"
 	if sinIva {
 		gasto = "CASE WHEN f.total > 0 THEN e.importe * (f.neto + f.exento) / f.total ELSE e.importe END"
 	}
@@ -628,6 +632,13 @@ func (s *Servicio) ResultadoEntre(ctx context.Context, idesde, ihasta, ddesde, d
 	if err != nil {
 		return r, err
 	}
+	// Lo facturado a mano, sin pedido, también es venta (M2S1-009); un
+	// servicio no tiene costo de mercadería, así que no es «sin costo».
+	m, err := s.facturasManuales(ctx, idesde, ihasta)
+	if err != nil {
+		return r, err
+	}
+	neto = jsmath.Num(float64(float64(neto.F()+m.conCae.Total) + m.sinCae.Total))
 	r.VentasNetas, r.VentasSinCosto = jsmath.Redondear2(neto.F()), jsmath.Redondear2(sinCosto.F())
 	r.Costo, r.Gastos = jsmath.Redondear2(costo.F()), jsmath.Redondear2(gastos.F())
 	r.Envios = jsmath.Redondear2(envios.F())

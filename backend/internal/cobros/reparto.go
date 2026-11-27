@@ -643,6 +643,11 @@ const columnasDelRecibo = `(SELECT coalesce(json_agg(json_build_object('medio', 
                                  AND l.operacion IN ('FECAESolicitar', 'FECompConsultar')), i.fecha_emision) > r.created_at END) END,
     '', '', NULL::timestamptz, 0::float8`
 
+// DeudaSinComprobante: el movimiento `m` de la cuenta de un cliente es deuda
+// (o un crédito) cargada a mano, sin comprobante ni recibo ni cheque: el
+// saldo inicial migrado, un ajuste, una nota de débito suelta.
+const DeudaSinComprobante = `(m.tipo IN ('ajuste', 'nota_debito') AND m.receipt_id IS NULL AND m.cheque_id IS NULL AND m.monto <> 0)`
+
 // ReciboDelCheque es, sobre la fila `c` de cheques, el recibo con el que
 // entró (nulo si entró por el mostrador o se cargó suelto).
 func ReciboDelCheque(c string) string {
@@ -751,6 +756,16 @@ SELECT * FROM (
                       ORDER BY am.created_at LIMIT 1) m
   WHERE c.sentido = 'recibido' AND (` + ReciboDelCheque("c") + ` IS NOT NULL OR ` + fragmentos.CircuitoDelCheque("c") + ` <> 'negro') AND e.hacia = 'rechazado' AND e.desde IN ('cartera', 'depositado', 'entregado')
     AND ` + fragmentos.FechaDelCheque("c", "e.at") + ` <= $1 AND {M}
+  UNION ALL
+  -- La deuda cargada a mano en la cuenta (el saldo del sistema anterior, una
+  -- nota de débito sin comprobante), con la regla «deuda_sin_comprobante» en
+  -- «saldo_inicial»: el cierre la asienta en Deudores del blanco, así que acá
+  -- también, y su cobro la cancela.
+  SELECT 'c:' || m.customer_id::text, m.created_at, 1, 'saldo:' || m.id::text, (-m.monto)::float8, 0, 0, false, NULL, NULL, NULL,
+    '', 0, 0, '', '{}', 0, '', NULL::json, '', NULL::json, '', '', NULL::timestamptz, 0::float8
+  FROM account_movements m
+  WHERE ` + DeudaSinComprobante + ` AND m.created_at <= $1 AND {M}
+    AND EXISTS (SELECT 1 FROM site_settings dsc WHERE dsc.clave = 'deuda_sin_comprobante' AND dsc.valor = 'saldo_inicial')
   UNION ALL
   -- La primera factura de cada pedido, el día que se emite (EventoPase).
   SELECT ` + claveDeFactura + `, least(i.created_at, i.fecha_emision), 7, i.id::text, i.total::float8, 0, 0, false, NULL, NULL, NULL,

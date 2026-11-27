@@ -443,6 +443,13 @@ export interface components {
             detalle: string;
             cantidad: number;
             donde: string;
+            /** @description Los casos del aviso uno por uno, con su importe y a dónde se resuelve cada uno */
+            casos?: {
+                nombre: string;
+                /** Format: double */
+                importe?: number;
+                donde: string;
+            }[];
         };
         CierreTotales: {
             /** Format: double */
@@ -479,6 +486,9 @@ export interface components {
             vendido: components["schemas"]["CierreVendido"];
             compras: components["schemas"]["CierreTotalesConIva"];
             gastos: components["schemas"]["CierreTotales"];
+            gastosB: components["schemas"]["CierreTotales"];
+            /** @description El primer mes con algún movimiento (YYYY-MM) */
+            primerMes: string;
             retencionesPracticadas: components["schemas"]["CierreTotales"];
             retencionesSufridas: components["schemas"]["CierreTotales"];
             percepcionesIibb: components["schemas"]["CierreTotales"];
@@ -1125,6 +1135,8 @@ export interface operations {
                 "application/json": {
                     periodo: string;
                     cerrado: boolean;
+                    /** @description Por qué se reabre; obligatorio para reabrir */
+                    motivo?: string;
                 };
             };
         };

@@ -630,7 +630,7 @@ func (s *Servicio) otrosPendientes(ctx context.Context, ve func(string) bool, ah
 		  CASE WHEN $4 THEN (SELECT count(*)::int FROM purchase_orders WHERE estado IN ('enviada', 'parcial')
 		                     AND fecha_prometida >= $9 AND fecha_prometida < $10) ELSE 0 END,
 		  CASE WHEN $5 THEN (SELECT count(*)::int FROM goods_receipts g WHERE g.estado = 'confirmada'
-		                     AND NOT EXISTS (SELECT 1 FROM purchase_invoices f WHERE f.receipt_id = g.id AND f.anulada_at IS NULL)) ELSE 0 END,
+		                     AND `+RecepcionSinFactura+`) ELSE 0 END,
 		  CASE WHEN $6 THEN (SELECT count(*)::int FROM invoices WHERE estado IN ('emitida', 'rechazada')) ELSE 0 END,
 		  CASE WHEN $7 THEN (SELECT count(*)::int FROM quotes WHERE estado = 'enviado' AND (valido_hasta IS NULL OR valido_hasta >= now())) ELSE 0 END,
 		  CASE WHEN $7 THEN (SELECT count(*)::int FROM quotes q WHERE q.estado = 'aceptado'
@@ -675,3 +675,11 @@ func (s *Servicio) otrosPendientes(ctx context.Context, ve func(string) bool, ah
 	}
 	return o, nil
 }
+
+// RecepcionSinFactura: la recepción `g` no tiene ninguna factura de compra
+// viva que la cubra (purchase_invoice_receipts: una factura puede cubrir
+// varios remitos). La misma regla en el inicio y en el cierre (mes simulado,
+// M3S2-034: el inicio miraba purchase_invoices.receipt_id y contaba 8 donde
+// el cierre contaba 3).
+const RecepcionSinFactura = `NOT EXISTS (SELECT 1 FROM purchase_invoice_receipts x JOIN purchase_invoices f ON f.id = x.purchase_invoice_id
+	WHERE x.goods_receipt_id = g.id AND f.anulada_at IS NULL)`

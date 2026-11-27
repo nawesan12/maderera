@@ -306,7 +306,40 @@ func (s *Servicio) CsvCuentasAPagar(ctx context.Context, ahora time.Time) (strin
 		return "", err
 	}
 	// La diferencia de cada libro con sus facturas, como Debo: lo que se
-	// debe es el libro si es positivo.
+	// debe es el libro si es positivo. Va renglón por renglón (mes simulado,
+	// M2S1-144): cada recepción sin factura con su remito, su orden y su
+	// fecha, para reclamar la factura que falta, y cada ajuste del libro con
+	// su detalle. Lo que no se explica así (notas de crédito sin aplicar,
+	// pagos a cuenta) va en un renglón por proveedor.
+	type renglonDelLibro struct {
+		concepto string
+		fecha    *time.Time
+		monto    float64
+	}
+	detalle := map[string][]renglonDelLibro{}
+	rs, err = s.lectura.Query(ctx, `
+		SELECT m.supplier_id::text, 'Remito ' || coalesce(nullif(g.numero_remito, ''), 's/n') || coalesce(' · ' || nullif(o.numero, ''), '') || ' sin factura',
+		  g.fecha, sum(m.monto)::float8
+		FROM supplier_movements m JOIN goods_receipts g ON g.id = m.goods_receipt_id LEFT JOIN purchase_orders o ON o.id = g.purchase_order_id
+		WHERE g.estado = 'confirmada' AND `+RecepcionSinFactura+`
+		GROUP BY m.supplier_id, g.id, g.numero_remito, o.numero, g.fecha HAVING abs(sum(m.monto)) > 0.009
+		UNION ALL
+		SELECT m.supplier_id::text, coalesce(nullif(m.detalle, ''), 'Ajuste'),
+		  ((m.created_at AT TIME ZONE 'America/Argentina/Buenos_Aires')::date)::timestamp AT TIME ZONE 'UTC', m.monto::float8
+		FROM supplier_movements m WHERE `+AjusteDeProveedor+` AND m.monto <> 0
+		ORDER BY 1, 3`)
+	if err != nil {
+		return "", err
+	}
+	var concepto string
+	var cuando *time.Time
+	var monto float64
+	if _, err := pgx.ForEachRow(rs, []any{&id, &concepto, &cuando, &monto}, func() error {
+		detalle[id] = append(detalle[id], renglonDelLibro{concepto, cuando, monto})
+		return nil
+	}); err != nil {
+		return "", err
+	}
 	rs, err = s.lectura.Query(ctx, `SELECT s.id::text, s.nombre, coalesce(s.cuit, ''), coalesce(sum(m.monto), 0)::float8
 		FROM suppliers s LEFT JOIN supplier_movements m ON m.supplier_id = s.id WHERE s.active GROUP BY s.id ORDER BY s.nombre`)
 	if err != nil {
@@ -315,8 +348,18 @@ func (s *Servicio) CsvCuentasAPagar(ctx context.Context, ahora time.Time) (strin
 	var libro float64
 	if _, err := pgx.ForEachRow(rs, []any{&id, &proveedor, &cuit, &libro}, func() error {
 		debe := max(libro, 0)
-		if dif := jsmath.Redondear2(debe - facturado[id]); dif > 0.009 || dif < -0.009 {
-			concepto := "Recibido sin factura y ajustes"
+		dif := jsmath.Redondear2(debe - facturado[id])
+		if !(dif > 0.009 || dif < -0.009) {
+			return nil
+		}
+		for _, r := range detalle[id] {
+			out = append(out, []string{csvexcel.Texto(proveedor), csvexcel.Texto(cuit), csvexcel.Texto(r.concepto), dia(r.fecha), "", "", "",
+				csvexcel.NumeroCsv(r.monto, 2)})
+			totalSaldo += r.monto
+			dif = jsmath.Redondear2(dif - r.monto)
+		}
+		if dif > 0.009 || dif < -0.009 {
+			concepto := "Otros movimientos del libro"
 			if dif < 0 {
 				concepto = "Notas de crédito y pagos a cuenta"
 			}

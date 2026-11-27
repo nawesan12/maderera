@@ -206,9 +206,10 @@ func TestCierreAvisaGastosRepetidos(t *testing.T) {
 func TestCerrarElMes(t *testing.T) {
 	e := armar(t)
 	adm := e.staff(t, "admin@prueba.test", "admin")
+	motivo := ""
 	cerrar := func(mes string, cerrado bool) (int, string) {
 		t.Helper()
-		cuerpo, _ := json.Marshal(map[string]any{"periodo": mes, "cerrado": cerrado})
+		cuerpo, _ := json.Marshal(map[string]any{"periodo": mes, "cerrado": cerrado, "motivo": motivo})
 		req, _ := http.NewRequest("POST", e.u+"cierre/cerrado", bytes.NewReader(cuerpo))
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := adm.Do(req)
@@ -245,8 +246,19 @@ func TestCerrarElMes(t *testing.T) {
 	if _, err := e.pool.Exec(ctx, `update receipts set estado = 'anulado', anulado_at = now() where id = $1`, recibo); !esMesCerrado(err) {
 		t.Fatalf("anular el recibo de septiembre: %v", err)
 	}
+	// Reabrir pide por qué (M2S1-056), y queda en la bitácora con el mes por
+	// su nombre.
+	if st, _ := cerrar("2026-09", false); st != 422 {
+		t.Fatal("reabrir sin motivo")
+	}
+	motivo = "Falta una factura de Placas del Sur"
 	if st, _ := cerrar("2026-09", false); st != 200 {
 		t.Fatal("reabrir")
+	}
+	var texto string
+	if err := e.pool.QueryRow(ctx, `select descripcion from audit_log where entidad = 'cierre' order by created_at desc limit 1`).Scan(&texto); err != nil ||
+		texto != "Reabrió septiembre de 2026: Falta una factura de Placas del Sur" {
+		t.Fatalf("bitácora: %q %v", texto, err)
 	}
 	if _, err := e.pool.Exec(ctx, `insert into expenses (fecha, descripcion, importe) values ('2026-09-10', 'Luz', 100)`); err != nil {
 		t.Fatalf("gasto de septiembre, reabierto: %v", err)

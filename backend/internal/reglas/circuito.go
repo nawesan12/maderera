@@ -62,6 +62,8 @@ func EnElTexto(texto, valor string) string {
 	frase := EnUnaFrase(valor)
 	r := strings.NewReplacer(
 		"circuito B", frase,
+		// «van al archivo B» (mes simulado, M2S2-031).
+		"archivo B", "archivo del "+frase,
 		" el B ", " el "+frase+" ", " el B:", " el "+frase+":", " el B.", " el "+frase+".",
 		" al B ", " al "+frase+" ", " al B.", " al "+frase+".", " al B:", " al "+frase+":",
 		" del B ", " del "+frase+" ", " del B.", " del "+frase+".",

@@ -171,6 +171,7 @@ paths:
               properties:
                 periodo: { type: string, pattern: '^\d{4}-\d{2}$' }
                 cerrado: { type: boolean }
+                motivo: { type: string, maxLength: 300, description: Por qué se reabre; obligatorio para reabrir }
       responses:
         "200":
           description: Cómo quedó el mes
@@ -372,6 +373,16 @@ components:
         detalle: { type: string }
         cantidad: { type: integer }
         donde: { type: string }
+        casos:
+          type: array
+          description: Los casos del aviso uno por uno, con su importe y a dónde se resuelve cada uno
+          items:
+            type: object
+            required: [nombre, donde]
+            properties:
+              nombre: { type: string }
+              importe: { type: number, format: double }
+              donde: { type: string }
     CierreTotales:
       type: object
       required: [total, cantidad]
@@ -405,7 +416,7 @@ components:
         por: { type: string, nullable: true }
     CierreResumen:
       type: object
-      required: [ventas, vendido, compras, gastos, retencionesPracticadas, retencionesSufridas, percepcionesIibb, posicionIva, iva, resultado, cerrado]
+      required: [ventas, vendido, compras, gastos, gastosB, retencionesPracticadas, retencionesSufridas, percepcionesIibb, posicionIva, iva, resultado, cerrado, primerMes]
       properties:
         cerrado: { $ref: "#/components/schemas/MesCerrado" }
         ventas: { $ref: "#/components/schemas/CierreTotalesConIva" }
@@ -413,7 +424,10 @@ components:
         # en los asientos ni en ningún archivo.
         vendido: { $ref: "#/components/schemas/CierreVendido" }
         compras: { $ref: "#/components/schemas/CierreTotalesConIva" }
+        # Los gastos del archivo del estudio; gastosB, los del circuito B.
         gastos: { $ref: "#/components/schemas/CierreTotales" }
+        gastosB: { $ref: "#/components/schemas/CierreTotales" }
+        primerMes: { type: string, description: El primer mes con algún movimiento (YYYY-MM), vacío si no hay ninguno }
         retencionesPracticadas: { $ref: "#/components/schemas/CierreTotales" }
         retencionesSufridas: { $ref: "#/components/schemas/CierreTotales" }
         percepcionesIibb: { $ref: "#/components/schemas/CierreTotales" }

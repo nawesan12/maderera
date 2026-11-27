@@ -3,6 +3,7 @@ package reportes
 import (
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -50,13 +51,23 @@ var Cuentas = struct {
 	// DiferenciasDeCaja: el faltante o sobrante del arqueo. La cuenta la
 	// tiene que definir el contador; mientras tanto va acá, a la vista.
 	DiferenciasDeCaja string
+	// MovimientosAImputar: la plata que entra o sale sin que el sistema sepa
+	// contra qué (el retiro de caja «otro», la devolución «por otro medio»,
+	// el cheque cargado sin cobro). Transitoria, a la vista del estudio hasta
+	// que diga a qué cuenta va (mes simulado, M2S3-003, M3S1-052, M3S2-004).
+	MovimientosAImputar string
+	// SaldosIniciales: la contrapartida de lo que entra a una cuenta sin
+	// comprobante (el saldo inicial que vino del sistema anterior, un ajuste
+	// a mano del libro de un proveedor), a definir por el estudio
+	// (M3S1-019, M3S4-006).
+	SaldosIniciales string
 }{"1.1.01", "1.1.02", "1.1.03", "1.1.05", "1.1.06", "1.2.01", "2.1.01", "2.1.03", "2.1.04", "2.1.05", "4.1.01", "5.1.01", "1.1.04",
 	"2.1.06", "4.1.02",
 	"1.1.07", "1.1.08", "1.1.09", "1.1.10", "1.1.11", "1.1.12",
 	"2.1.07",
 	"2.1.08", "2.1.09", "2.1.10", "2.1.11",
 	"5.1.11",
-	"5.2.01", "2.1.12", "5.1.12"}
+	"5.2.01", "2.1.12", "5.1.12", "2.1.13", "3.1.01"}
 
 // CuentaDeRetencionSufrida es la cuenta del crédito por una retención que
 // nos practicaron, según el impuesto ("" o desconocido: 1.1.06).
@@ -109,7 +120,8 @@ var nombresDeCuenta = map[string]string{
 	"5.1.06": "Sueldos y cargas", "5.1.07": "Mantenimiento", "5.1.08": "Impuestos y tasas", "5.1.09": "Librería y oficina",
 	"5.1.10": "Publicidad", "5.1.11": "Comisiones y gastos bancarios",
 	"5.2.01": "Costo de mercaderías vendidas", "2.1.12": "Cobros a imputar (facturas sin CAE)",
-	"5.1.12": "Diferencias de caja (a definir)",
+	"5.1.12": "Diferencias de caja (a definir)", "2.1.13": "Movimientos de fondos a imputar (a definir)",
+	"3.1.01": "Saldos iniciales y ajustes (a definir)",
 }
 
 // RenglonDeAsiento es RenglonDeAsiento.
@@ -234,9 +246,15 @@ func cuentaDeCobro(medio string) string {
 		return Cuentas.ValoresADepositar
 	case "retencion":
 		return Cuentas.RetencionesSufridas
+	case MedioAImputar:
+		return Cuentas.MovimientosAImputar
 	}
 	return cuentaDeMedio(medio)
 }
+
+// MedioAImputar es el de la plata que salió por un medio que el sistema no
+// conoce (la devolución «por otro medio»): va a Movimientos a imputar.
+const MedioAImputar = "a_imputar"
 
 // AsientoDeCobro es asientoDeCobro. Pasar una factura a cuenta corriente no
 // es un cobro (no entra plata: la deuda sigue en Deudores), así que no se
@@ -760,11 +778,35 @@ func NumeroFormateado(puntoVenta, numero int64) string {
 // (una factura del 31 a las 22 es del 31, y ARCA la autorizó con esa fecha),
 // un día tal como se guardó (a las 0 UTC).
 func fechaCsv(a Asiento) string {
-	t := a.Fecha.UTC()
-	if a.Instante {
-		t = a.Fecha.In(Argentina)
-	}
+	t := diaDelAsiento(a)
 	return fmt.Sprintf("%02d/%02d/%d", t.Day(), int(t.Month()), t.Year())
+}
+
+// diaDelAsiento es el día con el que el asiento va al CSV (fechaCsv).
+func diaDelAsiento(a Asiento) time.Time {
+	if a.Instante {
+		return a.Fecha.In(Argentina)
+	}
+	return a.Fecha.UTC()
+}
+
+// OrdenarAsientos los deja en el orden del libro diario: por el día con el
+// que salen en el CSV y, dentro del día, por el momento. Ordenados por el
+// instante, la factura de compra del 27 (a las 0 UTC, el 26 a las 21 en hora
+// argentina) quedaba entre los asientos del 26 y el diario salía 26, 27, 26,
+// 27 (mes simulado, M3S1-009). Los días sin hora van primero en su día.
+func OrdenarAsientos(asientos []Asiento) {
+	sort.SliceStable(asientos, func(i, j int) bool {
+		di, dj := diaDelAsiento(asientos[i]), diaDelAsiento(asientos[j])
+		ki, kj := di.Year()*10000+int(di.Month())*100+di.Day(), dj.Year()*10000+int(dj.Month())*100+dj.Day()
+		if ki != kj {
+			return ki < kj
+		}
+		if asientos[i].Instante != asientos[j].Instante {
+			return !asientos[i].Instante
+		}
+		return asientos[i].Fecha.Before(asientos[j].Fecha)
+	})
 }
 
 // CsvAsientos es app/admin/cierre/exportar: un renglón por línea con el

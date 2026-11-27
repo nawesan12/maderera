@@ -410,7 +410,8 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 	// como el tramo de arriba. Sin esto la nota de crédito acreditaba
 	// Deudores, la caja tenía la salida y el CSV no tenía el reintegro.
 	rs, err = s.lectura.Query(ctx, `
-		SELECT t.created_at, t.importe, r.numero, r.recibido_de, t.medio::text, r.id, `+cobros.ReintegroDeLoFacturado+`
+		SELECT t.created_at, t.importe, r.numero, r.recibido_de, t.medio::text, r.id, `+cobros.ReintegroDeLoFacturado+`,
+		  coalesce((SELECT d.destino::text FROM devoluciones d WHERE d.id = t.devolucion_id), '')
 		FROM receipt_refunds t JOIN receipts r ON r.id = t.receipt_id
 		WHERE t.created_at >= $1 AND t.created_at <= $2
 		ORDER BY t.created_at, t.id`, idesde, ihasta)
@@ -422,13 +423,19 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 		var importe jsmath.Num
 		var numero, cliente, medio, recibo string
 		var facturado bool
-		if err := rs.Scan(&fecha, &importe, &numero, &cliente, &medio, &recibo, &facturado); err != nil {
+		var destino string
+		if err := rs.Scan(&fecha, &importe, &numero, &cliente, &medio, &recibo, &facturado, &destino); err != nil {
 			rs.Close()
 			return nil, err
 		}
 		// Lo que no vuelve en efectivo vuelve por el banco, aunque se haya
 		// cobrado con un cheque: ese cheque ya no está en Valores a depositar.
-		if medio != "efectivo" {
+		// Lo devuelto «por otro medio» no se sabe de dónde salió: va a
+		// Movimientos a imputar hasta que el estudio diga (M3S1-052).
+		switch {
+		case destino == "afuera":
+			medio = MedioAImputar
+		case medio != "efectivo":
 			medio = "transferencia"
 		}
 		c := CobroAAsentar{Fecha: fecha, Comprobante: "por devolución del recibo " + numero, Cliente: cliente, Importe: importe.F(), Medio: medio}

@@ -37,8 +37,8 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
         clave: "ganancia_gastos",
         pregunta: "Los gastos, ¿con IVA o sin IVA?",
         opciones: [
-          { valor: "con_iva", texto: "Con IVA" },
-          { valor: "sin_iva", texto: "Sin IVA" },
+          { valor: "con_iva", texto: "Con el IVA que no da crédito" },
+          { valor: "sin_iva", texto: "Sin ningún IVA" },
         ],
       },
       {
@@ -72,10 +72,18 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
       },
       {
         clave: "asiento_sin_cae",
-        pregunta: "El cobro de una factura sin CAE",
+        pregunta: "El cobro de una factura sin CAE, hasta el CAE",
         opciones: [
-          { valor: "al_cae", texto: "Se asienta al llegar el CAE" },
+          { valor: "al_cae", texto: "En Anticipos de clientes" },
           { valor: "transitoria", texto: "En una cuenta transitoria" },
+        ],
+      },
+      {
+        clave: "deuda_sin_comprobante",
+        pregunta: "La deuda cargada a mano en la cuenta",
+        opciones: [
+          { valor: "circuito_b", texto: "Al circuito sin factura" },
+          { valor: "saldo_inicial", texto: "Al estudio, contra Saldos iniciales" },
         ],
       },
     ],

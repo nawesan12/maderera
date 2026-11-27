@@ -58,6 +58,10 @@ const (
 	DatosFiscalesDelCliente = "datos_fiscales_del_cliente"
 	// H032: si la tarjeta en línea pide lote y cupón.
 	LoteYCupon = "lote_y_cupon"
+	// M3S3-002: la deuda cargada a mano en la cuenta de un cliente (el saldo
+	// del sistema anterior, una nota de débito sin comprobante): al circuito
+	// B, como hasta ahora, o al archivo del estudio contra Saldos iniciales.
+	DeudaSinComprobante = "deuda_sin_comprobante"
 )
 
 // Opciones son los valores posibles de cada regla, el de arranque primero.
@@ -77,6 +81,7 @@ var Opciones = map[string][]string{
 	EtiquetaDelCircuito:         {"b", "sin_factura", "interno"},
 	DatosFiscalesDelCliente:     {"hasta_facturar", "ninguno"},
 	LoteYCupon:                  {"obligatorio", "opcional"},
+	DeudaSinComprobante:         {"circuito_b", "saldo_inicial"},
 }
 
 // Arranque es el valor de una regla cuando la fila no está o tiene algo que

@@ -366,12 +366,15 @@ func (s *Servicio) CertificadoParaImprimir(ctx context.Context, numero string) (
 	if err != nil {
 		return nil, err
 	}
-	var medios []string
+	var medios, refs []string
 	for filas.Next() {
 		var medio, ref string
 		if err := filas.Scan(&medio, &ref); err != nil {
 			filas.Close()
 			return nil, err
+		}
+		if ref != "" {
+			refs = append(refs, ref)
 		}
 		if ref != "" {
 			medio = NombreDelMedio(medio) + " " + ref
@@ -386,8 +389,11 @@ func (s *Servicio) CertificadoParaImprimir(ctx context.Context, numero string) (
 	}
 	if len(medios) > 0 {
 		c.PagoMedio = unirConY(medios)
-		// La referencia de la cabecera, solo si no la dicen ya los medios.
-		if c.PagoReferencia != nil && strings.Contains(c.PagoMedio, *c.PagoReferencia) {
+		// La referencia de la cabecera, solo si no la dicen ya los medios. En
+		// un pago partido la cabecera junta los números de las partes en
+		// otro orden («transferencia X y e-Cheq Y»): repetía los medios
+		// entre paréntesis (mes 23, M2S1-037).
+		if c.PagoReferencia != nil && repiteLosMedios(*c.PagoReferencia, c.PagoMedio, refs) {
 			c.PagoReferencia = nil
 		}
 	} else {
@@ -420,6 +426,20 @@ func (s *Servicio) CertificadoParaImprimir(ctx context.Context, numero string) (
 	}
 	c.Comprobantes = unirConY(comprobantes)
 	return &c, nil
+}
+
+// repiteLosMedios dice si la referencia de la cabecera no agrega nada a los
+// medios: ya está entera en ellos, o nombra alguno de sus números.
+func repiteLosMedios(referencia, medios string, refs []string) bool {
+	if strings.Contains(medios, referencia) {
+		return true
+	}
+	for _, r := range refs {
+		if strings.Contains(referencia, r) {
+			return true
+		}
+	}
+	return false
 }
 
 // unirConY es «a, b y c».
@@ -838,7 +858,9 @@ func (s *Servicio) PagarAProveedor(ctx context.Context, ses *auth.Sesion, m map[
 			if ref != "" {
 				renglon += " " + ref
 			}
-			desglose = append(desglose, renglon+" "+Monto(parte.Importe))
+			// Con los centavos: «e-Cheq 90000005 $ 2.241.507» era de
+			// 2.241.506,54 y la suma de los medios no daba el pago (mes 23).
+			desglose = append(desglose, renglon+" "+formato.Importe(parte.Importe))
 			sinMonto = append(sinMonto, renglon)
 		}
 		// La referencia de la cabecera, si no vino: las de los renglones.

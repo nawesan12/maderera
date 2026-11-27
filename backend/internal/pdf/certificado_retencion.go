@@ -160,12 +160,20 @@ func CertificadoDeRetencion(d DatosDelCertificado, _ time.Time) ([]byte, error) 
 	if d.Pago.Referencia != "" {
 		ref = " (" + d.Pago.Referencia + ")"
 	}
-	h.Escribir("Retención practicada sobre el pago del "+FechaLocal(d.Pago.Fecha)+" por "+d.Pago.Medio+ref+".",
-		Opciones{X: Margen, Y: y, Tamano: 8.5, Color: TintaSuave})
+	// Un pago partido nombra cada medio con su número: en un renglón se
+	// salía de la hoja (mes 23, M2S1-037). Se parte al ancho de la página.
+	ancho := AnchoA4 - 2*Margen
+	for i, r := range Renglones("Retención practicada sobre el pago del "+FechaLocal(d.Pago.Fecha)+" por "+d.Pago.Medio+ref+".", Normal, 8.5, ancho) {
+		if i > 0 {
+			y -= Mm(4.2)
+		}
+		h.Escribir(r, Opciones{X: Margen, Y: y, Tamano: 8.5, Color: TintaSuave})
+	}
 	if d.Pago.Comprobantes != "" {
-		y -= Mm(5)
-		h.Escribir(Elipsis("Cancela: "+d.Pago.Comprobantes+".", Normal, 8.5, AnchoA4-2*Margen),
-			Opciones{X: Margen, Y: y, Tamano: 8.5, Color: TintaSuave})
+		for _, r := range Renglones("Cancela: "+d.Pago.Comprobantes+".", Normal, 8.5, ancho) {
+			y -= Mm(4.2)
+			h.Escribir(r, Opciones{X: Margen, Y: y, Tamano: 8.5, Color: TintaSuave})
+		}
 	}
 
 	y -= Mm(24)

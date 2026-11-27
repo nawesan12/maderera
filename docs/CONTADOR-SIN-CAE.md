@@ -186,10 +186,15 @@ igual.
   fue (banco, caja fuerte u otro); los anteriores se leen por el motivo.
 - El faltante o sobrante de cada **arqueo** va contra 5.1.12 Diferencias de
   caja.
+- La mercadería que sale o entra **sin venta** (rotura, faltante, conteo,
+  consumo del taller, lo perdido en un traslado, un ingreso sin remito) va
+  contra Mercaderías y 5.1.13 Diferencias de inventario, al costo promedio
+  del momento. La reposición sin cargo a un cliente va a 5.2.01 Costo de
+  mercaderías vendidas.
 
-**A definir:** ¿a qué cuenta van las diferencias de arqueo? ¿Y los ingresos
-de caja que no vienen del banco? Hoy se toman como plata de la caja fuerte,
-que es la misma Caja, y no se asientan.
+**A definir:** ¿a qué cuenta van las diferencias de arqueo? ¿Y las de
+inventario? ¿Y los ingresos de caja que no vienen del banco? Hoy se toman
+como plata de la caja fuerte, que es la misma Caja, y no se asientan.
 
 ## Devolución de una venta facturada
 

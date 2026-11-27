@@ -384,10 +384,10 @@ func CierresDeTurnos(ctx context.Context, c Consultador, sesiones []string) (map
 		       count(DISTINCT a.id)::int,
 		       -coalesce(sum(coalesce(p.importe, a.total) - coalesce((SELECT sum(d.importe) FROM devoluciones d WHERE d.order_id = a.id
 		          AND d.destino = CASE coalesce(p.medio::text, a.medio_pago::text) WHEN 'efectivo' THEN 'caja' WHEN 'cuenta_corriente' THEN 'cuenta' END), 0)), 0),
-		       NULL::text, false, NULL::text, false
+		       NULL::text, false, string_agg(DISTINCT a.numero, ', ' ORDER BY a.numero), false
 		FROM cash_sessions s
 		JOIN LATERAL (
-		  SELECT o.id, o.medio_pago, o.total,
+		  SELECT o.id, o.numero, o.medio_pago, o.total,
 		         coalesce((SELECT max(h.created_at) FROM order_status_history h WHERE h.order_id = o.id AND h.estado = 'cancelado'),
 		                  o.updated_at) AS anulada_at
 		  FROM orders o
@@ -494,14 +494,7 @@ func juntarDevoluciones(rs []RenglonDelCierre) []RenglonDelCierre {
 		} else {
 			out[i].Cantidad += r.Cantidad
 			out[i].Total = jsmath.Redondear2(float64(out[i].Total + r.Total))
-			if r.Pedidos != nil {
-				if out[i].Pedidos == nil {
-					out[i].Pedidos = r.Pedidos
-				} else {
-					t := *out[i].Pedidos + ", " + *r.Pedidos
-					out[i].Pedidos = &t
-				}
-			}
+			out[i].Pedidos = sumarPedidos(out[i].Pedidos, r.Pedidos)
 		}
 		if r.Quien != nil && !slices.Contains(quienes[r.MedioPago], *r.Quien) {
 			quienes[r.MedioPago] = append(quienes[r.MedioPago], *r.Quien)
@@ -514,6 +507,26 @@ func juntarDevoluciones(rs []RenglonDelCierre) []RenglonDelCierre {
 		}
 	}
 	return out
+}
+
+// sumarPedidos junta dos listas «PED-1, PED-2» sin repetir y en orden. Una
+// venta con una devolución parcial y después anulada está en las dos.
+func sumarPedidos(a, b *string) *string {
+	if a == nil {
+		return b
+	}
+	if b == nil {
+		return a
+	}
+	todos := strings.Split(*a+", "+*b, ", ")
+	slices.SortFunc(todos, func(x, y string) int {
+		if len(x) != len(y) {
+			return len(x) - len(y)
+		}
+		return strings.Compare(x, y)
+	})
+	t := strings.Join(slices.Compact(todos), ", ")
+	return &t
 }
 
 // CierreDelTurno es el cierre Z de un turno solo.

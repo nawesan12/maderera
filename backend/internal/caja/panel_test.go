@@ -374,7 +374,8 @@ func TestAnularNoCambiaElCierreDeOtroTurno(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fmt.Sprint(z) != "[{efectivo 1 -1000 true <nil> false false <nil>}]" {
+	// Con el número de la anulada, como las parciales (mes 23).
+	if len(z) != 1 || z[0].Total != -1000 || !z[0].Devolucion || z[0].Pedidos == nil || *z[0].Pedidos != "Z-1" {
 		t.Errorf("la devolución se ve en el turno en que se hizo: %+v", z)
 	}
 }

@@ -750,7 +750,12 @@ function CierreZ({ cierre }: { cierre: RenglonDelCierre[] }) {
                       (M2S1-081, M3S1-060, M2S2-007). */}
                   <dt className="min-w-0 text-base">
                     {NOMBRE_DEL_MEDIO[r.medioPago] ?? r.medioPago}
-                    {r.pedidos && <span className="codigo"> · {r.pedidos}</span>}
+                    {r.pedidos && (
+                      <>
+                        {" · "}
+                        <span className="codigo">{r.pedidos}</span>
+                      </>
+                    )}
                     {r.quien && ` · ${r.quien}`}
                     <span className="ml-1.5 text-sm text-muted-foreground">({r.cantidad})</span>
                   </dt>

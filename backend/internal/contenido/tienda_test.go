@@ -152,4 +152,20 @@ func TestLosAjustesDejanRenglon(t *testing.T) {
 	if err := e.pool.QueryRow(ctx, `select count(*) from audit_log where entidad = 'whatsapp' and entidad_id = 'whatsapp_numero_humano'`).Scan(&n); err != nil || n != 1 {
 		t.Errorf("el número humano: %d %v", n, err)
 	}
+	// El número del sitio: «abc» no es un número, y lo escrito como se
+	// escribe queda en la forma de wa.me, con el nombre y el número legibles
+	// en la bitácora (mes 23).
+	_, _ = e.pool.Exec(ctx, `insert into site_settings (clave, valor, descripcion) values ('whatsapp_principal', '542235903118', 'Número al que van los botones de WhatsApp del sitio.') on conflict (clave) do nothing`)
+	if c, b := pedir(t, adm, "PUT", u+"whatsapp_principal", map[string]string{"valor": "abc"}); c != 422 || !strings.Contains(string(b), "característica") {
+		t.Errorf("número abc: %d %s", c, b)
+	}
+	if c, b := pedir(t, adm, "PUT", u+"whatsapp_principal", map[string]string{"valor": "223 590-3119"}); c != 204 {
+		t.Fatalf("número del sitio: %d %s", c, b)
+	}
+	var valor string
+	_ = e.pool.QueryRow(ctx, `select valor from site_settings where clave = 'whatsapp_principal'`).Scan(&valor)
+	_ = e.pool.QueryRow(ctx, `select descripcion from audit_log where entidad_id = 'whatsapp_principal'`).Scan(&desc)
+	if valor != "542235903119" || desc != "Número de WhatsApp del sitio: 223 590-3118 → 223 590-3119" {
+		t.Errorf("número del sitio: %q %q", valor, desc)
+	}
 }

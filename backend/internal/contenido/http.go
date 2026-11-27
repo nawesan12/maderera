@@ -15,6 +15,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/email"
+	"mjbj/internal/formato"
 	"mjbj/internal/limites"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
@@ -221,9 +222,11 @@ func (a *API) GuardarAjuste(ctx context.Context, r contenidoapi.GuardarAjusteReq
 	}
 	var antes, descripcion string
 	_ = a.s.pool.QueryRow(ctx, `SELECT valor, coalesce(descripcion, '') FROM site_settings WHERE clave = $1`, r.Clave).Scan(&antes, &descripcion)
-	if err := a.s.GuardarAjuste(ctx, r.Clave, r.Body.Valor); err != nil {
+	valor, err := a.s.GuardarAjusteNormalizado(ctx, r.Clave, r.Body.Valor)
+	if err != nil {
 		return nil, err
 	}
+	r.Body.Valor = valor
 	// Guardar lo mismo no deja renglón (mes simulado, M2S4-053).
 	if antes == r.Body.Valor {
 		return listo(), nil
@@ -250,7 +253,7 @@ func (a *API) GuardarAjuste(ctx context.Context, r contenidoapi.GuardarAjusteReq
 	// al bot sin contestar (mes simulado, M2S1-047 y M2S3-036).
 	case strings.HasPrefix(r.Clave, "whatsapp"):
 		bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaEditar, "whatsapp", r.Clave,
-			NombreDelAjuste(r.Clave, descripcion)+": "+vacio(antes)+" → "+vacio(r.Body.Valor), cambio)
+			NombreDelAjuste(r.Clave, descripcion)+": "+vacio(telefonoDelAjuste(r.Clave, antes))+" → "+vacio(telefonoDelAjuste(r.Clave, r.Body.Valor)), cambio)
 	// Los textos del sitio (la franja de arriba, los datos del negocio).
 	default:
 		bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaEditar, "sitio", r.Clave,
@@ -735,11 +738,22 @@ func NombreDelAjuste(clave, descripcion string) string {
 		return "Tope de mensajes del bot de WhatsApp"
 	case "whatsapp_numero_humano":
 		return "Número de WhatsApp de una persona"
+	case "whatsapp_principal":
+		return "Número de WhatsApp del sitio"
 	}
 	if descripcion != "" {
 		return descripcion
 	}
 	return strings.ReplaceAll(clave, "_", " ")
+}
+
+// telefonoDelAjuste escribe un número de WhatsApp como se lee («223
+// 590-3118»); el resto de los ajustes, como está.
+func telefonoDelAjuste(clave, v string) string {
+	if _, ok := numerosDeWhatsApp[clave]; ok {
+		return formato.Telefono(v)
+	}
+	return v
 }
 
 func vacio(v string) string {

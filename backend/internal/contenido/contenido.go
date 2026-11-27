@@ -297,6 +297,60 @@ var numericos = map[string]bool{
 
 // GuardarAjuste cambia un texto del sitio.
 func (s *Servicio) GuardarAjuste(ctx context.Context, clave, valor string) error {
+	_, err := s.GuardarAjusteNormalizado(ctx, clave, valor)
+	return err
+}
+
+// numerosDeWhatsApp son los ajustes que son un número de WhatsApp: el de los
+// botones del sitio y el de la persona que atiende cuando el bot deriva. Se
+// aceptaba «abc» y los botones quedaban rotos (mes 23). El humano puede ir
+// vacío (sin derivación).
+var numerosDeWhatsApp = map[string]bool{"whatsapp_principal": false, "whatsapp_numero_humano": true}
+
+// NumeroDeWhatsApp lleva lo escrito a la forma de wa.me: «223 590-3118» o
+// «0223 5903118» quedan con el 54 adelante, y uno con código de país
+// («+54 9 223 590-3118»), en dígitos. Vacío, "" y true; lo que no es un
+// número, false.
+func NumeroDeWhatsApp(v string) (string, bool) {
+	d := strings.Map(func(r rune) rune {
+		switch r {
+		case ' ', '-', '(', ')', '.', '+', '\u00a0':
+			return -1
+		}
+		return r
+	}, v)
+	if d == "" {
+		return "", true
+	}
+	for _, r := range d {
+		if r < '0' || r > '9' {
+			return "", false
+		}
+	}
+	switch {
+	case len(d) == 11 && strings.HasPrefix(d, "0"):
+		return "54" + d[1:], true
+	case len(d) == 10:
+		return "54" + d, true
+	case len(d) >= 12 && len(d) <= 15:
+		return d, true
+	}
+	return "", false
+}
+
+// GuardarAjusteNormalizado guarda el ajuste y devuelve cómo quedó escrito.
+func (s *Servicio) GuardarAjusteNormalizado(ctx context.Context, clave, valor string) (string, error) {
+	if vacioVale, ok := numerosDeWhatsApp[clave]; ok {
+		n, bien := NumeroDeWhatsApp(valor)
+		if !bien || (n == "" && !vacioVale) {
+			return "", plataforma.Invalido(map[string]string{"valor": "Poné el número con la característica, por ejemplo 223 590-3118."})
+		}
+		valor = n
+	}
+	return valor, s.guardarAjuste(ctx, clave, valor)
+}
+
+func (s *Servicio) guardarAjuste(ctx context.Context, clave, valor string) error {
 	if clave == "" || utf8.RuneCountInString(clave) > 60 || utf8.RuneCountInString(valor) > 500 {
 		return plataforma.Invalido(map[string]string{"valor": "No se pudo guardar: el texto no puede pasar de 500 letras."})
 	}

@@ -827,8 +827,11 @@ function ResumenDelCierre({ cerrado }: { cerrado: TurnoCerrado }) {
                         <span>{g.destino === "banco" ? "Al banco" : g.destino === "caja_fuerte" ? "A caja fuerte" : "Otros retiros"}</span>
                         <span>{formatearImporte(g.filas.reduce((s, m) => s + m.monto, 0))}</span>
                       </p>
-                      {g.destino === "otro" &&
-                        g.filas.map((m) => (
+                      {/* Cada retiro con su motivo, también los del banco y
+                          la caja fuerte que lo escribieron (mes 23). */}
+                      {g.filas
+                        .filter((m) => g.destino === "otro" || (m.motivo && m.motivo !== DESTINO[g.destino].motivo))
+                        .map((m) => (
                           <p key={m.id} className="linea-datos">
                             <span>· {m.motivo ?? "Retiro"}</span>
                             <span>{formatearImporte(m.monto)}</span>
@@ -870,7 +873,8 @@ function ResumenDelCierre({ cerrado }: { cerrado: TurnoCerrado }) {
                         ? "A cuenta · "
                         : ""}
                   {NOMBRE_DEL_MEDIO[r.medioPago] ?? r.medioPago}
-                  {r.pedidos && ` · ${r.pedidos}`} ({r.cantidad})
+                  {r.pedidos && ` · ${r.pedidos}`}
+                  {r.quien && ` · ${r.quien}`} ({r.cantidad})
                 </span>
                 <span>{formatearImporte(r.total)}</span>
               </p>

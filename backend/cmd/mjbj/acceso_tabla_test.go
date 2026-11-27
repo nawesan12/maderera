@@ -28,6 +28,14 @@ package main
 //
 // Cuando una ruta la usan varias pantallas, va la más amplia de ellas.
 var pantallaDeCadaRuta = map[string]string{
+	"CambiarFechaDeOrden":             "/admin/compras",                // POST /api/v1/admin/compras/ordenes/{id}/fecha
+	"CerrarOrdenConFaltante":          "/admin/compras",                // POST /api/v1/admin/compras/ordenes/{id}/cerrar
+	"RenglonesDevolvibles":            "/admin/compras",                // GET /api/v1/admin/compras/devolucion
+	"SimularRetenciones":              "/admin/compras",                // POST /api/v1/admin/compras/pagos/simular
+	"CargarSaldoDelBanco":             "admin",                         // POST /api/v1/admin/inicio/saldo-banco
+	"DatosDeDevolucionDelPedido":      "plata",                         // GET /api/v1/admin/pedidos/{id}/devolucion
+	"EstadoDelSistema":                "/admin/sistema",                // GET /api/v1/admin/sistema
+	"ReintentarTrabajo":               "/admin/sistema",                // POST /api/v1/admin/sistema/trabajos/{id}/reintentar
 	"CambiarAvisoEmail":               "/admin/avisos",                 // PUT /api/v1/admin/avisos/activo
 	"EstadoDelCorreo":                 "/admin/avisos",                 // GET /api/v1/admin/avisos/correo
 	"AvisosEnviados":                  "/admin/avisos",                 // GET /api/v1/admin/avisos/enviados
@@ -159,7 +167,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"GuardarAcomodo":                  "cola",                          // PUT /api/v1/admin/cortes/{id}/acomodo
 	"AvanzarCorte":                    "/admin/cortes",                 // POST /api/v1/admin/cortes/{id}/avanzar
 	"HojaDelCorte":                    "/admin/cortes",                 // GET /api/v1/admin/cortes/{id}/hoja
-	"CargarPasadas":                   "cola",                          // POST /api/v1/admin/cortes/{id}/pasadas
+	"CargarPasadas":                   "plata",                         // POST /api/v1/admin/cortes/{id}/pasadas
 	"CambiarSierra":                   "cola",                          // PUT /api/v1/admin/cortes/{id}/sierra
 	"AlternarUrgente":                 "cola",                          // POST /api/v1/admin/cortes/{id}/urgente
 	"AnularCorte":                     "cola",                          // POST /api/v1/admin/cortes/{id}/anular

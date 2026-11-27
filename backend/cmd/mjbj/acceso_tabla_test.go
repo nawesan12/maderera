@@ -258,6 +258,8 @@ var pantallaDeCadaRuta = map[string]string{
 	"DescuentosDePago":               "/admin/precios",                // GET /api/v1/admin/precios/descuentos
 	"GuardarDescuentoDePago":         "/admin/precios",                // POST /api/v1/admin/precios/descuentos
 	"EditarPrecio":                   "/admin/precios",                // POST /api/v1/admin/precios/editar
+	"OfertarPrecio":                  "/admin/precios",                // POST /api/v1/admin/precios/oferta
+	"TerminarOferta":                 "/admin/precios",                // POST /api/v1/admin/precios/oferta/fin
 	"HistorialDePrecios":             "/admin/precios",                // GET /api/v1/admin/precios/historial
 	"PrevisualizarImportacion":       "/admin/precios",                // POST /api/v1/admin/precios/importar/previa
 	"ConfirmarImportacion":           "/admin/precios",                // POST /api/v1/admin/precios/importar

@@ -21,12 +21,25 @@ import { DeshacerAjuste } from "./deshacer-ajuste";
 import { proveedoresParaElegir } from "@/lib/dal/admin/proveedores";
 import { DialogoImportar } from "./dialogo-importar";
 import { PrecioEditable } from "./precio-editable";
+import { OfertaDelPrecio } from "./oferta";
 
 const origenTexto: Record<string, string> = {
   manual: "Edición",
   ajuste_masivo: "Ajuste masivo",
   importacion: "Importación",
 };
+
+/**
+ * De dónde salió un cambio, con su motivo cuando lo dice mejor: «Deshecho:
+ * aumento de marzo» y no «Edición» (M3S1-031), «Lista del proveedor X» y no
+ * «Importación» (M2S2-005).
+ */
+function origenDelCambio(origen: string, motivo: string | null): string {
+  if (motivo?.startsWith("Lista del proveedor")) return motivo;
+  const deshecho = /^Se deshizo el ajuste(?: «(.+)»)?/.exec(motivo ?? "");
+  if (deshecho) return deshecho[1] ? `Deshecho: ${deshecho[1]}` : "Deshecho";
+  return origenTexto[origen] ?? origen;
+}
 
 type Params = {
   buscar?: string;
@@ -228,7 +241,7 @@ export default async function PreciosPage({
                         </span>
                       </p>
                       <p className="mt-0.5 text-sm text-muted-foreground">
-                        {origenTexto[cambio.origen] ?? cambio.origen} ·{" "}
+                        {origenDelCambio(cambio.origen, cambio.motivo)} ·{" "}
                         {fechaHora.format(cambio.createdAt)}
                       </p>
                     </li>
@@ -381,6 +394,16 @@ function RenglonDePrecio({
           {generalId && (
             <PrecioEditable variantId={fila.variantId} priceListId={generalId} valor={fila.precioGeneral} rotulo="Lista" tactil />
           )}
+          {generalId && (
+            <OfertaDelPrecio
+              variantId={fila.variantId}
+              priceListId={generalId}
+              producto={`${fila.producto} ${fila.medida}`}
+              precio={fila.precioGeneral}
+              precioAnterior={fila.precioAnterior}
+              ofertaHasta={fila.ofertaHasta}
+            />
+          )}
           <BajoCosto precio={fila.precioGeneral} piso={fila.piso} />
         </div>
         {/* El ahorro va entre los dos precios; un profesional más caro se
@@ -447,6 +470,16 @@ function FilaDePrecio({
       <td className="px-3 py-1.5">
         {generalId && (
           <PrecioEditable variantId={fila.variantId} priceListId={generalId} valor={fila.precioGeneral} rotulo="Lista" />
+        )}
+        {generalId && (
+          <OfertaDelPrecio
+            variantId={fila.variantId}
+            priceListId={generalId}
+            producto={`${fila.producto} ${fila.medida}`}
+            precio={fila.precioGeneral}
+            precioAnterior={fila.precioAnterior}
+            ofertaHasta={fila.ofertaHasta}
+          />
         )}
         <BajoCosto precio={fila.precioGeneral} piso={fila.piso} />
       </td>

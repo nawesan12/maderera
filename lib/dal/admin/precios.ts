@@ -29,6 +29,9 @@ export interface FilaPrecio {
   desactualizado: boolean;
   /** El precio final que apenas cubre el costo; null sin costo cargado. */
   piso?: number | null;
+  /** En oferta (lista general): el precio de antes y cuándo termina. */
+  precioAnterior?: string | null;
+  ofertaHasta?: string | null;
 }
 
 export const DIAS_PARA_REVISAR = 60;

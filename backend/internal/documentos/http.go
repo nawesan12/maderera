@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"mjbj/internal/jsmath"
 	"net/http"
 	"time"
 
@@ -201,8 +202,14 @@ func (a *API) ExportarPrecios(ctx context.Context, r documentosapi.ExportarPreci
 
 	planillaFilas := make([]planilla.FilaPlanilla, len(filas))
 	for i, f := range filas {
+		// Sin precio profesional, la celda va vacía y no «0»: la misma
+		// planilla tiene que poder volver a importarse (M2S1-044).
+		profesional := f.PrecioProfesional
+		if n := jsmath.Numero(profesional); !(n > 0) {
+			profesional = ""
+		}
 		planillaFilas[i] = planilla.FilaPlanilla{Sku: f.SKU, Producto: f.Producto, Medida: f.Medida, Categoria: f.Categoria,
-			PrecioGeneral: f.PrecioGeneral, PrecioProfesional: f.PrecioProfesional}
+			PrecioGeneral: f.PrecioGeneral, PrecioProfesional: profesional}
 	}
 	return archivo{
 		tipo:        "text/csv; charset=utf-8",

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -288,7 +289,27 @@ func (s *Servicio) AplicarLista(ctx context.Context, ses *auth.Sesion, form map[
 	if !hay {
 		return "", "", fallo("No hay una lista de precios general.")
 	}
+	// Lo que cambió, para la bitácora: qué producto, de cuánto a cuánto
+	// (M2S2-005).
+	type cambio struct {
+		Sku     string  `json:"sku"`
+		Antes   *string `json:"antes"`
+		Despues string  `json:"despues"`
+	}
+	var cambios []cambio
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var proveedor string
+		if err := tx.QueryRow(ctx, `SELECT coalesce(nombre, '') FROM suppliers WHERE id = $1`, perfil.SupplierID).Scan(&proveedor); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		motivo := "Lista del proveedor"
+		if strings.TrimSpace(proveedor) != "" {
+			motivo += " " + strings.TrimSpace(proveedor)
+		}
+		var lote string
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text`).Scan(&lote); err != nil {
+			return err
+		}
 		var existe string
 		err := tx.QueryRow(ctx, `SELECT id FROM supplier_price_profiles WHERE supplier_id = $1 LIMIT 1`, perfil.SupplierID).Scan(&existe)
 		margen := jsmath.Fijo2(perfil.MargenPorcentaje)
@@ -314,10 +335,26 @@ func (s *Servicio) AplicarLista(ctx context.Context, ses *auth.Sesion, form map[
 				return err
 			}
 			precio := jsmath.Fijo2(f.PrecioSugerido)
+			var antes *string
+			var sku string
+			if err := tx.QueryRow(ctx, `SELECT (SELECT price::text FROM price_list_items WHERE price_list_id = $1 AND variant_id = $2),
+				coalesce((SELECT sku FROM product_variants WHERE id = $2), '')`, general, f.VariantID).Scan(&antes, &sku); err != nil {
+				return err
+			}
 			if _, err := tx.Exec(ctx, `
 				INSERT INTO price_list_items (price_list_id, variant_id, price) VALUES ($1, $2, $3::numeric)
 				ON CONFLICT (price_list_id, variant_id) DO UPDATE SET price = $3::numeric, updated_at = now()`, general, f.VariantID, precio); err != nil {
 				return err
+			}
+			// Al historial, como cualquier cambio de precio: la lista del
+			// proveedor cambiaba el precio sin dejar rastro en «Últimos
+			// cambios» (M2S2-005).
+			if antes == nil || jsmath.Numero(*antes) != jsmath.Numero(precio) {
+				if _, err := tx.Exec(ctx, `INSERT INTO price_history (variant_id, price_list_id, precio_anterior, precio_nuevo, origen, motivo, lote_id, created_by_user_id)
+					VALUES ($1, $2, $3::numeric, $4::numeric, 'importacion', $5, $6::uuid, $7)`, f.VariantID, general, antes, precio, motivo, lote, ses.UserID); err != nil {
+					return err
+				}
+				cambios = append(cambios, cambio{Sku: sku, Antes: antes, Despues: precio})
 			}
 		}
 		return nil
@@ -326,6 +363,6 @@ func (s *Servicio) AplicarLista(ctx context.Context, ses *auth.Sesion, form map[
 		return "", "", err
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "precio", perfil.SupplierID,
-		fmt.Sprintf("Importó %d precios desde la lista de un proveedor", len(filas)), nil)
+		fmt.Sprintf("Importó %d precios desde la lista de un proveedor", len(filas)), map[string]any{"cambios": cambios})
 	return fmt.Sprintf("Listo: %d precios actualizados. El mapeo quedó guardado.", len(filas)), perfil.SupplierID, nil
 }

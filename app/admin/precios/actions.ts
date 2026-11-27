@@ -1,5 +1,6 @@
 "use server";
 
+import { parsearImporte } from "@/lib/formato";
 import { revalidatePath, updateTag } from "next/cache";
 import { ETIQUETAS } from "@/lib/cache-publico";
 import { api, comoFormulario, mensajeDe, type Problema } from "@/lib/api/servidor";
@@ -31,6 +32,26 @@ export async function editarPrecio(_previo: EstadoPrecios, formData: FormData): 
   if (r.error) return { error: mensajeDe(r.error as Problema, "Revisá el precio.") };
   refrescar();
   return { ok: "Precio actualizado." };
+}
+
+/** Pone un precio en oferta hasta un día (M2S2-030). «70.000» son setenta mil. */
+export async function ofertarPrecio(variantId: string, priceListId: string, precio: string, hasta: string): Promise<EstadoPrecios> {
+  const n = parsearImporte(precio);
+  if (!Number.isFinite(n) || n <= 0) return { error: "Ese precio no es válido." };
+  const r = await (await api()).POST("/api/v1/admin/precios/oferta", {
+    body: { variantId, priceListId, precio: String(n), hasta },
+  });
+  if (r.error) return { error: mensajeDe(r.error as Problema, "Revisá la oferta.") };
+  refrescar();
+  return { ok: "Quedó en oferta." };
+}
+
+/** Termina la oferta y vuelve al precio de antes. */
+export async function terminarOferta(variantId: string, priceListId: string): Promise<EstadoPrecios> {
+  const r = await (await api()).POST("/api/v1/admin/precios/oferta/fin", { body: { variantId, priceListId } });
+  if (r.error) return { error: mensajeDe(r.error as Problema, "No se pudo terminar la oferta.") };
+  refrescar();
+  return { ok: "Volvió al precio de antes." };
 }
 
 function pedidoDeAjuste(formData: FormData) {

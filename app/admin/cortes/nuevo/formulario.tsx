@@ -110,6 +110,7 @@ export function FormularioCorte({
   desdeConsulta,
   anchoSierra: anchoSierraGeneral,
   clienteInicial,
+  contactoInicial,
   sierraEditable = false,
   puedeReponer = false,
   preguntarSucursal = false,
@@ -144,6 +145,8 @@ export function FormularioCorte({
   };
   /** Desde la ficha del cliente: llega con el cliente ya elegido. */
   clienteInicial?: { id: string; nombre: string; razonSocial: string | null; telefono: string | null };
+  /** Sin ficha: el nombre y el teléfono de quien mandó la consulta. */
+  contactoInicial?: { nombre: string; telefono: string };
   /**
    * La sierra es un dato del taller: la cambia el admin. A quien vende le
    * sobraba un campo técnico que no sabe completar.
@@ -237,10 +240,10 @@ export function FormularioCorte({
   const [nombre, setNombre] = useState(
     corregir?.contactoNombre ??
       desdePedido?.contactoNombre ??
-      (clienteInicial ? (clienteInicial.razonSocial ?? clienteInicial.nombre) : ""),
+      (clienteInicial ? (clienteInicial.razonSocial ?? clienteInicial.nombre) : (contactoInicial?.nombre ?? "")),
   );
   const [telefono, setTelefono] = useState(
-    corregir?.telefono || clienteInicial?.telefono || desdePedido?.telefono || "",
+    corregir?.telefono || clienteInicial?.telefono || desdePedido?.telefono || contactoInicial?.telefono || "",
   );
   // La placa del pedido de entrada: arrancar con una medida supuesta armaba
   // el plano sobre una placa que no era (H188).

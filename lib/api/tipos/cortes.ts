@@ -449,6 +449,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/cortes/consulta/{token}/contacto": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Quién mandó la consulta por WhatsApp: el cliente vinculado a la
+         *     conversación, su nombre y su teléfono (M2S3-024). Para el alta del
+         *     corte; quien entra a /admin/cortes/nuevo.
+         */
+        get: operations["ContactoDeLaConsulta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cortes/consulta/{token}": {
         parameters: {
             query?: never;
@@ -966,6 +987,13 @@ export interface components {
                 grandis: components["schemas"]["MedidaDeTabla"];
                 pvc: components["schemas"]["MedidaDeTabla"];
             };
+        };
+        ContactoDeLaConsulta: {
+            clienteId: string | null;
+            nombre: string | null;
+            telefono: string | null;
+            /** @description La conversación de donde salió */
+            chat: string | null;
         };
         ConsultaDeCorte: {
             token: string;
@@ -1880,6 +1908,30 @@ export interface operations {
             };
             422: components["responses"]["Problema"];
             429: components["responses"]["Problema"];
+        };
+    };
+    ContactoDeLaConsulta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El contacto, o todo nulo si no salió de una conversación */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactoDeLaConsulta"];
+                };
+            };
+            401: components["responses"]["Problema"];
+            403: components["responses"]["Problema"];
         };
     };
     ConsultaDeCorte: {

@@ -363,6 +363,17 @@ func (s *Servicio) Alta(ctx context.Context, ses *auth.Sesion, f FormCorte) (str
 				return err
 			}
 		}
+		if f.Reemplaza != "" {
+			// La consulta de donde salió el corte corregido apunta al nuevo:
+			// abrirla decía «ya se pasó a corte: ver el CRT-5», el anulado
+			// (M2S1-197).
+			if _, err := tx.Exec(ctx, `UPDATE consultas_corte SET cutting_order_id = $1 WHERE cutting_order_id = $2`, id, f.Reemplaza); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `UPDATE consultas_corte_grupos SET cutting_order_id = $1 WHERE cutting_order_id = $2`, id, f.Reemplaza); err != nil {
+				return err
+			}
+		}
 		if f.Consulta != "" {
 			sql := `UPDATE consultas_corte SET cutting_order_id = $1
 				WHERE token = $2 AND cutting_order_id IS NULL`

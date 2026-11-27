@@ -513,6 +513,23 @@ paths:
                   token: { type: string }
         "422": { $ref: "#/components/responses/Problema" }
         "429": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/cortes/consulta/{token}/contacto:
+    get:
+      operationId: ContactoDeLaConsulta
+      description: |
+        Quién mandó la consulta por WhatsApp: el cliente vinculado a la
+        conversación, su nombre y su teléfono (M2S3-024). Para el alta del
+        corte; quien entra a /admin/cortes/nuevo.
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string, maxLength: 40 } }
+      responses:
+        "200":
+          description: El contacto, o todo nulo si no salió de una conversación
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContactoDeLaConsulta" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
   /api/v1/cortes/consulta/{token}:
     get:
       operationId: ConsultaDeCorte
@@ -1031,6 +1048,14 @@ components:
           properties:
             grandis: { $ref: "#/components/schemas/MedidaDeTabla" }
             pvc: { $ref: "#/components/schemas/MedidaDeTabla" }
+    ContactoDeLaConsulta:
+      type: object
+      required: [clienteId, nombre, telefono, chat]
+      properties:
+        clienteId: { type: string, nullable: true }
+        nombre: { type: string, nullable: true }
+        telefono: { type: string, nullable: true }
+        chat: { type: string, nullable: true, description: La conversación de donde salió }
     ConsultaDeCorte:
       type: object
       required: [token, variantId, material, placaLargoMm, placaAnchoMm, mitad, cantoDescripcion, piezas, anchoSierraMm, sucursal, metrosCanto, plano, corteId, createdAt, grupos]

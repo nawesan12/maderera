@@ -10,7 +10,7 @@ import { DECIDEN_EN_LA_COLA, puedeEntrar } from "@/lib/roles";
 import { esUuid } from "@/lib/uuid";
 import { anchoDeSierra } from "@/lib/dal/sierra";
 import { FormularioCorte } from "./formulario";
-import { consultaDeCorte } from "@/lib/dal/consultas-corte";
+import { consultaDeCorte, contactoDeLaConsulta } from "@/lib/dal/consultas-corte";
 import { placasCortablesPublicas } from "@/lib/dal/cortes-publico";
 import { ajustesDelSitio } from "@/lib/dal/contenido";
 import { valorDeRegla } from "@/lib/reglas";
@@ -59,7 +59,7 @@ export default async function NuevoCortePage({
   const pedidoId = sp.pedido ?? corregido?.corte.orderId ?? undefined;
   // De dónde se vino: el chat del cliente (H046).
   const volver = sp.volver && VUELTA_PERMITIDA.test(sp.volver) ? sp.volver : null;
-  const [sucursales, pedido, sierra, consulta, placas, cliente, ajustes] = await Promise.all([
+  const [sucursales, pedido, sierra, consulta, placas, clienteElegido, ajustes, contacto] = await Promise.all([
     listarSucursalesPublicas(),
     // Sin plata: el depósito también carga cortes de un pedido (el alta no
     // es del aserradero: lib/roles.ts).
@@ -69,7 +69,12 @@ export default async function NuevoCortePage({
     token ? placasCortablesPublicas() : Promise.resolve([]),
     clienteId && esUuid(clienteId) ? obtenerCliente(clienteId) : Promise.resolve(null),
     ajustesDelSitio(),
+    // La consulta que mandó un cliente por WhatsApp trae su ficha y su
+    // teléfono (M2S3-024).
+    token && !clienteId && veClientes ? contactoDeLaConsulta(token) : Promise.resolve(null),
   ]);
+  const cliente =
+    clienteElegido ?? (contacto?.clienteId && esUuid(contacto.clienteId) ? await obtenerCliente(contacto.clienteId) : null);
   if (token && !consulta) notFound();
   // El teléfono del cliente del pedido, para el aviso de «corte listo»
   // (H046). El aserradero no lo ve.
@@ -280,9 +285,12 @@ export default async function NuevoCortePage({
                 id: cliente.id,
                 nombre: cliente.nombre,
                 razonSocial: cliente.razonSocial,
-                telefono: cliente.telefono ?? (sp.telefono?.slice(0, 40) || null),
+                telefono: cliente.telefono ?? (sp.telefono?.slice(0, 40) || contacto?.telefono || null),
               }
             : undefined
+        }
+        contactoInicial={
+          !cliente && contacto?.nombre ? { nombre: contacto.nombre, telefono: contacto.telefono ?? "" } : undefined
         }
         desdePedido={
           pedido

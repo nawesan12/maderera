@@ -236,6 +236,12 @@ type FichaDeFactura struct {
 	Pagos     []PagoDeLaFactura    `json:"pagos"`
 	Creditos  []CreditoDeLaFactura `json:"creditos"`
 	Renglones []RenglonDeLaFactura `json:"renglones"`
+	// Flete es el de las recepciones que cubre: con él y la diferencia
+	// pasada al costo, la tabla de mercadería suma el neto (M2S1-123).
+	Flete float64 `json:"flete"`
+	// Devolucion es que los renglones son lo que devolvió una nota de
+	// crédito, no lo que llegó (M3S2-016).
+	Devolucion bool `json:"devolucion"`
 }
 
 // ObtenerFactura es la ficha de /admin/compras/facturas/[id]; nil si no está.
@@ -324,7 +330,34 @@ func (s *Servicio) ObtenerFactura(ctx context.Context, id string) (*FichaDeFactu
 		if err != nil {
 			return nil, err
 		}
+		var flete jsmath.Num
+		if err := s.pool.QueryRow(ctx, `SELECT coalesce(sum(g.gastos), 0) FROM purchase_invoice_receipts x JOIN goods_receipts g ON g.id = x.goods_receipt_id
+			WHERE x.purchase_invoice_id = $1`, f.ID).Scan(&flete); err != nil {
+			return nil, err
+		}
+		f.Flete = float64(flete)
+		return &f, nil
 	}
+	// Lo que devolvió una nota de crédito.
+	filas, err = s.pool.Query(ctx, `
+		SELECT p.name, v.label, d.cantidad, d.costo_unitario, i.alicuota_iva
+		FROM purchase_return_items d JOIN goods_receipt_items i ON i.id = d.goods_receipt_item_id
+		LEFT JOIN product_variants v ON v.id = d.variant_id LEFT JOIN products p ON p.id = v.product_id
+		WHERE d.purchase_invoice_id = $1 ORDER BY d.created_at, p.name`, f.ID)
+	if err != nil {
+		return nil, err
+	}
+	f.Renglones, err = pgx.CollectRows(filas, func(r pgx.CollectableRow) (RenglonDeLaFactura, error) {
+		var x RenglonDeLaFactura
+		var cantidad, costo, alicuota jsmath.Num
+		err := r.Scan(&x.Producto, &x.Variante, &cantidad, &costo, &alicuota)
+		x.Cantidad, x.CostoUnitario, x.AlicuotaIva = float64(cantidad), float64(costo), float64(alicuota)
+		return x, err
+	})
+	if err != nil {
+		return nil, err
+	}
+	f.Devolucion = len(f.Renglones) > 0
 	return &f, nil
 }
 
@@ -434,6 +467,13 @@ func (s *Servicio) CargarFactura(ctx context.Context, ses *auth.Sesion, m map[st
 	if d.AplicaA != nil && !esCredito {
 		return "", "", fallo("Solo una nota de crédito se aplica a otra factura.")
 	}
+	devoluciones, err := leerDevoluciones(m)
+	if err != nil {
+		return "", "", err
+	}
+	if len(devoluciones) > 0 && !esCredito {
+		return "", "", fallo("Solo una nota de crédito devuelve mercadería.")
+	}
 	var id string
 	var ajuste ajusteDeCosto
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -508,9 +548,27 @@ func (s *Servicio) CargarFactura(ctx context.Context, ses *auth.Sesion, m map[st
 				return err
 			}
 		}
+		if len(devoluciones) > 0 {
+			if err := devolverAlProveedor(ctx, tx, ses, id, d.SupplierID, NumeroDeCompra(int64(d.PuntoVenta), int64(d.Numero)), devoluciones); err != nil {
+				return err
+			}
+		}
 		// La factura vino distinta de lo recibido y quien la carga aceptó la
 		// diferencia: el costo de la mercadería pasa a lo facturado.
 		if d.AjustarCosto && len(recepciones) > 0 {
+			// Si la diferencia es justo lo que de la orden no llegó, cobra
+			// mercadería que no entró: pasarla al costo subiría el de lo que
+			// sí entró (M3S3-009). Se reclama o se compensa con una nota.
+			var faltante jsmath.Num
+			if err := tx.QueryRow(ctx, `
+				SELECT coalesce(sum((i.cantidad - i.cantidad_recibida) * i.costo_unitario), 0)
+				FROM purchase_order_items i WHERE i.cantidad_recibida < i.cantidad
+				  AND i.purchase_order_id IN (SELECT purchase_order_id FROM goods_receipts WHERE id = ANY($1::uuid[]))`, recepciones).Scan(&faltante); err != nil {
+				return err
+			}
+			if dif := jsmath.Redondear2(d.Neto - netoRecibido); faltante.F() > 0 && math.Abs(dif-faltante.F()) < 1 {
+				return fallo("La diferencia es mercadería que no llegó: no se pasa al costo.")
+			}
 			ajuste, err = pasarDiferenciaAlCosto(ctx, tx, ses, id, recepciones, jsmath.Redondear2(d.Neto-netoRecibido))
 			if err != nil {
 				return err
@@ -921,6 +979,10 @@ func (s *Servicio) AnularFactura(ctx context.Context, ses *auth.Sesion, id, moti
 			}
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM purchase_invoice_receipts WHERE purchase_invoice_id = $1`, id); err != nil {
+			return err
+		}
+		// Lo que devolvía una nota de crédito vuelve al stock.
+		if err := deshacerDevolucion(ctx, tx, ses, id, motivo); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE purchase_invoices SET aplica_a_id = NULL, updated_at = now() WHERE aplica_a_id = $1`, id); err != nil {

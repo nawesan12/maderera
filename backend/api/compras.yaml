@@ -631,6 +631,31 @@ paths:
             application/pdf:
               schema: { type: string, format: binary }
         "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/devolucion:
+    get:
+      operationId: RenglonesDevolvibles
+      description: Lo recibido del proveedor que todavía se le puede devolver con una nota de crédito.
+      parameters:
+        - { name: proveedor, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Los renglones de sus recepciones confirmadas de los últimos 120 días
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, remito, fecha, descripcion, unidad, recibido, devuelto, costoUnitario]
+                  properties:
+                    id: { type: string }
+                    remito: { type: string, nullable: true }
+                    fecha: { type: string, format: date-time }
+                    descripcion: { type: string }
+                    unidad: { type: string, nullable: true }
+                    recibido: { type: number, format: double }
+                    devuelto: { type: number, format: double }
+                    costoUnitario: { type: number, format: double }
   /api/v1/admin/compras/pagos/simular:
     post:
       operationId: SimularRetenciones
@@ -1113,6 +1138,17 @@ components:
       type: object
       required: [id, numeroRemito, fecha, estado, gastos, proveedor, supplierId, sucursal, lineas, neto, facturada]
       properties:
+        faltantes:
+          type: array
+          description: lo que de su orden no llegó (solo de las confirmadas sin factura)
+          items:
+            type: object
+            required: [descripcion, cantidad, unidad]
+            properties:
+              descripcion: { type: string }
+              cantidad: { type: number, format: double }
+              unidad: { type: string, nullable: true }
+        faltanteNeto: { type: number, format: double, description: el neto de lo que no llegó, al costo pedido }
         id: { type: string }
         numeroRemito: { type: string, nullable: true }
         fecha: { type: string, format: date-time }
@@ -1325,6 +1361,8 @@ components:
               cantidad: { type: number, format: double }
               costoUnitario: { type: number, format: double }
               alicuotaIva: { type: number, format: double }
+        flete: { type: number, format: double, description: el de las recepciones que cubre }
+        devolucion: { type: boolean, description: los renglones son lo que devolvió la nota de crédito }
     FichaDePago:
       type: object
       required: [id, fecha, total, neto, medio, circuito, referencia, notas, supplierId, proveedor, razonSocial, cuit, anuladoAt, motivoAnulacion,

@@ -42,6 +42,15 @@ export interface DatosFacturaCompra {
   aplicaA?: string;
   /** Si la diferencia con lo recibido pasa al costo de la mercadería. */
   ajustarCosto?: boolean;
+  /** De una nota de crédito, lo que se le devuelve al proveedor (sale del stock). */
+  devoluciones?: { itemId: string; cantidad: number }[];
+}
+
+/** Lo recibido del proveedor que todavía se le puede devolver con una nota de crédito. */
+export async function verDevolvibles(proveedor: string) {
+  if (!proveedor) return [];
+  const r = await (await api()).GET("/api/v1/admin/compras/devolucion", { params: { query: { proveedor } } });
+  return r.data ?? [];
 }
 
 function refrescar(supplierId: string, id?: string) {

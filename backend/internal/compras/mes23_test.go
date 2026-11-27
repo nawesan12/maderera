@@ -458,3 +458,85 @@ func TestCostoPromedioContraElStock(t *testing.T) {
 		t.Errorf("con 4 en el galpón: %v", c)
 	}
 }
+
+// M3S2-016: la nota de crédito devuelve mercadería: sale del stock, corrige
+// el costo y, anulada, vuelve al stock.
+func TestNotaDeCreditoConDevolucion(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	ctx := context.Background()
+	_, b := pedir(t, adm, "POST", e.u+"recepciones", map[string]any{"supplierId": e.proveedor, "branchId": e.central,
+		"lineas": []any{map[string]any{"variantId": e.placa, "cantidad": 10, "costoUnitario": 1000, "alicuotaIva": 21}}})
+	rec := idDe(t, b)
+	if c, b := pedir(t, adm, "POST", e.u+"recepciones/"+rec+"/confirmar", nil); c != 200 {
+		t.Fatalf("confirmar: %d %s", c, b)
+	}
+	// Llegaron otras 10 a 2.000: el promedio queda en 1.500.
+	_, b = pedir(t, adm, "POST", e.u+"recepciones", map[string]any{"supplierId": e.proveedor, "branchId": e.central,
+		"lineas": []any{map[string]any{"variantId": e.placa, "cantidad": 10, "costoUnitario": 2000, "alicuotaIva": 21}}})
+	rec2 := idDe(t, b)
+	pedir(t, adm, "POST", e.u+"recepciones/"+rec2+"/confirmar", nil)
+	_, b = pedir(t, adm, "GET", e.u+"compras/devolucion?proveedor="+e.proveedor, nil)
+	var renglones []RenglonDevolvible
+	_ = json.Unmarshal([]byte(b), &renglones)
+	var item string
+	for _, r := range renglones {
+		if r.CostoUnitario == 2000 {
+			item = r.ID
+		}
+	}
+	if item == "" {
+		t.Fatalf("devolvibles: %s", b)
+	}
+	// Devuelve 2 de las de 2.000: (20 × 1.500 − 2 × 2.000) / 18 = 1.444,4444.
+	nc := e.facturaDeCompra(t, adm, 88, map[string]any{"tipo": "nota_credito_a", "neto": 4000, "iva21": 840,
+		"devoluciones": []any{map[string]any{"itemId": item, "cantidad": 2}}})
+	if q := e.numero(t, `select qty::float8 from inventory where variant_id = $1`, e.placa); q != 18 {
+		t.Errorf("stock después de devolver: %v", q)
+	}
+	if c := e.numero(t, `select costo_promedio::float8 from variant_costs where variant_id = $1`, e.placa); c != 1444.4444 {
+		t.Errorf("costo después de devolver: %v", c)
+	}
+	// No se devuelve más de lo que llegó.
+	c, b := pedir(t, adm, "POST", e.u+"compras/facturas", map[string]any{"supplierId": e.proveedor, "tipo": "nota_credito_a", "puntoVenta": 3,
+		"numero": 89, "fechaEmision": "2026-10-20", "neto": 1, "iva21": 0, "iva105": 0, "iva27": 0, "exento": 0, "percepciones": 0,
+		"devoluciones": []any{map[string]any{"itemId": item, "cantidad": 9}}})
+	if c != 422 || !strings.Contains(b, "más de lo que llegó") {
+		t.Errorf("devolver de más: %d %s", c, b)
+	}
+	_, b = pedir(t, adm, "GET", e.u+"compras/facturas/"+nc, nil)
+	if !strings.Contains(b, `"devolucion":true`) {
+		t.Errorf("la ficha no muestra lo devuelto: %s", b)
+	}
+	if c, b := pedir(t, adm, "POST", e.u+"compras/facturas/"+nc+"/anular", map[string]string{"motivo": "error"}); c != 200 {
+		t.Fatalf("anular: %d %s", c, b)
+	}
+	if q := e.numero(t, `select qty::float8 from inventory where variant_id = $1`, e.placa); q != 20 {
+		t.Errorf("anulada, vuelve al stock: %v", q)
+	}
+	_ = ctx
+}
+
+// M3S3-009: la factura que cobra mercadería que no llegó no pasa al costo.
+func TestDiferenciaPorCantidadNoPasaAlCosto(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	linea := map[string]any{"variantId": e.tornillo, "descripcion": "Corredera", "cantidad": 20, "costoUnitario": 7560, "alicuotaIva": 21}
+	_, b := pedir(t, adm, "POST", e.u+"compras/ordenes", map[string]any{"supplierId": e.proveedor, "branchId": e.central, "lineas": []any{linea}})
+	orden := idDe(t, b)
+	pedir(t, adm, "POST", e.u+"compras/ordenes/"+orden+"/enviada", nil)
+	_, b = pedir(t, adm, "POST", e.u+"compras/ordenes/"+orden+"/recibir", map[string]string{"numeroRemito": "0031-00000412"})
+	rec := idDe(t, b)
+	_, _ = e.pool.Exec(context.Background(), `update goods_receipt_items set cantidad = 16 where receipt_id = $1`, rec)
+	pedir(t, adm, "POST", e.u+"recepciones/"+rec+"/confirmar", nil)
+	_, b = pedir(t, adm, "GET", e.u+"recepciones", nil)
+	if !strings.Contains(b, `"faltanteNeto":30240`) {
+		t.Errorf("el listado no dice lo que faltó: %s", b)
+	}
+	c, b := pedir(t, adm, "POST", e.u+"compras/facturas", map[string]any{"supplierId": e.proveedor, "tipo": "factura_a", "puntoVenta": 31,
+		"numero": 9, "fechaEmision": "2026-10-20", "neto": 151200, "iva21": 31752, "iva105": 0, "iva27": 0, "exento": 0, "percepciones": 0,
+		"receiptId": rec, "ajustarCosto": true})
+	if c != 422 || !strings.Contains(b, "no llegó") {
+		t.Errorf("pasar al costo una diferencia de cantidad: %d %s", c, b)
+	}
+}

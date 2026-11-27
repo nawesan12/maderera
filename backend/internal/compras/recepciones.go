@@ -31,6 +31,11 @@ type RecepcionListada struct {
 	Neto         float64   `json:"neto"`
 	// Facturada dice si ya hay una factura de compra vinculada.
 	Facturada bool `json:"facturada"`
+	// Faltantes es lo que de su orden no llegó, y FaltanteNeto su neto al
+	// costo pedido: una factura que cobra eso no es una diferencia de
+	// precio y no se pasa al costo (M3S3-009).
+	Faltantes    []Faltante `json:"faltantes"`
+	FaltanteNeto float64    `json:"faltanteNeto"`
 }
 
 // ListarRecepciones es listarRecepciones: el neto de las líneas más el flete.
@@ -47,14 +52,51 @@ func (s *Servicio) ListarRecepciones(ctx context.Context, limite int) ([]Recepci
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(filas, func(r pgx.CollectableRow) (RecepcionListada, error) {
+	lista, err := pgx.CollectRows(filas, func(r pgx.CollectableRow) (RecepcionListada, error) {
 		var x RecepcionListada
 		var neto *jsmath.Num
 		var gastos jsmath.Num
 		err := r.Scan(&x.ID, &x.NumeroRemito, &x.Fecha, &x.Estado, &x.Gastos, &x.Proveedor, &x.SupplierID, &x.Sucursal, &x.Lineas, &neto, &gastos, &x.Facturada)
 		x.Neto = numOCero(neto) + float64(gastos)
+		x.Faltantes = []Faltante{}
 		return x, err
 	})
+	if err != nil || len(lista) == 0 {
+		return lista, err
+	}
+	indice := map[string]int{}
+	var sinFacturar []string
+	for i, x := range lista {
+		if x.Estado == "confirmada" && !x.Facturada {
+			indice[x.ID] = i
+			sinFacturar = append(sinFacturar, x.ID)
+		}
+	}
+	if len(sinFacturar) == 0 {
+		return lista, nil
+	}
+	filas, err = s.pool.Query(ctx, `
+		SELECT r.id, i.descripcion, i.cantidad - i.cantidad_recibida, p.unit::text, i.costo_unitario
+		FROM goods_receipts r JOIN purchase_order_items i ON i.purchase_order_id = r.purchase_order_id
+		LEFT JOIN product_variants v ON v.id = i.variant_id LEFT JOIN products p ON p.id = v.product_id
+		WHERE r.id = ANY($1::uuid[]) AND i.cantidad_recibida < i.cantidad ORDER BY r.id, i.orden`, sinFacturar)
+	if err != nil {
+		return nil, err
+	}
+	defer filas.Close()
+	for filas.Next() {
+		var id string
+		var f Faltante
+		var cantidad, costo jsmath.Num
+		if err := filas.Scan(&id, &f.Descripcion, &cantidad, &f.Unidad, &costo); err != nil {
+			return nil, err
+		}
+		f.Cantidad = float64(cantidad)
+		x := &lista[indice[id]]
+		x.Faltantes = append(x.Faltantes, f)
+		x.FaltanteNeto = jsmath.Redondear2(x.FaltanteNeto + float64(f.Cantidad*costo.F()))
+	}
+	return lista, filas.Err()
 }
 
 // LineaDeRecepcion es una línea con la cuenta del costo, si ya se confirmó.

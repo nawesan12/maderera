@@ -29,6 +29,7 @@ import { useEtiquetasDelCircuito } from "@/components/admin/circuito";
 import { formatearMonto, hoyEnArgentina, importeDelCampo, importeIlegible, importeParaElCampo } from "@/lib/formato";
 import { Hoja, Interruptor, Opciones, Seccion } from "@/components/admin/formulario";
 import { cargarGasto, type EstadoGasto } from "./actions";
+import { DialogoProveedor } from "@/app/admin/proveedores/dialogo";
 import { CampoFecha } from "@/components/ui/campo-fecha";
 
 const CATEGORIAS = {
@@ -191,21 +192,38 @@ export function CargarGasto({
           />
         </label>
 
-        <label className="block md:col-span-2">
-          <span className="text-sm font-medium">A quién se le pagó</span>
-          <select
-            value={supplierId}
-            onChange={(e) => setSupplierId(e.target.value)}
-            className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-          >
-            <option value="">{conFactura ? "Elegí el proveedor" : "—"}</option>
-            {proveedores.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nombre}
-              </option>
-            ))}
-          </select>
-        </label>
+        {/* Con factura, el proveedor es obligatorio: se marca, y se puede
+            dar de alta ahí mismo (un locador, M2S2-025). El botón quedaba
+            gris sin decir qué faltaba. */}
+        <div className="md:col-span-2">
+          <label htmlFor="gasto-proveedor" className="text-sm font-medium">
+            A quién se le pagó
+            {conFactura && (
+              <span className="text-saldo-debe" aria-label="obligatorio">
+                {" *"}
+              </span>
+            )}
+          </label>
+          <div className="mt-1 flex gap-2">
+            <select
+              id="gasto-proveedor"
+              value={supplierId}
+              aria-invalid={(conFactura && !supplierId) || undefined}
+              onChange={(e) => setSupplierId(e.target.value)}
+              className={`h-11 min-w-0 flex-1 rounded-lg border border-linea bg-card px-3 text-base ${
+                conFactura && !supplierId ? "ring-2 ring-saldo-debe" : ""
+              }`}
+            >
+              <option value="">{conFactura ? "Elegí el proveedor" : "—"}</option>
+              {proveedores.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre}
+                </option>
+              ))}
+            </select>
+            <DialogoProveedor alCrear={setSupplierId} />
+          </div>
+        </div>
 
         <div className="md:col-span-2">
           <Interruptor etiqueta="Con factura" icono={FileText} marcado={conFactura} alCambiar={setConFactura} />

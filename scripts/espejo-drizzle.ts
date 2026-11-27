@@ -34,6 +34,8 @@ const SOLO_EN_GO = new Set([
   // Los ajustes que paga un pago y lo que cubría un pago anulado (00401).
   "supplier_payment_ajustes",
   "supplier_payment_anulado_items",
+  // Lo que una nota de crédito le devuelve al proveedor (00403).
+  "purchase_return_items",
   "cheque_estados",
   "consultas_corte",
   "consultas_corte_grupos",

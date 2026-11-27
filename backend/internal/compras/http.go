@@ -105,6 +105,9 @@ func (o respuesta) VisitListarPagosAProveedoresResponse(w http.ResponseWriter) e
 }
 func (o respuesta) VisitPagarAProveedorResponse(w http.ResponseWriter) error    { return o.escribir(w) }
 func (o respuesta) VisitSimularRetencionesResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitRenglonesDevolviblesResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
 func (o respuesta) VisitAnularPagoAProveedorResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -770,6 +773,14 @@ func (a *API) OrdenDePagoPdf(ctx context.Context, r comprasapi.OrdenDePagoPdfReq
 
 // AnularPagoAProveedor es solo del admin (con nombre, no por pantalla):
 // deshace plata ya pagada y certificados ya entregados.
+func (a *API) RenglonesDevolvibles(ctx context.Context, r comprasapi.RenglonesDevolviblesRequestObject) (comprasapi.RenglonesDevolviblesResponseObject, error) {
+	if _, err := compras(ctx); err != nil {
+		return nil, err
+	}
+	v, err := a.s.RenglonesDevolvibles(ctx, r.Params.Proveedor)
+	return ok(v), err
+}
+
 func (a *API) SimularRetenciones(ctx context.Context, r comprasapi.SimularRetencionesRequestObject) (comprasapi.SimularRetencionesResponseObject, error) {
 	if _, err := compras(ctx); err != nil {
 		return nil, err

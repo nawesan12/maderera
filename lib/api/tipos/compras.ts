@@ -654,6 +654,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/compras/devolucion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Lo recibido del proveedor que todavía se le puede devolver con una nota de crédito. */
+        get: operations["RenglonesDevolvibles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/compras/pagos/simular": {
         parameters: {
             query?: never;
@@ -1091,6 +1108,18 @@ export interface components {
             }[];
         };
         RecepcionListada: {
+            /** @description lo que de su orden no llegó (solo de las confirmadas sin factura) */
+            faltantes?: {
+                descripcion: string;
+                /** Format: double */
+                cantidad: number;
+                unidad: string | null;
+            }[];
+            /**
+             * Format: double
+             * @description el neto de lo que no llegó
+             */
+            faltanteNeto?: number;
             id: string;
             numeroRemito: string | null;
             /** Format: date-time */
@@ -1320,6 +1349,13 @@ export interface components {
                 /** Format: double */
                 alicuotaIva: number;
             }[];
+            /**
+             * Format: double
+             * @description el de las recepciones que cubre
+             */
+            flete?: number;
+            /** @description los renglones son lo que devolvió la nota de crédito */
+            devolucion?: boolean;
         };
         FichaDePago: {
             id: string;
@@ -2510,6 +2546,41 @@ export interface operations {
                 };
             };
             404: components["responses"]["Problema"];
+        };
+    };
+    RenglonesDevolvibles: {
+        parameters: {
+            query: {
+                proveedor: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los renglones de sus recepciones confirmadas de los últimos 120 días */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        remito: string | null;
+                        /** Format: date-time */
+                        fecha: string;
+                        descripcion: string;
+                        unidad: string | null;
+                        /** Format: double */
+                        recibido: number;
+                        /** Format: double */
+                        devuelto: number;
+                        /** Format: double */
+                        costoUnitario: number;
+                    }[];
+                };
+            };
         };
     };
     SimularRetenciones: {

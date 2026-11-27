@@ -579,3 +579,58 @@ func TestChequeDeUnaFacturaQueEsperaElCAE(t *testing.T) {
 		t.Errorf("con la regla en transitoria: %s", c)
 	}
 }
+
+// Mes 23 (prueba en el navegador): la vista previa nombra el producto con su
+// medida, y un costo guardado con más decimales que la lista (el promedio)
+// no cuenta como cambio ni sube el precio un centavo (M2S3-056).
+func TestListaDelProveedorAlCentavoYConElProducto(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	ctx := context.Background()
+	var lista string
+	_ = e.pool.QueryRow(ctx, `insert into price_lists (slug, name, is_default) values ('general', 'General', true) returning id`).Scan(&lista)
+	_, _ = e.pool.Exec(ctx, `insert into price_list_items (price_list_id, variant_id, price) values ($1, $2, 96500)`, lista, e.placa)
+	_, _ = e.pool.Exec(ctx, `insert into variant_costs (variant_id, cantidad_base, costo_promedio) values ($1, 10, 16303.6183)`, e.placa)
+	perfil := map[string]string{"supplierId": e.proveedor, "columnaCodigo": "Código", "columnaPrecio": "Precio", "precioEsNeto": "on", "margenPorcentaje": ""}
+	v := e.vistaPrevia(t, adm, "Código;Precio\nFEN18;16.303,62\n", perfil)
+	if len(v.Filas) != 1 {
+		t.Fatalf("vista: %+v", v)
+	}
+	f := v.Filas[0]
+	if f.Cambio != CambioIgual || f.PrecioSugerido != 96500 || v.SinCambios != 1 {
+		t.Errorf("al centavo es el mismo costo: %+v (sin cambios %d)", f, v.SinCambios)
+	}
+	if f.Nuestro == nil || *f.Nuestro != "Fenólico · 18 mm" {
+		t.Errorf("el nombre: %v", f.Nuestro)
+	}
+}
+
+// Mes 23: el stock sin costo (de la migración) no se pondera como si
+// costara 0: la recepción deja el costo pagado.
+func TestCostoPromedioConStockSinCosto(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	ctx := context.Background()
+	if _, err := e.pool.Exec(ctx, `insert into inventory (variant_id, branch_id, qty) values ($1, $2, 90)
+		on conflict (variant_id, branch_id) do update set qty = 90`, e.placa, e.central); err != nil {
+		t.Fatal(err)
+	}
+	_, b := pedir(t, adm, "POST", e.u+"recepciones", map[string]any{"supplierId": e.proveedor, "branchId": e.central,
+		"lineas": []any{map[string]any{"variantId": e.placa, "cantidad": 10, "costoUnitario": 7560, "alicuotaIva": 21}}})
+	if c, b := pedir(t, adm, "POST", e.u+"recepciones/"+idDe(t, b)+"/confirmar", nil); c != 200 {
+		t.Fatalf("confirmar: %d %s", c, b)
+	}
+	if c := e.numero(t, `select costo_promedio::float8 from variant_costs where variant_id = $1`, e.placa); c != 7560 {
+		t.Errorf("sin costo de antes, el costo es el pagado: %v", c)
+	}
+}
+
+func TestReferenciaQueRepiteLosMedios(t *testing.T) {
+	medios := "transferencia PV1C-TRF-1 y e-Cheq 90000005"
+	if !repiteLosMedios("e-Cheq 90000005 y transferencia PV1C-TRF-1", medios, []string{"90000005", "PV1C-TRF-1"}) {
+		t.Error("la cabecera en otro orden repite los medios")
+	}
+	if repiteLosMedios("OP-77", "transferencia", nil) {
+		t.Error("una referencia propia se conserva")
+	}
+}

@@ -477,9 +477,15 @@ func (s *Servicio) ConfirmarRecepcion(ctx context.Context, ses *auth.Sesion, id 
 				// recepciones y ninguna venta la bajaba, así que una laca sin
 				// stock quedaba con un costo más bajo que el que se pagó
 				// (M3S2-007). Sin stock, el costo nuevo es el que se pagó.
+				//
+				// El stock sin costo (el que vino de la migración, o el que
+				// nunca tuvo recepción) no se pondera como si costara 0: las
+				// correderas de $ 7.560 quedaban en $ 775 y el costo de lo
+				// vendido muy por debajo del real (mes 23). Se toma lo pagado.
 				var e EstadoDeCosto
 				var base, costo jsmath.Num
-				err := tx.QueryRow(ctx, `SELECT greatest(coalesce((SELECT sum(qty) FROM inventory WHERE variant_id = $1), 0), 0), costo_promedio
+				err := tx.QueryRow(ctx, `SELECT CASE WHEN costo_promedio > 0
+					    THEN greatest(coalesce((SELECT sum(qty) FROM inventory WHERE variant_id = $1), 0), 0) ELSE 0 END, costo_promedio
 					FROM variant_costs WHERE variant_id = $1`, v).Scan(&base, &costo)
 				e.CantidadBase, e.CostoPromedio = float64(base), float64(costo)
 				antesDeMezclar(v)

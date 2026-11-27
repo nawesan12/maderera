@@ -329,6 +329,7 @@ export function FormularioOrden({
                         step="0.01"
                         value={l.cantidad}
                         onChange={(e) => cambiar(i, "cantidad", e.target.value)}
+                        aria-label={`Cantidad de ${l.descripcion}`}
                         className="tabular h-10 w-24 rounded-lg border border-linea bg-background px-2 text-right text-base"
                       />
                     </td>

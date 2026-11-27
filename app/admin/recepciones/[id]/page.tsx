@@ -118,7 +118,9 @@ export default async function RecepcionPage({ params }: { params: Promise<{ id: 
               // Los tres costos, solo los que dicen algo: con el mismo
               // $ 7.560 en los tres renglones no se leía nada (M3S3-026).
               const conFlete = i.costoConGastos && Number(i.costoConGastos) !== Number(i.costoUnitario) ? i.costoConGastos : null;
-              const venia = i.costoAnterior && Number(i.costoAnterior) !== Number(i.costoResultante) ? i.costoAnterior : null;
+              // Sin costo de antes no «venía a $ 0»: no tenía (mes 23).
+              const venia =
+                Number(i.costoAnterior) > 0 && Number(i.costoAnterior) !== Number(i.costoResultante) ? i.costoAnterior : null;
               return (
                 <li key={i.id} className="space-y-1.5 px-4 py-3 @3xl:grid @3xl:grid-cols-[minmax(0,1fr)_auto] @3xl:items-baseline @3xl:gap-6 @3xl:space-y-0">
                   <div className="min-w-0">

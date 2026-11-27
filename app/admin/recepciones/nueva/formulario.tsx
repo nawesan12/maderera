@@ -331,7 +331,7 @@ export function FormularioRecepcion({
                     <tr key={l.variantId}>
                       <td className="px-4 py-2.5">
                         <span className="block">{l.descripcion}</span>
-                        {l.costoActual !== null && (
+                        {l.costoActual !== null && l.costoActual > 0 && (
                           <span className="tabular block text-sm text-muted-foreground">
                             venía a {formatearMonto(l.costoActual)}
                           </span>
@@ -371,6 +371,7 @@ export function FormularioRecepcion({
                           onChange={(e) =>
                             cambiar(i, "alicuotaIva", e.target.value)
                           }
+                          aria-label={`IVA de ${l.descripcion}`}
                           className="tabular h-10 rounded-lg border border-linea bg-background px-2 text-base"
                         >
                           {["0.00", "10.50", "21.00", "27.00"].map((a) => (

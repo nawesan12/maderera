@@ -44,6 +44,32 @@ export function importeAInformar(saldo: number, enRevision: number): number | nu
   return resto > 0.005 ? resto : null;
 }
 
+/**
+ * El estado que el portal muestra. Un retiro con su remito preparado y sin
+ * firmar todavía no está entregado: el pedido figuraba «Entregado» con el
+ * remito sin firmar (mes simulado, M2S1-071 y M2S2-115). Queda «Listo» hasta
+ * la firma.
+ */
+export function estadoVisibleDelPedido(
+  estado: string,
+  remitos: { estado: string; tipo: string }[],
+): string {
+  if (estado !== "entregado") return estado;
+  return remitos.some((r) => r.estado === "preparada" && r.tipo === "retiro") ? "listo" : estado;
+}
+
+/**
+ * El título de los remitos de un pedido, sin los anulados: un envío no es un
+ * retiro («1 retiro» con «Te lo llevamos a», M2S1-155).
+ */
+export function tituloDeRemitos(remitos: { tipo: string }[]): string {
+  const envios = remitos.filter((r) => r.tipo === "envio").length;
+  const n = remitos.length;
+  if (envios === n) return n === 1 ? "1 envío" : `${n} envíos`;
+  if (envios === 0) return n === 1 ? "1 retiro" : `${n} retiros`;
+  return `${n} remitos`;
+}
+
 /** El contador de pedidos abiertos: «en curso», nunca «en camino» (H083, H313). */
 export function pedidosEnCurso(n: number): string {
   return `${n} en curso`;

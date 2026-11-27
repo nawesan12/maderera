@@ -636,6 +636,46 @@ func RemitoPorLoQueQueda(ctx context.Context, tx pgx.Tx, pedidoID string, sucurs
 	return &EntregaCreada{ID: id, Numero: numero, FirmaToken: token, PedidoCompleto: true}, nil
 }
 
+// ConstanciaParaFirmar es el remito de una venta del mostrador a cuenta
+// corriente que se lleva en el acto: la mercadería sale fiada, y el cliente
+// la veía «Retirado 4 de 4» sin ningún remito ni constancia (mes simulado,
+// M2S1-073). Como el de constancia, no toca el inventario (el stock bajó al
+// vender); queda «preparada», con su enlace para que firme quien se la llevó.
+// Va en la transacción de la venta: el pedido es nuevo y nadie más lo tiene,
+// así que el candado de la serie después del pedido no se cruza con otro.
+// Sin nada por retirar no hace nada (nil).
+// NotaConstanciaACuenta marca el remito de ConstanciaParaFirmar: anular la
+// venta lo anula con ella (no es un retiro que haya que revisar aparte).
+const NotaConstanciaACuenta = "Venta del mostrador a cuenta corriente"
+
+func ConstanciaParaFirmar(ctx context.Context, tx pgx.Tx, pedidoID string, sucursal *string, usuario *string) (*EntregaCreada, error) {
+	if err := numeracion.BloquearRemitos(ctx, tx); err != nil {
+		return nil, err
+	}
+	pendientes, err := SaldoDeAcopio(ctx, tx, pedidoID)
+	if err != nil {
+		return nil, err
+	}
+	lineas := LineasDeConstancia(pendientes)
+	if len(lineas) == 0 {
+		return nil, nil
+	}
+	numero, err := numeracion.Remito(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	token := tokenDeFirma()
+	nota := NotaConstanciaACuenta
+	id, err := insertarRemito(ctx, tx, numero, pedidoID, sucursal, "retiro", "preparada", nil, nil, &nota, token, usuario, lineas)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := cola.Encolar(ctx, sqlc.New(tx), TrabajoRemitoParaFirmar, map[string]string{"deliveryId": id}, time.Time{}); err != nil {
+		return nil, err
+	}
+	return &EntregaCreada{ID: id, Numero: numero, FirmaToken: token, PedidoCompleto: true}, nil
+}
+
 // RemitoDeConstancia es el remito de una venta que ya salió por el
 // mostrador: la mercadería cruzó la puerta y el stock se descontó al cobrar,
 // así que este remito **no toca el inventario**. Nace entregado, con todo lo
@@ -800,6 +840,21 @@ func (s *Servicio) RegistrarFirma(ctx context.Context, f FormFirma, ip *string) 
 			}
 			if err := VueltaDelViaje(ctx, tx, pedido, r.DeliveryID, r.Numero, nil, true); err != nil {
 				return err
+			}
+		}
+		// El retiro ya figuraba entregado: el aviso «entregado» esperaba la
+		// firma (notificaciones.CambioDeEstado) y sale ahora (M2S1-071).
+		if tipo != "envio" {
+			var avisar bool
+			if err := tx.QueryRow(ctx, `SELECT o.estado = 'entregado' AND NOT EXISTS (
+				  SELECT 1 FROM deliveries d WHERE d.order_id = o.id AND d.estado = 'preparada')
+				FROM orders o WHERE o.id = $1`, pedido).Scan(&avisar); err != nil {
+				return err
+			}
+			if avisar {
+				if _, err := cola.Encolar(ctx, sqlc.New(tx), TrabajoPedidoEstado, map[string]string{"orderId": pedido, "estado": "entregado"}, time.Time{}); err != nil {
+					return err
+				}
 			}
 		}
 		// La constancia de lo que se retiró, por correo.
@@ -1118,6 +1173,10 @@ type RemitoDelPortal struct {
 	ReceptorNombre *string    `json:"receptorNombre"`
 	FirmadoAt      *time.Time `json:"firmadoAt"`
 	CreatedAt      time.Time  `json:"createdAt"`
+	// FirmaToken: del remito preparado que espera la firma, para firmarlo
+	// desde el pedido (solo el link del correo lo hacía; M2S1-071). El
+	// pedido es del cliente de la sesión: el mismo token le llega por correo.
+	FirmaToken *string `json:"firmaToken"`
 }
 
 // EntregasDelPortal son los retiros y el acopio de un pedido del cliente de
@@ -1140,14 +1199,15 @@ func (s *Servicio) DelPortal(ctx context.Context, ses *auth.Sesion, pedido strin
 	}
 	out := &EntregasDelPortal{Entregas: []RemitoDelPortal{}}
 	filas, err := s.pool.Query(ctx, `
-		SELECT id, numero, tipo::text, estado::text, receptor_nombre, firmado_at, created_at
+		SELECT id, numero, tipo::text, estado::text, receptor_nombre, firmado_at, created_at,
+		  CASE WHEN estado = 'preparada' THEN firma_token END
 		FROM deliveries WHERE order_id = $1 ORDER BY created_at DESC`, pedido)
 	if err != nil {
 		return nil, err
 	}
 	for filas.Next() {
 		var r RemitoDelPortal
-		if err := filas.Scan(&r.ID, &r.Numero, &r.Tipo, &r.Estado, &r.ReceptorNombre, &r.FirmadoAt, &r.CreatedAt); err != nil {
+		if err := filas.Scan(&r.ID, &r.Numero, &r.Tipo, &r.Estado, &r.ReceptorNombre, &r.FirmadoAt, &r.CreatedAt, &r.FirmaToken); err != nil {
 			filas.Close()
 			return nil, err
 		}

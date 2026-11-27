@@ -24,6 +24,7 @@ import (
 	"mjbj/internal/clientes"
 	"mjbj/internal/cobros"
 	"mjbj/internal/cortes"
+	"mjbj/internal/entregas"
 	"mjbj/internal/facturacion"
 	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
@@ -838,6 +839,12 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 			VALUES ($1, 'compra', $2::numeric, $3, $4, $5)`,
 			*v.CustomerID, jsmath.Fijo2(c.parteCuenta), "Venta de mostrador "+numero, numero, usuario); err != nil {
 			return ResultadoVenta{}, err
+		}
+		// Lo que se lleva fiado sale con su remito, para firmar (M2S1-073).
+		if estado == "entregado" {
+			if _, err := entregas.ConstanciaParaFirmar(ctx, tx, pedido, &v.BranchID, &usuario); err != nil {
+				return ResultadoVenta{}, err
+			}
 		}
 	}
 

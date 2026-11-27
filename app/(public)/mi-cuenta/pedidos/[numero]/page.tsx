@@ -9,6 +9,7 @@ import {
   Download,
   FileText,
   MapPin,
+  PenLine,
   Printer,
   Scissors,
   Store,
@@ -35,7 +36,7 @@ import {
   numeroFormateado,
   type TipoComprobante,
 } from "@/lib/fiscal/comprobantes";
-import { estadoDelPago, mensajeDeConsulta } from "@/lib/cuenta/portal";
+import { estadoDelPago, estadoVisibleDelPedido, mensajeDeConsulta, tituloDeRemitos } from "@/lib/cuenta/portal";
 import { VolverAPedir } from "./volver-a-pedir";
 import { tienda } from "@/lib/dal/contenido";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
@@ -84,6 +85,11 @@ export default async function DetallePedidoPage({
   const etapas =
     pedido.tipoEntrega === "retiro" ? ETAPAS_RETIRO : ETAPAS_PEDIDO;
   const cancelado = pedido.estado === "cancelado";
+  // Los remitos que valen (el anulado no se lista: decía «retiró» y no
+  // coincidía con el conteo, M3S2-053), y el estado que se muestra: con un
+  // retiro sin firmar el pedido no figura entregado (M2S1-071, M2S2-115).
+  const remitos = pedido.entregas.filter((e) => e.estado !== "anulada");
+  const estadoVisible = estadoVisibleDelPedido(pedido.estado, remitos);
   const quien = cliente ? { nombre: cliente.nombre, cuit: null } : null;
 
   // Un solo `?text=`: enlaceWhatsapp ya lo arma (antes la página le sumaba
@@ -181,7 +187,7 @@ export default async function DetallePedidoPage({
             <h1 className="tabular text-2xl font-bold tracking-tight">
               {pedido.numero}
             </h1>
-            <EtiquetaEstado estado={pedido.estado} contexto="pedido" />
+            <EtiquetaEstado estado={estadoVisible} contexto="pedido" />
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Hecho el {fechaLarga.format(pedido.createdAt)}
@@ -237,7 +243,7 @@ export default async function DetallePedidoPage({
 
       {!cancelado && (
         <section className="rounded-xl bg-card p-5 tarjeta">
-          <Pasos etapas={etapas} actual={pedido.estado} />
+          <Pasos etapas={etapas} actual={estadoVisible} />
         </section>
       )}
 
@@ -297,40 +303,43 @@ export default async function DetallePedidoPage({
             </section>
           )}
 
-          {/* Retiros: cada remito con su papel y su reclamo; el anulado,
-              apagado (H306, H312, H389). */}
-          {pedido.entregas.length > 0 && (
+          {/* Los remitos: cada uno con su papel y su reclamo, y el que espera
+              la firma con «Firmar» (H306, H312, H389, M2S1-071). Un envío
+              no es un retiro (M2S1-155); la fecha es la de la firma, no la
+              de cuando se armó (M2S4-057). */}
+          {remitos.length > 0 && (
             <section className="tarjeta overflow-hidden rounded-xl bg-card">
-              <h2 className="px-5 pt-4 pb-2 font-medium">
-                {plural(
-                  pedido.entregas.filter((e) => e.estado !== "anulada").length,
-                  "retiro",
-                )}
-              </h2>
+              <h2 className="px-5 pt-4 pb-2 font-medium">{tituloDeRemitos(remitos)}</h2>
               <ul className="divide-y divide-linea">
-                {pedido.entregas.map((entrega, i) => {
-                  const anulado = entrega.estado === "anulada";
+                {remitos.map((entrega) => {
+                  const paraFirmar = entrega.estado === "preparada";
+                  const i = pedido.entregas.indexOf(entrega);
                   return (
-                    <li
-                      key={entrega.id}
-                      className={`px-5 py-3 ${anulado ? "opacity-60" : ""}`}
-                    >
+                    <li key={entrega.id} className="px-5 py-3">
                       <p className="flex flex-wrap items-baseline gap-x-2">
-                        <span
-                          className={`tabular font-medium ${anulado ? "line-through" : ""}`}
-                        >
-                          {entrega.numero}
-                        </span>
+                        <span className="tabular font-medium">{entrega.numero}</span>
                         <span className="text-sm text-muted-foreground">
-                          {fechaCorta.format(entrega.createdAt)}
-                          {entrega.receptorNombre
-                            ? ` · retiró ${entrega.receptorNombre}`
+                          {fechaCorta.format(entrega.firmadoAt ?? entrega.createdAt)}
+                          {!paraFirmar && entrega.receptorNombre
+                            ? ` · ${entrega.tipo === "envio" ? "recibió" : "retiró"} ${entrega.receptorNombre}`
                             : ""}
-                          {anulado ? " · anulado" : ""}
                         </span>
+                        {paraFirmar && (
+                          <span className="estado-espera rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)]">
+                            Para firmar
+                          </span>
+                        )}
                       </p>
-                      {!anulado && (
-                        <div className="mt-2 flex flex-wrap gap-2">
+                      <div className="mt-2 flex flex-wrap gap-2">
+                          {paraFirmar && entrega.firmaToken && (
+                            <Link
+                              href={`/firmar/${entrega.firmaToken}`}
+                              className="inline-flex h-11 items-center gap-2 rounded-lg bg-accion px-4 text-sm font-semibold text-white transition-colors hover:bg-accion-hover"
+                            >
+                              <PenLine className="h-4 w-4" />
+                              Firmar
+                            </Link>
+                          )}
                           <Link
                             href={`/remito/${entrega.id}`}
                             target="_blank"
@@ -353,8 +362,7 @@ export default async function DetallePedidoPage({
                           >
                             Reclamar
                           </BotonWhatsapp>
-                        </div>
-                      )}
+                      </div>
                     </li>
                   );
                 })}
@@ -596,9 +604,14 @@ export default async function DetallePedidoPage({
                 ) : (
                   <Truck className="h-4 w-4" />
                 )}
+                {/* Ya retirado no es «lo retirás» (M2S1-159). */}
                 {pedido.tipoEntrega === "retiro"
-                  ? "Lo retirás en"
-                  : "Te lo llevamos a"}
+                  ? estadoVisible === "entregado"
+                    ? "Retiro en"
+                    : "Lo retirás en"
+                  : estadoVisible === "entregado"
+                    ? "Entrega en"
+                    : "Te lo llevamos a"}
               </h2>
 
               {pedido.tipoEntrega === "retiro" ? (

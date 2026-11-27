@@ -152,6 +152,26 @@ func TestCambioDeEstado(t *testing.T) {
 	}
 }
 
+// M2S1-071: el retiro con el remito sin firmar no avisa «entregado»; sale
+// con la firma, y una sola vez.
+func TestEntregadoEsperaLaFirma(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	id := e.pedido(t, "PED-000210", "juan@prueba.test", "retiro")
+	remito := e.uno(t, `insert into deliveries (numero, order_id, estado, tipo, firma_token) values ('REM-0002', $1, 'preparada', 'retiro', 'tok') returning id`, id)
+	antes := e.correos()
+	if err := e.s.CambioDeEstado(ctx, id, "entregado"); err != nil || e.correos() != antes {
+		t.Fatalf("con el remito sin firmar salió el aviso: %v", err)
+	}
+	e.uno(t, `update deliveries set estado = 'entregada', firmado_at = now() where id = $1 returning 'ok'`, remito)
+	if err := e.s.CambioDeEstado(ctx, id, "entregado"); err != nil || e.correos() != antes+1 {
+		t.Fatalf("firmado, no salió: %v", err)
+	}
+	if err := e.s.CambioDeEstado(ctx, id, "entregado"); err != nil || e.correos() != antes+1 {
+		t.Fatalf("salió dos veces: %v", err)
+	}
+}
+
 func TestResultadoDePago(t *testing.T) {
 	e := armar(t)
 	ctx := context.Background()

@@ -34,9 +34,11 @@ export function GET() {
       lang: "es-AR",
       categories: ["business", "productivity"],
       icons: [
-        { src: "/mostrador/icono-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
-        { src: "/mostrador/icono-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
-        { src: "/mostrador/icono-mascara-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+        // Su propio ícono, la «m» sobre fondo oscuro: con el del Mostrador,
+        // instaladas en el teléfono no se distinguían (mes simulado, M3S1-033).
+        { src: "/panel/icono-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+        { src: "/panel/icono-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+        { src: "/panel/icono-mascara-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
       ],
     },
     {

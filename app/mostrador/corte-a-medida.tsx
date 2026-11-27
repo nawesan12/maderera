@@ -198,6 +198,10 @@ export function CorteAMedida({
 
   // Las del taller si es el corte de la cola, tal cual (lo mismo que Go).
   const pasadasACobrar = pasadasConfirmadas(pasadasDelPlano, validas, confirmado);
+  // Cuánto usa de verdad la placa que va sin cargo, si es una sola: decía
+  // «1 placa» de un corte que usa el 30 % (mes simulado, M2S1-085).
+  const parciales = plano.placas.filter((p) => !p.seVendeEntera);
+  const fraccionSinCargo = parciales.length === 1 ? Math.max(1, Math.round(parciales[0].aprovechado * 100)) : null;
 
   // La misma cuenta que la ficha del corte y la planilla del taller, que ya
   // está probada: no hay dos formas de medir un metro de tapacanto.
@@ -639,6 +643,9 @@ export function CorteAMedida({
                 sencillo
                 // Con veta, girarla la cortaría contra el dibujo.
                 girable={(indice) => !validas[indice]?.respetaVeta}
+                // La media placa dice media: el chip decía «Se vende entera»
+                // y el renglón «1 media placa» (mes simulado, M3S2-062).
+                quien={{ media: Boolean(mitad) }}
               />
             ) : (
               <div className="flex h-full min-h-[240px] items-center justify-center rounded-xl border border-dashed">
@@ -673,7 +680,10 @@ export function CorteAMedida({
 
         {/* La cuenta y las salidas abajo y fijas: el total se ve mientras se
             tipea, y no hay que bajar para encontrar el botón. */}
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-linea bg-background px-6 py-4">
+        {/* La cuenta arriba y las acciones abajo a la derecha, siempre en el
+            mismo lugar: con «Material sin cargo» el pie se partía y «Agregar
+            a la venta» caía solo a la izquierda (mes simulado, M2S1-179). */}
+        <div className="flex flex-col gap-3 border-t border-linea bg-background px-6 py-4">
           {/* Mientras Go recalcula, la cuenta que se ve es la del despiece
               anterior: se apaga, y lo que es una alerta (sin cargo, se
               cobran) no aparece hasta saberlo. Al abrir se veía un momento
@@ -699,11 +709,15 @@ export function CorteAMedida({
             {/* Las placas que no pasan la mitad no se venden: se cobra el corte
                 y el recorte queda en la maderera (la regla de la media placa).
                 Se dice acá y no se descubre leyendo la venta (H019, H174). */}
+            {/* Con la fracción que se usa de verdad: «1 placa» de un corte que
+                usa el 30 % (mes simulado, M2S1-085). */}
             {!calculando && placasParciales > 0 && (
               <div className="estado-espera">
                 <dt className="inline">Material sin cargo </dt>
                 <dd className="inline font-semibold">
-                  {placasParciales} {placasParciales === 1 ? (mitad ? "media" : "placa") : mitad ? "medias" : "placas"}
+                  {fraccionSinCargo !== null
+                    ? `${fraccionSinCargo} % de ${mitad ? "media" : "placa"}`
+                    : `${placasParciales} ${placasParciales === 1 ? (mitad ? "media" : "placa") : mitad ? "medias" : "placas"}`}
                 </dd>
               </div>
             )}
@@ -723,7 +737,8 @@ export function CorteAMedida({
             )}
           </dl>
 
-          {errorPdf && <span className="estado-problema text-sm font-medium">{errorPdf}</span>}
+          <div className="flex flex-wrap items-center justify-end gap-3">
+          {errorPdf && <span className="estado-problema mr-auto text-sm font-medium">{errorPdf}</span>}
 
           <button
             type="button"
@@ -767,7 +782,9 @@ export function CorteAMedida({
               <kbd className="rounded border border-current px-1.5 py-0.5 text-xs font-medium opacity-70">Ctrl + Enter</kbd>
             </button>
           )}
+          </div>
         </div>
+
       </DialogContent>
     </Dialog>
   );

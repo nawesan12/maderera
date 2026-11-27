@@ -223,6 +223,7 @@ export async function cobrarSinConexion(
         descuento,
         descuentoMotivo: motivoDelDescuento || null,
         lineas,
+        recibido: medio === "efectivo" && !pagos ? recibido : null,
       },
       contextoDelTicket,
     );

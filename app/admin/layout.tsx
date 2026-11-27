@@ -35,6 +35,8 @@ import { ProveedorDelCircuito } from "@/components/admin/circuito";
  */
 export const metadata: Metadata = {
   manifest: "/admin/app.webmanifest",
+  // El ícono propio del Panel también en el iPhone (M3S1-033).
+  icons: { apple: "/panel/apple-touch-180.png" },
   robots: { index: false, follow: false },
 };
 

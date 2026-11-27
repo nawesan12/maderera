@@ -19,6 +19,8 @@ import { DiaDeEntrega } from "./dia-de-entrega";
 import { devolucionDesdeElPedido, pedidoParaFacturar } from "@/lib/dal/admin/facturacion";
 import { BotonFacturar } from "./facturar";
 import { CorregirPedido, DevolverPedido } from "./corregir-devolver";
+import { FaltoAlgo } from "./falto-algo";
+import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { DevolverFacturado } from "./devolver-facturado";
 import { Entregas } from "./entregas";
 import { saldoDeAcopio } from "@/lib/entregas";
@@ -53,11 +55,12 @@ export default async function FichaPedidoPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ remito?: string }>;
+  searchParams: Promise<{ remito?: string; falto?: string }>;
 }) {
   const { id } = await params;
-  // «Preparar remito» desde el tablero llega con el formulario abierto.
-  const { remito: abrirRemito } = await searchParams;
+  // «Preparar remito» desde el tablero llega con el formulario abierto, y
+  // «Le faltó algo» desde las ventas de hoy del mostrador (M3S3-021).
+  const { remito: abrirRemito, falto } = await searchParams;
   if (!esUuid(id)) notFound();
   const [usuario, pedido] = await Promise.all([
     requireStaff(),
@@ -128,6 +131,13 @@ export default async function FichaPedidoPage({
     manejaPlata && !cancelado && pedido.facturado ? await devolucionDesdeElPedido(pedido.id) : null;
   const devuelveDesdeElPedido = devolucionFacturada && devolucionFacturada.tope > 0.005 && devolucionFacturada.renglones.some((r) => r.queda > 0);
   const corregible = devolvible && pedido.origen !== "mostrador" && pedido.cobrado < 0.005;
+  // «Le faltó algo»: la reposición sin cargo es un ajuste del Stock, de quien
+  // entra ahí (M3S3-021).
+  const reponible = !cancelado && puedeEntrar("/admin/stock", usuario.staffRole);
+  const sucursalSlug = reponible
+    ? ((await listarSucursalesPublicas()).find((s) => s.id === pedido.branchId)?.slug ?? null)
+    : null;
+
   const renglones = pedido.items.map((i) => ({
     id: i.id,
     descripcion: i.descripcion,
@@ -260,6 +270,16 @@ export default async function FichaPedidoPage({
               />
             )}
             {devolvible && <DevolverPedido id={pedido.id} numero={pedido.numero} renglones={renglones} />}
+            {reponible && sucursalSlug && (
+              <FaltoAlgo
+                numero={pedido.numero}
+                sucursal={sucursalSlug}
+                abiertoAlEntrar={falto === "1"}
+                renglones={pedido.items.flatMap((i) =>
+                  i.variantId ? [{ variantId: i.variantId, descripcion: i.descripcion, cantidad: Number(i.cantidad) }] : [],
+                )}
+              />
+            )}
             <a
               href={`/ticket/${pedido.id}`}
               target="_blank"

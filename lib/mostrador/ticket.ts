@@ -44,6 +44,8 @@ export interface LineaDelTicket {
   unidad: string;
   precioUnitario: number;
   subtotal: number;
+  /** Media placa: «2 medias placas», no «2 placas» (mes simulado, M2S1-084). */
+  presentacion?: string | null;
 }
 
 export interface DocumentoTicket {
@@ -83,6 +85,12 @@ export interface DocumentoTicket {
   /** La mercadería queda en depósito: el papel lo tiene que gritar. */
   acopio: boolean;
   whatsapp: string | null;
+  /** La venta se anuló: el papel lo dice bien grande (M2S1-083). */
+  anulada?: boolean;
+  /** Con cuánto pagó en efectivo: el papel dice el vuelto (M3S1-061). */
+  recibido?: number | null;
+  /** Los cortes de la venta, con sus piezas: con eso vuelve a retirar (M2S3-095). */
+  cortes?: { numero: string; piezas: number }[];
 }
 
 export interface ContextoDelTicket {
@@ -110,6 +118,7 @@ export function documentoDeVenta(
     descuentoMotivo?: string | null;
     /** Las mismas líneas que se mandan a cobrar, sin recortar. */
     lineas: LineaDeVenta[];
+    recibido?: number | null;
   },
   contexto: ContextoDelTicket,
 ): DocumentoTicket {
@@ -167,5 +176,7 @@ export function documentoDeVenta(
     importeEnCuenta,
     acopio: venta.acopio ?? false,
     whatsapp: contexto.whatsapp,
+    recibido: venta.recibido ?? null,
   };
+
 }

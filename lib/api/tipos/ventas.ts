@@ -575,6 +575,13 @@ export interface components {
         FichaDePedido: {
             /** @description Tiene una factura viva */
             facturado: boolean;
+            /**
+             * Format: double
+             * @description con cuánto pagó en efectivo en el mostrador (el vuelto del ticket)
+             */
+            efectivoRecibido?: number | null;
+            /** @description la factura viva de la venta: el papel que vale */
+            facturaId?: string | null;
             /** @description Se retira de a partes (ya salió algo */
             acopio: boolean;
             /**

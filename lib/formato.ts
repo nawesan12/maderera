@@ -531,6 +531,23 @@ export function telefonoParaMarcar(telefono: string): string {
 }
 
 /**
+ * Un teléfono argentino como se lee: «5492235903118» → «223 590-3118». El
+ * WhatsApp del ticket salía como lo guarda `wa.me`, con el 54 y el 9 (mes
+ * simulado, M2S1-186). Sin el 54 y el 9, el área es de tres cifras salvo la
+ * de Buenos Aires (11); lo que no tiene diez cifras queda como vino.
+ */
+export function telefonoLegible(telefono: string): string {
+  let d = telefono.replace(/\D/g, "");
+  if (d.startsWith("54")) d = d.slice(2);
+  if (d.startsWith("9") && d.length === 11) d = d.slice(1);
+  if (d.startsWith("0")) d = d.slice(1);
+  if (d.length !== 10) return telefono.trim();
+  const area = d.startsWith("11") ? 2 : 3;
+  const resto = d.slice(area);
+  return `${d.slice(0, area)} ${resto.slice(0, resto.length - 4)}-${resto.slice(-4)}`;
+}
+
+/**
  * El número como lo quiere `wa.me`: internacional, sin signos, con el 9.
  *
  * **El 9 es el detalle que rompe todo.** Argentina exige `54` + `9` + área +

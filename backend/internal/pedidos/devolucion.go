@@ -147,12 +147,14 @@ func (s *Servicio) DevolverSinFacturaDesde(ctx context.Context, ses *auth.Sesion
 			cantidad, subtotal  float64
 			factor              float64
 			devuelto, traido    float64
+			yaDevuelto          float64
 		}
 		items := map[string]item{}
 		filas, err := tx.Query(ctx, `
 			SELECT oi.id::text, oi.descripcion, oi.unidad, oi.variant_id::text, oi.cantidad::float8, oi.subtotal::float8, oi.stock_por_unidad::float8,
 			       coalesce((SELECT sum(di.cantidad) FROM devolucion_items di WHERE di.order_item_id = oi.id), 0)::float8,
-			       coalesce((SELECT sum(di.cantidad - di.del_acopio) FROM devolucion_items di WHERE di.order_item_id = oi.id), 0)::float8
+			       coalesce((SELECT sum(di.cantidad - di.del_acopio) FROM devolucion_items di WHERE di.order_item_id = oi.id), 0)::float8,
+			       coalesce((SELECT sum(di.importe) FROM devolucion_items di WHERE di.order_item_id = oi.id), 0)::float8
 			FROM order_items oi WHERE oi.order_id = $1`, pedido)
 		if err != nil {
 			return err
@@ -160,7 +162,7 @@ func (s *Servicio) DevolverSinFacturaDesde(ctx context.Context, ses *auth.Sesion
 		for filas.Next() {
 			var id string
 			var x item
-			if err := filas.Scan(&id, &x.descripcion, &x.unidad, &x.variante, &x.cantidad, &x.subtotal, &x.factor, &x.devuelto, &x.traido); err != nil {
+			if err := filas.Scan(&id, &x.descripcion, &x.unidad, &x.variante, &x.cantidad, &x.subtotal, &x.factor, &x.devuelto, &x.traido, &x.yaDevuelto); err != nil {
 				filas.Close()
 				return err
 			}
@@ -168,6 +170,11 @@ func (s *Servicio) DevolverSinFacturaDesde(ctx context.Context, ses *auth.Sesion
 		}
 		filas.Close()
 		if err := filas.Err(); err != nil {
+			return err
+		}
+		// Lo que se cobró de cada renglón, con el descuento del pedido.
+		netos, err := netosDeLosRenglones(ctx, tx, pedido)
+		if err != nil {
 			return err
 		}
 
@@ -197,7 +204,7 @@ func (s *Servicio) DevolverSinFacturaDesde(ctx context.Context, ses *auth.Sesion
 				return fallo(`De "` + x.descripcion + `", el cliente se llevó ` + jsmath.Texto(llevado) + `: no puede traer más.`)
 			}
 			v := vuelta{orderItem: r.OrderItemID, cantidad: r.Cantidad, delAcopio: delAcopio, descripcion: x.descripcion, unidad: x.unidad,
-				importe: ventas.ACentavos(float64(x.subtotal*r.Cantidad) / x.cantidad)}
+				importe: importeDeLaVuelta(netos[r.OrderItemID], x.cantidad, x.devuelto, x.yaDevuelto, r.Cantidad)}
 			if x.variante != nil {
 				v.variante = *x.variante
 				v.unidadesAcopio = ventas.UnidadesDeStock(delAcopio, x.factor)
@@ -380,10 +387,28 @@ type ParaDevolverSinFactura struct {
 	CajaAbierta bool    `json:"cajaAbierta"`
 }
 
-// RenglonQueQueda es lo que todavía se puede devolver de un renglón.
+// RenglonQueQueda es lo que todavía se puede devolver de un renglón, y la
+// plata que vuelve si se devuelve todo eso (neto del descuento del pedido).
 type RenglonQueQueda struct {
 	OrderItemID string  `json:"orderItemId"`
 	Queda       float64 `json:"queda"`
+	Neto        float64 `json:"neto"`
+}
+
+// importeDeLaVuelta es la plata de devolver `cantidad` de un renglón que se
+// cobró `neto` por `vendido`: la parte de lo que todavía no volvió. Lo
+// último que queda devuelve justo lo que falta, sin el centavo de redondeo
+// que sobraba de a partes. El diálogo hace la misma cuenta.
+func importeDeLaVuelta(neto, vendido, devuelto, yaDevuelto, cantidad float64) float64 {
+	queda := ventas.CantidadDeStock(vendido - devuelto)
+	falta := ventas.ACentavos(math.Max(0, neto-yaDevuelto))
+	if queda <= 0 {
+		return 0
+	}
+	if cantidad >= queda-1e-9 {
+		return falta
+	}
+	return ventas.ACentavos(float64(falta*cantidad) / queda)
 }
 
 // DatosDeDevolucion arma ParaDevolverSinFactura.
@@ -401,19 +426,29 @@ func (s *Servicio) DatosDeDevolucion(ctx context.Context, pedido string) (*ParaD
 	if err != nil {
 		return nil, err
 	}
+	netos, err := netosDeLosRenglones(ctx, s.pool, pedido)
+	if err != nil {
+		return nil, err
+	}
 	filas, err := s.pool.Query(ctx, `
-		SELECT oi.id::text, oi.cantidad::float8 - coalesce((SELECT sum(di.cantidad) FROM devolucion_items di WHERE di.order_item_id = oi.id), 0)::float8
+		SELECT oi.id::text, oi.cantidad::float8,
+		       coalesce((SELECT sum(di.cantidad) FROM devolucion_items di WHERE di.order_item_id = oi.id), 0)::float8,
+		       coalesce((SELECT sum(di.importe) FROM devolucion_items di WHERE di.order_item_id = oi.id), 0)::float8
 		FROM order_items oi WHERE oi.order_id = $1 ORDER BY oi.id`, pedido)
 	if err != nil {
 		return nil, err
 	}
 	for filas.Next() {
 		var r RenglonQueQueda
-		if err := filas.Scan(&r.OrderItemID, &r.Queda); err != nil {
+		var vendido, devuelto, yaDevuelto float64
+		if err := filas.Scan(&r.OrderItemID, &vendido, &devuelto, &yaDevuelto); err != nil {
 			filas.Close()
 			return nil, err
 		}
-		r.Queda = ventas.CantidadDeStock(math.Max(0, r.Queda))
+		r.Queda = ventas.CantidadDeStock(math.Max(0, vendido-devuelto))
+		if r.Queda > 0 {
+			r.Neto = importeDeLaVuelta(netos[r.OrderItemID], vendido, devuelto, yaDevuelto, r.Queda)
+		}
 		out.Renglones = append(out.Renglones, r)
 	}
 	filas.Close()

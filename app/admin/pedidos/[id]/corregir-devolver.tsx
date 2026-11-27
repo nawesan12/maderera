@@ -64,14 +64,24 @@ export function DevolverPedido({
   const [pendiente, startTransition] = useTransition();
 
   // Lo que queda de cada renglón: con dos ya devueltas decía «de 8 u.».
-  const queda = new Map(datos?.renglones.map((r) => [r.orderItemId, r.queda]) ?? []);
+  const queda = new Map(datos?.renglones.map((r) => [r.orderItemId, r]) ?? []);
   const disponibles = renglones
-    .map((r) => ({ ...r, queda: queda.get(r.id) ?? r.cantidad }))
+    .map((r) => {
+      const q = queda.get(r.id);
+      return { ...r, queda: q?.queda ?? r.cantidad, neto: q?.neto ?? r.subtotal };
+    })
     .filter((r) => r.queda > 0);
   const elegidos = disponibles
     .map((r) => ({ r, cantidad: leerCantidad(cantidades[r.id] ?? "") }))
     .filter((x) => Number.isFinite(x.cantidad) && x.cantidad > 0);
-  const total = elegidos.reduce((s, x) => s + Math.round((x.r.subtotal * x.cantidad * 100) / x.r.cantidad) / 100, 0);
+  // Vuelve lo que se cobró, no la lista: con el 10 % por transferencia
+  // devolvía $ 12.345 de un tirante cobrado $ 11.110,50 (PED-1123). Lo
+  // mismo que calcula Go (pedidos.importeDeLaVuelta).
+  const total = elegidos.reduce(
+    (s, x) =>
+      s + (x.cantidad >= x.r.queda - 1e-9 ? x.r.neto : Math.round((x.r.neto * x.cantidad * 100) / x.r.queda) / 100),
+    0,
+  );
   const mal = disponibles.some((r) => {
     const c = leerCantidad(cantidades[r.id] ?? "");
     return !Number.isFinite(c) || c < 0 || c > r.queda;

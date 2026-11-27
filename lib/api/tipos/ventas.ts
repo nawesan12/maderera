@@ -935,6 +935,11 @@ export interface operations {
                             orderItemId: string;
                             /** Format: double */
                             queda: number;
+                            /**
+                             * Format: double
+                             * @description La plata de devolver todo lo que queda, neta del descuento del pedido
+                             */
+                            neto: number;
                         }[];
                         /** Format: double */
                         deuda: number;

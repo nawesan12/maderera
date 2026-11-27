@@ -109,3 +109,39 @@ func TestCorregirUnPedidoMalCargado(t *testing.T) {
 		t.Errorf("con cobro: %d %s", c, b)
 	}
 }
+
+// Mes 23 (PED-1123): con el 10 % por transferencia, la devolución sin
+// factura devuelve lo cobrado y no la lista; de a partes, la suma da justo
+// lo que se cobró, y el diálogo recibe el mismo neto.
+func TestLaDevolucionSinFacturaVuelveNetaDelDescuento(t *testing.T) {
+	e := armar(t)
+	ven, ses := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	e.exec(t, `insert into payment_discounts (medio, desde_monto, porcentaje, etiqueta, activo) values ('transferencia', 0, 10, '10% por transferencia', true)`)
+	transferencia := "transferencia"
+	r, err := e.s.ConvertirConEntrega(t.Context(), ses, e.presupuesto(t, ses, 3), Entrega{MedioPago: &transferencia})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pedido := r.ID
+	placa := e.texto(t, `select id::text from order_items where order_id = $1 and variant_id is not null`, pedido)
+	// 3 × 84.500 = 253.500, menos 25.350: se cobra 228.150 por las tres.
+	datos, err := e.s.DatosDeDevolucion(t.Context(), pedido)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range datos.Renglones {
+		if d.OrderItemID == placa && d.Neto != 228150 {
+			t.Errorf("neto en el diálogo: %v", d.Neto)
+		}
+	}
+	u := e.srv.URL + "/api/v1/admin/pedidos/" + pedido + "/devolucion"
+	for i, cant := range []float64{1, 2} {
+		cuerpo := map[string]any{"renglones": []any{map[string]any{"orderItemId": placa, "cantidad": cant}}, "motivo": "Sin abrir", "clave": "neto-" + string(rune('a'+i))}
+		if c, b := pedir(t, ven, "POST", u, cuerpo); c != 200 {
+			t.Fatalf("devolver %v: %d %s", cant, c, b)
+		}
+	}
+	if v := e.texto(t, `select string_agg(importe::text, ' ' order by created_at) from devoluciones where order_id = $1`, pedido); v != "76050.00 152100.00" {
+		t.Errorf("importes: %q", v)
+	}
+}

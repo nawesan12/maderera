@@ -182,10 +182,11 @@ paths:
                     type: array
                     items:
                       type: object
-                      required: [orderItemId, queda]
+                      required: [orderItemId, queda, neto]
                       properties:
                         orderItemId: { type: string }
                         queda: { type: number, format: double }
+                        neto: { type: number, format: double, description: "La plata de devolver todo lo que queda, neta del descuento del pedido" }
                   deuda: { type: number, format: double }
                   aCuenta: { type: boolean }
                   caja: { type: number, format: double }

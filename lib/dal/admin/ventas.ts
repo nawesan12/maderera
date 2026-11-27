@@ -137,7 +137,8 @@ export async function obtenerPedido(id: string): Promise<PedidoCompleto | null> 
 }
 
 export interface DatosDeDevolucion {
-  renglones: { orderItemId: string; queda: number }[];
+  /** `neto`: la plata de devolver todo lo que queda, con el descuento del pedido. */
+  renglones: { orderItemId: string; queda: number; neto: number }[];
   deuda: number;
   aCuenta: boolean;
   caja: number;

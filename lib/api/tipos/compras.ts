@@ -302,6 +302,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/compras/ordenes/{id}/cerrar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description La orden de la que llegó una parte y no va a llegar el resto queda completa, con lo que faltó a la vista. */
+        post: operations["CerrarOrdenConFaltante"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/compras/ordenes/{id}/fecha": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description La fecha prometida, mientras la orden no llegó entera. */
+        post: operations["CambiarFechaDeOrden"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/compras/ordenes/{id}/recibir": {
         parameters: {
             query?: never;
@@ -1005,6 +1043,11 @@ export interface components {
             pendientes: number;
             /** Format: double */
             porLlegar: number;
+            /**
+             * Format: double
+             * @description el neto de lo que ya llegó
+             */
+            recibido?: number;
         };
         Orden: {
             id: string;
@@ -1036,6 +1079,15 @@ export interface components {
                 costoUnitario: string;
                 alicuotaIva: string;
                 orden: number;
+                /** @description el costo promedio con que llegó (de las recepciones confirmadas) */
+                costoRecibido?: string | null;
+            }[];
+            recepciones?: {
+                id: string;
+                numeroRemito: string | null;
+                /** Format: date-time */
+                fecha: string;
+                estado: string;
             }[];
         };
         RecepcionListada: {
@@ -1878,6 +1930,43 @@ export interface operations {
             cookie?: never;
         };
         requestBody: components["requestBodies"]["Motivo"];
+        responses: {
+            200: components["responses"]["Hecho"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    CerrarOrdenConFaltante: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Motivo"];
+        responses: {
+            200: components["responses"]["Hecho"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    CambiarFechaDeOrden: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description aaaa-mm-dd; vacía la saca */
+                    fechaPrometida: string;
+                };
+            };
+        };
         responses: {
             200: components["responses"]["Hecho"];
             422: components["responses"]["Problema"];

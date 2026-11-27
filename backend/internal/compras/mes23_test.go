@@ -386,3 +386,48 @@ func TestBorrarCondicionDiceCual(t *testing.T) {
 		t.Errorf("la bitácora no dice cuál")
 	}
 }
+
+// M2S3-013, M2S1-138, M2S1-035, M3S4-020: una orden de la que llegó una
+// parte no se anula, se cierra con faltante; la ficha lista sus remitos y
+// el costo con que llegó, y la fecha se corrige estando enviada.
+func TestOrdenCerradaConFaltante(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	linea := map[string]any{"variantId": e.placa, "descripcion": "Fenólico 18 mm", "cantidad": 28, "costoUnitario": 40400, "alicuotaIva": 21}
+	_, b := pedir(t, adm, "POST", e.u+"compras/ordenes", map[string]any{"supplierId": e.proveedor, "branchId": e.central, "lineas": []any{linea}})
+	orden := idDe(t, b)
+	pedir(t, adm, "POST", e.u+"compras/ordenes/"+orden+"/enviada", nil)
+	if c, b := pedir(t, adm, "POST", e.u+"compras/ordenes/"+orden+"/fecha", map[string]string{"fechaPrometida": "2099-12-20"}); c != 200 {
+		t.Fatalf("fecha estando enviada: %d %s", c, b)
+	}
+	_, b = pedir(t, adm, "POST", e.u+"compras/ordenes/"+orden+"/recibir", map[string]string{"numeroRemito": "0003-00022510"})
+	rec := idDe(t, b)
+	ctx := context.Background()
+	if _, err := e.pool.Exec(ctx, `update goods_receipt_items set cantidad = 26, costo_unitario = 41500 where receipt_id = $1`, rec); err != nil {
+		t.Fatal(err)
+	}
+	if c, b := pedir(t, adm, "POST", e.u+"recepciones/"+rec+"/confirmar", nil); c != 200 {
+		t.Fatalf("confirmar: %d %s", c, b)
+	}
+	if c, b := pedir(t, adm, "POST", e.u+"compras/ordenes/"+orden+"/anular", map[string]string{"motivo": "no tienen más"}); c != 422 || !strings.Contains(b, "cerrala con faltante") {
+		t.Errorf("anular con mercadería recibida: %d %s", c, b)
+	}
+	if c, b := pedir(t, adm, "POST", e.u+"compras/ordenes/"+orden+"/cerrar", map[string]string{"motivo": "no tienen más"}); c != 200 {
+		t.Fatalf("cerrar: %d %s", c, b)
+	}
+	_, b = pedir(t, adm, "GET", e.u+"compras/ordenes/"+orden, nil)
+	var o Orden
+	_ = json.Unmarshal([]byte(b), &o)
+	if o.Estado != "completa" || len(o.Recepciones) != 1 || o.Items[0].CostoRecibido == nil || jsmathNum(*o.Items[0].CostoRecibido) != 41500 {
+		t.Errorf("la orden cerrada: %s", b)
+	}
+	if o.FechaPrometida == nil || o.FechaPrometida.UTC().Format("2006-01-02") != "2099-12-20" {
+		t.Errorf("fecha: %v", o.FechaPrometida)
+	}
+	_, b = pedir(t, adm, "GET", e.u+"compras/ordenes", nil)
+	if !strings.Contains(b, `"recibido":1050400`) {
+		t.Errorf("el listado no dice lo que llegó: %s", b)
+	}
+}
+
+func jsmathNum(s string) float64 { return jsmath.Numero(s) }

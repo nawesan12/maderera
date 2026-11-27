@@ -255,6 +255,32 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Hecho" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/ordenes/{id}/cerrar:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: CerrarOrdenConFaltante
+      description: La orden de la que llegó una parte y no va a llegar el resto queda completa, con lo que faltó a la vista.
+      requestBody: { $ref: "#/components/requestBodies/Motivo" }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/ordenes/{id}/fecha:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: CambiarFechaDeOrden
+      description: La fecha prometida, mientras la orden no llegó entera.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fechaPrometida]
+              properties:
+                fechaPrometida: { type: string, description: aaaa-mm-dd; vacía la saca }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/compras/ordenes/{id}/recibir:
     parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
     post:
@@ -1023,6 +1049,7 @@ components:
         neto: { type: number, format: double }
         pendientes: { type: integer }
         porLlegar: { type: number, format: double }
+        recibido: { type: number, format: double, description: el neto de lo que ya llegó }
     Orden:
       type: object
       required: [id, numero, estado, fechaPrometida, notas, createdAt, enviadaAt, supplierId, proveedor, branchId, sucursal, borradorAbierto, items]
@@ -1061,6 +1088,17 @@ components:
               costoUnitario: { type: string }
               alicuotaIva: { type: string }
               orden: { type: integer }
+              costoRecibido: { type: string, nullable: true, description: el costo promedio con que llegó (de las recepciones confirmadas) }
+        recepciones:
+          type: array
+          items:
+            type: object
+            required: [id, numeroRemito, fecha, estado]
+            properties:
+              id: { type: string }
+              numeroRemito: { type: string, nullable: true }
+              fecha: { type: string, format: date-time }
+              estado: { type: string }
     RecepcionListada:
       type: object
       required: [id, numeroRemito, fecha, estado, gastos, proveedor, supplierId, sucursal, lineas, neto, facturada]

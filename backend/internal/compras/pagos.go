@@ -385,7 +385,11 @@ func (s *Servicio) CertificadoParaImprimir(ctx context.Context, numero string) (
 		return nil, err
 	}
 	if len(medios) > 0 {
-		c.PagoMedio, c.PagoReferencia = unirConY(medios), nil
+		c.PagoMedio = unirConY(medios)
+		// La referencia de la cabecera, solo si no la dicen ya los medios.
+		if c.PagoReferencia != nil && strings.Contains(c.PagoMedio, *c.PagoReferencia) {
+			c.PagoReferencia = nil
+		}
 	} else {
 		c.PagoMedio = NombreDelMedio(c.PagoMedio)
 	}

@@ -72,14 +72,20 @@ export default async function OrdenesDeCompraPage() {
 
 type Orden = Awaited<ReturnType<typeof listarOrdenesDeCompra>>[number];
 
-function Estado({ estado }: { estado: string }) {
-  const e = ESTADOS[estado] ?? ESTADOS.borrador;
+/** Completa con renglones que no llegaron: se cerró con faltante (M2S3-013). */
+const conFaltante = (o: Orden) => o.estado === "completa" && o.pendientes > 0;
+
+function Estado({ o }: { o: Orden }) {
+  const e = conFaltante(o) ? { texto: "Cerrada con faltante", clase: "estado-espera" } : (ESTADOS[o.estado] ?? ESTADOS.borrador);
   return (
     <span className={`${e.clase} inline-flex shrink-0 items-center rounded-lg bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-semibold`}>
       {e.texto}
     </span>
   );
 }
+
+/** El neto: el de lo que llegó, en una cerrada con faltante. */
+const netoDe = (o: Orden) => (conFaltante(o) ? (o.recibido ?? o.neto) : o.neto);
 
 /** La fecha prometida; vencida con la orden abierta, en rojo. */
 function Prometida({ o }: { o: Orden }) {
@@ -98,7 +104,7 @@ function Prometida({ o }: { o: Orden }) {
 
 /** Los renglones que faltan; una orden anulada o completa no espera nada. */
 function Pendientes({ o }: { o: Orden }) {
-  if (o.estado === "anulada" || o.pendientes === 0) return <span className="text-muted-foreground">—</span>;
+  if (o.estado === "anulada" || o.estado === "completa" || o.pendientes === 0) return <span className="text-muted-foreground">—</span>;
   return (
     <span className="font-semibold">
       {o.pendientes} de {o.lineas}
@@ -142,9 +148,9 @@ function ListaDeOrdenes({ ordenes }: { ordenes: Orden[] }) {
               <td className="tabular px-5 py-3 text-right">
                 <Pendientes o={o} />
               </td>
-              <td className="tabular px-5 py-3 text-right font-semibold">{formatearMonto(o.neto)}</td>
+              <td className="tabular px-5 py-3 text-right font-semibold">{formatearMonto(netoDe(o))}</td>
               <td className="px-5 py-3">
-                <Estado estado={o.estado} />
+                <Estado o={o} />
               </td>
             </tr>
           ))}
@@ -157,14 +163,14 @@ function ListaDeOrdenes({ ordenes }: { ordenes: Orden[] }) {
             <Link href={`/admin/compras/ordenes/${o.id}`} className="block space-y-1 px-4 py-3 hover:bg-hundida">
               <span className="flex items-center justify-between gap-3">
                 <span className="codigo text-[17px] font-semibold">{o.numero}</span>
-                <Estado estado={o.estado} />
+                <Estado o={o} />
               </span>
               {/* El neto va con el proveedor y la fecha con la sucursal,
                   enteras las dos: con el neto al lado, a 375 px la sucursal
                   quedaba en «Casa Cen…» (mes simulado). */}
               <span className="flex items-baseline justify-between gap-3 text-base">
                 <span className="line-clamp-2 min-w-0 break-words">{o.proveedor}</span>
-                <span className="tabular shrink-0 font-semibold">{formatearMonto(o.neto)}</span>
+                <span className="tabular shrink-0 font-semibold">{formatearMonto(netoDe(o))}</span>
               </span>
               <span className="block text-base">
                 <Prometida o={o} />

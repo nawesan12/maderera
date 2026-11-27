@@ -89,6 +89,12 @@ func (o respuesta) VisitListarOrdenesDeCompraResponse(w http.ResponseWriter) err
 }
 func (o respuesta) VisitCrearOrdenDeCompraResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitOrdenDeCompraResponse(w http.ResponseWriter) error      { return o.escribir(w) }
+func (o respuesta) VisitCerrarOrdenConFaltanteResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitCambiarFechaDeOrdenResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
 func (o respuesta) VisitAnularOrdenDeCompraResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -449,6 +455,30 @@ func (a *API) MarcarOrdenEnviada(ctx context.Context, r comprasapi.MarcarOrdenEn
 		return nil, fallo("Esa orden ya no está en borrador.")
 	}
 	m, err := a.s.MarcarEnviada(ctx, ses, r.Id)
+	if err != nil {
+		return nil, err
+	}
+	return hecho(m), nil
+}
+
+func (a *API) CerrarOrdenConFaltante(ctx context.Context, r comprasapi.CerrarOrdenConFaltanteRequestObject) (comprasapi.CerrarOrdenConFaltanteResponseObject, error) {
+	ses, err := compras(ctx)
+	if err != nil {
+		return nil, err
+	}
+	m, err := a.s.CerrarConFaltante(ctx, ses, r.Id, r.Body.Motivo)
+	if err != nil {
+		return nil, err
+	}
+	return hecho(m), nil
+}
+
+func (a *API) CambiarFechaDeOrden(ctx context.Context, r comprasapi.CambiarFechaDeOrdenRequestObject) (comprasapi.CambiarFechaDeOrdenResponseObject, error) {
+	ses, err := compras(ctx)
+	if err != nil {
+		return nil, err
+	}
+	m, err := a.s.CambiarFechaPrometida(ctx, ses, r.Id, r.Body.FechaPrometida)
 	if err != nil {
 		return nil, err
 	}

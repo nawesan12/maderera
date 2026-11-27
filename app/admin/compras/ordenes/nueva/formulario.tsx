@@ -140,6 +140,9 @@ export function FormularioOrden({
    * marca lo que falta y se dice en la barra.
    */
   const [intentado, setIntentado] = useState(false);
+  // Una fecha a medio escribir («20/2») no deja crear la orden: se creaba
+  // sin fecha y, enviada, ya no se podía cargar (M3S4-020).
+  const [fechaIncompleta, setFechaIncompleta] = useState(false);
   const fechaVieja = fechaPrometida !== "" && fechaPrometida < hoyEnArgentina();
   const lineasMal = lineas.some(
     (l) => !(Number(l.cantidad) > 0) || l.costoUnitario === "" || importeIlegible(l.costoUnitario),
@@ -149,7 +152,9 @@ export function FormularioOrden({
       ? { campo: "orden-proveedor", texto: "Elegí el proveedor." }
       : branchId === ""
         ? { campo: "orden-sucursal", texto: "Elegí dónde se entrega." }
-        : fechaVieja
+        : fechaIncompleta
+          ? { campo: "orden-fecha", texto: "Revisá la fecha prometida: dd/mm/aaaa, de hoy en adelante." }
+          : fechaVieja
           ? { campo: "orden-fecha", texto: "La fecha prometida ya pasó." }
           : lineas.length === 0
             ? { campo: "orden-buscar", texto: "Agregá qué se pide." }
@@ -228,8 +233,9 @@ export function FormularioOrden({
               id="orden-fecha"
               value={fechaPrometida}
               min={hoyEnArgentina()}
-              aria-invalid={(fechaPrometida !== "" && fechaPrometida < hoyEnArgentina()) || undefined}
+              aria-invalid={(fechaPrometida !== "" && fechaPrometida < hoyEnArgentina()) || marcar("orden-fecha") || undefined}
               onChange={(e) => setFecha(e.target.value)}
+              onValidez={(v) => setFechaIncompleta(!v)}
               className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
             />
           </label>

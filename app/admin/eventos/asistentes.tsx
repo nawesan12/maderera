@@ -17,11 +17,6 @@ const ESTADOS: Record<string, { texto: string; clase: string }> = {
     texto: "Confirmado",
     clase: "estado-ok bg-[var(--estado-fondo)] text-[var(--estado-tinta)]",
   },
-  asistio: {
-    texto: "Vino",
-    clase: "estado-ok bg-[var(--estado-fondo)] text-[var(--estado-tinta)]",
-  },
-  ausente: { texto: "No vino", clase: "bg-muted text-muted-foreground" },
   cancelada: {
     texto: "Cancelada",
     clase: "bg-muted text-muted-foreground line-through",
@@ -34,10 +29,14 @@ const ESTADOS: Record<string, { texto: string; clase: string }> = {
  * Se despliega porque en la pantalla de eventos lo que se escanea es el estado
  * de cada uno; el detalle de quién viene se mira cuando se está armando la sala
  * o tomando asistencia.
+ *
+ * «Vino» y «No vino» son un selector con la opción elegida en relieve, y
+ * aparecen desde que el evento empezó: antes se podía marcar días antes, y la
+ * pastilla repetía «Vino» al lado de dos botones iguales (M2S1-129, M3S4-018).
  */
-export function Asistentes({ asistentes }: { asistentes: Asistente[] }) {
+export function Asistentes({ asistentes, empezo }: { asistentes: Asistente[]; empezo: boolean }) {
   const [abierto, setAbierto] = useState(false);
-  const [, marcar] = useActionState(marcarAsistencia, inicial);
+  const [resultado, marcar] = useActionState(marcarAsistencia, inicial);
 
   if (asistentes.length === 0) {
     return (
@@ -66,10 +65,11 @@ export function Asistentes({ asistentes }: { asistentes: Asistente[] }) {
       {abierto && (
         <ul className="divide-y border-t">
           {asistentes.map((a) => {
-            const estado = ESTADOS[a.estado] ?? {
-              texto: a.estado,
-              clase: "bg-muted text-muted-foreground",
-            };
+            const tomaAsistencia = empezo && (a.estado === "confirmada" || a.estado === "asistio" || a.estado === "ausente");
+            // Antes de empezar, «vino» o «no vino» no corresponden todavía:
+            // tiene el lugar confirmado.
+            const estado =
+              ESTADOS[a.estado] ?? (a.estado === "asistio" || a.estado === "ausente" ? ESTADOS.confirmada : undefined);
 
             return (
               <li
@@ -88,40 +88,45 @@ export function Asistentes({ asistentes }: { asistentes: Asistente[] }) {
                   {fechaCorta.format(a.createdAt)}
                 </span>
 
-                <span
-                  className={`rounded-full px-2.5 py-1 text-sm font-medium ${estado.clase}`}
-                >
-                  {estado.texto}
-                </span>
-
-                {a.estado !== "cancelada" && (
-                  <div className="flex gap-2">
-                    <form action={marcar}>
-                      <input type="hidden" name="id" value={a.id} />
-                      <input type="hidden" name="estado" value="asistio" />
-                      <button
-                        type="submit"
-                        className="inline-flex h-9 items-center rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
-                      >
-                        Vino
-                      </button>
-                    </form>
-                    <form action={marcar}>
-                      <input type="hidden" name="id" value={a.id} />
-                      <input type="hidden" name="estado" value="ausente" />
-                      <button
-                        type="submit"
-                        className="inline-flex h-9 items-center rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
-                      >
-                        No vino
-                      </button>
-                    </form>
+                {tomaAsistencia ? (
+                  <div role="group" aria-label={`Asistencia de ${a.nombre}`} className="flex gap-1 rounded-lg bg-hundida p-1">
+                    {(
+                      [
+                        ["asistio", "Vino"],
+                        ["ausente", "No vino"],
+                      ] as const
+                    ).map(([valor, texto]) => (
+                      <form key={valor} action={marcar}>
+                        <input type="hidden" name="id" value={a.id} />
+                        <input type="hidden" name="estado" value={valor} />
+                        <button
+                          type="submit"
+                          aria-pressed={a.estado === valor}
+                          className={`inline-flex h-9 items-center rounded-md px-3 text-base font-medium transition-colors ${
+                            a.estado === valor ? "bg-card text-foreground shadow-sm" : "text-texto-2 hover:text-foreground"
+                          }`}
+                        >
+                          {texto}
+                        </button>
+                      </form>
+                    ))}
                   </div>
+                ) : (
+                  estado && (
+                    <span className={`rounded-full px-2.5 py-1 text-sm font-medium ${estado.clase}`}>
+                      {estado.texto}
+                    </span>
+                  )
                 )}
               </li>
             );
           })}
         </ul>
+      )}
+      {resultado.error && (
+        <p role="alert" className="px-5 pb-3 text-base text-destructive">
+          {resultado.error}
+        </p>
       )}
     </div>
   );

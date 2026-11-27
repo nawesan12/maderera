@@ -418,10 +418,25 @@ func TestEventos(t *testing.T) {
 	if st, p := pedir(t, ven, "PUT", e.srv.URL+"/api/v1/admin/eventos/asistencia", map[string]any{"id": beto, "estado": "cancelada"}); st != 200 || p["ok"] != "Listo." {
 		t.Fatalf("cancelar a Beto: %d %v", st, p)
 	}
+	// M2S1-129: «vino» recién desde que empieza.
+	ana := as["_lista"].([]any)[0].(map[string]any)["id"].(string)
+	if st, p := pedir(t, ven, "PUT", e.srv.URL+"/api/v1/admin/eventos/asistencia", map[string]any{"id": ana, "estado": "asistio"}); st != 422 || p["detail"] != "La asistencia se toma desde que empieza el evento." {
+		t.Fatalf("vino antes del evento: %d %v", st, p)
+	}
+	// M2S1-130: el panel sabe que es de mañana y a cuántos les llega.
+	_, l = pedir(t, ven, "GET", e.srv.URL+"/api/v1/admin/eventos", nil)
+	for _, x := range l["_lista"].([]any) {
+		if x.(map[string]any)["id"] == id {
+			este = x.(map[string]any)
+		}
+	}
+	if este["manana"] != true || este["porRecordar"] != 1.0 || este["empezo"] != false {
+		t.Fatalf("mañana y por recordar: %v", este)
+	}
 
 	// Los recordatorios: los de mañana, una sola vez.
 	e.buzon.mensajes = nil
-	if st, p := pedir(t, ven, "POST", e.srv.URL+"/api/v1/admin/eventos/recordatorios", nil); st != 200 || p["ok"] != "Salieron 1 recordatorio." {
+	if st, p := pedir(t, ven, "POST", e.srv.URL+"/api/v1/admin/eventos/recordatorios", nil); st != 200 || p["ok"] != "Salió 1 recordatorio." {
 		t.Fatalf("recordatorios: %d %v", st, p)
 	}
 	if got := e.buzon.asuntos(); got != "ana@prueba.test: Mañana te esperamos: Taller de Wood Frame" {
@@ -438,6 +453,29 @@ func TestEventos(t *testing.T) {
 	if st, _ := pedir(t, anon, "POST", e.srv.URL+"/api/v1/eventos/aviso-por-pago", map[string]any{"customerId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111"},
 		"Authorization", "Bearer "+secretoInterno); st != 200 {
 		t.Fatalf("aviso por pago: %d", st)
+	}
+}
+
+// M2S1-119 y M2S1-130: un borrador sin anotados se borra (uno con gente o
+// publicado, no), y un evento se recuerda desde su tarjeta, una vez.
+func TestBorrarYRecordarUnEvento(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	borrador := e.uno(t, `insert into events (slug, titulo, inicia, cupo, estado) values ('b', 'B', now() + interval '9 days', 3, 'borrador') returning id`)
+	conGente := e.uno(t, `insert into events (slug, titulo, inicia, cupo, estado) values ('c', 'C', now() + interval '9 days', 3, 'publicado') returning id`)
+	e.uno(t, `insert into event_registrations (event_id, nombre, email, estado) values ($1, 'Ana', 'ana@x.test', 'confirmada'), ($1, 'Beto', 'beto@x.test', 'asistio') returning id`, conGente)
+	if err := e.s.BorrarEvento(ctx, borrador); err != nil {
+		t.Fatalf("borrar el borrador: %v", err)
+	}
+	if err := e.s.BorrarEvento(ctx, conGente); err == nil {
+		t.Fatal("borró un evento publicado con gente")
+	}
+	// M3S4-038: el marcado «vino» antes de tiempo también recibe el recordatorio.
+	if n, err := e.s.RecordarEvento(ctx, conGente); err != nil || n != 2 {
+		t.Fatalf("recordar el evento: %d %v", n, err)
+	}
+	if n, _ := e.s.RecordarEvento(ctx, conGente); n != 0 {
+		t.Fatalf("se repitió: %d", n)
 	}
 }
 

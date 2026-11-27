@@ -41,7 +41,7 @@ func TestPendientesDelTaller(t *testing.T) {
 		t.Fatalf("empezar: %d %s", code, b)
 	}
 	code, b := ver("?sucursal=Aserradero")
-	if code != 200 || !strings.Contains(b, `"enLaMaquina":[{"id":"`+enAserradero) || strings.Contains(b, `"cortes":[{`) {
+	if code != 200 || !strings.Contains(b, `"enLaMaquina":[{"id":"`+enAserradero) || strings.Contains(b, `"cortes":[{`) || !strings.Contains(b, `"actualizado":"`) {
 		t.Errorf("en la máquina: %d %s", code, b)
 	}
 }
@@ -167,6 +167,22 @@ func TestElTotalConQueSeTomo(t *testing.T) {
 	}
 }
 
+// Mes 23: cambiar las pasadas del trabajo vuelve a tomar el total; el
+// tachado queda para cuando cambia la tarifa.
+func TestLasPasadasVuelvenATomarElTotal(t *testing.T) {
+	e := armar(t)
+	ven := e.staff(t, "vendedor@prueba.test", "vendedor")
+	id := alta(t, e, ven, melamina(e, "piezas", []any{pieza(600, 300, 3)}))
+	f := leerFicha(t, e, ven, id)
+	if code, b := pedir(t, ven, "POST", e.srv.URL+"/api/v1/admin/cortes/"+id+"/pasadas", map[string]any{"pasadas": f["pasadasACobrar"].(float64) + 2}); code != 204 {
+		t.Fatalf("pasadas: %d %s", code, b)
+	}
+	f = leerFicha(t, e, ven, id)
+	if total := f["cuenta"].(map[string]any)["total"].(float64); f["totalTomado"] == nil || f["totalTomado"].(float64) != total {
+		t.Errorf("con las pasadas cambiadas, el total %v y el tomado %v", total, f["totalTomado"])
+	}
+}
+
 // M3S2-009: la placa que trae el cliente (escrita a mano) cobra sus pasadas
 // con la tarifa de «Placas», y con «Placa del cliente» si se cargó.
 func TestLaPlacaDelClienteCobraSusPasadas(t *testing.T) {
@@ -193,6 +209,42 @@ func TestLaPlacaDelClienteCobraSusPasadas(t *testing.T) {
 	}
 	if c := leerFicha(t, e, ven, id)["cuenta"].(map[string]any); c["precioPorPasada"].(float64) != 1500 {
 		t.Errorf("con su tarifa: %v", c["precioPorPasada"])
+	}
+}
+
+// M3S4-040: cobrar desde la ficha un corte que ya salió de la máquina da un
+// pedido «listo», que se entrega con un paso. Si todavía no salió, nace
+// pendiente, como siempre.
+func TestElCorteTerminadoNacePedidoListo(t *testing.T) {
+	e := armar(t)
+	ven := e.staff(t, "vendedor@prueba.test", "vendedor")
+	nuevo := func() string {
+		return alta(t, e, ven, map[string]any{"contactoNombre": "Rodolfo", "materialDescripcion": "MDF — 1830 x 2600mm — 18mm",
+			"placaLargoMm": "2600", "placaAnchoMm": "1830", "piezas": []any{pieza(600, 300, 3)}})
+	}
+	estadoDelPedido := func(id string) string {
+		code, b := pedir(t, ven, "POST", e.srv.URL+"/api/v1/admin/cortes/"+id+"/pedido", nil)
+		if code != 200 {
+			t.Fatalf("a pedido: %d %s", code, b)
+		}
+		var estado string
+		if err := e.pool.QueryRow(context.Background(), `select o.estado::text from orders o join cutting_orders c on c.order_id = o.id where c.id = $1`, id).Scan(&estado); err != nil {
+			t.Fatal(err)
+		}
+		return estado
+	}
+	enCola := nuevo()
+	if got := estadoDelPedido(enCola); got != "pendiente" {
+		t.Errorf("en cola: %s", got)
+	}
+	terminado := nuevo()
+	for _, desde := range []string{"en-cola", "en-proceso"} {
+		if code, b := pedir(t, ven, "POST", e.srv.URL+"/api/v1/admin/cortes/"+terminado+"/avanzar?desde="+desde, nil); code != 200 {
+			t.Fatalf("avanzar desde %s: %d %s", desde, code, b)
+		}
+	}
+	if got := estadoDelPedido(terminado); got != "listo" {
+		t.Errorf("terminado: %s", got)
 	}
 }
 
@@ -306,6 +358,15 @@ func TestMaterialEnOrden(t *testing.T) {
 	}
 	if got := MaterialEnOrden("MDF que trae el cliente", nil, nil); got != "MDF que trae el cliente" {
 		t.Errorf("a mano: %q", got)
+	}
+	// La trae el cliente (M2S3-067): sin variante, con la etiqueta del
+	// buscador, sale igual que la del catálogo.
+	if got := MaterialEnOrden("MDF — 1830 x 2600mm — 18mm", nil, nil); got != "MDF — 2600 × 1830 mm — 18mm" {
+		t.Errorf("la trae el cliente: %q", got)
+	}
+	m, n := int32(2500), int32(1800)
+	if got := MaterialEnOrden("MDF — 1830 x 2600mm — 18mm", &m, &n); got != "MDF — 2600 × 1830 mm — 18mm" {
+		t.Errorf("con la medida propia distinta: %q", got)
 	}
 }
 

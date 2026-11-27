@@ -422,14 +422,21 @@ func (s *Servicio) Alta(ctx context.Context, ses *auth.Sesion, f FormCorte) (str
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "corte", numero,
 		"Cargó el corte "+numero+" para "+contacto, nil)
-	// El total con que se tomó el corte suelto, el que se le dice al
-	// cliente: si la tarifa cambia, la ficha muestra los dos (M3S2-030).
+	s.tomarTotal(ctx, id)
+	return numero, id, nil
+}
+
+// tomarTotal guarda el total con que se toma el corte suelto, el que se le
+// dice al cliente: si la tarifa cambia, la ficha muestra los dos (M3S2-030).
+// Se vuelve a tomar cuando cambia el trabajo —las pasadas, el acomodo, el
+// disco—: con la tarifa igual, CRT-7 salía «$ 4.800» tachado y «$ 3.600»
+// solo por el acomodo a mano.
+func (s *Servicio) tomarTotal(ctx context.Context, id string) {
 	if f, err := s.Ficha(ctx, id); err == nil && f != nil && f.Modo == "suelto" && f.Cuenta.Total > 0 {
 		if _, err := s.pool.Exec(ctx, `UPDATE cutting_orders SET total_tomado = $2 WHERE id = $1`, id, jsmath.Num(f.Cuenta.Total)); err != nil {
 			s.log.Error("total tomado del corte", "error", err)
 		}
 	}
-	return numero, id, nil
 }
 
 // planoDelAlta es el plano del corte que se está dando de alta, como lo va a

@@ -984,6 +984,7 @@ func (s *Servicio) CargarPasadas(ctx context.Context, ses *auth.Sesion, id strin
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "corte", id,
 		fmt.Sprintf("%s: %d → %d pasadas", numero, previas, int32(cantidad)), nil)
+	s.tomarTotal(ctx, id)
 	return nil
 }
 
@@ -1046,6 +1047,7 @@ func (s *Servicio) GuardarAcomodo(ctx context.Context, ses *auth.Sesion, id stri
 		desc = fmt.Sprintf("%s: acomodo corregido a mano (%d %s)", numero, len(fijadas), pieza)
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "corte", id, desc, nil)
+	s.tomarTotal(ctx, id)
 	if guardado != nil {
 		return "Acomodo guardado.", nil
 	}
@@ -1085,6 +1087,7 @@ func (s *Servicio) CambiarSierra(ctx context.Context, ses *auth.Sesion, id, valo
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "corte", id,
 		fmt.Sprintf("%s: disco de %s a %s mm", c.Numero, jsmath.Texto(anterior), jsmath.Texto(*ancho)), nil)
+	s.tomarTotal(ctx, id)
 	if n := len(plano.NoEntran); n > 0 {
 		return fmt.Sprintf("Disco cambiado. Ojo: con %s mm hay %d pieza(s) que no entran.", jsmath.Texto(*ancho), n), nil
 	}

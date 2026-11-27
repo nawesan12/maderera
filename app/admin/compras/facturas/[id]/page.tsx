@@ -96,7 +96,8 @@ export default async function FacturaDeCompraPage({
               {f.proveedor}
             </Link>
             {` · del ${fechaCorta.format(f.fechaEmision)}`}
-            {f.fechaVencimiento && ` · vence ${fechaCorta.format(f.fechaVencimiento)}`}
+            {/* Una nota de crédito no vence: resta (las de antes guardaban la fecha). */}
+            {f.fechaVencimiento && !esCredito && ` · vence ${fechaCorta.format(f.fechaVencimiento)}`}
           </>
         }
         acciones={
@@ -142,7 +143,14 @@ export default async function FacturaDeCompraPage({
             {/* Anulada, no da crédito fiscal: decía «Da crédito fiscal» debajo
                 de «Anulada» (M3S3-025). */}
             {[
-              f.anuladaAt ? null : daCreditoFiscal(f.tipo) ? "Da crédito fiscal" : "Sin crédito fiscal",
+              // La nota de crédito A recibida resta crédito fiscal (mes 23).
+              f.anuladaAt
+                ? null
+                : !daCreditoFiscal(f.tipo)
+                  ? "Sin crédito fiscal"
+                  : esCredito
+                    ? "Resta crédito fiscal"
+                    : "Da crédito fiscal",
               f.cae ? `CAE ${f.cae}` : null,
               f.numeroRemito ? `Remito ${f.numeroRemito}` : null,
             ]

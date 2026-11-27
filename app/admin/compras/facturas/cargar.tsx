@@ -194,6 +194,7 @@ export function CargarFactura({
         .filter((r) => r.supplierId === supplierId)
         .sort((a, b) => (a.numeroRemito ?? "").localeCompare(b.numeroRemito ?? "", "es", { numeric: true }));
   const esCredito = tipo.startsWith("nota_credito");
+  const esNota = tipo.startsWith("nota_");
 
   const pideDevolvibles = esCredito && Boolean(supplierId) && !corregir;
   useEffect(() => {
@@ -240,6 +241,22 @@ export function CargarFactura({
   }
   function cambiarTipo(t: Tipo) {
     setTipo(t);
+    // Una nota no cubre una recepción y los remitos no se ven: el que venía
+    // tildado solo (M2S1-112) quedaba marcado a escondidas, con su neto, y
+    // la carga decía «vinculá la factura» (mes 23, M2S3-016). Al pasar a
+    // nota se destilda, y el neto que había puesto el remito se vacía.
+    if (!corregir && t.startsWith("nota_") && remitos.length > 0) {
+      setRemitos([]);
+      setAjustarCosto(false);
+      cambiarNeto(n(neto) === netoRecibido ? "" : neto, t);
+      return;
+    }
+    // De vuelta a factura, el único remito del proveedor se vuelve a marcar.
+    if (!corregir && !t.startsWith("nota_") && tipo.startsWith("nota_") && remitos.length === 0 && delProveedor.length === 1 && neto === "") {
+      setRemitos([delProveedor[0].id]);
+      cambiarNeto(importeParaElCampo(delProveedor[0].neto), t);
+      return;
+    }
     cambiarNeto(neto, t);
   }
   function tocarIva(set: (v: string) => void) {
@@ -269,9 +286,18 @@ export function CargarFactura({
     setSupplierId(id);
     setAplicaA("");
     setDevuelve({});
-    cambiarTipo(tipoSegunCondicion(proveedores.find((p) => p.id === id)?.condicionIva));
+    const segun = tipoSegunCondicion(proveedores.find((p) => p.id === id)?.condicionIva);
+    // Si ya se eligió una nota, sigue siendo nota (con la letra del
+    // proveedor): volvía a «Factura» y tildaba su remito.
+    const nota = esNota ? (`${tipo.slice(0, -1)}${segun.slice(-1)}` as Tipo) : null;
+    setTipo(nota ?? segun);
+    setDiferenciaVista(false);
+    if (!ivaTocado) {
+      const iva = ivaPropuesto(n(neto), nota ?? segun);
+      setIva21(iva > 0 ? importeParaElCampo(iva) : "");
+    }
     // El único remito sin facturar del proveedor viene marcado (M2S1-112).
-    const suyos = corregir ? [] : recepciones.filter((r) => r.supplierId === id);
+    const suyos = corregir || nota ? [] : recepciones.filter((r) => r.supplierId === id);
     if (suyos.length === 1) {
       setRemitos([suyos[0].id]);
       setNeto(importeParaElCampo(suyos[0].neto));
@@ -353,8 +379,8 @@ export function CargarFactura({
         percepciones,
         percepcionIva: n(percepcionIva),
         percepcionIibb: n(percepcionIibb),
-        receiptId: remitos[0],
-        receiptIds: remitos.slice(1),
+        receiptId: esNota ? undefined : remitos[0],
+        receiptIds: esNota ? [] : remitos.slice(1),
         aplicaA: esCredito && aplicaA ? aplicaA : undefined,
         ajustarCosto: ajustarCosto && !porCantidad && Math.abs(contraRecibido) > 0.01,
         ...(esCredito && devoluciones.length > 0 ? { devoluciones } : {}),
@@ -476,7 +502,7 @@ export function CargarFactura({
 
           <Campo etiqueta="CAE" valor={cae} onCambio={setCae} />
 
-          {delProveedor.length > 0 && !esCredito && (
+          {delProveedor.length > 0 && !esNota && (
             <fieldset className="md:col-span-2">
               <legend className="text-base font-medium">Remitos que cubre</legend>
               <div className="mt-1 grid gap-2 sm:grid-cols-2">

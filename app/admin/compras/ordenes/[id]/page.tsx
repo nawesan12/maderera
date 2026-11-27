@@ -74,6 +74,13 @@ export default async function OrdenPage({
   // Completa con renglones que no llegaron: se cerró con faltante (M2S3-013).
   const conFaltante = orden.estado === "completa" && falta;
   const recepciones = orden.recepciones ?? [];
+  // Al cerrarla, Go suma «Cerrada con faltante: motivo» a las notas: con la
+  // chapa del estado se leía dos veces (mes 23). Queda el motivo.
+  const notas = (orden.notas ?? "")
+    .split(" · ")
+    .map((n) => (conFaltante ? n.replace(/^Cerrada con faltante(: )?/, "") : n))
+    .filter((n) => n.trim() !== "")
+    .join(" · ");
   const proveedor = await obtenerProveedor(orden.supplierId);
   /*
    * La orden como se le manda al proveedor (mes simulado, H197: había que
@@ -238,9 +245,7 @@ export default async function OrdenPage({
         </section>
       )}
 
-      {orden.notas && (
-        <p className="text-base text-muted-foreground">{orden.notas}</p>
-      )}
+      {notas && <p className="text-base text-muted-foreground">{notas}</p>}
 
       <AccionesDeOrden
         id={orden.id}

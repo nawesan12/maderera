@@ -197,9 +197,9 @@ type VistaPreviaProveedor struct {
 	SinAparear int                   `json:"sinAparear"`
 	// SinCambios son las apareadas con el mismo costo y el mismo precio: no
 	// cuentan como «para actualizar» (M2S3-056).
-	SinCambios int `json:"sinCambios"`
-	Columnas   []string              `json:"columnas"`
-	Error      *string               `json:"error,omitempty"`
+	SinCambios int      `json:"sinCambios"`
+	Columnas   []string `json:"columnas"`
+	Error      *string  `json:"error,omitempty"`
 }
 
 func vistaVacia(e string) VistaPreviaProveedor {

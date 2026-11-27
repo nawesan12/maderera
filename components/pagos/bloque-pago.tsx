@@ -119,9 +119,12 @@ export function BloquePago({
           <Clock className="mt-0.5 h-5 w-5 shrink-0 text-brand-orange" />
           <div className="text-sm">
             <p className="font-semibold">Estamos verificando tu pago</p>
+            {/* Al que ya retiró no se le promete «arrancamos con el
+                pedido» (mes 23): paga lo que se llevó. */}
             <p className="text-muted-foreground">
-              Recibimos el comprobante. Apenas lo vemos en la cuenta te
-              confirmamos y arrancamos con el pedido.
+              {enCurso
+                ? "Recibimos el comprobante. Apenas lo vemos en la cuenta te confirmamos y arrancamos con el pedido."
+                : "Recibimos el comprobante. Apenas lo vemos en la cuenta te confirmamos."}
             </p>
           </div>
         </CardContent>

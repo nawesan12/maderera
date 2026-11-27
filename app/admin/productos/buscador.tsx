@@ -47,6 +47,8 @@ export function BuscadorProductos({
   proveedorActual = "todos",
   estados,
   estadoActual = "todos",
+  sucursales,
+  sucursalActual = "todas",
 }: {
   categorias: { slug: string; name: string }[];
   busquedaActual: string;
@@ -58,6 +60,9 @@ export function BuscadorProductos({
   proveedorActual?: string;
   estados?: EstadoDeLista[];
   estadoActual?: string;
+  /** Stock: los grupos de una sola sucursal. */
+  sucursales?: { slug: string; nombre: string }[];
+  sucursalActual?: string;
 }) {
   const ruta = usePathname();
   const { texto, setTexto, actualizar } = useFiltrosDeLista({
@@ -69,7 +74,10 @@ export function BuscadorProductos({
   // pestañas, y la primera tarjeta arrancaba al pie de la pantalla (mes
   // simulado, H397). Con alguno puesto, el botón lo cuenta.
   const puestos =
-    (categoriaActual !== "todos" ? 1 : 0) + (marcaActual !== "todas" ? 1 : 0) + (proveedorActual !== "todos" ? 1 : 0);
+    (categoriaActual !== "todos" ? 1 : 0) +
+    (marcaActual !== "todas" ? 1 : 0) +
+    (proveedorActual !== "todos" ? 1 : 0) +
+    (sucursalActual !== "todas" ? 1 : 0);
   const [desplegados, setDesplegados] = useState(false);
 
   return (
@@ -97,6 +105,25 @@ export function BuscadorProductos({
           )}
         </button>
         <div className={`${desplegados ? "flex w-full flex-wrap gap-3" : "hidden"} sm:contents`}>
+          {sucursales && sucursales.length > 1 && (
+            <Select
+              value={sucursalActual}
+              onValueChange={(v) => v && actualizar({ suc: v })}
+              items={{ todas: "Todas las sucursales", ...Object.fromEntries(sucursales.map((s) => [s.slug, s.nombre])) }}
+            >
+              <SelectTrigger className="h-11 w-52 max-sm:w-full" aria-label="Sucursal">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Todas las sucursales</SelectItem>
+                {sucursales.map((s) => (
+                  <SelectItem key={s.slug} value={s.slug}>
+                    {s.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Select
             value={categoriaActual}
             onValueChange={(v) => v && actualizar({ cat: v })}

@@ -88,6 +88,15 @@ export function estadoEnSucursal(disponible: number, minimo: number): EstadoEnSu
   return "bien";
 }
 
+/**
+ * Si la sucursal pide reposición: la regla de Go (catalogo.ReponerEnFila),
+ * lo disponible en su mínimo o en negativo. Es la que pone la medida en
+ * «Para reponer».
+ */
+export function pideReponer(disponible: number, minimo: number): boolean {
+  return disponible < 0 || (minimo > 0 && disponible <= minimo);
+}
+
 /** El aviso de un ajuste, con el producto: dos avisos con «Deshacer» sin nombre se confundían. */
 export function avisoDelAjuste(producto: string, mensaje: string): string {
   const p = producto.trim();

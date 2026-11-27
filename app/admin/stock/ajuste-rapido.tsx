@@ -340,9 +340,10 @@ function CargaPorMedida({
                   </span>
                 ) : null}
                 {modo === "contar" && diferencia !== 0 && (
-                  <span className={diferencia < 0 ? "font-medium text-destructive" : "text-muted-foreground"}>
+                  <span className={diferencia < 0 ? "font-medium text-saldo-debe" : "text-muted-foreground"}>
                     {" "}
-                    · {diferencia > 0 ? "sobran" : "faltan"} {formatearCantidad(Math.abs(diferencia))}
+                    · {diferencia > 0 ? "sobra" : "falta"}
+                    {Math.abs(diferencia) === 1 ? "" : "n"} {formatearCantidad(Math.abs(diferencia))}
                   </span>
                 )}
               </>

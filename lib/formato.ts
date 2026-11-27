@@ -184,6 +184,9 @@ export const fechaCorta = fechaSegunTipo({ day: "2-digit", month: "2-digit", yea
 
 export const fechaLarga = fechaSegunTipo({ day: "numeric", month: "long", year: "numeric" });
 
+/** «30/11»: la fecha prometida de una orden decía «29/11» en Stock (M3S2-025). */
+export const diaCorto = fechaSegunTipo({ day: "2-digit", month: "2-digit" });
+
 export const fechaHora = new Intl.DateTimeFormat("es-AR", {
   timeZone: ZONA,
   day: "2-digit",

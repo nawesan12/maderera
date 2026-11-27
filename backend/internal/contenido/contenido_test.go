@@ -290,6 +290,16 @@ func TestAjustesYResenas(t *testing.T) {
 	if c, _ := pedir(t, juan, "POST", u+"contenido/mis-resenas", resena); c != 409 {
 		t.Errorf("la segunda reseña de la misma compra: %d", c)
 	}
+	// M3S4-032 y M2S3-077: la medida que compró y el estado de la reseña.
+	if _, b := pedir(t, juan, "GET", u+"contenido/mis-resenas", nil); !strings.Contains(string(b), `"estadoResena":"pendiente"`) ||
+		strings.Contains(string(b), `"medida":""`) {
+		t.Errorf("la medida y el estado: %s", b)
+	}
+	_, _ = e.pool.Exec(ctx, `update product_reviews set estado = 'rechazada' where order_id = $1`, orderID)
+	if _, b := pedir(t, juan, "GET", u+"contenido/mis-resenas", nil); !strings.Contains(string(b), `"estadoResena":"rechazada"`) {
+		t.Errorf("la rechazada: %s", b)
+	}
+	_, _ = e.pool.Exec(ctx, `update product_reviews set estado = 'pendiente' where order_id = $1`, orderID)
 	if c, _ := pedir(t, juan, "POST", u+"contenido/mis-resenas", map[string]any{"productId": producto, "orderId": orderID, "estrellas": 9}); c != 422 {
 		t.Errorf("nueve estrellas: %d", c)
 	}
@@ -417,8 +427,9 @@ func TestSitio(t *testing.T) {
 	u := e.srv.URL + "/api/v1/contenido/"
 
 	// Documentos: los reservados solo los ve un profesional activo.
-	_, _ = e.pool.Exec(ctx, `insert into technical_documents (titulo, url, solo_profesionales, orden) values
-		('Ficha del fenólico', '/d/1.pdf', false, 1), ('Tabla de cargas', '/d/2.pdf', true, 2), ('Viejo', '/d/3.pdf', false, 0)`)
+	// Con archivo subido (tamaño): sin él no se listan (M2S1-025).
+	_, _ = e.pool.Exec(ctx, `insert into technical_documents (titulo, url, solo_profesionales, orden, tamano_bytes) values
+		('Ficha del fenólico', '/d/1.pdf', false, 1, 100), ('Tabla de cargas', '/d/2.pdf', true, 2, 100), ('Viejo', '/d/3.pdf', false, 0, 100)`)
 	_, _ = e.pool.Exec(ctx, `update technical_documents set activo = false where titulo = 'Viejo'`)
 	juan := e.cliente(t, "juan@prueba.test", "cliente")
 	for _, c := range []struct {

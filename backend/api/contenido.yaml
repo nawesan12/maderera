@@ -663,7 +663,7 @@ components:
         reparto: { type: object, additionalProperties: { type: integer } }
     Resenable:
       type: object
-      required: [productId, slug, nombre, orderId, numeroPedido, yaResenado]
+      required: [productId, slug, nombre, orderId, numeroPedido, yaResenado, medida, estadoResena]
       properties:
         productId: { type: string }
         slug: { type: string }
@@ -671,6 +671,8 @@ components:
         orderId: { type: string }
         numeroPedido: { type: string }
         yaResenado: { type: boolean }
+        medida: { type: string, description: las medidas que compró de ese producto en ese pedido }
+        estadoResena: { type: string, description: "pendiente, publicada o rechazada; vacío si no la dejó" }
     Ajuste:
       type: object
       required: [clave, valor, descripcion, updatedAt]

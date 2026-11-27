@@ -208,14 +208,18 @@ export function conPunto(frase: string): string {
  * alguno, queda reseñado. Conserva el orden en que llegan, así al publicar la
  * tarjeta no salta de lugar.
  */
-export function unaPorProducto<T extends { productId: string; yaResenado: boolean }>(items: T[]): T[] {
-  const reseñados = new Set(items.filter((i) => i.yaResenado).map((i) => i.productId));
+export function unaPorProducto<T extends { productId: string; yaResenado: boolean; estadoResena?: string }>(items: T[]): T[] {
+  // La reseña de cada producto, con su estado: el renglón que queda dice si
+  // se publicó o no (M2S3-077).
+  const reseñados = new Map<string, T>();
+  for (const i of items) if (i.yaResenado && !reseñados.has(i.productId)) reseñados.set(i.productId, i);
   const vistos = new Set<string>();
   const out: T[] = [];
   for (const i of items) {
     if (vistos.has(i.productId)) continue;
     vistos.add(i.productId);
-    out.push(reseñados.has(i.productId) && !i.yaResenado ? { ...i, yaResenado: true } : i);
+    const r = reseñados.get(i.productId);
+    out.push(r && !i.yaResenado ? { ...i, yaResenado: true, estadoResena: r.estadoResena } : i);
   }
   return out;
 }

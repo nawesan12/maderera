@@ -510,7 +510,10 @@ func (q *Queries) ModerarResena(ctx context.Context, arg ModerarResenaParams) (s
 
 const productosResenables = `-- name: ProductosResenables :many
 SELECT p.id AS product_id, p.slug, p.name AS nombre, o.id AS order_id, o.numero AS numero_pedido,
-       EXISTS (SELECT 1 FROM product_reviews r WHERE r.customer_id = $1 AND r.order_id = o.id AND r.product_id = p.id) AS ya_resenado
+       EXISTS (SELECT 1 FROM product_reviews r WHERE r.customer_id = $1 AND r.order_id = o.id AND r.product_id = p.id) AS ya_resenado,
+       string_agg(DISTINCT v.label, ', ')::text AS medida,
+       coalesce((SELECT r.estado::text FROM product_reviews r WHERE r.customer_id = $1 AND r.order_id = o.id AND r.product_id = p.id
+                 ORDER BY r.created_at DESC LIMIT 1), '')::text AS estado_resena
 FROM orders o
 JOIN order_items oi ON oi.order_id = o.id
 JOIN product_variants v ON v.id = oi.variant_id
@@ -528,8 +531,13 @@ type ProductosResenablesRow struct {
 	OrderID      string `json:"orderId"`
 	NumeroPedido string `json:"numeroPedido"`
 	YaResenado   bool   `json:"yaResenado"`
+	Medida       string `json:"medida"`
+	EstadoResena string `json:"estadoResena"`
 }
 
+// Con la medida que compró (la lista decía solo «Fenólico» y no se sabía de
+// qué se estaba reseñando) y el estado de su reseña: la rechazada seguía
+// diciendo «Enviada» (mes simulado, M3S4-032 y M2S3-077).
 func (q *Queries) ProductosResenables(ctx context.Context, customerID string) ([]ProductosResenablesRow, error) {
 	rows, err := q.db.Query(ctx, productosResenables, customerID)
 	if err != nil {
@@ -546,6 +554,8 @@ func (q *Queries) ProductosResenables(ctx context.Context, customerID string) ([
 			&i.OrderID,
 			&i.NumeroPedido,
 			&i.YaResenado,
+			&i.Medida,
+			&i.EstadoResena,
 		); err != nil {
 			return nil, err
 		}

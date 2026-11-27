@@ -128,6 +128,9 @@ func UnidadPara(u string, cantidad float64, descripcion string) string {
 		return "cortes"
 	}
 	a := Unidad(UnidadDeVenta(u, descripcion))
+	if a == "media placa" && cantidad != 1 {
+		return "medias placas"
+	}
 	if cantidad == 1 || strings.ContainsAny(a, ". ²") || len([]rune(a)) <= 2 || strings.HasSuffix(a, "s") {
 		return a
 	}

@@ -333,6 +333,8 @@ export interface components {
             numero?: string;
             /** @description El estado al que llegó el pedido */
             estado?: string;
+            /** @description El enlace de firma del remito que salió al avanzar */
+            firmaToken?: string;
         };
         PlazoDelPresupuesto: {
             texto: string;
@@ -817,6 +819,9 @@ export interface operations {
                 "application/json": {
                     receptorNombre?: string;
                     receptorDocumento?: string;
+                    /** @description el PIN de un admin para soltar lo que no se cobró (422 en pin) */
+                    pin?: string;
+                    ficha?: string;
                 };
             };
         };

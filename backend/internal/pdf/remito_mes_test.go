@@ -84,3 +84,13 @@ func textoDelPDF(t *testing.T, b []byte) string {
 	}
 	return string(out)
 }
+
+// Mes simulado 2: el remito de una media placa decía «1 placa».
+func TestUnidadDeLaMediaPlaca(t *testing.T) {
+	if u := UnidadPara("placa", 1, "MDF 18 — media placa, partida a lo largo"); u != "media placa" {
+		t.Errorf("%q", u)
+	}
+	if u := UnidadPara("placa", 2, "Fenólico 15 — Media placa, partida a lo ancho"); u != "medias placas" {
+		t.Errorf("%q", u)
+	}
+}

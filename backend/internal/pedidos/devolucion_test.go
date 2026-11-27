@@ -19,7 +19,7 @@ func TestDevolucionDeUnPedidoSinFactura(t *testing.T) {
 	pedido := e.pedido(t, ses, 2)
 	e.exec(t, `update orders set estado = 'listo', medio_pago = 'efectivo' where id = $1`, pedido)
 	u := e.srv.URL + "/api/v1/admin/pedidos/" + pedido
-	if c, b := pedir(t, dep, "POST", u+"/avanzar?desde=listo", map[string]any{"receptorDocumento": "20111222"}); c != 200 {
+	if c, b := pedir(t, ven, "POST", u+"/avanzar?desde=listo", map[string]any{"receptorDocumento": "20111222"}); c != 200 {
 		t.Fatalf("entregar: %d %s", c, b)
 	}
 	placa := e.texto(t, `select id::text from order_items where order_id = $1 and variant_id is not null`, pedido)

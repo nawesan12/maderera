@@ -144,6 +144,15 @@ func (a *API) PrepararRemito(ctx context.Context, r entregasapi.PrepararRemitoRe
 	if msj != "" {
 		return nil, invalido(campo, msj)
 	}
+	if msj := RevisarDocumento(f.ReceptorDocumento); msj != "" {
+		return nil, invalido("receptorDocumento", msj)
+	}
+	if v, ok := (*r.Body)["pin"].(string); ok {
+		f.SinCobrar.PIN = v
+	}
+	if v, ok := (*r.Body)["ficha"].(string); ok {
+		f.SinCobrar.Ficha = v
+	}
 	e, err := a.s.CrearEntrega(ctx, ses, f)
 	if err != nil {
 		return nil, err

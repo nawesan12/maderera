@@ -23,6 +23,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"log/slog"
+	"math"
 	"net/http"
 	"time"
 
@@ -34,6 +35,7 @@ import (
 	"mjbj/internal/autorizacion"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/cola"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/numeracion"
 	"mjbj/internal/plataforma"
@@ -41,6 +43,7 @@ import (
 	"mjbj/internal/reservas"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas"
+	"mjbj/internal/ventas/fragmentos"
 	"mjbj/internal/zodjs"
 )
 
@@ -232,9 +235,13 @@ func ConGalpon(ctx context.Context, db consultor, pedido string, renglones []Ren
 		return nil, err
 	}
 	galpon := map[string]float64{}
+	enStock := map[string]float64{}
 	var id string
 	var factor, n float64
 	if _, err := pgx.ForEachRow(filas, []any{&id, &factor, &n}, func() error {
+		if factor > 0 && factor != 1 {
+			enStock[id] = jsmath.Round(n*1000) / 1000
+		}
 		if factor > 0 {
 			n = n / factor
 		}
@@ -246,6 +253,9 @@ func ConGalpon(ctx context.Context, db consultor, pedido string, renglones []Ren
 	for i := range renglones {
 		if g, ok := galpon[renglones[i].OrderItemID]; ok {
 			renglones[i].EnElGalpon = &g
+		}
+		if g, ok := enStock[renglones[i].OrderItemID]; ok {
+			renglones[i].GalponEnStock = &g
 		}
 	}
 	return renglones, nil
@@ -422,6 +432,17 @@ func (s *Servicio) CrearEntrega(ctx context.Context, ses *auth.Sesion, f FormRem
 			var visita *string
 			if i > 0 {
 				visita = &out.ID
+				// Lo de otro pedido sale solo si está cobrado (o a cuenta) y
+				// armado: el remito ofrecía sumar un pedido sin preparar y
+				// sin cobrar, sin ninguna marca (mes simulado 2).
+				if ok, err := otroAcopioSale(ctx, tx, parte.OrderID); err != nil {
+					return err
+				} else if !ok {
+					return ErrorDeEntrega("Lo de otro pedido sale junto si está listo y cobrado.")
+				}
+			}
+			if _, err := AutorizarSinCobrar(ctx, tx, s.aut, ses, parte.OrderID, f.SinCobrar); err != nil {
+				return err
 			}
 			creada, delCliente, err := crearEnTransaccion(ctx, tx, parte, usuario, visita)
 			if err != nil {
@@ -442,6 +463,52 @@ func (s *Servicio) CrearEntrega(ctx context.Context, ses *auth.Sesion, f FormRem
 	})
 	return out, err
 }
+
+// alcanzaElGalpon: el remito no saca más de lo que hay en el galpón (mes
+// simulado 2: con 0 tirantes se firmó un remito por 6 y el stock quedó en
+// negativo; «Marcar listo» frenaba el pedido y el remito lo despachaba
+// igual). Es la misma cuenta que «Marcar listo» (ConGalpon, en la unidad
+// del renglón), con el candado de la serie de remitos tomado.
+func alcanzaElGalpon(ctx context.Context, tx pgx.Tx, pedido string, pendientes []Renglon, lineas []LineaAEntregar) error {
+	conGalpon, err := ConGalpon(ctx, tx, pedido, append([]Renglon(nil), pendientes...))
+	if err != nil {
+		return err
+	}
+	lleva := map[string]float64{}
+	for _, l := range lineas {
+		lleva[l.OrderItemID] += l.Cantidad
+	}
+	for _, r := range conGalpon {
+		n := lleva[r.OrderItemID]
+		if r.EnElGalpon == nil || n <= 0.0005 {
+			continue
+		}
+		if *r.EnElGalpon+0.0005 < n {
+			return ErrorDeEntrega("No alcanza: " + r.Descripcion + " lleva " + formato.Cantidad(n) +
+				" y en el galpón hay " + formato.Cantidad(math.Max(*r.EnElGalpon, 0)) + ".")
+		}
+	}
+	return nil
+}
+
+// otroAcopioSale: lo de otro pedido del cliente sale en la misma visita si
+// está listo o ya en acopio, y no debe nada fuera de la cuenta corriente.
+func otroAcopioSale(ctx context.Context, tx pgx.Tx, pedido string) (bool, error) {
+	var ok bool
+	err := tx.QueryRow(ctx, `SELECT `+condicionOtroAcopio+` FROM orders o WHERE o.id = $1`, pedido).Scan(&ok)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return ok, err
+}
+
+// condicionOtroAcopio es, sobre la fila `o`, si lo de ese pedido puede
+// salir junto con el de otro: armado (listo, o ya se retiró algo) y sin
+// nada por cobrar fuera de la cuenta. Un pedido web sin preparar figuraba
+// como «1 renglón más en acopio» (mes simulado 2).
+const condicionOtroAcopio = `(o.estado NOT IN ('entregado', 'cancelado') AND (o.estado = 'listo' OR o.origen = 'mostrador'
+	OR EXISTS (SELECT 1 FROM deliveries d WHERE d.order_id = o.id AND d.estado <> 'anulada'))
+	AND ` + fragmentos.SinCobrarDelPedido + ` IS NULL)`
 
 func conAlgo(ls []LineaAEntregar) bool {
 	for _, l := range ls {
@@ -523,6 +590,9 @@ func crearEnTransaccion(ctx context.Context, tx pgx.Tx, f FormRemito, usuario, v
 		}
 	}
 	if !yaSalio {
+		if err := alcanzaElGalpon(ctx, tx, f.OrderID, pendientes, control.Lineas); err != nil {
+			return nil, nil, err
+		}
 		if err := sacarDelDeposito(ctx, tx, f.OrderID, salida, numero, usuario, control.Lineas, pendientes); err != nil {
 			return nil, nil, err
 		}
@@ -608,20 +678,23 @@ func RemitoPorLoQueQueda(ctx context.Context, tx pgx.Tx, pedidoID string, sucurs
 	if tipo != "envio" {
 		tipo = "retiro"
 	}
-	nota := "Entregado desde el tablero de pedidos"
-	if tipo == "envio" {
-		nota = "Despachado desde el tablero de pedidos"
-	}
+	// Sin nota: «Entregado desde el tablero de pedidos» salía impreso en el
+	// papel del cliente (mes simulado 2). El historial ya dice cómo salió.
 	token := tokenDeFirma()
 	var nombre, documento *string
 	if tipo == "retiro" {
 		nombre, documento = quien.Nombre, quien.Documento
 	}
-	id, err := insertarRemito(ctx, tx, numero, pedidoID, salida, tipo, "preparada", nombre, documento, &nota, token, usuario, lineas)
+	yaSalio, err := SalioConLaVenta(ctx, tx, pedidoID)
 	if err != nil {
 		return nil, err
 	}
-	yaSalio, err := SalioConLaVenta(ctx, tx, pedidoID)
+	if !yaSalio {
+		if err := alcanzaElGalpon(ctx, tx, pedidoID, pendientes, lineas); err != nil {
+			return nil, err
+		}
+	}
+	id, err := insertarRemito(ctx, tx, numero, pedidoID, salida, tipo, "preparada", nombre, documento, nil, token, usuario, lineas)
 	if err != nil {
 		return nil, err
 	}
@@ -1078,7 +1151,7 @@ func (s *Servicio) OtrosAcopios(ctx context.Context, pedido string) ([]OtroAcopi
 	filas, err := s.pool.Query(ctx, `
 		SELECT o.id::text, o.numero FROM orders o
 		WHERE o.customer_id = (SELECT customer_id FROM orders WHERE id = $1) AND o.id <> $1
-		  AND o.tipo_entrega = 'retiro' AND o.estado NOT IN ('entregado', 'cancelado')
+		  AND o.tipo_entrega = 'retiro' AND `+condicionOtroAcopio+`
 		ORDER BY o.created_at`, pedido)
 	if err != nil {
 		return nil, err

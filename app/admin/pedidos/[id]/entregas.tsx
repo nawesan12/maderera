@@ -300,8 +300,15 @@ function FormularioDeRemito({
   alGenerar: (numero: string) => void;
 }) {
   const [estado, preparar, preparando] = useActionState(prepararRemito, inicial);
+  // Arranca en lo que queda, o en lo que hay en el galpón si no alcanza
+  // (mes simulado 2: proponía 4 lacas con 3 en el estante, y salía igual).
   const [cantidades, setCantidades] = useState<Record<string, string>>(() =>
-    Object.fromEntries(conSaldo.map((p) => [p.orderItemId, String(p.pendiente)])),
+    Object.fromEntries(
+      conSaldo.map((p) => [
+        p.orderItemId,
+        String(p.enElGalpon !== undefined && p.enElGalpon < p.pendiente ? Math.max(Math.floor(p.enElGalpon * 1000) / 1000, 0) : p.pendiente),
+      ]),
+    ),
   );
   // Lo de los otros acopios arranca en cero: se suma lo que se lleva.
   const [deOtros, setDeOtros] = useState<Record<string, string>>({});
@@ -327,10 +334,20 @@ function FormularioDeRemito({
   const conDecimales = (p: RenglonPendiente, valor: string) =>
     Boolean(p.enteros) && llevaDecimales(valor) && valor !== String(p.pendiente);
   const malEscritos = conSaldo.filter((p) => conDecimales(p, cantidades[p.orderItemId] ?? ""));
+  // Más de lo que hay en el galpón no sale: Go lo frena igual.
+  const pasaElGalpon = (p: RenglonPendiente, valor: string) =>
+    p.enElGalpon !== undefined && Number(valor.replace(",", ".")) > Math.max(p.enElGalpon, 0) + 0.0005;
+  const sinStock = [
+    ...conSaldo.filter((p) => pasaElGalpon(p, cantidades[p.orderItemId] ?? "")),
+    ...otros.flatMap((o) => o.renglones.filter((p) => pasaElGalpon(p, deOtros[`otro-${o.orderId}-${p.orderItemId}`] ?? ""))),
+  ];
+  // El PIN de un admin para soltar lo que no se cobró, cuando Go lo pide.
+  const [pin, setPin] = useState<{ visto: EstadoEntrega; abierto: boolean }>({ visto: inicial, abierto: false });
+  if (estado.autorizacion && pin.visto !== estado) setPin({ visto: estado, abierto: true });
 
   function enviar(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (preparando || malEscritos.length > 0) return;
+    if (preparando || malEscritos.length > 0 || sinStock.length > 0) return;
     if (debe) {
       setPreguntando(true);
       return;
@@ -338,8 +355,9 @@ function FormularioDeRemito({
     generar();
   }
 
-  function generar() {
+  function generar(conPin?: string) {
     const datos = new FormData();
+    if (conPin) datos.set("pin", conPin);
     datos.set("orderId", orderId);
     datos.set("tipo", tipoEntrega);
     for (const [id, valor] of Object.entries(cantidades)) datos.set(`cantidad-${id}`, valor);
@@ -360,6 +378,7 @@ function FormularioDeRemito({
             valor={cantidades[p.orderItemId] ?? ""}
             alCambiar={(v) => setCantidades((c) => ({ ...c, [p.orderItemId]: v }))}
             mal={conDecimales(p, cantidades[p.orderItemId] ?? "")}
+            sinStock={pasaElGalpon(p, cantidades[p.orderItemId] ?? "")}
           />
         ))}
       </div>
@@ -382,6 +401,7 @@ function FormularioDeRemito({
                 placeholder="0"
                 alCambiar={(v) => setDeOtros((c) => ({ ...c, [clave]: v }))}
                 mal={conDecimales(p, deOtros[clave] ?? "")}
+                sinStock={pasaElGalpon(p, deOtros[clave] ?? "")}
               />
             );
           })}
@@ -426,7 +446,7 @@ function FormularioDeRemito({
         )}
       </div>
 
-      {estado.error && (
+      {estado.error && !estado.autorizacion && (
         <p role="alert" className="flex items-start gap-2 text-base text-destructive">
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
           {estado.error}
@@ -436,11 +456,11 @@ function FormularioDeRemito({
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="submit"
-          disabled={preparando || malEscritos.length > 0}
+          disabled={preparando || malEscritos.length > 0 || sinStock.length > 0}
           className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-60"
         >
           {preparando && <Loader2 className="h-4 w-4 animate-spin" />}
-          Generar remito
+          {sinStock.length > 0 ? "No alcanza el galpón" : "Generar remito"}
         </button>
         <button
           type="button"
@@ -505,6 +525,22 @@ function FormularioDeRemito({
         </Dialog>
       )}
 
+      {estado.autorizacion && (
+        <Dialog open={pin.abierto} onOpenChange={(v) => !preparando && setPin((x) => ({ ...x, abierto: v }))}>
+          <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
+            <DialogHeader>
+              <DialogTitle>{sinCobrar ? `${sinCobrar.numero} sin cobrar` : "Sin cobrar"}</DialogTitle>
+            </DialogHeader>
+            <CampoPin
+              autorizacion={estado.autorizacion}
+              enviando={preparando}
+              onEnviar={(clave) => generar(clave)}
+              onCancelar={() => setPin((x) => ({ ...x, abierto: false }))}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
+
       {debe && sinCobrar && cobro && (
         <DialogoCobro
           sinBoton
@@ -515,7 +551,7 @@ function FormularioDeRemito({
           aCobrar={sinCobrar.monto}
           medio={cobro.medio}
           pedido={{ id: orderId, numero: cobro.numero }}
-          alCobrar={generar}
+          alCobrar={() => generar()}
         />
       )}
     </>
@@ -529,6 +565,7 @@ function RenglonACantidad({
   valor,
   alCambiar,
   mal,
+  sinStock = false,
   placeholder,
 }: {
   id: string;
@@ -537,6 +574,8 @@ function RenglonACantidad({
   alCambiar: (v: string) => void;
   /** Lo que no se fracciona va entero (T4, hallazgo 21). */
   mal: boolean;
+  /** Pasa lo que hay en el galpón. */
+  sinStock?: boolean;
   placeholder?: string;
 }) {
   return (
@@ -544,13 +583,19 @@ function RenglonACantidad({
       <label htmlFor={id} className="min-w-0 flex-1 basis-48 text-base">
         {p.descripcion}
         <span className="block text-muted-foreground">
-          Quedan {cantidadConUnidad(p.pendiente, p.unidad, p.descripcion)}
+          {p.pendiente === 1 ? "Queda" : "Quedan"} {cantidadConUnidad(p.pendiente, p.unidad, p.descripcion)}
           {/* Lo que hay en el estante, para no prometer lo que no está (mes
               simulado, H218). */}
+          {/* De una media placa, el galpón en placas, como en Stock: «66 en
+              el galpón» eran 33 placas (mes simulado 2). */}
           {p.enElGalpon !== undefined && (
             <span className={`tabular ${p.enElGalpon < p.pendiente ? "font-medium text-destructive" : ""}`}>
               {" "}
-              · {formatearCantidad(Math.max(p.enElGalpon, 0))} en el galpón
+              ·{" "}
+              {p.galponEnStock !== undefined
+                ? cantidadConUnidad(Math.max(p.galponEnStock, 0), "placa")
+                : formatearCantidad(Math.max(p.enElGalpon, 0))}{" "}
+              en el galpón
             </span>
           )}
         </span>
@@ -564,7 +609,7 @@ function RenglonACantidad({
         value={valor}
         placeholder={placeholder}
         onChange={(e) => alCambiar(e.target.value)}
-        aria-invalid={mal || undefined}
+        aria-invalid={mal || sinStock || undefined}
         aria-describedby={mal ? `${id}-entero` : undefined}
         className="tabular h-11 w-28 text-right text-base"
       />

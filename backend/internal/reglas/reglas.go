@@ -58,6 +58,11 @@ const (
 	DatosFiscalesDelCliente = "datos_fiscales_del_cliente"
 	// H032: si la tarjeta en línea pide lote y cupón.
 	LoteYCupon = "lote_y_cupon"
+	// Mes simulado 2 (M2S1-018): quién pide el PIN de un admin para soltar
+	// mercadería sin cobrar. «deposito»: solo el depósito, que no cobra;
+	// «fuera_de_la_cuenta»: también quien vende, si el cliente no tiene
+	// cuenta corriente o la deuda pasa su límite.
+	EntregarSinCobrar = "entregar_sin_cobrar"
 )
 
 // Opciones son los valores posibles de cada regla, el de arranque primero.
@@ -77,6 +82,7 @@ var Opciones = map[string][]string{
 	EtiquetaDelCircuito:         {"b", "sin_factura", "interno"},
 	DatosFiscalesDelCliente:     {"hasta_facturar", "ninguno"},
 	LoteYCupon:                  {"obligatorio", "opcional"},
+	EntregarSinCobrar:           {"deposito", "fuera_de_la_cuenta"},
 }
 
 // Arranque es el valor de una regla cuando la fila no está o tiene algo que

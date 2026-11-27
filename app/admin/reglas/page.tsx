@@ -139,6 +139,14 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
         ],
       },
       {
+        clave: "entregar_sin_cobrar",
+        pregunta: "Entregar sin cobrar, ¿quién pide el PIN?",
+        opciones: [
+          { valor: "deposito", texto: "Solo el depósito" },
+          { valor: "fuera_de_la_cuenta", texto: "También quien vende, fuera de la cuenta corriente" },
+        ],
+      },
+      {
         clave: "firma_sin_pin",
         pregunta: "Sin ningún PIN cargado, ¿firma la contraseña de un admin?",
         opciones: [

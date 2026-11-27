@@ -56,6 +56,10 @@ type Resultado struct {
 	ID     string `json:"id,omitempty"`
 	Numero string `json:"numero,omitempty"`
 	Estado string `json:"estado,omitempty"`
+	// FirmaToken: el enlace de firma del remito que salió al avanzar. En
+	// un retiro el cliente está presente: la pantalla va derecho a la firma
+	// (mes simulado 2: quedaba «Sin firmar», un paso aparte que se olvidaba).
+	FirmaToken string `json:"firmaToken,omitempty"`
 }
 
 // NotaEntregadoSinCobrar encabeza la nota del historial de un pedido que se
@@ -219,6 +223,21 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 				return err
 			}
 			usuario := ses.UserID
+			saldo, err := entregas.SaldoDeAcopio(ctx, tx, id)
+			if err != nil {
+				return err
+			}
+			if len(entregas.SoloPendientes(saldo)) > 0 {
+				// El documento primero: es lo que se corrige en el lugar.
+				if p.tipoEntrega != "envio" {
+					if campo, msj := quien.Revisar(); msj != "" {
+						return plataforma.Invalido(map[string]string{campo: msj})
+					}
+				}
+				if _, err := entregas.AutorizarSinCobrar(ctx, tx, s.aut, ses, id, quien.SinCobrar); err != nil {
+					return err
+				}
+			}
 			if remito, err = entregas.RemitoPorLoQueQueda(ctx, tx, id, sucursal, p.tipoEntrega, &usuario, quien); err != nil {
 				return err
 			}
@@ -268,7 +287,11 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 	if remito != nil {
 		ok = p.numero + " quedó " + texto + ": la mercadería salió con el remito " + remito.Numero + ", que queda para firmar."
 	}
-	return &Resultado{Ok: ok, Numero: p.numero, Estado: siguiente}, nil
+	out := &Resultado{Ok: ok, Numero: p.numero, Estado: siguiente}
+	if remito != nil {
+		out.FirmaToken = remito.FirmaToken
+	}
+	return out, nil
 }
 
 // Cancelar cancela el pedido y libera lo reservado (el físico no se toca:

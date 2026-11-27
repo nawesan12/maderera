@@ -162,6 +162,7 @@ func (a *API) AvanzarPedido(ctx context.Context, r ventasapi.AvanzarPedidoReques
 	var quien entregas.Receptor
 	if r.Body != nil {
 		quien = entregas.NuevoReceptor(r.Body.ReceptorNombre, r.Body.ReceptorDocumento)
+		quien.SinCobrar = entregas.SalidaSinCobrar{PIN: texto(r.Body.Pin), Ficha: texto(r.Body.Ficha)}
 	}
 	v, err := a.s.Avanzar(ctx, ses, r.Id.String(), desde, quien)
 	if err != nil {

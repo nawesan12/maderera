@@ -182,8 +182,15 @@ func UnidadDeVenta(u, descripcion string) string {
 	if (u == "litro" || u == "kg") && envase.MatchString(descripcion) {
 		return "unidad"
 	}
+	// La media placa se cuenta en medias (mes simulado 2: el remito firmado
+	// decía «1 placa» de una media).
+	if u == "placa" && mediaPlaca.MatchString(descripcion) {
+		return "media_placa"
+	}
 	return u
 }
+
+var mediaPlaca = regexp.MustCompile(`(?i)\bmedia placa\b`)
 
 var abreviaturaUnidad = map[string]string{
 	"unidad":         "u.",

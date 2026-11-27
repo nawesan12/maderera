@@ -291,6 +291,11 @@ export interface components {
              * @description Lo que hay en el estante de la sucursal de donde sale
              */
             enElGalpon?: number;
+            /**
+             * Format: double
+             * @description Lo mismo en la unidad del stock (placas enteras), cuando el renglón es una presentación (media placa). Ausente si es la misma
+             */
+            galponEnStock?: number;
         };
         OtroAcopio: {
             orderId: string;

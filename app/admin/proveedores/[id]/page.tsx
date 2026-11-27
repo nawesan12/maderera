@@ -59,6 +59,7 @@ export default async function ProveedorPage({
   ]);
 
   if (!proveedor) notFound();
+  const inactivo = proveedor.estado === "inactivo";
 
   return (
     <div className="space-y-6">
@@ -76,6 +77,12 @@ export default async function ProveedorPage({
             <h1 className="text-[26px] font-bold tracking-tight">
               {proveedor.nombre}
             </h1>
+            {/* Dado de baja, la ficha lo dice (mes 23): no había rastro. */}
+            {inactivo && (
+              <span className="mt-1 inline-block rounded-full bg-muted px-2.5 py-0.5 text-sm font-medium text-muted-foreground">
+                Inactivo
+              </span>
+            )}
             {/* La razón social en su renglón y el CUIT entero, sin partirse
                 (M2S2-081: «…SRL · 30-» / «71555040-3»). */}
             {proveedor.razonSocial && proveedor.razonSocial !== proveedor.nombre && (
@@ -105,12 +112,15 @@ export default async function ProveedorPage({
                 {formatearMonto(proveedor.saldo)}
               </p>
             </div>
-            <Link
-              href={`/admin/compras/pagos?proveedor=${proveedor.id}`}
-              className="boton-accion inline-flex h-12 items-center rounded-xl px-6 text-base font-semibold"
-            >
-              Pagar
-            </Link>
+            {/* Al inactivo se le paga solo lo que se le debe, como en Pagos. */}
+            {(!inactivo || proveedor.saldo > 0.005) && (
+              <Link
+                href={`/admin/compras/pagos?proveedor=${proveedor.id}`}
+                className="boton-accion inline-flex h-12 items-center rounded-xl px-6 text-base font-semibold"
+              >
+                Pagar
+              </Link>
+            )}
           </div>
         </header>
       </div>

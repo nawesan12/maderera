@@ -249,3 +249,14 @@ const MotivoDelDescuento = `coalesce((SELECT pd2.etiqueta FROM payment_discounts
 	                           WHERE rcm.estado = 'emitido' AND rcm.id IN ` + recibosDelPedido + `
 	                           HAVING count(DISTINCT rpm.medio) = 1)
 	  ORDER BY pd2.desde_monto DESC LIMIT 1), o.descuento_motivo)`
+
+// RetiroSinFirmar es, sobre la fila `o` de orders, si el pedido tiene un
+// remito de retiro preparado que el cliente todavía no firmó. La venta del
+// mostrador queda «entregado» al cobrarse, con el remito para firmar: el
+// portal la listaba «Entregado» y ofrecía reseñarla antes de la firma (mes
+// 23, M2S1-071).
+const RetiroSinFirmar = `EXISTS (SELECT 1 FROM deliveries rs WHERE rs.order_id = o.id AND rs.estado = 'preparada' AND rs.tipo = 'retiro')`
+
+// EstadoParaElCliente es el estado que ve el cliente: «listo» hasta que
+// firma el retiro.
+const EstadoParaElCliente = `(CASE WHEN o.estado = 'entregado' AND ` + RetiroSinFirmar + ` THEN 'listo' ELSE o.estado::text END)`

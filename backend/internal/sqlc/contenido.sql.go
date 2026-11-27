@@ -519,6 +519,8 @@ JOIN order_items oi ON oi.order_id = o.id
 JOIN product_variants v ON v.id = oi.variant_id
 JOIN products p ON p.id = v.product_id
 WHERE o.customer_id = $1 AND o.estado = 'entregado' AND p.active
+  -- Con el retiro sin firmar todavía no se lo llevó (mes 23, M2S1-071).
+  AND NOT EXISTS (SELECT 1 FROM deliveries rs WHERE rs.order_id = o.id AND rs.estado = 'preparada' AND rs.tipo = 'retiro')
 GROUP BY p.id, p.slug, p.name, o.id, o.numero
 ORDER BY max(o.created_at) DESC
 LIMIT 100
@@ -698,6 +700,7 @@ SELECT EXISTS (
   JOIN order_items oi ON oi.order_id = o.id
   JOIN product_variants v ON v.id = oi.variant_id
   WHERE o.id = $2 AND o.customer_id = $1 AND o.estado = 'entregado' AND v.product_id = $3
+    AND NOT EXISTS (SELECT 1 FROM deliveries rs WHERE rs.order_id = o.id AND rs.estado = 'preparada' AND rs.tipo = 'retiro')
 )
 `
 

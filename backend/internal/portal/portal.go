@@ -26,6 +26,7 @@ import (
 	"mjbj/internal/push"
 	"mjbj/internal/reglas"
 	"mjbj/internal/sqlc"
+	"mjbj/internal/ventas/fragmentos"
 )
 
 // Servicio son las lecturas y acciones del portal.
@@ -126,7 +127,7 @@ type Resumen struct {
 func (s *Servicio) ResumenDe(ctx context.Context, c *Cliente) (Resumen, error) {
 	r := Resumen{LimiteCredito: c.LimiteCredito}
 	err := s.pool.QueryRow(ctx, `SELECT
-		(SELECT count(*)::int FROM orders WHERE customer_id = $1 AND estado NOT IN ('entregado', 'cancelado')),
+		(SELECT count(*)::int FROM orders o WHERE o.customer_id = $1 AND `+fragmentos.EstadoParaElCliente+` NOT IN ('entregado', 'cancelado')),
 		(SELECT count(*)::int FROM quotes WHERE customer_id = $1 AND estado::text = ANY($2)),
 		(SELECT coalesce(sum(monto), 0)::float8 FROM account_movements WHERE customer_id = $1),
 		(SELECT coalesce(cuenta_bloqueada, false) FROM customers WHERE id = $1)`, c.ID, s.estadosAResponder(ctx)).
@@ -173,7 +174,7 @@ type Pedido struct {
 // algún renglón con saldo (lo mismo que entregas.SaldoDeAcopio).
 func (s *Servicio) Pedidos(ctx context.Context, c *Cliente) ([]Pedido, error) {
 	filas, err := s.pool.Query(ctx, `
-		SELECT o.id, o.numero, o.estado::text, o.estado_pago::text, o.medio_pago::text, o.tipo_entrega::text, o.total::float8,
+		SELECT o.id, o.numero, `+fragmentos.EstadoParaElCliente+`, o.estado_pago::text, o.medio_pago::text, o.tipo_entrega::text, o.total::float8,
 		  (SELECT count(*)::int FROM order_items i WHERE i.order_id = o.id), b.name,
 		  o.estado NOT IN ('entregado', 'cancelado') AND EXISTS (SELECT 1 FROM deliveries d WHERE d.order_id = o.id AND d.estado <> 'anulada')
 		    AND EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND NOT (oi.variant_id IS NULL AND oi.del_corte)

@@ -85,9 +85,9 @@ func (s *Servicio) Seguir(ctx context.Context, ses *auth.Sesion, numero, token s
 	err := s.pool.QueryRow(ctx, `
 		SELECT o.id, o.numero, o.public_token::text, o.customer_id::text, o.contacto_nombre, o.contacto_telefono, o.tipo_entrega::text,
 		  o.direccion_entrega, o.zona_envio, o.costo_envio::text, o.subtotal::text, o.total::text, o.medio_pago::text,
-		  o.estado_pago::text, o.estado::text, b.name, b.slug, o.created_at,
+		  o.estado_pago::text, `+fragmentos.EstadoParaElCliente+`, b.name, b.slug, o.created_at,
 		  coalesce(o.descuento, 0)::float8, `+fragmentos.MotivoDelDescuento+`, coalesce(`+fragmentos.SinCobrarDelPedido+`, 0)::float8,
-		  CASE WHEN o.estado = 'entregado' THEN (SELECT max(h.created_at) FROM order_status_history h
+		  CASE WHEN `+fragmentos.EstadoParaElCliente+` = 'entregado' THEN (SELECT max(h.created_at) FROM order_status_history h
 		    WHERE h.order_id = o.id AND h.estado = 'entregado') END,
 		  EXISTS (SELECT 1 FROM customers c WHERE c.id = o.customer_id AND c.user_id IS NOT NULL)
 		FROM orders o LEFT JOIN branches b ON b.id = o.branch_id
@@ -243,7 +243,7 @@ type EstadoDelPedido struct {
 func (s *Servicio) MiPedido(ctx context.Context, c *Cliente, numero string) (*PedidoPropio, error) {
 	var p PedidoPropio
 	err := s.pool.QueryRow(ctx, `
-		SELECT o.id, o.numero, o.estado::text, o.estado_pago::text, o.medio_pago::text, o.tipo_entrega::text, o.direccion_entrega,
+		SELECT o.id, o.numero, `+fragmentos.EstadoParaElCliente+`, o.estado_pago::text, o.medio_pago::text, o.tipo_entrega::text, o.direccion_entrega,
 		  o.zona_envio, o.costo_envio::text, o.subtotal::text, o.total::text, o.notas, b.name, b.slug, o.created_at,
 		  coalesce(o.descuento, 0)::float8, o.origen::text, `+fragmentos.MotivoDelDescuento+`, o.public_token::text
 		FROM orders o LEFT JOIN branches b ON b.id = o.branch_id
@@ -271,6 +271,17 @@ func (s *Servicio) MiPedido(ctx context.Context, c *Cliente, numero string) (*Pe
 	}
 	if p.Historial, err = pgx.CollectRows(filas, pgx.RowToStructByPos[EstadoDelPedido]); err != nil {
 		return nil, err
+	}
+	// Mientras el retiro espera la firma, «Qué fue pasando» no dice
+	// «Entregado» con el pedido arriba en «Listo» (mes 23, M2S1-071).
+	if p.Estado == "listo" {
+		h := p.Historial[:0]
+		for _, e := range p.Historial {
+			if e.Estado != "entregado" {
+				h = append(h, e)
+			}
+		}
+		p.Historial = h
 	}
 	paraElCliente(&p)
 

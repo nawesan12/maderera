@@ -293,6 +293,16 @@ func TestAjustesYResenas(t *testing.T) {
 	_ = e.pool.QueryRow(ctx, `insert into orders (numero, contacto_nombre, customer_id, estado) values ('PED-1', 'Juan', $1, 'entregado') returning id`, clienteID).Scan(&orderID)
 	_, _ = e.pool.Exec(ctx, `insert into order_items (order_id, variant_id, descripcion, cantidad, precio_unitario, subtotal) values ($1, $2, 'Fenólico 18', 1, 100, 100)`, orderID, variante)
 
+	// Con el retiro sin firmar todavía no se lo llevó: no se reseña (mes 23).
+	_, _ = e.pool.Exec(ctx, `insert into deliveries (numero, order_id, tipo, estado, firma_token) values ('REM-1', $1, 'retiro', 'preparada', 'tok-resena')`, orderID)
+	if _, b := pedir(t, juan, "GET", u+"contenido/mis-resenas", nil); strings.Contains(string(b), `"numeroPedido":"PED-1"`) {
+		t.Errorf("ofrece reseñar con el remito sin firmar: %s", b)
+	}
+	if c, _ := pedir(t, juan, "POST", u+"contenido/mis-resenas", map[string]any{"productId": producto, "orderId": orderID, "estrellas": 5, "texto": "Antes"}); c == 201 {
+		t.Errorf("reseñó con el remito sin firmar")
+	}
+	_, _ = e.pool.Exec(ctx, `update deliveries set estado = 'entregada' where numero = 'REM-1'`)
+
 	_, b := pedir(t, juan, "GET", u+"contenido/mis-resenas", nil)
 	if !strings.Contains(string(b), `"yaResenado":false`) || !strings.Contains(string(b), `"numeroPedido":"PED-1"`) {
 		t.Fatalf("lo reseñable: %s", b)

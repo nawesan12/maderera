@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"mjbj/internal/cuit"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/planilla"
 )
@@ -543,7 +544,12 @@ func describir(entidad string, d map[string]string) (identificador, resumen stri
 		}
 		return d["sku"], cantidad + " en " + d["sucursal"]
 	}
-	return primero(d["codigo"], d["cuit"], d["email"], "—"), unir(d["nombre"], d["saldo"])
+	// El saldo como en el resto del panel: salía «1234.50» (mes 23).
+	saldo := d["saldo"]
+	if n := numeroJS(saldo); saldo != "" && !math.IsNaN(n) {
+		saldo = formato.Importe(n)
+	}
+	return primero(d["codigo"], d["cuit"], d["email"], "—"), unir(d["nombre"], saldo)
 }
 
 // Previsualizar valida el archivo entero sin escribir nada. La muestra va

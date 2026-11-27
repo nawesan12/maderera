@@ -100,3 +100,13 @@ func TestMes23LaVistaPreviaDiceLoQueEscribe(t *testing.T) {
 		t.Errorf("con el tipo: %s %q", tipo, tel)
 	}
 }
+
+// La vista previa de proveedores mostraba el saldo «1234.50» (mes 23).
+func TestElSaldoDeLaVistaPreviaConFormato(t *testing.T) {
+	if _, r := describir("proveedores", map[string]string{"codigo": "P1", "nombre": "Maderas Sur", "saldo": "1234.50"}); r != "Maderas Sur · $ 1.234,50" {
+		t.Errorf("resumen: %q", r)
+	}
+	if _, r := describir("proveedores", map[string]string{"codigo": "P2", "nombre": "Sin saldo"}); r != "Sin saldo" {
+		t.Errorf("sin saldo: %q", r)
+	}
+}

@@ -366,7 +366,10 @@ func (h *Hoja) EncabezadoEmisor(e *Emisor, y float64) float64 {
 	h.Escribir(razon, Opciones{X: Margen, Y: cursor, Tamano: tam, Fuente: Negrita})
 	cursor -= baja
 
-	if e.NombreFantasia != "" {
+	// El nombre de fantasía solo si dice algo que la razón social no dice:
+	// «Maderera Juan B. Justo S.R.L.» y debajo «Maderera Juan B. Justo», con
+	// el logo arriba, era el nombre tres veces (M3S4-029).
+	if e.NombreFantasia != "" && !strings.Contains(strings.ToLower(razon), strings.ToLower(strings.TrimSpace(e.NombreFantasia))) {
 		h.Escribir(e.NombreFantasia, Opciones{X: Margen, Y: cursor, Tamano: 8, Color: TintaSuave})
 		cursor -= 11
 	}

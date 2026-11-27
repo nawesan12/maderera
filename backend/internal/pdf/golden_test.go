@@ -312,6 +312,11 @@ func diferencia(a, b string) (float64, error) {
 //     sola pasada, en singular («1 pieza», no «1 piezas»).
 //   - comprobante, presupuesto y remito (26/11, mes simulado): el metro
 //     lineal se abrevia «m» y no «ml», que se leía como mililitros.
+//   - presupuesto y lista-precios (27/11, mes simulado, segunda vuelta): el
+//     presupuesto dice el vendedor que lo armó, no repite la empresa ni el
+//     «Cód. cliente» vacío y vende la lata por unidad; la lista dice «a
+//     consultar» en lugar de «$0», y el encabezado no repite el nombre de
+//     fantasía que ya está en la razón social.
 func TestActualizarGolden(t *testing.T) {
 	pedido := os.Getenv("PDF_ACTUALIZAR")
 	if pedido == "" {

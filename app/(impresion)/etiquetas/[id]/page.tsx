@@ -72,9 +72,19 @@ async function Contenido({
           parece a un documento. Los estilos van acá para que la página sea
           autosuficiente al imprimir. */}
       <style>{`
-        .etiquetas-pagina { max-width: 210mm; margin: 0 auto; padding: 8mm; font-family: var(--font-sans, sans-serif); color: #1a1a1a; }
-        .etiquetas-barra { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6mm; }
-        .etiquetas-grilla { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3mm; }
+        /* Papel siempre claro, como la hoja de corte: en oscuro el título y
+           las medidas salían casi negros sobre negro (mes simulado, M2S2-046). */
+        :root { color-scheme: light; }
+        html, body { background: #fff; color: #1a1a1a; }
+        .etiquetas-pagina { max-width: 210mm; margin: 0 auto; padding: 8mm; font-family: var(--font-sans, sans-serif); color: #1a1a1a; background: #fff; }
+        .etiquetas-barra { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4mm; margin-bottom: 6mm; }
+        .etiquetas-barra > div { min-width: 0; flex: 1 1 16rem; }
+        .etiquetas-grilla { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3mm; }
+        /* En el teléfono, de a una: la grilla de 3 medía 600 px a 375. */
+        @media screen and (max-width: 640px) {
+          .etiquetas-pagina { padding: 4mm; }
+          .etiquetas-grilla { grid-template-columns: minmax(0, 1fr); }
+        }
         .etiqueta-pieza { border: 1px solid #bbb; border-radius: 2mm; padding: 3mm; break-inside: avoid; display: flex; gap: 3mm; align-items: center; }
         .etiqueta-datos { min-width: 0; flex: 1; }
         .etiqueta-datos .medida { font-size: 13pt; font-weight: 700; font-variant-numeric: tabular-nums; }

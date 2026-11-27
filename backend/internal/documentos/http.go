@@ -122,7 +122,7 @@ func (a *API) MiListaDePreciosPdf(ctx context.Context, _ documentosapi.MiListaDe
 	}
 	titulo := "Lista de precios"
 	if l.EsDiferenciada && l.Nombre != nil {
-		titulo = "Lista " + *l.Nombre
+		titulo = pdf.TituloDeLista(*l.Nombre)
 	}
 	emisor, err := a.emisor(ctx)
 	if err != nil {

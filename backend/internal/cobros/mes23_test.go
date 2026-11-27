@@ -62,6 +62,10 @@ func TestChequeDeUnReciboEnteroEnElB(t *testing.T) {
 	}
 	var id string
 	_ = b.pool.QueryRow(ctx, `select id from cheques where numero = '10400100'`).Scan(&id)
+	// Un recibo de antes de la 00370, sin el circuito del reparto guardado en
+	// el cheque: se lee por el reparto del recibo. Con la columna, manda
+	// ella (la fija cobros.FijarReparto al emitir).
+	_, _ = b.pool.Exec(ctx, `update cheques set circuito_reparto = null where id = $1`, id)
 	_, _ = b.pool.Exec(ctx, `update receipts set reparto_deudores = 0, reparto_anticipo = 0, reparto_b = 68800
 		where id = (select receipt_id from cheques where id = $1)`, id)
 	var circuito string
@@ -75,5 +79,10 @@ func TestChequeDeUnReciboEnteroEnElB(t *testing.T) {
 	_ = b.pool.QueryRow(ctx, `select `+fragmentos.CircuitoDelCheque("ch")+` from cheques ch where ch.id = $1`, id).Scan(&circuito)
 	if circuito != "blanco" {
 		t.Errorf("con el reparto al blanco: %s", circuito)
+	}
+	_, _ = b.pool.Exec(ctx, `update cheques set circuito_reparto = 'negro' where id = $1`, id)
+	_ = b.pool.QueryRow(ctx, `select `+fragmentos.CircuitoDelCheque("ch")+` from cheques ch where ch.id = $1`, id).Scan(&circuito)
+	if circuito != "negro" {
+		t.Errorf("con el circuito del reparto guardado: %s", circuito)
 	}
 }

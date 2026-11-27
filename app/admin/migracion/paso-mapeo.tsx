@@ -68,7 +68,7 @@ export function PasoMapeo({
               >
                 {campo.etiqueta}
                 {campo.requerido && (
-                  <span className="ml-1.5 text-brand-orange" aria-label="obligatorio">
+                  <span className="ml-1.5 text-brand-orange" aria-hidden="true">
                     *
                   </span>
                 )}

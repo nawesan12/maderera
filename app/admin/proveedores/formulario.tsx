@@ -308,12 +308,16 @@ function Campo({
       <span className="text-sm font-medium">
         {etiqueta}
         {requerido && (
-          <span className="text-saldo-debe" aria-label="obligatorio">
+          // El asterisco es para la vista; el lector lo sabe por
+          // aria-required. Con aria-label el nombre del campo salía
+          // «Nombreobligatorio» (mes 23).
+          <span className="text-saldo-debe" aria-hidden="true">
             {" *"}
           </span>
         )}
       </span>
       <input
+        aria-required={requerido || undefined}
         value={valor}
         onChange={(e) => onCambio(e.target.value)}
         className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"

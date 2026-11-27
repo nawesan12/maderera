@@ -200,7 +200,7 @@ export function CargarGasto({
           <label htmlFor="gasto-proveedor" className="text-sm font-medium">
             A quién se le pagó
             {conFactura && (
-              <span className="text-saldo-debe" aria-label="obligatorio">
+              <span className="text-saldo-debe" aria-hidden="true">
                 {" *"}
               </span>
             )}
@@ -208,6 +208,7 @@ export function CargarGasto({
           <div className="mt-1 flex gap-2">
             <select
               id="gasto-proveedor"
+              aria-required={conFactura || undefined}
               value={supplierId}
               aria-invalid={(conFactura && !supplierId) || undefined}
               onChange={(e) => setSupplierId(e.target.value)}

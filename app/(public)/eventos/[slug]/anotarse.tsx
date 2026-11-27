@@ -228,7 +228,7 @@ function Campo({
     <div>
       <label htmlFor={nombre} className="block text-sm font-medium">
         {etiqueta}
-        {requerido && <span className="text-acento-texto" aria-label="obligatorio">
+        {requerido && <span className="text-acento-texto" aria-hidden="true">
             {" *"}
           </span>}
       </label>

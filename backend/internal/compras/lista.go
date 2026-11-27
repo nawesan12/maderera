@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -496,10 +497,15 @@ func (s *Servicio) AplicarLista(ctx context.Context, ses *auth.Sesion, form map[
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "precio", perfil.SupplierID,
 		"Importó "+formato.Cuantos(precios, "precio", "precios")+" de la lista de "+s.nombreDelProveedor(ctx, perfil.SupplierID), map[string]any{"cambios": cambios})
-	texto := "Listo: " + plural(precios, "precio actualizado", "precios actualizados")
-	if costos > 0 {
-		texto += " y " + plural(costos, "costo guardado", "costos guardados")
+	// Sin precios cambiados no se dice «0 precios actualizados» (mes 23).
+	var partes []string
+	if precios > 0 || costos == 0 {
+		partes = append(partes, plural(precios, "precio actualizado", "precios actualizados"))
 	}
+	if costos > 0 {
+		partes = append(partes, plural(costos, "costo guardado", "costos guardados"))
+	}
+	texto := "Listo: " + strings.Join(partes, " y ")
 	return texto + ".", perfil.SupplierID, nil
 }
 

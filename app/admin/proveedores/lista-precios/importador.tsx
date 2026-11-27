@@ -96,7 +96,20 @@ export function ImportadorDeLista({
   const aAplicar = conCambios.filter((f) => elegidas.has(f.codigo));
   const quietas = apareadas.length - conCambios.length;
   const noApareadas = (vista?.filas ?? []).filter((f) => !f.variantId);
-  const textoAplicar = aAplicar.length === 1 ? "Aplicar 1 precio" : `Aplicar ${aAplicar.length} precios`;
+  /*
+   * El botón cuenta lo que va a pasar: sin costo previo no hay precio
+   * sugerido y el renglón solo guarda el costo. Decía «Aplicar 3 precios» y
+   * el resultado era «0 precios actualizados y 3 costos guardados» (mes 23).
+   * La cuenta es la de compras.AplicarLista.
+   */
+  const conPrecio = aAplicar.filter(
+    (f) => f.precioSugerido > 0 && (f.precioActual === null || Math.round(f.precioActual * 100) !== Math.round(f.precioSugerido * 100)),
+  ).length;
+  const soloCosto = aAplicar.length - conPrecio;
+  const textoAplicar =
+    conPrecio === 0
+      ? `Guardar ${soloCosto === 1 ? "1 costo" : `${soloCosto} costos`}`
+      : `Aplicar ${conPrecio === 1 ? "1 precio" : `${conPrecio} precios`}${soloCosto > 0 ? ` y ${soloCosto === 1 ? "1 costo" : `${soloCosto} costos`}` : ""}`;
 
   return (
     <section className="tarjeta">
@@ -312,12 +325,16 @@ export function ImportadorDeLista({
                   ) : (
                     <span className="h-5 w-5 shrink-0" aria-hidden />
                   )}
-                  <div className="min-w-0 flex-1">
+                  {/* Si el nombre y los importes no entran juntos, los
+                      importes bajan de renglón: a 375 px el nombre quedaba
+                      con una palabra por línea (mes 23). */}
+                  <div className="flex min-w-0 flex-1 flex-wrap items-start justify-between gap-x-3 gap-y-1">
+                  <div className="min-w-0 flex-[1_1_11rem]">
                     <p className="text-base">{f.nuestro ?? f.descripcion ?? "—"}</p>
                     <p className="codigo text-sm text-muted-foreground">{f.codigo}</p>
                   </div>
                   {f.variantId ? (
-                    <div className="shrink-0 text-right">
+                    <div className="ml-auto shrink-0 text-right">
                       <p className="tabular text-sm text-muted-foreground">
                         {f.costoAnterior !== null ? moneda.format(f.costoAnterior) : "—"}
                         {" → "}
@@ -350,8 +367,9 @@ export function ImportadorDeLista({
                       </p>
                     </div>
                   ) : (
-                    <span className="shrink-0 text-base text-brand-orange">No está en el catálogo</span>
+                    <span className="ml-auto shrink-0 text-base text-brand-orange">No está en el catálogo</span>
                   )}
+                  </div>
                 </li>
               );
             })}
@@ -414,7 +432,11 @@ export function ImportadorDeLista({
                 abierto={confirmando}
                 alCerrar={() => setConfirmando(false)}
                 titulo={textoAplicar}
-                detalle={`Cambia la lista general. ${aAplicar.filter((f) => f.cambio === "baja").length > 0 ? "Hay precios que bajan." : ""}`.trim()}
+                detalle={
+                  conPrecio === 0
+                    ? ""
+                    : `Cambia la lista general. ${aAplicar.filter((f) => f.cambio === "baja").length > 0 ? "Hay precios que bajan." : ""}`.trim()
+                }
                 confirmar={textoAplicar}
                 cancelar="Volver"
                 pendiente={aplicando}

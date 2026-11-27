@@ -93,7 +93,7 @@ func TestListaDelProveedorMantieneElMargenYDejaRastro(t *testing.T) {
 
 	// Aplicar otra vez lo mismo no cambia nada ni suma historial; la vista
 	// previa lo cuenta como sin cambios.
-	if c, b := pedir(t, adm, "POST", e.u+"compras/lista-proveedor/aplicar", aplicar); c != 200 || !strings.Contains(b, "Listo: 0 precios actualizados y 1 costo guardado.") {
+	if c, b := pedir(t, adm, "POST", e.u+"compras/lista-proveedor/aplicar", aplicar); c != 200 || !strings.Contains(b, "Listo: 1 costo guardado.") {
 		t.Errorf("reaplicar: %d %s", c, b)
 	}
 	if n := e.numero(t, `select count(*)::float8 from price_history where variant_id = $1`, e.placa); n != 1 {

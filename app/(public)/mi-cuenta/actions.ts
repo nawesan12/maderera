@@ -6,8 +6,7 @@ import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
 import { z } from "zod";
 import { verifySession } from "@/lib/dal/session";
 import { miPedido } from "@/lib/dal/cuenta";
-import { plural } from "@/lib/formato";
-import { agregarVarios } from "@/app/(public)/carrito-actions";
+import { agregarVarios, vaciarCarrito } from "@/app/(public)/carrito-actions";
 
 export interface EstadoAccion {
   error?: string;
@@ -66,6 +65,13 @@ export async function repetirPedido(
   const pedido = await miPedido(numero.data);
   if (!pedido) return { error: "No encontramos ese pedido." };
 
+  // Con algo ya en el carrito se elige: reemplazarlo o sumar. Sumaba sin
+  // avisar y el pedido salía con el doble de latas (mes simulado, M2S4-015).
+  if (formData.get("modo") === "reemplazar") {
+    const vaciado = await vaciarCarrito();
+    if (vaciado.error) return { error: vaciado.error };
+  }
+
   const resultado = await agregarVarios(
     pedido.items.map((item) => ({
       variantId: item.variantId ?? undefined,
@@ -78,9 +84,9 @@ export async function repetirPedido(
 
   if (resultado.error) return { error: resultado.error };
 
-  return {
-    ok: `Cargamos ${plural(pedido.items.length, "producto")} en tu presupuesto.`,
-  };
+  // Al carrito, con las líneas cargadas: la pantalla quedaba igual y no se
+  // sabía si había funcionado (M2S3-079).
+  redirect("/carrito");
 }
 
 /* -------------------------------------------------------------------------- */

@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { vaciarCarrito } from "@/app/(public)/carrito-actions";
 import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
 
 export interface EstadoPresupuesto {
@@ -13,8 +15,9 @@ export interface EstadoPresupuesto {
 
 /**
  * Convierte el presupuesto en curso en una cotización real, con número y los
- * precios del momento. **El carrito no se vacía**: pedir un presupuesto no es
- * comprar. Lo hace Go (backend/internal/checkout, tanda 6): el esquema, el
+ * precios del momento. Después **el carrito se vacía**: seguía lleno con
+ * «Continuar con el pedido» activo, y el mismo pedido salía dos veces (mes
+ * simulado, M2S2-075). El presupuesto se acepta desde Mi cuenta. Lo hace Go (backend/internal/checkout, tanda 6): el esquema, el
  * freno por IP y correo, la numeración y el plazo de respuesta (express de 24
  * horas para un profesional aprobado) y el correo de «recibimos tu pedido»,
  * que encola en la misma transacción.
@@ -39,5 +42,7 @@ export async function pedirPresupuesto(
   const { ok, numero, express } = r.data;
   revalidatePath("/admin/presupuestos");
   revalidatePath("/admin");
-  return { ok, numero, express };
+  const vaciado = await vaciarCarrito();
+  if (vaciado.error) return { ok, numero, express };
+  redirect(`/carrito?presupuesto=${encodeURIComponent(numero ?? "")}`);
 }

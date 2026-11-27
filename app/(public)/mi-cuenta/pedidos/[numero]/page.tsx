@@ -39,6 +39,7 @@ import {
 import { estadoDelPago, estadoVisibleDelPedido, mensajeDeConsulta, tituloDeRemitos } from "@/lib/cuenta/portal";
 import { VolverAPedir } from "./volver-a-pedir";
 import { tienda } from "@/lib/dal/contenido";
+import { obtenerCarrito } from "@/lib/dal/carrito";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
 import { InformarTransferencia } from "@/components/cuenta/informar-transferencia";
 
@@ -68,11 +69,13 @@ export default async function DetallePedidoPage({
   params: Promise<{ numero: string }>;
 }) {
   const { numero } = await params;
-  const [pedido, laTienda, cliente] = await Promise.all([
+  const [pedido, laTienda, cliente, carrito] = await Promise.all([
     miPedido(numero),
     tienda(),
     clienteDeLaSesion(),
+    obtenerCarrito(),
   ]);
+  const carritoConCosas = carrito.items.length + carrito.cortes.length > 0;
 
   // El DAL ya filtró por dueño: si no vuelve nada, o no existe o no es suyo, y
   // las dos cosas se contestan igual. Decir "existe pero no es tuyo" confirma
@@ -708,8 +711,13 @@ export default async function DetallePedidoPage({
 
       <div className="flex flex-wrap gap-3">
         {/* Volver a pedir carga el carrito; sin tienda, lo manda por WhatsApp. */}
+        {/* Un pedido con corte no se repite desde acá: el carrito cargaba
+            «13 pasada · A cotizar» sin el despiece y no se podía comprar
+            (M3S4-012). Se consulta por WhatsApp. */}
         {laTienda.activa ? (
-          <VolverAPedir numero={pedido.numero} />
+          pedido.cortes.length === 0 && (
+            <VolverAPedir numero={pedido.numero} carritoConCosas={carritoConCosas} />
+          )
         ) : (
           repetir && (
             <BotonWhatsapp enlace={repetir} variante="secundario">

@@ -27,7 +27,11 @@ export const metadata: Metadata = {
  * de quien está mirando para no hacerle tipear lo que ya sabemos, y si le
  * corresponde la cola express.
  */
-export default async function CarritoPage() {
+export default async function CarritoPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ presupuesto?: string }>;
+}) {
   // Sin tienda no hay carrito: los precios no salen de la API y nada se
   // puede agregar. Quien llega por un enlace viejo va al catálogo.
   if (!(await tienda()).activa) redirect("/catalogo");
@@ -56,6 +60,7 @@ export default async function CarritoPage() {
     // el resto del sitio.
     <CarritoProvider carrito={carrito}>
       <VistaDelCarrito
+        presupuestoPedido={(await searchParams).presupuesto?.slice(0, 20)}
         sucursales={sucursales.map((s) => ({ id: s.id, nombre: s.nombre }))}
         cortes={carrito.cortes}
         contacto={{

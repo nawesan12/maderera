@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useCarrito } from "@/lib/carrito-context";
 import { actualizarPrecios } from "@/app/(public)/carrito-actions";
-import { formatearPrecio, formatearUnidad } from "@/lib/formato";
+import { cantidadConUnidad, formatearPrecio, formatearUnidad, unidadDeVenta } from "@/lib/formato";
 import { admiteDecimales, formatearCantidad, leerCantidad } from "@/lib/unidades";
 import { nombreDePresentacion } from "@/lib/ventas/forma-de-venta";
 import { PrecioSecundario } from "@/components/precio";
@@ -38,12 +38,15 @@ import type { CorteEnCarrito } from "@/lib/dal/carrito";
  * —sucursales, quién está mirando— los recibe de `page.tsx`.
  */
 export function VistaDelCarrito({
+  presupuestoPedido,
   sucursales,
   contacto,
   esProfesional,
   whatsapp,
   cortes,
 }: {
+  /** El número del presupuesto recién pedido: el carrito ya se vació. */
+  presupuestoPedido?: string;
   sucursales: SucursalElegible[];
   /**
    * Los cortes a medida que hay en el carrito.
@@ -84,7 +87,7 @@ export function VistaDelCarrito({
     `Hola! Quiero un presupuesto por:\n\n${[
       ...items.map(
         (i) =>
-          `· ${i.descripcion}: ${i.cantidad} ${i.unidad.replace("_", " ")}`,
+          `· ${i.descripcion}: ${cantidadConUnidad(i.cantidad, i.unidad, i.descripcion)}`,
       ),
       ...cortes.map(
         (c) =>
@@ -96,19 +99,27 @@ export function VistaDelCarrito({
   if (items.length === 0 && cortes.length === 0) {
     return (
       <div className="min-h-screen bg-sitio-alt">
-        <Encabezado cantidad={0} />
+        <Encabezado productos={0} cortes={0} />
         <div className="contenedor py-16">
           <Card className="mx-auto max-w-lg rounded-[14px] border border-linea shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
             <CardContent className="p-12 text-center">
               <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-[18px] bg-naranja-claro">
                 <ShoppingCart className="h-9 w-9 text-acento-texto" />
               </div>
-              <h2 className="mb-2 text-xl font-bold">
-                Tu carrito está vacío
-              </h2>
-              <p className="mb-6 text-muted-foreground">
-                Agregá los productos que necesites del catálogo.
-              </p>
+              {presupuestoPedido ? (
+                <h2 className="mb-6 text-xl font-bold">
+                  Recibimos tu pedido <span className="tabular">{presupuestoPedido}</span>
+                </h2>
+              ) : (
+                <>
+                  <h2 className="mb-2 text-xl font-bold">
+                    Tu carrito está vacío
+                  </h2>
+                  <p className="mb-6 text-muted-foreground">
+                    Agregá los productos que necesites del catálogo.
+                  </p>
+                </>
+              )}
               <div className="flex flex-wrap justify-center gap-3">
                 <Button
                   render={<Link href="/catalogo" />}
@@ -126,7 +137,7 @@ export function VistaDelCarrito({
 
   return (
     <div className="min-h-screen bg-sitio-alt">
-      <Encabezado cantidad={items.length} />
+      <Encabezado productos={items.length} cortes={cortes.length} />
 
       <div className="contenedor pb-[70px] pt-6">
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_344px] lg:items-start">
@@ -240,12 +251,19 @@ export function VistaDelCarrito({
             <Card className="overflow-hidden rounded-[14px] border border-linea shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
               <CardContent className="p-0">
                 <ul className="divide-y divide-linea-tenue">
-                  {items.map((item) => (
+                  {items.map((item) => {
+                    // La lata de 4 litros se cuenta por unidad: decía «l ·
+                    // $ 68.900 por l» y 2 latas parecían 2 litros (M2S3-080).
+                    const unidad = unidadDeVenta(item.unidad, item.descripcion) ?? item.unidad;
+                    return (
                     <li
                       key={item.id}
-                      className="flex flex-wrap items-center gap-3.5 px-5 py-4"
+                      // A 375 el tacho quedaba solo en un tercer renglón: va
+                      // arriba a la derecha, junto al nombre, y la cantidad y
+                      // el importe en el renglón de abajo (M2S4-077).
+                      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3.5 gap-y-3 px-5 py-4 sm:flex sm:flex-wrap"
                     >
-                      <div className="min-w-48 flex-1">
+                      <div className="min-w-0 sm:min-w-48 sm:flex-1">
                         {item.slug ? (
                           <Link
                             href={`/catalogo/${item.slug}`}
@@ -259,10 +277,10 @@ export function VistaDelCarrito({
                         <p className="tabular mt-0.5 text-[13px] text-texto-3">
                           {item.presentacion
                             ? nombreDePresentacion(item.presentacion)
-                            : formatearUnidad(item.unidad)}
+                            : formatearUnidad(unidad)}
                           {item.precioActual !== null &&
                             ` · ${formatearPrecio(String(item.precioActual))} ${
-                              item.presentacion ? "cada una" : `por ${formatearUnidad(item.unidad)}`
+                              item.presentacion ? "cada una" : `por ${formatearUnidad(unidad)}`
                             }`}
                         </p>
                         {/* Que se cotiza a mano se dice acá, en el renglón, y
@@ -274,7 +292,9 @@ export function VistaDelCarrito({
                           </p>
                         )}
 
-                        <ChipOrigen origen={item.origen} />
+                        {/* «Del catálogo» no distinguía nada cuando todo viene
+                            del catálogo: solo lo que viene de otro lado. */}
+                        {item.origen !== "catalogo" && <ChipOrigen origen={item.origen} />}
 
                         {/* El descuento por volumen se muestra en el renglón que
                             lo generó: enterarse recién en el total no explica
@@ -291,6 +311,16 @@ export function VistaDelCarrito({
                         )}
                       </div>
 
+                      <button
+                        onClick={() => quitar(item.id)}
+                        disabled={guardando}
+                        className="flex h-[38px] w-[38px] shrink-0 items-center justify-center self-start justify-self-end rounded-[9px] border border-linea-suave text-texto-3 transition-colors hover:text-rojo-oferta disabled:opacity-50 sm:order-last sm:self-center"
+                        aria-label={`Sacar ${item.descripcion} del carrito`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+
+                      <div className="col-span-2 flex items-center justify-between gap-3.5 sm:contents">
                       <div className="flex h-11 items-center overflow-hidden rounded-[9px] border border-linea bg-card">
                         <button
                           onClick={() => cambiar(item.id, item.cantidad - 1)}
@@ -301,12 +331,12 @@ export function VistaDelCarrito({
                           <Minus className="h-4 w-4" />
                         </button>
                         {/* Los metros se tipean: con ±1 no se llega a 3,7. */}
-                        {admiteDecimales(item.unidad) && item.unidad !== "placa" ? (
+                        {admiteDecimales(unidad) && unidad !== "placa" ? (
                           <input
                             key={item.cantidad}
                             defaultValue={formatearCantidad(item.cantidad)}
                             inputMode="decimal"
-                            aria-label={`Cantidad de ${item.descripcion}, en ${formatearUnidad(item.unidad)}`}
+                            aria-label={`Cantidad de ${item.descripcion}, en ${formatearUnidad(unidad)}`}
                             disabled={guardando}
                             onKeyDown={(e) => {
                               if (e.key === "Enter") e.currentTarget.blur();
@@ -341,17 +371,10 @@ export function VistaDelCarrito({
                           ? formatearPrecio(String(item.subtotal))
                           : "A consultar"}
                       </p>
-
-                      <button
-                        onClick={() => quitar(item.id)}
-                        disabled={guardando}
-                        className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[9px] border border-linea-suave text-texto-3 transition-colors hover:text-rojo-oferta disabled:opacity-50"
-                        aria-label={`Sacar ${item.descripcion} del carrito`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      </div>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               </CardContent>
             </Card>
@@ -476,14 +499,15 @@ export function VistaDelCarrito({
             {/* El aviso solo tiene sentido para quien todavía no tiene la
                 cuenta: a un profesional aprobado la lista ya se le aplicó, y se
                 lo dice el cartel de arriba de la lista. */}
+            {/* No hay escala de descuento por cantidad: la cuenta habilitada
+                da la lista de precios (M2S2-141). */}
             {!esProfesional && (
               <section className="rounded-xl border border-[#f5d9b8] bg-naranja-claro px-[18px] py-4 dark:border-brand-orange/25">
                 <p className="text-[14.5px] font-semibold text-acento-sobre-claro">
                   ¿Sos profesional?
                 </p>
                 <p className="mt-1.5 text-[13.5px] leading-normal text-acento-sobre-claro">
-                  Con cuenta habilitada este carrito sale con tu escala de
-                  descuento aplicada.
+                  Con cuenta habilitada este carrito sale con tu lista de precios.
                 </p>
               </section>
             )}
@@ -518,16 +542,24 @@ function ChipOrigen({ origen }: { origen: string }) {
   );
 }
 
-function Encabezado({ cantidad }: { cantidad: number }) {
+/**
+ * Lo que hay en el carrito, contando los cortes: con solo un corte decía
+ * «Todavía no agregaste nada» arriba del corte y del total (M3S1-074).
+ */
+function Encabezado({ productos, cortes }: { productos: number; cortes: number }) {
+  const partes = [
+    productos > 0 && (productos === 1 ? "1 producto" : `${productos} productos`),
+    cortes > 0 && (cortes === 1 ? "1 corte a medida" : `${cortes} cortes a medida`),
+  ].filter(Boolean);
   return (
     <div className="contenedor pt-10">
       <h1 className="text-[34px] font-bold tracking-[-0.03em]">
         Tu carrito
       </h1>
       <p className="mt-1.5 text-base text-texto-2">
-        {cantidad === 0
+        {partes.length === 0
           ? "Todavía no agregaste nada."
-          : `${cantidad === 1 ? "1 producto" : `${cantidad} productos`} · los precios se confirman cuando te respondemos`}
+          : `${partes.join(" y ")} · los precios se confirman cuando te respondemos`}
       </p>
     </div>
   );

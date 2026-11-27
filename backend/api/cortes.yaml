@@ -556,8 +556,9 @@ components:
     CorteListado:
       type: object
       required: [id, numero, cliente, material, placas, pasadas, estado, urgente, sucursal, notas, piezas, metrosCuadrados, createdAt,
-        mitad, sinCargo, branchId, salioAt]
+        mitad, sinCargo, branchId, salioAt, cobrado]
       properties:
+        cobrado: { type: boolean, description: El pedido del corte no debe nada }
         mitad: { type: string, nullable: true, description: Las placas son medias }
         sinCargo: { type: boolean }
         branchId: { type: string, nullable: true }

@@ -26,6 +26,7 @@ export function AccionesPedido({
   estadoPago,
   tipoEntrega,
   compacto = false,
+  secundario = false,
   cobro,
   sinCobrar,
   pedido,
@@ -41,6 +42,12 @@ export function AccionesPedido({
   tipoEntrega: string;
   /** En una tarjeta de tablero los botones ocupan el ancho disponible. */
   compacto?: boolean;
+  /**
+   * El botón de avanzar sin el naranja de acción: en una lista de cuatro
+   * pedidos por preparar, cuatro llamados principales iguales no dicen por
+   * dónde empezar (mes simulado, M2S4-047).
+   */
+  secundario?: boolean;
   /**
    * Para cobrar: con recibo, tenga o no cliente, y el efectivo a la caja de su
    * sucursal (cobros.CobrarPedido). Antes «Cobrar» marcaba el pedido pagado
@@ -181,7 +188,7 @@ export function AccionesPedido({
         <button
           onClick={() => (preguntar ? setConfirmando(true) : accion(avanzar))}
           disabled={pendiente}
-          className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium transition-colors disabled:opacity-50 ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
+          className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg ${secundario ? "border bg-card" : "boton-accion"} px-3 text-base font-medium transition-colors disabled:opacity-50 ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
         >
           {pendiente ? (
             <Loader2 className="h-5 w-5 animate-spin" />

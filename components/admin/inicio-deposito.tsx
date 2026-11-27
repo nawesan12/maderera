@@ -20,6 +20,15 @@ const TOPE = 5;
 const RENGLON = "flex flex-col gap-2.5 px-4 py-3 sm:flex-row sm:items-center sm:gap-3";
 const BOTON = "shrink-0 [&_button]:max-sm:w-full [&_a]:max-sm:w-full";
 
+/*
+ * El renglón que se toca entero (M2S4-047): el número del pedido estira su
+ * enlace sobre la fila y el botón queda chico, a la derecha, encima del
+ * enlace. Con un botón naranja a lo ancho en cada pedido, la lista eran
+ * cuatro llamados iguales.
+ */
+const FILA = "relative flex items-center gap-3 px-4 py-3 transition-colors hover:bg-hundida/60";
+const BOTON_CHICO = "relative z-10 shrink-0";
+
 /**
  * Lo que el depósito hace en la mañana, en la primera pantalla: lo que hay
  * que entregar o despachar, lo que hay que preparar y la cola de corte, con
@@ -44,26 +53,36 @@ const BOTON = "shrink-0 [&_button]:max-sm:w-full [&_a]:max-sm:w-full";
  * primero. El urgente lleva la llama, como en la tarjeta del tablero.
  */
 export async function InicioDelDeposito() {
-  const [enLaMaquina, cola, pedidos] = await Promise.all([
+  const [enLaMaquina, cola, terminados, pedidos] = await Promise.all([
     listarCortes({ estado: "en-proceso" }),
     listarCortes({ estado: "en-cola" }),
+    listarCortes({ estado: "terminado" }),
     listarPedidos({ vista: "tablero" }),
   ]);
   const entregar = paraEntregar(pedidos, TOPE);
+  // Los cortes que salieron de la máquina también esperan que los retiren:
+  // «Nada para entregar» con tres terminados abajo, en Pendientes, mandaba
+  // a buscarlos a otra pantalla (mes simulado, M2S4-047).
+  const cortesParaRetirar = terminados.slice(0, Math.max(TOPE - entregar.renglones.length, 0));
+  const totalEntregar = entregar.total + terminados.length;
   const preparar = paraPreparar(pedidos, TOPE);
   const maquinaLibre = enLaMaquina.length === 0;
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <RefrescarSolo />
-      <Lista titulo="Para entregar" total={entregar.total} href="/admin/pedidos">
-        {entregar.total === 0 ? (
+      <Lista
+        titulo="Para entregar"
+        total={totalEntregar}
+        href={entregar.total >= terminados.length ? "/admin/pedidos?estado=listo" : "/admin/cortes"}
+      >
+        {totalEntregar === 0 ? (
           <Vacio titulo="Nada para entregar" />
         ) : (
           <ul className="divide-y divide-linea-suave">
             {entregar.renglones.map((p) => (
               <li key={p.id} className={RENGLON}>
-                <Pedido {...p} />
+                <Pedido {...p} sinCobrar={(p.sinCobrar ?? 0) > 0.009} />
                 <div className={BOTON}>
                   <AccionesPedido
                     id={p.id}
@@ -77,21 +96,45 @@ export async function InicioDelDeposito() {
                 </div>
               </li>
             ))}
+            {cortesParaRetirar.map((c) => (
+              <li key={c.id} className={RENGLON}>
+                <div className="min-w-0 flex-1">
+                  <p className="flex min-w-0 items-baseline gap-2">
+                    <Link href={`/admin/cortes/${c.id}`} className="codigo shrink-0 whitespace-nowrap hover:underline">
+                      {c.numero}
+                    </Link>
+                    <span className="min-w-0 break-words text-base font-semibold sm:truncate">{c.cliente}</span>
+                  </p>
+                  <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-texto-2">
+                    <span>Corte terminado</span>
+                    {!c.cobrado && !c.sinCargo && <ChipSinCobrar />}
+                  </p>
+                </div>
+                <div className={BOTON}>
+                  <AccionesCorte id={c.id} estado={c.estado} urgente={c.urgente} />
+                </div>
+              </li>
+            ))}
           </ul>
         )}
       </Lista>
 
-      <Lista titulo="Para preparar" total={preparar.total} href="/admin/pedidos">
+      <Lista titulo="Para preparar" total={preparar.total} href="/admin/pedidos?estado=por-preparar">
         {preparar.total === 0 ? (
           <Vacio titulo="Nada para preparar" />
         ) : (
           <ul className="divide-y divide-linea-suave">
             {preparar.renglones.map((p) => (
-              <li key={p.id} className={RENGLON}>
+              <li key={p.id} className={FILA}>
                 {/* El que ya se está armando lo dice: «Marcar listo» al lado
                     de un pedido sin estado parecía saltear un paso (H107). */}
-                <Pedido {...p} preparando={p.estado === "preparando"} />
-                <div className={BOTON}>
+                <Pedido
+                  {...p}
+                  preparando={p.estado === "preparando"}
+                  sinCobrar={(p.sinCobrar ?? 0) > 0.009}
+                  filaEntera
+                />
+                <div className={BOTON_CHICO}>
                   <AccionesPedido
                     id={p.id}
                     estado={p.estado}
@@ -99,6 +142,7 @@ export async function InicioDelDeposito() {
                     tipoEntrega={p.tipoEntrega}
                     pedido={{ numero: p.numero, nombre: p.cliente }}
                     acopio={p.acopio}
+                    secundario
                   />
                 </div>
               </li>
@@ -178,7 +222,12 @@ export async function InicioDelDeposito() {
   );
 }
 
-/** Número, cliente y cómo sale. El nombre no se corta en el teléfono. */
+/**
+ * Número, cliente y cómo sale. El nombre no se corta en el teléfono. Lo que
+ * se entrega sin cobrar lleva su chip, como en la tarjeta de Pedidos: el
+ * depósito no ve importes, pero tiene que saber que no se lo lleva sin pasar
+ * por el mostrador (M3S3-038).
+ */
 function Pedido({
   id,
   numero,
@@ -186,6 +235,8 @@ function Pedido({
   tipoEntrega,
   zonaEnvio,
   preparando = false,
+  sinCobrar = false,
+  filaEntera = false,
 }: {
   id: string;
   numero: string;
@@ -193,20 +244,39 @@ function Pedido({
   tipoEntrega: string;
   zonaEnvio: string | null;
   preparando?: boolean;
+  sinCobrar?: boolean;
+  /** El enlace del número se estira sobre la fila (`FILA`). */
+  filaEntera?: boolean;
 }) {
   return (
     <div className="min-w-0 flex-1">
       <p className="flex min-w-0 items-baseline gap-2">
-        <Link href={`/admin/pedidos/${id}`} className="codigo shrink-0 whitespace-nowrap hover:underline">
+        <Link
+          href={`/admin/pedidos/${id}`}
+          className={`codigo shrink-0 whitespace-nowrap hover:underline ${
+            filaEntera ? "after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring" : ""
+          }`}
+        >
           {numero}
         </Link>
         <span className="min-w-0 break-words text-base font-semibold sm:truncate">{cliente}</span>
       </p>
-      <p className="truncate text-sm text-texto-2">
-        {preparando && <span className="font-semibold text-acento-texto">Preparando · </span>}
-        {tipoEntrega === "retiro" ? "Retira" : `Envío${zonaEnvio ? ` · ${zonaEnvio}` : ""}`}
+      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-texto-2">
+        <span>
+          {preparando && <span className="font-semibold text-acento-texto">Preparando · </span>}
+          {tipoEntrega === "retiro" ? "Retira" : `Envío${zonaEnvio ? ` · ${zonaEnvio}` : ""}`}
+        </span>
+        {sinCobrar && <ChipSinCobrar />}
       </p>
     </div>
+  );
+}
+
+function ChipSinCobrar() {
+  return (
+    <span className="estado-espera inline-flex rounded-full bg-[var(--estado-fondo)] px-2 py-0.5 text-sm font-medium text-[var(--estado-tinta)]">
+      Sin cobrar
+    </span>
   );
 }
 

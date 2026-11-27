@@ -480,6 +480,8 @@ export interface components {
         /** Format: double */
         Metros: number;
         CorteListado: {
+            /** @description El pedido del corte no debe nada */
+            cobrado: boolean;
             /** @description Las placas son medias */
             mitad: string | null;
             sinCargo: boolean;

@@ -21,6 +21,7 @@ export const OPCIONES_DE_REGLAS = {
   etiqueta_del_circuito: ["b", "sin_factura", "interno"],
   datos_fiscales_del_cliente: ["hasta_facturar", "ninguno"],
   lote_y_cupon: ["obligatorio", "opcional"],
+  escala_con_lista: ["si", "no"],
 } as const;
 
 export type ReglaPendiente = keyof typeof OPCIONES_DE_REGLAS;

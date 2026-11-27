@@ -77,7 +77,6 @@ export interface EstadoDelPago {
 
 const ABONA_AL_RETIRAR: Record<string, string> = {
   efectivo: "Abonás al retirar o cuando te lo entregamos.",
-  mercado_pago: "Te mandamos el enlace para pagar por WhatsApp.",
 };
 
 /**

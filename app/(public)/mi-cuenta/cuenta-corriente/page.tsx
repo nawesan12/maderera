@@ -36,6 +36,7 @@ export default async function CuentaCorrientePage({
     tienda(),
   ]);
   const enCamino = recientes.movimientos.filter((m) => m.clase === "pago_en_revision" || m.clase === "cheque_por_recibir");
+  const enRevision = enCamino.reduce((t, m) => t + Math.abs(m.importeInformativo ?? 0), 0);
 
   if (cuenta.movimientos.length === 0 && cuenta.limiteCredito === 0) {
     return (
@@ -199,10 +200,8 @@ export default async function CuentaCorrientePage({
 
       <PagarDeuda
         saldo={cuenta.saldo}
-        propuesto={importeAInformar(
-          cuenta.saldo,
-          enCamino.reduce((t, m) => t + Math.abs(m.importeInformativo ?? 0), 0),
-        )}
+        propuesto={importeAInformar(cuenta.saldo, enRevision)}
+        enRevision={enRevision}
         banco={banco}
       />
 

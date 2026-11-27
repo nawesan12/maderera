@@ -26,13 +26,13 @@ export interface CobroDelPedido {
 export async function cobroDelPedido(
   numero: string,
   token?: string,
-): Promise<{ cobro: CobroDelPedido | null; enVivo: boolean } | null> {
+): Promise<{ cobro: CobroDelPedido | null; enVivo: boolean; disponible: boolean } | null> {
   const r = await (await api()).GET("/api/v1/pagos/pedido/{numero}/cobro", {
     params: { path: { numero: numero.slice(0, 40) }, query: token ? { t: token.slice(0, 64) } : {} },
   });
   if (r.response.status === 404) return null;
-  const { cobro, enVivo } = datos(r);
-  return { cobro: cobro ? { ...cobro, createdAt: new Date(cobro.createdAt) } : null, enVivo };
+  const { cobro, enVivo, disponible } = datos(r);
+  return { cobro: cobro ? { ...cobro, createdAt: new Date(cobro.createdAt) } : null, enVivo, disponible };
 }
 
 export type DatosParaTransferir = NonNullable<Esquemas["DatosBancariosDelPanel"]>;
@@ -43,6 +43,14 @@ export type DatosParaTransferir = NonNullable<Esquemas["DatosBancariosDelPanel"]
  */
 export async function datosParaTransferir(): Promise<DatosParaTransferir | null> {
   return datos(await apiPublica.GET("/api/v1/pagos/datos-para-transferir")).datos ?? null;
+}
+
+/**
+ * Si hay con qué cobrar en línea (Mercado Pago o el demo). Sin eso la tienda
+ * no ofrece Mercado Pago (mes simulado, M2S2-002).
+ */
+export async function pagoOnlineDisponible(): Promise<boolean> {
+  return datos(await apiPublica.GET("/api/v1/pagos/estado")).disponible;
 }
 
 /** Si los cobros online salen de verdad o son una simulación. */

@@ -90,7 +90,7 @@ func panel(ctx context.Context) (*auth.Sesion, error) {
 /* -------------------------------- público -------------------------------- */
 
 func (a *API) EstadoDeCobros(context.Context, pagosapi.EstadoDeCobrosRequestObject) (pagosapi.EstadoDeCobrosResponseObject, error) {
-	return ok(map[string]bool{"enVivo": a.s.EnVivo()}), nil
+	return ok(map[string]bool{"enVivo": a.s.EnVivo(), "disponible": a.s.Disponible()}), nil
 }
 
 func (o respuesta) VisitDatosParaTransferirResponse(w http.ResponseWriter) error {
@@ -126,7 +126,7 @@ func (a *API) CobroDelPedido(ctx context.Context, r pagosapi.CobroDelPedidoReque
 	if !puede {
 		return nil, noEsta("No encontramos ese pedido.")
 	}
-	return ok(map[string]any{"cobro": c, "enVivo": a.s.EnVivo()}), nil
+	return ok(map[string]any{"cobro": c, "enVivo": a.s.EnVivo(), "disponible": a.s.Disponible()}), nil
 }
 
 // formulario lee un multipart con el comprobante (16 MB más los textos).

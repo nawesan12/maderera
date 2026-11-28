@@ -17,9 +17,10 @@ export default async function MisPedidosPage() {
     (p) => p.estado === "entregado" || p.estado === "cancelado",
   );
 
-  const totalComprado = pedidos
-    .filter((p) => p.estado !== "cancelado")
-    .reduce((s, p) => s + p.total, 0);
+  // La cuenta y el total, de lo mismo: los cancelados no suman a ninguno
+  // (M4-066: «5 pedidos · $ 990.550» con el cancelado contado y no sumado).
+  const comprados = pedidos.filter((p) => p.estado !== "cancelado");
+  const totalComprado = comprados.reduce((s, p) => s + p.total, 0);
 
   if (pedidos.length === 0) {
     return (
@@ -45,7 +46,7 @@ export default async function MisPedidosPage() {
       <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h1 className="text-2xl font-bold tracking-tight">Mis pedidos</h1>
         <p className="text-sm text-muted-foreground">
-          {plural(pedidos.length, "pedido")} ·{" "}
+          {plural(comprados.length, "pedido")} ·{" "}
           <span className="tabular">{formatearMonto(totalComprado)}</span> en
           total
         </p>

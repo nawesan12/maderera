@@ -9,6 +9,7 @@ import { Opciones } from "@/components/admin/opciones";
 import { Confirmar } from "@/components/admin/confirmar";
 import type { DatosDeDevolucion } from "@/lib/dal/admin/facturacion";
 import { CampoPin, type Autorizacion } from "@/components/autorizacion/campo-pin";
+import { NOMBRE_DEL_MEDIO, type MedioDeCobro } from "@/lib/cobros/partes";
 import { calcularDevolucion, devolver, type EstadoFactura } from "../actions";
 
 type Destino = "caja" | "cuenta" | "afuera" | "deuda";
@@ -149,6 +150,10 @@ export function Devolucion({
   const afueraPosible = entra(datos.afuera);
   // Lo que no se cobró se devuelve bajando lo que se debe: no sale plata.
   const deudaPosible = entra(datos.deuda);
+  // Por dónde vuelve lo de afuera cuando es un solo medio, como lo asienta
+  // el cierre (lo cobrado con cheque vuelve por transferencia): «Otro medio»
+  // y «por el medio de pago» no decían que salía del banco (mes 23).
+  const afueraPor = datos.afueraPor ? NOMBRE_DEL_MEDIO[datos.afueraPor as MedioDeCobro] : undefined;
   // Lo elegido, mientras siga valiendo; si no, el primero que vale.
   const posibles: Record<Destino, boolean> = {
     caja: cajaPosible,
@@ -192,7 +197,7 @@ export function Devolucion({
             : destino === "cuenta"
               ? `${formatearMonto(importe)} a la cuenta`
               : destino === "afuera"
-                ? `${formatearMonto(importe)} por el medio de pago`
+                ? `${formatearMonto(importe)} por ${afueraPor ? afueraPor.replace(/^(Transferencia|Tarjeta)/, (m) => m.toLowerCase()) : "el medio de pago"}`
                 : destino === "deuda"
                   ? `${formatearMonto(importe)} menos de deuda`
                   : null,
@@ -341,7 +346,7 @@ export function Devolucion({
               [
                 { valor: "caja", texto: "Caja", posible: cajaPosible },
                 { valor: "cuenta", texto: "Cuenta", posible: cuentaPosible },
-                { valor: "afuera", texto: "Otro medio", posible: afueraPosible },
+                { valor: "afuera", texto: afueraPor ?? "Otro medio", posible: afueraPosible },
                 { valor: "deuda", texto: "Baja la deuda", posible: deudaPosible },
               ] as const
             )

@@ -685,6 +685,8 @@ export interface components {
         }[];
         DatosDeDevolucion: {
             pedido: string;
+            /** @description El medio por el que vuelve lo de afuera, si es uno solo (lo cobrado con cheque vuelve por transferencia); vacío si son varios */
+            afueraPor: string;
             renglones: components["schemas"]["RenglonesDevolvibles"];
             /** Format: double */
             caja: number;

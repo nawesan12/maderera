@@ -772,9 +772,10 @@ components:
           enAcopio: { type: number, format: double }
     DatosDeDevolucion:
       type: object
-      required: [pedido, renglones, caja, cuenta, afuera, deuda, conCliente, sucursal, sucursales, ventaAnulada]
+      required: [pedido, renglones, caja, cuenta, afuera, deuda, conCliente, sucursal, sucursales, ventaAnulada, afueraPor]
       properties:
         pedido: { type: string }
+        afueraPor: { type: string, description: "El medio por el que vuelve lo de afuera, si es uno solo (lo cobrado con cheque vuelve por transferencia); vacío si son varios" }
         renglones: { $ref: "#/components/schemas/RenglonesDevolvibles" }
         caja: { type: number, format: double }
         cuenta: { type: number, format: double }

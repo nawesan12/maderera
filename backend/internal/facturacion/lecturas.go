@@ -634,8 +634,13 @@ func (s *Servicio) Obtener(ctx context.Context, id string) (*Completo, error) {
 		}
 		if err == nil {
 			d.Partes = []ParteDevuelta{}
+			// Lo que se devuelve de un cobro del mostrador con cheque vuelve por
+			// el banco (el cheque sigue en la cartera), y así lo asienta el
+			// cierre: la nota
+			// decía «Cheque» con el asiento contra Banco (mes 23).
 			filas, err := s.pool.Query(ctx, `SELECT medio, sum(importe)::float8 FROM (
-				  SELECT coalesce(p.medio, 'mercado_pago') AS medio, t.importe FROM payment_refunds t JOIN payments p ON p.id = t.payment_id WHERE t.devolucion_id = $1
+				  SELECT CASE WHEN coalesce(p.medio, 'mercado_pago') IN ('cheque', 'echeq') THEN 'transferencia' ELSE coalesce(p.medio, 'mercado_pago') END AS medio,
+				    t.importe FROM payment_refunds t JOIN payments p ON p.id = t.payment_id WHERE t.devolucion_id = $1
 				  UNION ALL
 				  SELECT t.medio::text, t.importe FROM receipt_refunds t WHERE t.devolucion_id = $1) x GROUP BY medio ORDER BY medio`, devolucion)
 			if err != nil {

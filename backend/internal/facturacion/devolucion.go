@@ -156,6 +156,55 @@ type DatosDeDevolucion struct {
 	Sucursales []SucursalDeDevolucion `json:"sucursales"`
 	// VentaAnulada: ya no hay nada que devolver; la factura se anula.
 	VentaAnulada bool `json:"ventaAnulada"`
+	// AfueraPor es el medio por el que vuelve lo de «afuera» cuando es uno
+	// solo, como lo asienta el cierre: lo cobrado con cheque vuelve por
+	// transferencia (el cheque sigue en la cartera). Vacío si son varios. La
+	// pantalla decía «por el medio de pago» y la nota «Cheque» mientras el
+	// asiento salía del Banco (mes 23).
+	AfueraPor string `json:"afueraPor"`
+}
+
+// medioDeVuelta es el medio por el que vuelve lo cobrado con `medio`, con
+// los nombres de los medios de cobro.
+func medioDeVuelta(medio string) string {
+	switch medio {
+	case "cheque", "echeq", "deposito", "transferencia":
+		return "transferencia"
+	case "debito", "tarjeta_debito":
+		return "tarjeta_debito"
+	case "credito", "tarjeta_credito":
+		return "tarjeta_credito"
+	case "mercado_pago":
+		return "mercado_pago"
+	}
+	return ""
+}
+
+// afueraPor es AfueraPor de la venta cobrada sin recibos (la del
+// mostrador): los medios de lo cobrado que vuelve por afuera (ni efectivo
+// ni cuenta corriente), si dan uno solo. Lo de un recibo que vuelve por
+// afuera no se sabe por dónde salió (el cierre lo deja a imputar).
+func afueraPor(ctx context.Context, c consultor, pedido string) (string, error) {
+	rs, err := c.Query(ctx, `SELECT DISTINCT coalesce(p.medio, 'mercado_pago') FROM payments p
+		  WHERE p.order_id = $1 AND p.estado = 'aprobado' AND coalesce(p.medio, '') NOT IN ('efectivo', 'cuenta_corriente')
+		    AND NOT EXISTS (SELECT 1 FROM receipt_parts x WHERE x.payment_id = p.id)`, pedido)
+	if err != nil {
+		return "", err
+	}
+	defer rs.Close()
+	visto := ""
+	for rs.Next() {
+		var m string
+		if err := rs.Scan(&m); err != nil {
+			return "", err
+		}
+		v := medioDeVuelta(m)
+		if v == "" || (visto != "" && visto != v) {
+			return "", nil
+		}
+		visto = v
+	}
+	return visto, rs.Err()
 }
 
 // topesDeLaVenta es cuánto de la venta entró por cada camino de vuelta, y
@@ -357,6 +406,11 @@ func (s *Servicio) ParaDevolver(ctx context.Context, invoiceID string) (*DatosDe
 		return nil, err
 	}
 	d.Caja, d.Cuenta, d.Afuera, d.Deuda = topes.caja, topes.cuenta, topes.afuera, topes.deuda
+	if d.Afuera > 0.005 && !topes.conRecibos {
+		if d.AfueraPor, err = afueraPor(ctx, s.pool, *pedido); err != nil {
+			return nil, err
+		}
+	}
 	if !d.ConCliente {
 		d.Cuenta = 0
 	}

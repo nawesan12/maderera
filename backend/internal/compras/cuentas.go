@@ -722,6 +722,15 @@ func diaDeHoy(ahora time.Time) time.Time {
 // por lo que el proveedor ya había devuelto) y, si se pagó en el acto como
 // un gasto, su total entero. Es la única regla del saldo de una factura:
 // la usan el listado, el pago, el Resumen y los CSV.
+// ImputadoAlAjuste es lo que ya cubre un ajuste que subió la deuda: lo
+// pagado (sin los pagos anulados) y los ajustes que bajan la deuda aplicados
+// a él (M4-036).
+func ImputadoAlAjuste(m string) string {
+	return `(coalesce((SELECT sum(k.importe) FROM supplier_payment_ajustes k JOIN supplier_payments p ON p.id = k.payment_id
+	            WHERE k.movement_id = ` + m + `.id AND p.anulado_at IS NULL), 0)
+	  + coalesce((SELECT sum(-b.monto) FROM supplier_movements b WHERE b.aplica_a_ajuste_id = ` + m + `.id), 0))`
+}
+
 func AplicadoA(f string) string {
 	return `(coalesce((SELECT sum(a.importe) FROM supplier_payment_allocations a WHERE a.purchase_invoice_id = ` + f + `.id), 0)
 	  + coalesce((SELECT sum(n.total) FROM purchase_invoices n WHERE n.aplica_a_id = ` + f + `.id AND n.anulada_at IS NULL), 0)

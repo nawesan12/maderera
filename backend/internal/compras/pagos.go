@@ -183,8 +183,7 @@ func (s *Servicio) FacturasConSaldo(ctx context.Context, proveedor string) ([]Fa
 		-- Un ajuste a mano que subió la deuda (un saldo inicial): se paga
 		-- como una factura (M2S1-125).
 		SELECT m.id, 0, 0, 'ajuste', m.created_at, NULL::timestamptz, m.monto,
-		  coalesce((SELECT sum(k.importe) FROM supplier_payment_ajustes k JOIN supplier_payments p ON p.id = k.payment_id
-		            WHERE k.movement_id = m.id AND p.anulado_at IS NULL), 0), 0
+		  `+ImputadoAlAjuste("m")+`, 0
 		FROM supplier_movements m
 		WHERE m.supplier_id = $1 AND m.tipo = 'ajuste' AND m.monto > 0 AND m.cheque_id IS NULL AND m.supplier_payment_id IS NULL
 		  AND m.purchase_invoice_id IS NULL AND m.goods_receipt_id IS NULL
@@ -786,8 +785,7 @@ func (s *Servicio) PagarAProveedor(ctx context.Context, ses *auth.Sesion, m map[
 			importes = append(importes, a.Importe)
 			var debe, pagado jsmath.Num
 			err := tx.QueryRow(ctx, `
-				SELECT m.monto, coalesce((SELECT sum(k.importe) FROM supplier_payment_ajustes k JOIN supplier_payments p ON p.id = k.payment_id
-				                          WHERE k.movement_id = m.id AND p.anulado_at IS NULL), 0)
+				SELECT m.monto, `+ImputadoAlAjuste("m")+`
 				FROM supplier_movements m WHERE m.id = $1 AND m.supplier_id = $2 AND m.tipo = 'ajuste' AND m.monto > 0 FOR UPDATE`,
 				a.PurchaseInvoiceID, d.SupplierID).Scan(&debe, &pagado)
 			if errors.Is(err, pgx.ErrNoRows) {

@@ -198,8 +198,8 @@ export default async function ProveedorPage({
         supplierId={proveedor.id}
         movimientos={proveedor.movimientos}
         facturas={pendientes
-          .filter((f) => !f.tipo.startsWith("nota_credito") && f.tipo !== "cheque_rechazado" && f.tipo !== "ajuste")
-          .map((f) => ({ id: f.id, numero: f.numero, saldo: f.saldo }))}
+          .filter((f) => !f.tipo.startsWith("nota_credito") && f.tipo !== "cheque_rechazado")
+          .map((f) => ({ id: f.id, numero: f.numero, saldo: f.saldo, ajuste: f.tipo === "ajuste" }))}
       />
 
       {/* Lo pagado en el acto (un flete, la luz): no pasa por la cuenta, pero

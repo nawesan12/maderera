@@ -209,7 +209,8 @@ func (s *Servicio) ObtenerProveedor(ctx context.Context, id string) (*Proveedor,
 		  (SELECT lpad(f.punto_venta::text, 4, '0') || '-' || lpad(f.numero::text, 8, '0') FROM purchase_invoice_receipts x JOIN purchase_invoices f ON f.id = x.purchase_invoice_id
 		   WHERE x.goods_receipt_id = m.goods_receipt_id LIMIT 1),
 		  m.cheque_id,
-		  (SELECT lpad(f.punto_venta::text, 4, '0') || '-' || lpad(f.numero::text, 8, '0') FROM purchase_invoices f WHERE f.id = m.aplica_a_id)
+		  coalesce((SELECT lpad(f.punto_venta::text, 4, '0') || '-' || lpad(f.numero::text, 8, '0') FROM purchase_invoices f WHERE f.id = m.aplica_a_id),
+		    (SELECT 'ajuste' || coalesce(' ' || nullif(a.referencia, ''), '') FROM supplier_movements a WHERE a.id = m.aplica_a_ajuste_id))
 		FROM supplier_movements m
 		WHERE m.supplier_id = $1 ORDER BY m.created_at DESC LIMIT 200`, id)
 	if err != nil {
@@ -393,15 +394,34 @@ func (s *Servicio) RegistrarMovimiento(ctx context.Context, ses *auth.Sesion, m 
 		}
 		aplicaA = &v
 	}
+	// También se aplica a un ajuste que subió la deuda (M4-036): sin eso, un
+	// «Sube» y un «Baja» del mismo monto dejaban el saldo en cero y el primero
+	// seguía para pagarse.
+	var aplicaAAjuste *string
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if aplicaA != nil {
 			if !plataforma.UUIDValido(*aplicaA) {
 				return fallo("Esa factura no existe.")
 			}
+			var debe, cubierto jsmath.Num
+			err := tx.QueryRow(ctx, `SELECT m.monto, `+ImputadoAlAjuste("m")+` FROM supplier_movements m
+				WHERE m.id = $1 AND m.supplier_id = $2 AND m.tipo = 'ajuste' AND m.monto > 0 AND m.cheque_id IS NULL
+				  AND m.supplier_payment_id IS NULL AND m.purchase_invoice_id IS NULL AND m.goods_receipt_id IS NULL
+				FOR UPDATE`, *aplicaA, x.SupplierID).Scan(&debe, &cubierto)
+			if err == nil {
+				if saldo := SaldoDeFactura(debe.F(), cubierto.F()); x.Monto-saldo > 0.009 {
+					return fallo("A ese ajuste le quedan " + formato.Importe(saldo) + ": el que baja no puede ser mayor.")
+				}
+				aplicaAAjuste = aplicaA
+				return insertarAjuste(ctx, tx, ses, x, conSigno, nil, aplicaAAjuste)
+			}
+			if !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
 			var dueno, tipo string
 			var anulada bool
 			var total, imputado jsmath.Num
-			err := tx.QueryRow(ctx, `SELECT supplier_id, tipo::text, anulada_at IS NOT NULL, total, `+AplicadoA("f")+`
+			err = tx.QueryRow(ctx, `SELECT supplier_id, tipo::text, anulada_at IS NOT NULL, total, `+AplicadoA("f")+`
 				FROM purchase_invoices f WHERE id = $1 FOR UPDATE`, *aplicaA).Scan(&dueno, &tipo, &anulada, &total, &imputado)
 			if errors.Is(err, pgx.ErrNoRows) || err == nil && dueno != x.SupplierID {
 				return fallo("Esa factura no es de este proveedor.")
@@ -416,11 +436,7 @@ func (s *Servicio) RegistrarMovimiento(ctx context.Context, ses *auth.Sesion, m 
 				return fallo("A esa factura le quedan " + formato.Importe(saldo) + ": el ajuste no puede ser mayor.")
 			}
 		}
-		_, err := tx.Exec(ctx, `
-			INSERT INTO supplier_movements (supplier_id, tipo, monto, detalle, referencia, created_by_user_id, aplica_a_id)
-			VALUES ($1, $2::tipo_movimiento_proveedor, $3::numeric, $4, $5, $6, $7)`,
-			x.SupplierID, x.Tipo, jsmath.Fijo2(conSigno), x.Detalle, x.Referencia, ses.UserID, aplicaA)
-		return err
+		return insertarAjuste(ctx, tx, ses, x, conSigno, aplicaA, nil)
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), "foreign key") {
@@ -435,6 +451,14 @@ func (s *Servicio) RegistrarMovimiento(ctx context.Context, ses *auth.Sesion, m 
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "proveedor", x.SupplierID,
 		"Anotó un ajuste de "+formato.Importe(conSigno)+ref+": "+*x.Detalle, nil)
 	return x.SupplierID, nil
+}
+
+func insertarAjuste(ctx context.Context, tx pgx.Tx, ses *auth.Sesion, x MovimientoProveedor, conSigno float64, factura, ajuste *string) error {
+	_, err := tx.Exec(ctx, `
+		INSERT INTO supplier_movements (supplier_id, tipo, monto, detalle, referencia, created_by_user_id, aplica_a_id, aplica_a_ajuste_id)
+		VALUES ($1, $2::tipo_movimiento_proveedor, $3::numeric, $4, $5, $6, $7, $8)`,
+		x.SupplierID, x.Tipo, jsmath.Fijo2(conSigno), x.Detalle, x.Referencia, ses.UserID, factura, ajuste)
+	return err
 }
 
 // DarDeBaja es darDeBajaProveedor: queda inactivo, no se borra.

@@ -6452,6 +6452,7 @@ type SupplierMovement struct {
 	SupplierPaymentID *string                 `json:"supplierPaymentId"`
 	ChequeID          *string                 `json:"chequeId"`
 	AplicaAID         *string                 `json:"aplicaAId"`
+	AplicaAAjusteID   *string                 `json:"aplicaAAjusteId"`
 }
 
 type SupplierPayment struct {

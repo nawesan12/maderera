@@ -32,6 +32,8 @@ interface FacturaPendiente {
   id: string;
   numero: string;
   saldo: number;
+  /** Un ajuste que subió la deuda: el que la baja se le aplica (M4-036). */
+  ajuste?: boolean;
 }
 
 const TIPOS: Record<string, string> = {
@@ -80,7 +82,10 @@ function nombreDelMovimiento(m: Movimiento): { titulo: string; numero: string | 
   if (m.tipo === "ajuste") {
     return {
       titulo: nombreDelAjuste(m),
-      numero: [m.referencia, m.aplicaA && `a la factura ${m.aplicaA}`].filter(Boolean).join(" · ") || null,
+      numero:
+        [m.referencia, m.aplicaA && (m.aplicaA.startsWith("ajuste") ? `al ${m.aplicaA}` : `a la factura ${m.aplicaA}`)]
+          .filter(Boolean)
+          .join(" · ") || null,
     };
   }
   return { titulo: TIPOS[m.tipo] ?? m.tipo, numero: m.referencia };
@@ -127,7 +132,12 @@ export function CuentaDelProveedor({
   const [monto, setMonto] = useState("");
   const [referencia, setReferencia] = useState("");
   const [detalle, setDetalle] = useState("");
-  const [aplicaA, setAplicaA] = useState("");
+  // Si hay un ajuste que subió la deuda y sigue abierto, el que la baja se
+  // le aplica salvo que se elija otra cosa: con «Ninguna» por defecto, el
+  // primero quedaba para pagarse con el saldo en cero (M4-036).
+  const ajusteAbierto = facturas.find((f) => f.ajuste)?.id ?? "";
+  const [elegida, setElegida] = useState<string | null>(null);
+  const aplicaA = elegida !== null && (elegida === "" || facturas.some((f) => f.id === elegida)) ? elegida : ajusteAbierto;
 
   function anotar() {
     empezar(async () => {
@@ -144,7 +154,7 @@ export function CuentaDelProveedor({
         setMonto("");
         setReferencia("");
         setDetalle("");
-        setAplicaA("");
+        setElegida(null);
         setAjustando(false);
         router.refresh();
       }
@@ -212,10 +222,10 @@ export function CuentaDelProveedor({
               crédito: la factura queda pagada por lo que cubre. */}
           {sentido === "baja" && facturas.length > 0 && (
             <label className="block md:col-span-2">
-              <span className="text-base font-medium">Factura</span>
+              <span className="text-base font-medium">Aplica a</span>
               <select
                 value={aplicaA}
-                onChange={(e) => setAplicaA(e.target.value)}
+                onChange={(e) => setElegida(e.target.value)}
                 className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
               >
                 <option value="">Ninguna</option>

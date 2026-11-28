@@ -158,7 +158,7 @@ func TestPresupuestosPorCorreoYTelefono(t *testing.T) {
 	_, ven := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
 	q := e.presupuesto(t, ven, 1)
 	e.exec(t, `update quotes set contacto_email = 'sim.irenep@ejemplo.test', contacto_telefono = '+54 9 223 555-0604' where id = $1`, q)
-	for _, buscar := range []string{"irenep", "2235550604"} {
+	for _, buscar := range []string{"irenep", "2235550604", "223 555-0604", "+54 9 223 555-0604"} {
 		p, err := e.s.ListarPresupuestos(ctx, Filtros{Busqueda: buscar}, 0, 0)
 		if err != nil {
 			t.Fatal(err)

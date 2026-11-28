@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -51,6 +52,14 @@ func (a *argumentos) coincide(texto string, columnas ...string) string {
 	}
 	return "(" + strings.Join(porTermino, " AND ") + ")"
 }
+
+// telefonoEscrito es una búsqueda que es solo un teléfono con sus espacios,
+// guiones, paréntesis o el «+» (diez dígitos o más: un número de
+// presupuesto como «2026-0069» no pasa).
+var (
+	telefonoEscrito = regexp.MustCompile(`^\s*\+?[\d\s().-]+$`)
+	noDigitos       = regexp.MustCompile(`\D`)
+)
 
 func donde(condiciones []string) string {
 	if len(condiciones) == 0 {
@@ -153,7 +162,13 @@ func (s *Servicio) ListarPresupuestos(ctx context.Context, f Filtros, limite, de
 	if f.Busqueda != "" {
 		// También por el correo y el teléfono, que es lo que el vendedor
 		// tiene a mano cuando el cliente escribe desde otro lado (M4-074).
-		if c := a.coincide(f.Busqueda, "q.numero", "q.contacto_nombre", "c.razon_social", "q.contacto_email", "c.email",
+		// Un teléfono se escribe como se ve en la ficha («223 555-0102»):
+		// junto, para que coincida con los dígitos de la columna (recorrido).
+		busqueda := f.Busqueda
+		if digitos := noDigitos.ReplaceAllString(busqueda, ""); len(digitos) >= 10 && telefonoEscrito.MatchString(busqueda) {
+			busqueda = digitos
+		}
+		if c := a.coincide(busqueda, "q.numero", "q.contacto_nombre", "c.razon_social", "q.contacto_email", "c.email",
 			`regexp_replace(coalesce(q.contacto_telefono, ''), '[^0-9]', '', 'g')`,
 			`regexp_replace(coalesce(c.telefono, ''), '[^0-9]', '', 'g')`); c != "" {
 			cond = append(cond, c)

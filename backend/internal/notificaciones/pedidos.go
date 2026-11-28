@@ -104,9 +104,36 @@ func (s *Servicio) PedidoRecibido(ctx context.Context, id string) error {
 	return nil
 }
 
+// ordenDelPedido es el orden de los estados de un pedido.
+var ordenDelPedido = map[string]int{"pendiente": 0, "preparando": 1, "listo": 2, "en-camino": 3, "entregado": 4, "cancelado": 5}
+
+// PasoDe dice si un pedido en `actual` ya dejó atrás `estado`: el aviso de
+// `estado` no sale (recorrido, M4-087).
+func PasoDe(actual, estado string) bool {
+	a, ok1 := ordenDelPedido[actual]
+	e, ok2 := ordenDelPedido[estado]
+	return ok1 && ok2 && a > e
+}
+
 // CambioDeEstado es avisarCambioDePedido + notificarCambioDeEstado: el
 // WhatsApp y el correo de un pedido que avanzó. El evento es el estado.
 func (s *Servicio) CambioDeEstado(ctx context.Context, id, estado string) error {
+	// Un paso intermedio que el pedido ya dejó atrás no se avisa: sale el
+	// del estado al que llegó (recorrido, M4-087). Esperan
+	// entregas.EsperaDelAviso para que esto alcance.
+	if estado == "preparando" || estado == "listo" {
+		var actual string
+		err := s.pool.QueryRow(ctx, `SELECT estado::text FROM orders WHERE id = $1`, id).Scan(&actual)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if PasoDe(actual, estado) {
+			return nil
+		}
+	}
 	// Un envío listo no se va a retirar (mes simulado 2: le decía «listo para
 	// retirar» a quien esperaba el camión): el WhatsApp, que solo tiene ese
 	// texto, no sale; el correo dice que sale para la entrega (M2S1-074).
@@ -171,6 +198,19 @@ func (s *Servicio) CambioDeEstado(ctx context.Context, id, estado string) error 
 	// repite «Tu pedido salió para la entrega» (mes simulado, M3S1-055).
 	if estado == "en-camino" && yaSalio {
 		return nil
+	}
+	// Con el remito firmado le llega la constancia de entrega, que ya dice
+	// que se entregó: «Tu pedido fue entregado» era el cuarto correo del
+	// mismo minuto (recorrido, M4-087). El WhatsApp sale igual.
+	if estado == "entregado" {
+		var conConstancia bool
+		if err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM deliveries WHERE order_id = $1 AND firmado_at IS NOT NULL AND estado <> 'anulada')`,
+			id).Scan(&conConstancia); err != nil {
+			return err
+		}
+		if conConstancia {
+			return nil
+		}
 	}
 	var asunto string
 	var encabezado *string

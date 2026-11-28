@@ -710,7 +710,8 @@ func (s *Servicio) listoConElCorte(ctx context.Context, ses *auth.Sesion, corte,
 			pedido, "Corte "+numero+" terminado", usuario); err != nil {
 			return err
 		}
-		_, err = cola.Encolar(ctx, sqlc.New(tx), "pedido.estado", map[string]string{"orderId": pedido, "estado": "listo"}, time.Time{})
+		_, err = cola.Encolar(ctx, sqlc.New(tx), "pedido.estado", map[string]string{"orderId": pedido, "estado": "listo"},
+			entregas.CuandoAvisar("listo", time.Now()))
 		return err
 	})
 }

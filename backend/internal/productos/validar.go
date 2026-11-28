@@ -14,6 +14,7 @@ import (
 
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/precios"
 )
 
 // FormProducto es lo que manda el formulario, todo como texto, igual que lo
@@ -236,16 +237,21 @@ func (v *validador) cantidad(campo, s string) *float64 {
 	return &n
 }
 
+// precio se lee como cualquier otro campo de plata del panel (Precios,
+// Compras, Caja): «55.000» son cincuenta y cinco mil y «84.500,50», con
+// centavos. Solo cambiar la coma por el punto guardaba «55.000» como $ 55
+// (recorrido M4-001).
 func (v *validador) precio(campo, s string) string {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return "0"
 	}
-	s = reemplazarComa(s)
-	if !positivo(jsmath.Numero(s)) {
+	n := precios.ParsearImporte(s)
+	if !positivo(n) {
 		v.mal(campo, "Revisá el precio.")
+		return s
 	}
-	return s
+	return strconv.FormatFloat(n, 'f', -1, 64)
 }
 
 func (v *validador) uuid(campo, s, mensaje string) {

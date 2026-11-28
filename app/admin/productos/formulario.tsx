@@ -40,6 +40,7 @@ import {
   type ImagenProducto,
 } from "@/components/admin/galeria-imagenes";
 import { generarSlug } from "@/lib/validation/product";
+import { importeDelCampo, importeParaElCampo } from "@/lib/formato";
 import { guardarProducto, type EstadoFormulario } from "./actions";
 import {
   BarraGuardar,
@@ -240,8 +241,16 @@ export function FormularioProducto({
   const rubroValido = rubrosDeLaCategoria.some((r) => r.id === rubro)
     ? rubro
     : "";
+  // Los precios llegan de la base como «55000.00» y se muestran como se
+  // escriben («55.000»), que es como Go los vuelve a leer (M4-001).
   const [variantes, setVariantes] = useState<VarianteForm[]>(
-    inicial.variantes.length > 0 ? inicial.variantes : [varianteVacia()],
+    inicial.variantes.length > 0
+      ? inicial.variantes.map((v) => ({
+          ...v,
+          precioGeneral: importeParaElCampo(v.precioGeneral) || "0",
+          precioProfesional: importeParaElCampo(v.precioProfesional),
+        }))
+      : [varianteVacia()],
   );
 
   // En el alta el slug sigue al nombre; al editar no se toca.
@@ -410,9 +419,7 @@ export function FormularioProducto({
                   onForma={setForma}
                   pct={pctMedia}
                   onPct={setPctMedia}
-                  precioEjemplo={Number(
-                    (variantes[0]?.precioGeneral ?? "0").replace(",", "."),
-                  )}
+                  precioEjemplo={importeDelCampo(variantes[0]?.precioGeneral)}
                   sinMedidas={
                     variantes.filter((v) => !v.largoMm || !v.anchoMm).length
                   }

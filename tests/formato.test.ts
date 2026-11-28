@@ -187,6 +187,9 @@ describe("cantidadConUnidad", () => {
     expect(unidadConcordada(119, "placa")).toBe("placas");
     expect(unidadConcordada(2.5, "placa")).toBe("placas");
     expect(unidadConcordada(22, "rollo")).toBe("rollos");
+    // M2S2-086 (mes 23): la laca de 4 litros se repone por lata, no por litro.
+    expect(unidadConcordada(12, "litro", "Laca 4 litros")).toBe("u.");
+    expect(unidadConcordada(12, "litro", "Laca")).not.toBe("u.");
   });
 });
 

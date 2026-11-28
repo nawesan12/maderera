@@ -644,6 +644,7 @@ async function Resultados({ params }: { params: Params }) {
               productCount: c.productCount,
             }))}
             activa={params.cat ?? "todos"}
+            cantidadMoldava={marcas.find((m) => m.nombre.trim().toLowerCase() === "moldava")?.productCount ?? null}
           />
         </div>
 

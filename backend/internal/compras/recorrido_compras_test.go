@@ -132,3 +132,26 @@ func TestPercepcionDeLaFacturaConSuNombre(t *testing.T) {
 		t.Errorf("el renglón de la percepción: %q %v", detalle, monto)
 	}
 }
+
+// M4-040: lo devolvible trae el costo que factura el proveedor (sin el
+// flete) y la factura que cubre su recepción.
+func TestDevolvibleConCostoFacturadoYFactura(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	c, b := pedir(t, adm, "POST", e.u+"recepciones", map[string]any{"supplierId": e.proveedor, "branchId": e.central, "numeroRemito": "R-7",
+		"gastos": 100, "lineas": []any{map[string]any{"variantId": e.tornillo, "cantidad": 100, "costoUnitario": 10, "alicuotaIva": 21}}})
+	if c != 200 {
+		t.Fatalf("crear: %d %s", c, b)
+	}
+	r := idDe(t, b)
+	if c, b := pedir(t, adm, "POST", e.u+"recepciones/"+r+"/confirmar", nil); c != 200 {
+		t.Fatalf("confirmar: %d %s", c, b)
+	}
+	f := e.facturaDeCompra(t, adm, 5588, map[string]any{"neto": 1100, "iva21": 231, "receiptId": r})
+	_, b = pedir(t, adm, "GET", e.u+"compras/devolucion?proveedor="+e.proveedor, nil)
+	var filas []RenglonDevolvible
+	_ = json.Unmarshal([]byte(b), &filas)
+	if len(filas) != 1 || filas[0].CostoFacturado != 10 || filas[0].CostoUnitario != 11 || filas[0].FacturaID == nil || *filas[0].FacturaID != f {
+		t.Errorf("devolvibles: %s", b)
+	}
+}

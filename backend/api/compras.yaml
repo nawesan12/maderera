@@ -646,7 +646,7 @@ paths:
                 type: array
                 items:
                   type: object
-                  required: [id, remito, fecha, descripcion, unidad, recibido, devuelto, costoUnitario]
+                  required: [id, remito, fecha, descripcion, unidad, recibido, devuelto, costoUnitario, costoFacturado, facturaId]
                   properties:
                     id: { type: string }
                     remito: { type: string, nullable: true }
@@ -656,6 +656,8 @@ paths:
                     recibido: { type: number, format: double }
                     devuelto: { type: number, format: double }
                     costoUnitario: { type: number, format: double }
+                    costoFacturado: { type: number, format: double, description: El costo del remito, sin el flete, que es el que factura el proveedor }
+                    facturaId: { type: string, nullable: true, description: La factura viva que cubre la recepción }
   /api/v1/admin/compras/pagos/simular:
     post:
       operationId: SimularRetenciones

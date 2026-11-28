@@ -2578,6 +2578,13 @@ export interface operations {
                         devuelto: number;
                         /** Format: double */
                         costoUnitario: number;
+                        /**
+                         * Format: double
+                         * @description El costo del remito
+                         */
+                        costoFacturado: number;
+                        /** @description La factura viva que cubre la recepción */
+                        facturaId: string | null;
                     }[];
                 };
             };

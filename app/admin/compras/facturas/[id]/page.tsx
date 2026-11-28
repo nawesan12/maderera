@@ -52,6 +52,12 @@ export default async function FacturaDeCompraPage({
           (x) => !x.tipo.startsWith("nota_credito") && x.tipo !== "cheque_rechazado" && x.saldo - f.total > -0.01,
         )
       : [];
+  // Desde la factura con saldo, las notas a favor del mismo proveedor: no
+  // había cómo llegar a la nota que la corrige (M4-039).
+  const notasAFavor =
+    !esCredito && !f.anuladaAt && saldo > 0.01
+      ? (await facturasConSaldo(f.supplierId)).filter((x) => x.tipo.startsWith("nota_credito"))
+      : [];
   const flete = f.flete ?? 0;
   const diferencia =
     Math.round((f.neto - f.renglones.reduce((s, r) => s + r.cantidad * r.costoUnitario, 0) - flete) * 100) / 100;
@@ -108,12 +114,24 @@ export default async function FacturaDeCompraPage({
               facturas={aplicables.map((x) => ({ id: x.id, numero: x.numero, saldo: x.saldo }))}
             />
           ) : !f.anuladaAt && !esCredito && saldo > 0.01 ? (
-            <Link
-              href={`/admin/compras/pagos?proveedor=${f.supplierId}&factura=${f.id}`}
-              className="boton-accion inline-flex h-11 items-center rounded-xl px-5 text-base font-semibold"
-            >
-              Pagar {formatearMonto(saldo)}
-            </Link>
+            <>
+              {notasAFavor.map((n) => (
+                <Link
+                  key={n.id}
+                  href={`/admin/compras/facturas/${n.id}`}
+                  className="tarjeta-hundida inline-flex h-11 items-center gap-2 rounded-xl px-4 text-base font-medium"
+                >
+                  <span className="tabular whitespace-nowrap">NC {n.numero}</span>
+                  <span className="tabular text-saldo-favor">−{formatearMonto(n.saldo)}</span>
+                </Link>
+              ))}
+              <Link
+                href={`/admin/compras/pagos?proveedor=${f.supplierId}&factura=${f.id}`}
+                className="boton-accion inline-flex h-11 items-center rounded-xl px-5 text-base font-semibold"
+              >
+                Pagar {formatearMonto(saldo)}
+              </Link>
+            </>
           ) : undefined
         }
       />

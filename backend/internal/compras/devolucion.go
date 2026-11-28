@@ -32,6 +32,12 @@ type RenglonDevolvible struct {
 	Recibido      float64   `json:"recibido"`
 	Devuelto      float64   `json:"devuelto"`
 	CostoUnitario float64   `json:"costoUnitario"`
+	// CostoFacturado es el del remito, sin el flete: es el que factura el
+	// proveedor y el que propone el neto de la nota (M4-040). FacturaID, la
+	// factura que cubre la recepción, para listar primero los de la que se
+	// corrige.
+	CostoFacturado float64 `json:"costoFacturado"`
+	FacturaID      *string `json:"facturaId"`
 }
 
 // Devolucion es lo que una nota de crédito devuelve de un renglón.
@@ -53,7 +59,9 @@ func (s *Servicio) RenglonesDevolvibles(ctx context.Context, proveedor string) (
 	}
 	filas, err := s.pool.Query(ctx, `
 		SELECT i.id, r.numero_remito, r.fecha, trim(coalesce(p.name, '') || ' ' || coalesce(v.label, '')), p.unit::text,
-		  i.cantidad, `+devueltoSQL+`, coalesce(i.costo_con_gastos, i.costo_unitario)
+		  i.cantidad, `+devueltoSQL+`, coalesce(i.costo_con_gastos, i.costo_unitario), i.costo_unitario,
+		  (SELECT f.id FROM purchase_invoices f WHERE f.anulada_at IS NULL AND f.tipo::text NOT LIKE 'nota_%' AND (f.receipt_id = r.id OR EXISTS (
+		    SELECT 1 FROM purchase_invoice_receipts x WHERE x.purchase_invoice_id = f.id AND x.goods_receipt_id = r.id)) LIMIT 1)
 		FROM goods_receipt_items i JOIN goods_receipts r ON r.id = i.receipt_id
 		LEFT JOIN product_variants v ON v.id = i.variant_id LEFT JOIN products p ON p.id = v.product_id
 		WHERE r.supplier_id = $1 AND r.estado = 'confirmada' AND r.fecha > now() - interval '120 days'
@@ -64,9 +72,9 @@ func (s *Servicio) RenglonesDevolvibles(ctx context.Context, proveedor string) (
 	}
 	return pgx.CollectRows(filas, func(r pgx.CollectableRow) (RenglonDevolvible, error) {
 		var x RenglonDevolvible
-		var recibido, devuelto, costo jsmath.Num
-		err := r.Scan(&x.ID, &x.Remito, &x.Fecha, &x.Descripcion, &x.Unidad, &recibido, &devuelto, &costo)
-		x.Recibido, x.Devuelto, x.CostoUnitario = float64(recibido), float64(devuelto), float64(costo)
+		var recibido, devuelto, costo, facturado jsmath.Num
+		err := r.Scan(&x.ID, &x.Remito, &x.Fecha, &x.Descripcion, &x.Unidad, &recibido, &devuelto, &costo, &facturado, &x.FacturaID)
+		x.Recibido, x.Devuelto, x.CostoUnitario, x.CostoFacturado = float64(recibido), float64(devuelto), float64(costo), float64(facturado)
 		return x, err
 	})
 }

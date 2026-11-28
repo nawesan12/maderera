@@ -37,3 +37,13 @@ func TestRechazarTransferenciaDeLaCuentaAvisa(t *testing.T) {
 		t.Errorf("no se encoló el aviso: %v", n)
 	}
 }
+
+// Mes 23: «Depósito informado», no «Depósito informada».
+func TestAvisoDelInformadoConcuerda(t *testing.T) {
+	if ti, cu := AvisoDelInformado("deposito", "Roberto Ferreyra", 1000); ti != "Depósito informado · Roberto Ferreyra" || !strings.Contains(cu, "Verificalo") {
+		t.Errorf("%q %q", ti, cu)
+	}
+	if ti, cu := AvisoDelInformado("transferencia", "Roberto Ferreyra", 1000); ti != "Transferencia informada · Roberto Ferreyra" || !strings.Contains(cu, "Verificala") {
+		t.Errorf("%q %q", ti, cu)
+	}
+}

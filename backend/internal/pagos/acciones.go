@@ -221,17 +221,23 @@ func (s *Servicio) SubirComprobanteDeDeuda(ctx context.Context, x Extras, ses *a
 		VALUES ($1, 'deuda', 'transferencia', $2, $3::numeric, 'en_revision', $4)`, c.id, medio, jsmath.Fijo2(importe), url); err != nil {
 		return Resultado{}, err
 	}
-	titulo := "Transferencia"
-	if medio == "deposito" {
-		titulo = "Depósito"
-	}
 	if x.Push != nil {
+		titulo, cuerpo := AvisoDelInformado(medio, c.nombre, importe)
 		go x.Push.Avisar(context.WithoutCancel(ctx), push.Aviso{
-			Titulo: titulo + " informada · " + c.nombre, Cuerpo: formato.Importe(importe) + " para su cuenta corriente. Verificala en Pagos.",
-			URL: "/admin/pagos", Etiqueta: "pago_informado",
+			Titulo: titulo, Cuerpo: cuerpo, URL: "/admin/pagos", Etiqueta: "pago_informado",
 		})
 	}
 	return Resultado{Ok: "Recibimos tu comprobante. Lo imputamos a tu cuenta al verificarlo y te mandamos el recibo."}, nil
+}
+
+// AvisoDelInformado es el push al panel de una transferencia o un depósito
+// que informó el cliente, con la concordancia de cada uno: decía «Depósito
+// informada» (mes 23).
+func AvisoDelInformado(medio, cliente string, importe float64) (titulo, cuerpo string) {
+	if medio == "deposito" {
+		return "Depósito informado · " + cliente, formato.Importe(importe) + " para su cuenta corriente. Verificalo en Pagos."
+	}
+	return "Transferencia informada · " + cliente, formato.Importe(importe) + " para su cuenta corriente. Verificala en Pagos."
 }
 
 // InformarCheques: los cheques con los que el cliente paga su cuenta nacen

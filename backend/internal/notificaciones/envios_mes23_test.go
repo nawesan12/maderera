@@ -68,3 +68,21 @@ func TestElRechazoSeAvisa(t *testing.T) {
 		t.Errorf("rechazo: %s %q", para, asunto)
 	}
 }
+
+// El envío que vuelve a salir tampoco repite el WhatsApp de «salió para la
+// entrega» (mes 23, M3S1-055: el correo ya lo cuidaba, el WhatsApp no).
+func TestElEnvioQueVuelveASalirNoRepiteElWhatsapp(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	e.uno(t, `insert into whatsapp_avisos (evento, plantilla, idioma, texto_libre, activo) values ('en-camino', 'pedido_en_camino', 'es_AR', 'Hola {{nombre}}, tu pedido {{pedido}} salió.', true) returning 'ok'`)
+	envio := e.pedido(t, "PED-001204", "sim.particular@prueba.test", "envio")
+	e.uno(t, `update orders set contacto_telefono = '2236000000' where id = $1 returning 'ok'`, envio)
+	for range 2 {
+		if err := e.s.CambioDeEstado(ctx, envio, "en-camino"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if r := e.registro(t, "en-camino"); strings.Count(r, "whatsapp:") > 1 || strings.Count(r, "email:") != 1 {
+		t.Errorf("salió dos veces: %s", r)
+	}
+}

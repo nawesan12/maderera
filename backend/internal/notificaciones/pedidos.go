@@ -133,6 +133,20 @@ func (s *Servicio) CambioDeEstado(ctx context.Context, id, estado string) error 
 			return nil
 		}
 	}
+	// Un envío que vuelve a salir (se anuló el remito y se hizo otro) no
+	// repite «Tu pedido salió para la entrega» por ningún canal: el correo
+	// ya lo cuidaba y el WhatsApp salía de nuevo (mes simulado, M3S1-055).
+	if estado == "en-camino" {
+		var salio bool
+		if err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM notifications_log
+			  WHERE entidad_tipo = 'order' AND entidad_id = $1 AND evento = 'en-camino' AND estado IN ('enviada', 'simulada'))`,
+			id).Scan(&salio); err != nil {
+			return err
+		}
+		if salio {
+			return nil
+		}
+	}
 	if avisarPorWhatsapp {
 		s.wa.AvisarCambioDePedido(ctx, id, estado)
 	}

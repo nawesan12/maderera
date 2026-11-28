@@ -35,7 +35,7 @@ func leerJSON(t *testing.T, nombre string, destino any) {
 	}
 }
 
-// conCeldasMarcadas es la única diferencia buscada con el TS en leerFilas
+// conCeldasMarcadas son las dos diferencias buscadas con el TS en leerFilas
 // (M2S1-044): una celda de precio que no se puede leer marca la fila con la
 // columna y el valor, en vez de saltearla callada. Donde el Go marcó así una
 // fila del mismo SKU, se toma esa fila; el resto se compara entero.
@@ -47,6 +47,14 @@ func conCeldasMarcadas(goFilas, ts []FilaImportada) []FilaImportada {
 	for i := range out {
 		if i < len(goFilas) && goFilas[i].Sku == out[i].Sku && goFilas[i].Linea == out[i].Linea &&
 			(strings.HasPrefix(goFilas[i].Error, "Precio de lista: ") || strings.HasPrefix(goFilas[i].Error, "Precio profesional: ")) {
+			out[i] = goFilas[i]
+		}
+		// La segunda (mes 23): la fila sin ningún precio, con las columnas en
+		// su lugar, es una medida sin precio y no cambia nada; el TS la daba
+		// por error y la planilla exportada no volvía a entrar.
+		if i < len(goFilas) && goFilas[i].Sku == out[i].Sku && goFilas[i].Linea == out[i].Linea &&
+			out[i].Error == "No se pudo leer ningún precio de esta fila." && goFilas[i].Error == "" &&
+			goFilas[i].PrecioGeneral == nil && goFilas[i].PrecioProfesional == nil {
 			out[i] = goFilas[i]
 		}
 	}

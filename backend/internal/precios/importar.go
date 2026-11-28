@@ -114,6 +114,12 @@ func (s *Servicio) Comparar(ctx context.Context, leidas []FilaLeida) (VistaPrevi
 		}
 		f := FilaPrevia{Linea: l.Linea, SKU: l.SKU}
 		variante, ok := porSKU[l.SKU]
+		// El de lista en cero de una medida que no tiene precio de lista
+		// (una planilla exportada antes, «Escalera a medida») no cambia
+		// nada: no es regalarla (mes 23, M2S1-044).
+		if ok && l.PrecioGeneral != nil && jsmath.Numero(*l.PrecioGeneral) == 0 && actual(variante.ID, ls.general) == nil {
+			l.PrecioGeneral = nil
+		}
 		switch {
 		case l.Error != "":
 			f.Estado, f.Detalle = "error", ptr(l.Error)

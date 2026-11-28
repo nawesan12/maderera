@@ -208,8 +208,14 @@ func (a *API) ExportarPrecios(ctx context.Context, r documentosapi.ExportarPreci
 		if n := jsmath.Numero(profesional); !(n > 0) {
 			profesional = ""
 		}
+		// Lo mismo con el de lista: «Escalera a medida» no tiene y salía
+		// «0,00», que la importación rechaza (mes 23).
+		general := f.PrecioGeneral
+		if n := jsmath.Numero(general); !(n > 0) {
+			general = ""
+		}
 		planillaFilas[i] = planilla.FilaPlanilla{Sku: f.SKU, Producto: f.Producto, Medida: f.Medida, Categoria: f.Categoria,
-			PrecioGeneral: f.PrecioGeneral, PrecioProfesional: profesional}
+			PrecioGeneral: general, PrecioProfesional: profesional}
 	}
 	return archivo{
 		tipo:        "text/csv; charset=utf-8",

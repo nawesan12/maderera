@@ -198,7 +198,10 @@ func LeerFilas(grilla [][]string) []FilaImportada {
 			salida = append(salida, FilaImportada{Linea: linea, Sku: sku, Error: strings.TrimSpace(malGeneral + " " + malProfesional)})
 			continue
 		}
-		if general == nil && profesional == nil {
+		// Sin ningún precio, con las columnas en su lugar, es una medida que
+		// no tiene precio (así sale de la planilla exportada): no cambia
+		// nada, no es un problema (mes 23, M2S1-044).
+		if general == nil && profesional == nil && iGeneral == -1 && iProfesional == -1 {
 			salida = append(salida, FilaImportada{Linea: linea, Sku: sku, Error: "No se pudo leer ningún precio de esta fila."})
 			continue
 		}

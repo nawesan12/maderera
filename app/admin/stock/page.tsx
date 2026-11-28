@@ -91,9 +91,13 @@ export default async function AdminStockPage({
       <EncabezadoPanel
         titulo="Stock"
         resumen={
-          conteos.reponer > 0
-            ? `${plural(conteos.reponer, "medida")} para reponer de ${conteos.todas}`
-            : `${plural(conteos.todas, "medida")} en inventario`
+          // Con «En negativo» elegido, el subtítulo habla de eso y no de
+          // reponer (recorrido 2).
+          estado === "negativo"
+            ? `${plural(conteos.negativo, "medida")} en negativo de ${conteos.todas}`
+            : conteos.reponer > 0
+              ? `${plural(conteos.reponer, "medida")} para reponer de ${conteos.todas}`
+              : `${plural(conteos.todas, "medida")} en inventario`
         }
       >
         {/* El cruce de stock y ventas vive en su propio reporte, que es de

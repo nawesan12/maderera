@@ -2,6 +2,7 @@
 
 import { useActionState, useRef, useState } from "react";
 import { AlertCircle, ArrowLeft, ArrowRight, Check, Loader2 } from "lucide-react";
+import { motivoDocumentoInvalido } from "@/lib/cuit";
 import { solicitarAcceso, type EstadoSolicitud } from "./actions";
 
 const inicial: EstadoSolicitud = {};
@@ -43,6 +44,17 @@ export function FormularioProfesional({
 }) {
   const [estado, accion, enviando] = useActionState(solicitarAcceso, inicial);
   const previo = estado.valores;
+  // El documento se mira al «Seguir» del primer paso, con el mismo motivo que
+  // daría el servidor, debajo del campo (recorrido, M4-072).
+  const [errorDocumento, setErrorDocumento] = useState<string | null>(null);
+  function documentoOk(form: HTMLFormElement): boolean {
+    const tipo = (form.elements.namedItem("documentoTipo") as HTMLSelectElement | null)?.value ?? "cuit";
+    const campo = form.elements.namedItem("documentoNumero") as HTMLInputElement | null;
+    const motivo = motivoDocumentoInvalido(tipo, campo?.value ?? "");
+    setErrorDocumento(motivo);
+    if (motivo) campo?.focus();
+    return !motivo;
+  }
 
   if (estado.ok) {
     return (
@@ -57,7 +69,13 @@ export function FormularioProfesional({
   }
 
   return (
-    <Pasos key={estado.intento ?? 0} accion={accion} enviando={enviando} error={estado.error}>
+    <Pasos
+      key={estado.intento ?? 0}
+      accion={accion}
+      enviando={enviando}
+      error={estado.error}
+      validarPaso={(paso, form) => paso !== 0 || documentoOk(form)}
+    >
       {(paso) => (
         <>
           <fieldset hidden={paso !== 0} className="space-y-4">
@@ -83,10 +101,19 @@ export function FormularioProfesional({
                   required
                   defaultValue={previo?.documentoNumero}
                   inputMode="numeric"
-                  className="h-12 w-full rounded-[10px] border border-linea bg-background px-3 text-base"
+                  aria-invalid={errorDocumento ? true : undefined}
+                  aria-describedby={errorDocumento ? "documentoError" : undefined}
+                  onInput={() => errorDocumento && setErrorDocumento(null)}
+                  className="h-12 w-full rounded-[10px] border border-linea bg-background px-3 text-base aria-[invalid=true]:border-destructive"
                 />
               </div>
-              <p className="mt-1 text-sm text-texto-3">Con DNI la factura sale B.</p>
+              {errorDocumento ? (
+                <p id="documentoError" role="alert" className="mt-1 text-sm font-medium text-destructive">
+                  {errorDocumento}
+                </p>
+              ) : (
+                <p className="mt-1 text-sm text-texto-3">Con DNI la factura sale B.</p>
+              )}
             </div>
             <Campo nombre="razonSocial" etiqueta="Empresa (opcional)" defecto={previo?.razonSocial} autoComplete="organization" />
           </fieldset>
@@ -146,11 +173,14 @@ function Pasos({
   accion,
   enviando,
   error,
+  validarPaso,
   children,
 }: {
   accion: (datos: FormData) => void;
   enviando: boolean;
   error?: string;
+  /** Lo que el navegador no sabe mirar (el dígito del CUIT). */
+  validarPaso?: (paso: number, form: HTMLFormElement) => boolean;
   children: (paso: number) => React.ReactNode;
 }) {
   const [paso, setPaso] = useState(0);
@@ -168,7 +198,7 @@ function Pasos({
         return false;
       }
     }
-    return true;
+    return !formulario.current || !validarPaso || validarPaso(paso, formulario.current);
   }
 
   return (

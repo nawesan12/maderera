@@ -109,3 +109,17 @@ export function documentoValido(
 ): boolean {
   return tipo === "cuit" ? cuitValido(numero) : dniValido(numero);
 }
+
+/**
+ * Por qué no sirve el documento de la solicitud profesional, con las
+ * palabras del servidor (backend/internal/profesionales/logica.go), o null.
+ * El «Seguir» del primer paso lo mira: el CUIT con el último número mal se
+ * rechazaba recién al mandar los tres pasos (recorrido, M4-072).
+ */
+export function motivoDocumentoInvalido(tipo: string, numero: string): string | null {
+  const texto = numero.trim();
+  if (!texto) return "Dejanos tu DNI o CUIT.";
+  if (tipo === "cuit" ? cuitValido(texto) : dniValido(texto)) return null;
+  if (tipo === "cuit" && soloDigitos(texto).length === 11) return "El CUIT no es válido: revisá el último número.";
+  return "Revisá el número: no coincide con el tipo de documento.";
+}

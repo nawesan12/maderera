@@ -551,6 +551,13 @@ func ConceptoDe(tipo, nota, documento string) (concepto, referencia string) {
 		return "Recepción corregida", ""
 	case documento == "devolucion":
 		return "Devolución", ref
+	case documento == "devolucion_proveedor":
+		// Lo que vuelve al proveedor con su nota de crédito: decía «Egreso»
+		// sin ninguna referencia (M4-041).
+		if tipo == "egreso" {
+			return "Devolución", strings.TrimPrefix(nota, "Devolución al proveedor · ")
+		}
+		return "Anulación de la devolución", ""
 	case tipo == "venta" && strings.HasPrefix(nota, "Remito "):
 		// El retiro de lo vendido (un acopio, un envío): sale con su remito.
 		return "Entrega", strings.TrimPrefix(nota, "Remito ")

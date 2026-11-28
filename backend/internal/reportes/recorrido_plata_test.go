@@ -289,7 +289,7 @@ func TestDeudoresElPedidoSinEntregarNoEsDelB(t *testing.T) {
 	}
 	// Debe 826.800 + 48.400 − 589.700 = 285.500: nada con CAE (la seña pagó la
 	// factura), todo del pedido sin entregar y nada del B.
-	if !strings.Contains(d, ";285500,00;") || !strings.Contains(d, ";0,00;0,00;285500,00;0,00\r") {
+	if !strings.Contains(d, ";285500,00;") || !strings.Contains(d, ";0,00;0,00;285500,00;0,00;0,00\r") {
 		t.Errorf("deudores:\n%s", d)
 	}
 	_, cuerpo, _ := pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-11")

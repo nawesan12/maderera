@@ -25,7 +25,7 @@ import (
 // CsvDeudores es la deuda de cada cliente por antigüedad, **con el mismo
 // saldo que su ficha** más lo que debe fuera de la cuenta: las facturas con
 // saldo (el de Facturación) y lo entregado sin factura y sin cobrar (la cifra
-// de «Me deben»), y partida en cuatro columnas que suman ese total
+// de «Me deben»), y partida en cinco columnas que suman ese total
 // (mes simulado, M2S1-008 y M3S4-001):
 //
 //   - **Con CAE**: el mayor de Deudores por ventas (1.1.03) del archivo del
@@ -35,6 +35,10 @@ import (
 //     el CAE, hasta lo que la cuenta debe de verdad.
 //   - **Pedidos sin entregar ni facturar**: lo que la cuenta debe de pedidos
 //     tomados a cuenta corriente que todavía no son venta.
+//   - **Anticipos (2.1.06)**: el saldo a favor que el archivo del estudio
+//     tiene en Anticipos de clientes (un cobro a cuenta sin deuda, una
+//     retención sola). Iba al B y el contador veía el mismo saldo en dos
+//     circuitos según el archivo (recorrido 2).
 //   - **El circuito B**: el resto, lo que se debe de ventas sin factura.
 //
 // Antes el listado era solo el mayor: el estudio recibía $ 84.300 de
@@ -161,7 +165,7 @@ func (s *Servicio) CsvDeudores(ctx context.Context, ahora time.Time) (string, er
 		c                    cuenta
 		aging                cobros.Aging
 		total, mayor, sinCae float64
-		porFacturar, b       float64
+		porFacturar, ant, b  float64
 	}
 	var filas []fila
 	for k := range claves {
@@ -171,7 +175,9 @@ func (s *Servicio) CsvDeudores(ctx context.Context, ahora time.Time) (string, er
 		sc := jsmath.Redondear2(min(max(sinCae[k], 0), max(jsmath.Redondear2(total-mayor), 0)))
 		resto := jsmath.Redondear2(total - mayor - sc)
 		pf := jsmath.Redondear2(min(max(resto, 0), max(porFacturar[k], 0)))
-		f := fila{c: datos[k], aging: a, total: total, mayor: mayor, sinCae: sc, porFacturar: pf, b: jsmath.Redondear2(resto - pf)}
+		resto = jsmath.Redondear2(resto - pf)
+		ant := jsmath.Redondear2(max(min(resto, 0), -max(reparto.Anticipos[k], 0)))
+		f := fila{c: datos[k], aging: a, total: total, mayor: mayor, sinCae: sc, porFacturar: pf, ant: ant, b: jsmath.Redondear2(resto - ant)}
 		if math.Abs(f.total) > 0.005 || math.Abs(f.mayor) > 0.005 {
 			filas = append(filas, f)
 		}
@@ -188,8 +194,8 @@ func (s *Servicio) CsvDeudores(ctx context.Context, ahora time.Time) (string, er
 	})
 	var out [][]string
 	type suma struct {
-		tramos                               [4]float64
-		total, mayor, sinCae, porFacturar, b float64
+		tramos                                    [4]float64
+		total, mayor, sinCae, porFacturar, ant, b float64
 	}
 	var deben, aFavor, todo suma
 	sumar := func(x *suma, f fila) {
@@ -200,6 +206,7 @@ func (s *Servicio) CsvDeudores(ctx context.Context, ahora time.Time) (string, er
 		x.mayor += f.mayor
 		x.sinCae += f.sinCae
 		x.porFacturar += f.porFacturar
+		x.ant += f.ant
 		x.b += f.b
 	}
 	for _, f := range filas {
@@ -218,7 +225,7 @@ func (s *Servicio) CsvDeudores(ctx context.Context, ahora time.Time) (string, er
 			r = append(r, csvexcel.NumeroCsv(t.Monto, 2))
 		}
 		r = append(r, csvexcel.NumeroCsv(f.total, 2), dias, csvexcel.NumeroCsv(f.mayor, 2), csvexcel.NumeroCsv(f.sinCae, 2),
-			csvexcel.NumeroCsv(f.porFacturar, 2), csvexcel.NumeroCsv(f.b, 2))
+			csvexcel.NumeroCsv(f.porFacturar, 2), csvexcel.NumeroCsv(f.ant, 2), csvexcel.NumeroCsv(f.b, 2))
 		out = append(out, r)
 		if f.total >= 0 {
 			sumar(&deben, f)
@@ -234,13 +241,13 @@ func (s *Servicio) CsvDeudores(ctx context.Context, ahora time.Time) (string, er
 		}
 		return append(r, csvexcel.NumeroCsv(jsmath.Redondear2(x.total), 2), "", csvexcel.NumeroCsv(jsmath.Redondear2(x.mayor), 2),
 			csvexcel.NumeroCsv(jsmath.Redondear2(x.sinCae), 2), csvexcel.NumeroCsv(jsmath.Redondear2(x.porFacturar), 2),
-			csvexcel.NumeroCsv(jsmath.Redondear2(x.b), 2))
+			csvexcel.NumeroCsv(jsmath.Redondear2(x.ant), 2), csvexcel.NumeroCsv(jsmath.Redondear2(x.b), 2))
 	}
 	out = append(out, renglon("Deben", deben), renglon("Saldos a favor", aFavor))
 	circuito := reglas.Circuito(ctx, s.pool)
 	return csvexcel.ArmarCsv(
 		[]string{"Código", "Cliente", "CUIT", "Teléfono", "Al día (0-30)", "31 a 60 días", "61 a 90 días", "Más de 90 días", "Total", "Días de la más vieja",
-			"Con CAE (1.1.03)", "Facturas sin CAE", "Pedidos sin entregar ni facturar", strings.ToUpper(circuito[:1]) + circuito[1:]},
+			"Con CAE (1.1.03)", "Facturas sin CAE", "Pedidos sin entregar ni facturar", "Anticipos (2.1.06)", strings.ToUpper(circuito[:1]) + circuito[1:]},
 		out, renglon("Total", todo),
 	), nil
 }

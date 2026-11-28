@@ -78,3 +78,25 @@ func TestElRemitoSinFacturaVaEnCuentasAPagar(t *testing.T) {
 		t.Errorf("cuentas a pagar:\n%s", c)
 	}
 }
+
+// M2S1-034 (mes 23, no se pudo ver sin recepciones): la orden que sale de
+// Reposición va al último proveedor que le entregó esa medida (la última
+// recepción confirmada) antes que al del código cargado.
+func TestReposicionLlevaAlUltimoQueEntrego(t *testing.T) {
+	e := armar(t)
+	placa, _ := e.catalogo(t)
+	codigo := e.id(t, `insert into suppliers (nombre) values ('Placas del Sur') returning id`)
+	ombu := e.id(t, `insert into suppliers (nombre) values ('Aserradero El Ombú') returning id`)
+	e.exec(t, `insert into supplier_variant_codes (supplier_id, variant_id, codigo) values ($1, $2, 'F18')`, codigo, placa)
+	g := e.id(t, `insert into goods_receipts (supplier_id, branch_id, numero_remito, estado, fecha) values ($1, $2, '0002-1', 'confirmada', '2026-10-01') returning id`, ombu, e.central)
+	e.exec(t, `insert into goods_receipt_items (receipt_id, variant_id, cantidad, costo_unitario) values ($1, $2, 10, 1000)`, g, placa)
+	r, err := e.s.Reposicion(context.Background(), OpcionesDeReposicion{DiasDelPeriodo: 30, CoberturaObjetivo: 30, Sucursal: "todos"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range r.Filas {
+		if f.VariantID == placa && (f.ProveedorID == nil || *f.ProveedorID != ombu || *f.Proveedor != "Aserradero El Ombú") {
+			t.Errorf("proveedor: %+v", f)
+		}
+	}
+}

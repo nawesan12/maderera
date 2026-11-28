@@ -13,6 +13,7 @@ import {
 import { leerPeriodo, resolverPeriodo } from "@/lib/periodos";
 import { requireStaff } from "@/lib/dal/session";
 import { ElegirCorte } from "./elegir-corte";
+import { margenDelRenglon } from "@/lib/reportes-cortes";
 import { FiltrosDelReporte } from "./filtros";
 import { GraficoDeEvolucion } from "@/components/admin/grafico-evolucion";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
@@ -307,20 +308,7 @@ export default async function ReportesPage({
                                  costo: el total lleva IVA adentro y el costo
                                  no, y la venta de los renglones sin costo no
                                  tiene contra qué medirse. */
-                              const margen = f.netoCosteado - f.costo;
-                              const pct =
-                                f.netoCosteado > 0
-                                  ? (margen / f.netoCosteado) * 100
-                                  : null;
-                              // Un margen bajo no se pinta como uno sano:
-                              // menos del 5 % va en el color de espera, y
-                              // el negativo en el de deuda (M2S1-039).
-                              const color =
-                                margen < 0 || (pct !== null && pct < 0)
-                                  ? "text-saldo-debe"
-                                  : pct !== null && pct < 5
-                                    ? "estado-espera"
-                                    : "text-saldo-favor";
+                              const { margen, pct, color } = margenDelRenglon(f.netoCosteado, f.costo);
                               return (
                                 <>
                                   <span className={`tabular whitespace-nowrap font-semibold ${color}`}>

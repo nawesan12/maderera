@@ -44,6 +44,7 @@ func TestElClienteNoLeeLosMotivosDeLaCasa(t *testing.T) {
 		"Cheque Banco Galicia N° 00088123 devuelto al cliente: El cliente lo pidió de vuelta": "Cheque Banco Galicia N° 00088123 devuelto al cliente",
 		"No lo pudimos tomar: No recibimos el cheque físico":                                  "No lo pudimos tomar",
 		"Devolución del pedido PED-1125: V2M admin devuelve una lata":                         "Devolución del pedido PED-1125",
+		"Devolución de la venta PED-1121: No la usó":                                          "Devolución de la venta PED-1121",
 		"Cheque Banco Nación N° 1 rechazado por el banco: Sin fondos":                         "Cheque Banco Nación N° 1 rechazado por el banco: Sin fondos",
 		"Pago: Transferencia": "Pago: Transferencia",
 	} {

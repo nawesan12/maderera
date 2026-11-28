@@ -103,8 +103,10 @@ func DetalleParaElCliente(detalle *string) *string {
 
 // prefijosConMotivoDeLaCasa son los asientos cuyo «: …» lo escribió alguien
 // de la casa para la casa.
+// La devolución de una venta facturada (la nota de crédito) también: el
+// cliente leía «Devolución de la venta PED-1121: No la usó» (mes 23).
 var prefijosConMotivoDeLaCasa = []string{"Anulación de la venta ", "Cancelación del pedido ", PrefijoAnulacionDeRecibo,
-	"Devolución del pedido ", DetalleChequeNoTomado}
+	"Devolución del pedido ", "Devolución de la venta ", DetalleChequeNoTomado}
 
 func conMotivoDeLaCasa(d string) bool {
 	for _, p := range prefijosConMotivoDeLaCasa {

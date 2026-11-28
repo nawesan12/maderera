@@ -324,7 +324,9 @@ func (s *Servicio) CsvCuentasAPagar(ctx context.Context, ahora time.Time) (strin
 	detalle := map[string][]renglonDelLibro{}
 	rs, err = s.lectura.Query(ctx, `
 		SELECT m.supplier_id::text, 'Remito ' || coalesce(nullif(g.numero_remito, ''), 's/n') || coalesce(' · ' || nullif(o.numero, ''), '') || ' sin factura',
-		  g.fecha, sum(m.monto)::float8
+		  -- El día argentino de la recepción, como los ajustes: a las 21:05
+		  -- del 27/11 la fecha UTC ya es el 28 (mes 23).
+		  ((g.fecha AT TIME ZONE 'America/Argentina/Buenos_Aires')::date)::timestamp AT TIME ZONE 'UTC', sum(m.monto)::float8
 		FROM supplier_movements m JOIN goods_receipts g ON g.id = m.goods_receipt_id LEFT JOIN purchase_orders o ON o.id = g.purchase_order_id
 		WHERE g.estado = 'confirmada' AND `+RecepcionSinFactura+`
 		GROUP BY m.supplier_id, g.id, g.numero_remito, o.numero, g.fecha HAVING abs(sum(m.monto)) > 0.009

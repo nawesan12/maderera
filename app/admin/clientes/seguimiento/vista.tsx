@@ -207,7 +207,11 @@ function Tarjeta({ gestion, deuda }: { gestion: GestionListada; deuda: Deudor | 
       {gestion.proximaAccionAt && (
         <p
           className={`mt-1.5 flex items-center gap-1.5 text-sm ${
-            gestion.vencida ? "font-medium text-destructive" : "text-muted-foreground"
+            gestion.vencida
+              ? "font-medium text-destructive"
+              : gestion.paraHoy
+                ? "font-medium text-brand-orange-dark"
+                : "text-muted-foreground"
           }`}
         >
           <CalendarClock className="h-3.5 w-3.5" />

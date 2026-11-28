@@ -60,7 +60,7 @@ export default async function SeguimientoPage({
     cuit: c.cuit,
     seguido: conGestion.has(c.id),
   }));
-  const vencidas = abiertas.filter((g) => g.vencida).length;
+  const vencidas = abiertas.filter((g) => g.vencida || g.paraHoy).length;
 
   return (
     <div className="space-y-6">

@@ -1038,7 +1038,7 @@ components:
         clienteRazonSocial: { type: string, nullable: true, description: la razón social del cliente, para reconocer al librador }
     Gestion:
       type: object
-      required: [id, customerId, cliente, etapa, asunto, notas, proximaAccionAt, vencida, createdAt]
+      required: [id, customerId, cliente, etapa, asunto, notas, proximaAccionAt, vencida, paraHoy, createdAt]
       properties:
         id: { type: string }
         customerId: { type: string }
@@ -1047,6 +1047,7 @@ components:
         asunto: { type: string }
         notas: { type: string, nullable: true }
         proximaAccionAt: { type: string, format: date-time, nullable: true }
-        vencida: { type: boolean }
+        vencida: { type: boolean, description: "la próxima acción es de un día argentino que ya pasó" }
+        paraHoy: { type: boolean, description: "la próxima acción es de hoy (día argentino)" }
         createdAt: { type: string, format: date-time }
         saldo: { type: number, format: double, description: "lo que debe el cliente en la cuenta (positivo, debe)" }

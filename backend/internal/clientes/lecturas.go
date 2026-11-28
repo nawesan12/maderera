@@ -579,7 +579,11 @@ type Gestion struct {
 	Asunto          string     `json:"asunto"`
 	Notas           *string    `json:"notas"`
 	ProximaAccionAt *time.Time `json:"proximaAccionAt"`
-	Vencida         bool       `json:"vencida"`
+	// Vencida: el día argentino de la próxima acción ya pasó. ParaHoy: es
+	// hoy. Comparando el mediodía guardado con la hora, la de hoy pasaba a
+	// «Vencía el» a las 12 (mes 23: a las 21 se leía vencida).
+	Vencida bool `json:"vencida"`
+	ParaHoy bool `json:"paraHoy"`
 	CreatedAt       time.Time  `json:"createdAt"`
 	// Saldo es lo que debe el cliente en la cuenta (positivo, debe): la
 	// tarjeta no lo decía y había que escribirlo en el asunto (mes simulado 2).
@@ -601,15 +605,27 @@ func (s *Servicio) Gestiones(ctx context.Context, incluirCerradas bool, cliente 
 	return pgx.CollectRows(filas, func(r pgx.CollectableRow) (Gestion, error) {
 		var g Gestion
 		err := r.Scan(&g.ID, &g.CustomerID, &g.Cliente, &g.Etapa, &g.Asunto, &g.Notas, &g.ProximaAccionAt, &g.CreatedAt, &g.Saldo)
-		g.Vencida = g.ProximaAccionAt != nil && !g.ProximaAccionAt.After(hoy)
+		if g.ProximaAccionAt != nil {
+			dia, hoyDia := diaArgentino(*g.ProximaAccionAt), diaArgentino(hoy)
+			g.Vencida, g.ParaHoy = dia.Before(hoyDia), dia.Equal(hoyDia)
+		}
 		return g, err
 	})
 }
 
-// GestionesVencidas es cuántas abiertas tienen la próxima acción vencida.
+// GestionesVencidas es cuántas abiertas tienen la próxima acción para hoy
+// o vencida (el «Para hoy» del inicio): hasta que termina el día argentino,
+// no hasta la hora de ahora.
 func (s *Servicio) GestionesVencidas(ctx context.Context, hoy time.Time) (int, error) {
 	var n int
+	manana := diaArgentino(hoy).AddDate(0, 0, 1)
 	err := s.pool.QueryRow(ctx, `SELECT count(*)::int FROM customer_follow_ups
-		WHERE etapa <> 'cerrado' AND proxima_accion_at IS NOT NULL AND proxima_accion_at <= $1`, hoy).Scan(&n)
+		WHERE etapa <> 'cerrado' AND proxima_accion_at IS NOT NULL AND proxima_accion_at < $1`, manana).Scan(&n)
 	return n, err
+}
+
+// diaArgentino es la medianoche argentina del día de t.
+func diaArgentino(t time.Time) time.Time {
+	a := t.In(argentina)
+	return time.Date(a.Year(), a.Month(), a.Day(), 0, 0, 0, 0, argentina)
 }

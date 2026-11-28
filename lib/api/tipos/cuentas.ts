@@ -932,7 +932,10 @@ export interface components {
             notas: string | null;
             /** Format: date-time */
             proximaAccionAt: string | null;
+            /** @description la próxima acción es de un día argentino que ya pasó */
             vencida: boolean;
+            /** @description la próxima acción es de hoy (día argentino) */
+            paraHoy: boolean;
             /** Format: date-time */
             createdAt: string;
             /**

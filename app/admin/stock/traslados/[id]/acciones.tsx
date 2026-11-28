@@ -107,7 +107,7 @@ export function AccionesDelTraslado({
         />
       )}
 
-      <Dialog open={anulando} onOpenChange={setAnulando}>
+      <Dialog open={anulando} onOpenChange={(v) => !pendiente && setAnulando(v)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Anular {codigo}</DialogTitle>
@@ -115,21 +115,16 @@ export function AccionesDelTraslado({
           <p className="text-base">
             Vuelve todo a <strong>{origen}</strong>.
           </p>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setAnulando(false)}
-              className="h-11 rounded-lg border text-base font-medium hover:bg-muted"
-            >
-              Volver
-            </button>
+          {/* Un solo botón: no anular es la ✕, como en el remito (M2S4-046). */}
+          <div className="flex justify-end pt-2">
             <button
               type="button"
               onClick={anular}
               disabled={pendiente}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-accion text-base font-medium text-white hover:bg-brand-orange-dark disabled:opacity-50"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-destructive px-4 text-base font-medium text-white disabled:opacity-50"
             >
-              {pendiente ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : "Anular"}
+              {pendiente && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+              Anular el traslado
             </button>
           </div>
         </DialogContent>

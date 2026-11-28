@@ -210,7 +210,7 @@ function Tarjeta({ gestion, deuda }: { gestion: GestionListada; deuda: Deudor | 
             gestion.vencida
               ? "font-medium text-destructive"
               : gestion.paraHoy
-                ? "font-medium text-brand-orange-dark"
+                ? "font-medium text-acento-sobre-claro"
                 : "text-muted-foreground"
           }`}
         >

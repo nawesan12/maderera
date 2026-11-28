@@ -5342,6 +5342,7 @@ type CuttingOrder struct {
 	CargoOrderID        *string     `json:"cargoOrderId"`
 	TotalTomado         *jsmath.Num `json:"totalTomado"`
 	RehacerDe           *string     `json:"rehacerDe"`
+	PasadasPrevias      *int32      `json:"pasadasPrevias"`
 }
 
 type CuttingRate struct {

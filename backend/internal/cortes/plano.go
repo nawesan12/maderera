@@ -179,6 +179,10 @@ type DatosDelPlano struct {
 	// Relleno: la pieza de una placa que se cobra por pasadas va al sobrante
 	// de una que se vende entera, si entra (MotorRelleno). Nulo: prendido.
 	Relleno *bool
+	// HojaPrimero: entre dos acomodos con las mismas placas gana el que la
+	// hoja corta con menos pasadas, antes que el del retal más grande
+	// (MotorHojaPrimero). Nulo: prendido.
+	HojaPrimero *bool
 }
 
 // SuperficieDeSierra es cuánto material se lleva la sierra en una placa, en
@@ -312,20 +316,39 @@ func calcularPlanoBase(d DatosDelPlano) Plano {
 		return intento{placas: placas, orden: orden, descartadas: descartadas}
 	}
 
+	mejorQue := esMejor
+	if d.HojaPrimero == nil || *d.HojaPrimero {
+		// Cada placa se cuenta una vez: el mejor se compara contra cada
+		// candidato de la búsqueda.
+		contadas := map[*placaEnCurso]int{}
+		pasadas := func(placas []*placaEnCurso) int {
+			n := 0
+			for _, p := range placas {
+				c, ok := contadas[p]
+				if !ok {
+					c = pasadasConLaHoja([]*placaEnCurso{p}, placaLargo, placaAncho, sierra)
+					contadas[p] = c
+				}
+				n += c
+			}
+			return n
+		}
+		mejorQue = func(c, a []*placaEnCurso) bool { return esMejorConLaHoja(c, a, pasadas) }
+	}
 	var mejor *intento
 	for _, c := range criterios {
 		orden := ordenarPor(sueltas, c, func() float64 { return 0 })
 		for _, regla := range []reglaDePartir{corto, largo} {
 			r := regla
 			it := probar(orden, r, func() reglaDePartir { return r })
-			if mejor == nil || esMejor(it.placas, mejor.placas) {
+			if mejor == nil || mejorQue(it.placas, mejor.placas) {
 				mejor = &it
 			}
 		}
 	}
 
 	if busqueda && mejor != nil && len(sueltas) > 1 && len(unidades) <= PiezasMaximasParaBuscar {
-		m := buscarMejorPlano(*mejor, sueltas, probar, semilla, presupuesto)
+		m := buscarMejorPlano(*mejor, sueltas, probar, semilla, presupuesto, mejorQue)
 		mejor = &m
 	}
 
@@ -419,6 +442,84 @@ func esMejor(candidato, actual []*placaEnCurso) bool {
 	return retalMayor(candidato) > retalMayor(actual)
 }
 
+// esMejorConLaHoja (MotorHojaPrimero, recorrido M4-088): menos placas gana;
+// a igual cantidad, el que la hoja corta con menos pasadas, y recién después
+// el retal más grande. El retal solo elegía en CRT-11 (10 piezas de 450 ×
+// 350) una columna de 4 y una fila de 6, que el motor cortaba en 12 pasadas
+// pero la hoja, que empieza al largo, en 14 y con tres tiras angostas: el
+// cliente pagaba dos pasadas de más.
+func esMejorConLaHoja(candidato, actual []*placaEnCurso, pasadas func([]*placaEnCurso) int) bool {
+	if len(candidato) != len(actual) {
+		return len(candidato) < len(actual)
+	}
+	c, a := pasadas(candidato), pasadas(actual)
+	if c != a {
+		return c < a
+	}
+	return retalMayor(candidato) > retalMayor(actual)
+}
+
+// pasadasConLaHoja cuenta los cortes de la hoja de cada placa, como
+// ConLaHoja (la que no se puede armar, con los del motor).
+func pasadasConLaHoja(placas []*placaEnCurso, placaLargo, placaAncho, sierra float64) int {
+	n := 0
+	for _, p := range placas {
+		if len(p.piezas) == 0 {
+			continue
+		}
+		piezas := make([]PiezaColocada, len(p.piezas))
+		for j, x := range p.piezas {
+			x.X, x.Y, x.Ancho, x.Alto = r3(x.X), r3(x.Y), r3(x.Ancho), r3(x.Alto)
+			piezas[j] = x
+		}
+		c, ok := cortesDeLaHoja(Rect{0, 0, placaLargo, placaAncho}, piezas, sierra, 1, 0)
+		if !ok {
+			c = len(p.cortes)
+		}
+		n += c
+	}
+	return n
+}
+
+// cortesDeLaHoja cuenta los cortes del árbol que arma partir sin armarlo:
+// cada trozo partido corta una vez por tira, menos la última si llega al
+// borde (dibujoDe). El árbol entero, con sus firmas, costaba medio segundo
+// por plano dentro de la búsqueda.
+func cortesDeLaHoja(rect Rect, piezas []PiezaColocada, sierra float64, nivel, saltos int) (int, bool) {
+	if len(piezas) == 0 {
+		return 0, true
+	}
+	if len(piezas) == 1 && math.Abs(piezas[0].Ancho-rect.Ancho) <= eps && math.Abs(piezas[0].Alto-rect.Alto) <= eps {
+		return 0, true
+	}
+	eje := ejeDelNivel(nivel)
+	tiras := tirasEn(piezas, eje, sierra)
+	usado := 0.0
+	for _, t := range tiras {
+		usado = usado + (t.hasta - t.desde)
+	}
+	usado = usado + float64(float64(len(tiras)-1)*sierra)
+	resto := r3(largoR(rect, eje) - usado)
+	if len(tiras) == 1 && resto <= eps {
+		if saltos >= 1 {
+			return 0, false
+		}
+		return cortesDeLaHoja(rect, piezas, sierra, nivel+1, saltos+1)
+	}
+	n := len(tiras)
+	if resto <= eps {
+		n--
+	}
+	for _, t := range tiras {
+		c, ok := cortesDeLaHoja(rectDeTira(rect, eje, t.desde, r3(t.hasta-t.desde)), t.piezas, sierra, nivel+1, 0)
+		if !ok {
+			return 0, false
+		}
+		n += c
+	}
+	return n, true
+}
+
 func retalMayor(placas []*placaEnCurso) float64 {
 	t := 0.0
 	for _, p := range placas {
@@ -474,6 +575,7 @@ func buscarMejorPlano(
 	probar func([]*unidad, reglaDePartir, func() reglaDePartir) intento,
 	semilla uint32,
 	presupuesto float64,
+	esMejor func(candidato, actual []*placaEnCurso) bool,
 ) intento {
 	costo := float64(len(sueltas) * max(1, len(inicial.placas)))
 	rondas := int(math.Min(rondasMaximas, math.Max(rondasMinimas, math.Floor(presupuesto/costo))))

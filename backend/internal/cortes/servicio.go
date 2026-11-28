@@ -488,9 +488,10 @@ func PlanoDelMotor(c *Corte) Plano {
 	sierra := c.AnchoSierraMm
 	busqueda := c.MotorPlano >= 2
 	relleno := c.MotorPlano >= MotorRelleno
+	hoja := c.MotorPlano >= MotorHojaPrimero
 	return CalcularPlano(DatosDelPlano{
 		Piezas: piezas, PlacaLargo: c.Medida.Largo, PlacaAncho: c.Medida.Ancho,
-		AnchoSierra: &sierra, Fijadas: LeerAcomodoManual(acomodo), Busqueda: &busqueda, Relleno: &relleno,
+		AnchoSierra: &sierra, Fijadas: LeerAcomodoManual(acomodo), Busqueda: &busqueda, Relleno: &relleno, HojaPrimero: &hoja,
 	})
 }
 
@@ -614,7 +615,8 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 	tag, err := s.pool.Exec(ctx, `
 		UPDATE cutting_orders SET estado = $2::estado_corte, updated_at = now(),
 			terminado_at = CASE WHEN $2 = 'terminado' THEN now() ELSE terminado_at END,
-			pasadas = coalesce($4, pasadas)
+			pasadas = coalesce($4, pasadas),
+			pasadas_previas = CASE WHEN $2 = 'terminado' THEN pasadas ELSE pasadas_previas END
 		WHERE id = $1 AND estado = $3::estado_corte`, id, sig, estado, confirmadas)
 	if err != nil {
 		return "", err
@@ -825,7 +827,11 @@ func (s *Servicio) Volver(ctx context.Context, ses *auth.Sesion, id, desde strin
 	}
 	tag, err := s.pool.Exec(ctx, `
 		UPDATE cutting_orders SET estado = $2::estado_corte, updated_at = now(),
-			terminado_at = CASE WHEN $3 = 'terminado' THEN NULL ELSE terminado_at END
+			terminado_at = CASE WHEN $3 = 'terminado' THEN NULL ELSE terminado_at END,
+			-- Las pasadas que corrigió el taller al terminar vuelven con él
+			-- (M4-089).
+			pasadas = CASE WHEN $3 = 'terminado' THEN coalesce(pasadas_previas, pasadas) ELSE pasadas END,
+			pasadas_previas = CASE WHEN $3 = 'terminado' THEN NULL ELSE pasadas_previas END
 		WHERE id = $1 AND estado = $3::estado_corte`, id, anterior, estado)
 	if err != nil {
 		return "", err

@@ -22,7 +22,7 @@ import { SierraDelTrabajo } from "./sierra";
 import { formatearSierra } from "@/lib/cortes/sierra";
 import { CobrarCorte, CorregirOAnular, MasArchivos, RemitoDeLaReposicion, SumarAlPedido } from "./gestion";
 import { listarPerfiles } from "@/lib/dal/admin/cortes-exportacion";
-import { PlanoVivo, RetalMayorVivo, SobrantesVivos } from "./plano-vivo";
+import { MontoVivo, PasadasVivas, PlanoVivo, RetalMayorVivo, RotuloDePasadas, SobrantesVivos } from "./plano-vivo";
 
 export default async function FichaCortePage({
   params,
@@ -260,12 +260,8 @@ export default async function FichaCortePage({
               />
             )}
             <Cifra
-              valor={String(ficha.pasadasACobrar)}
-              rotulo={
-                noCobra
-                  ? ficha.pasadasACobrar === 1 ? "pasada" : "pasadas"
-                  : ficha.pasadasACobrar === 1 ? "pasada a cobrar" : "pasadas a cobrar"
-              }
+              valor={<PasadasVivas guardado={ficha.pasadasACobrar} />}
+              rotulo={<RotuloDePasadas guardado={ficha.pasadasACobrar} aCobrar={!noCobra} />}
             />
             <RetalMayorVivo guardado={plano} ancha={noCobra} />
           </div>
@@ -280,7 +276,7 @@ export default async function FichaCortePage({
                   />
                 )}
                 <RenglonesDelCorte cuenta={cuenta} />
-                <Total texto="Total del trabajo" monto={cuenta.total} antes={ficha.totalTomado}>
+                <Total texto="Total del trabajo" monto={cuenta.total} antes={ficha.totalTomado} cuenta={cuenta}>
                   {cobra && cuenta.total > 0 && corte.estado !== "terminado" && !anulado && <CobrarCorte id={corte.id} conPlaca={corte.variantId != null} />}
                 </Total>
               </dl>
@@ -317,7 +313,7 @@ export default async function FichaCortePage({
                 </div>
                 <RenglonesDelCorte cuenta={cuenta} />
                 {cuenta.total > 0 && (
-                  <Total texto="Fuera del pedido" monto={cuenta.total}>
+                  <Total texto="Fuera del pedido" monto={cuenta.total} cuenta={cuenta}>
                     {cobra && ficha.sumar && !anulado && (
                       <SumarAlPedido
                         id={corte.id}
@@ -651,8 +647,8 @@ function Cifra({
   destacada,
   ancha,
 }: {
-  valor: string;
-  rotulo: string;
+  valor: React.ReactNode;
+  rotulo: React.ReactNode;
   destacada?: boolean;
   /** Ocupa el renglón entero en el teléfono (la tercera de tres). */
   ancha?: boolean;
@@ -668,11 +664,11 @@ function Cifra({
 }
 
 /** Un renglón de la cuenta del trabajo. */
-function Renglon({ que, cuanto }: { que: string; cuanto: number }) {
+function Renglon({ que, cuanto }: { que: React.ReactNode; cuanto: number | React.ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-4">
       <dt className="min-w-0 text-base text-muted-foreground">{que}</dt>
-      <dd className="tabular shrink-0 text-base">{formatearMonto(cuanto)}</dd>
+      <dd className="tabular shrink-0 text-base">{typeof cuanto === "number" ? formatearMonto(cuanto) : cuanto}</dd>
     </div>
   );
 }
@@ -690,8 +686,13 @@ function RenglonesDelCorte({
           cargar el precio. El aviso de abajo lo dice. */}
       {cuenta.pasadasCobrables > 0 && cuenta.precioPorPasada > 0 && (
         <Renglon
-          que={`${cuenta.pasadasCobrables} ${cuenta.pasadasCobrables === 1 ? "pasada" : "pasadas"} × ${formatearMonto(cuenta.precioPorPasada)}`}
-          cuanto={cuenta.subtotalCorte}
+          que={
+            <>
+              <PasadasVivas guardado={cuenta.pasadasCobrables} />{" "}
+              <RotuloDePasadas guardado={cuenta.pasadasCobrables} aCobrar={false} /> × {formatearMonto(cuenta.precioPorPasada)}
+            </>
+          }
+          cuanto={<MontoVivo monto={cuenta.subtotalCorte} pasadas={cuenta.pasadasCobrables} precioPorPasada={cuenta.precioPorPasada} />}
         />
       )}
       {cuenta.subtotalCanto > 0 && (
@@ -705,10 +706,13 @@ function Total({
   texto,
   monto,
   antes,
+  cuenta,
   children,
 }: {
   texto: React.ReactNode;
   monto: number;
+  /** Con la cuenta, el total sigue a las pasadas del acomodo que se prueba. */
+  cuenta?: { pasadasCobrables: number; precioPorPasada: number };
   /** Lo que se le dijo al cliente al tomarlo: si cambió, va tachado al lado (M3S2-030). */
   antes?: number | null;
   children?: React.ReactNode;
@@ -723,7 +727,13 @@ function Total({
             {formatearMonto(antes)}
           </s>
         )}
-        <span className="tabular text-xl font-bold">{formatearMonto(monto)}</span>
+        <span className="tabular text-xl font-bold">
+          {cuenta ? (
+            <MontoVivo monto={monto} pasadas={cuenta.pasadasCobrables} precioPorPasada={cuenta.precioPorPasada} />
+          ) : (
+            formatearMonto(monto)
+          )}
+        </span>
         {children}
       </dd>
     </div>

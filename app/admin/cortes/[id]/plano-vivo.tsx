@@ -3,6 +3,7 @@
 import { createContext, useContext, useState } from "react";
 import type { PlanoDeCorte } from "@/lib/cortes/tipos";
 import { sobraDelCliente } from "@/lib/cortes/de-quien";
+import { formatearMonto } from "@/lib/formato";
 
 /**
  * El plano que se está probando en el acomodo a mano, para las cifras de
@@ -10,19 +11,52 @@ import { sobraDelCliente } from "@/lib/cortes/de-quien";
  * sobra» seguían diciendo lo del plano guardado, y para eso se mueve la pieza
  * (mes simulado, M2S2-138). Sin acomodo en curso, lo del servidor.
  */
+type EnPrueba = { plano: PlanoDeCorte; pasadas: number };
+
 const Contexto = createContext<{
   plano: PlanoDeCorte | null;
-  setPlano: (p: PlanoDeCorte | null) => void;
+  pasadas: number | null;
+  setPlano: (p: EnPrueba | null) => void;
 } | null>(null);
 
 export function PlanoVivo({ children }: { children: React.ReactNode }) {
-  const [plano, setPlano] = useState<PlanoDeCorte | null>(null);
-  return <Contexto.Provider value={{ plano, setPlano }}>{children}</Contexto.Provider>;
+  const [prueba, setPlano] = useState<EnPrueba | null>(null);
+  return (
+    <Contexto.Provider value={{ plano: prueba?.plano ?? null, pasadas: prueba?.pasadas ?? null, setPlano }}>
+      {children}
+    </Contexto.Provider>
+  );
 }
 
-/** Para el acomodo: publica el plano que dibuja (null, el guardado). */
+/**
+ * Para el acomodo: publica el plano que dibuja y las pasadas que Go cobraría
+ * al guardarlo (null, lo guardado). Las pasadas y la plata seguían en lo
+ * guardado y cambiaban recién al recargar (M4-029: 12 pasadas y $ 14.400 al
+ * girar la pieza, 8 y $ 9.600 después de guardar).
+ */
 export function usePublicarPlano() {
   return useContext(Contexto)?.setPlano;
+}
+
+/** Las pasadas a cobrar, con el acomodo que se está probando. */
+export function PasadasVivas({ guardado }: { guardado: number }) {
+  return <>{useContext(Contexto)?.pasadas ?? guardado}</>;
+}
+
+/** «pasada» o «pasadas», según las que se están probando. */
+export function RotuloDePasadas({ guardado, aCobrar }: { guardado: number; aCobrar: boolean }) {
+  const n = useContext(Contexto)?.pasadas ?? guardado;
+  const palabra = n === 1 ? "pasada" : "pasadas";
+  return <>{aCobrar ? `${palabra} a cobrar` : palabra}</>;
+}
+
+/**
+ * Un importe de la cuenta con las pasadas que se están probando: el
+ * guardado más la diferencia de pasadas a la tarifa.
+ */
+export function MontoVivo({ monto, pasadas, precioPorPasada }: { monto: number; pasadas: number; precioPorPasada: number }) {
+  const vivas = useContext(Contexto)?.pasadas ?? pasadas;
+  return <>{formatearMonto(monto + (vivas - pasadas) * precioPorPasada)}</>;
 }
 
 function usePlanoVivo(guardado: PlanoDeCorte): PlanoDeCorte {

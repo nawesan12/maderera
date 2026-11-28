@@ -54,7 +54,7 @@ export function AcomodoDelCorte({
   // El mismo disco que usó la ficha para presupuestar: si acá se acomodara
   // con otro espesor, mover una pieza podría cambiar el precio sin que nadie
   // tocara el despiece.
-  const { plano } = usePlano({
+  const { plano, pasadasACobrar } = usePlano({
     piezas: piezasParaElPlano(piezas),
     placaLargo,
     placaAncho,
@@ -71,8 +71,8 @@ export function AcomodoDelCorte({
   const publicar = usePublicarPlano();
   const router = useRouter();
   useEffect(() => {
-    publicar?.(sinGuardar && plano.placas.length > 0 ? plano : null);
-  }, [publicar, sinGuardar, plano]);
+    publicar?.(sinGuardar && plano.placas.length > 0 ? { plano, pasadas: pasadasACobrar } : null);
+  }, [publicar, sinGuardar, plano, pasadasACobrar]);
 
   return (
     <div className="space-y-3">

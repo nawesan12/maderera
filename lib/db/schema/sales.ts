@@ -530,6 +530,8 @@ export const cuttingOrders = pgTable(
      * Cero significa "todavía no se midió", no "sale gratis".
      */
     pasadas: integer().notNull().default(0),
+    /** Las de antes de que el taller las corrigiera al terminar: «Deshacer» las devuelve (00466). */
+    pasadasPrevias: integer(),
     /**
      * Qué tapacanto lleva el trabajo: color y espesor ("blanco 0,45 mm").
      *

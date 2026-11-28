@@ -57,7 +57,7 @@ function Fila({ orden: o }: { orden: Esperada }) {
         <p className="text-base text-muted-foreground">
           {o.sucursal ?? "—"}
           {o.fechaPrometida && (
-            <span className={`tabular ${dias !== null && dias < 0 ? "font-medium text-saldo-debe" : ""}`}>
+            <span className={`tabular-nums ${dias !== null && dias < 0 ? "font-medium text-saldo-debe" : ""}`}>
               {" · "}
               {fechaCorta.format(o.fechaPrometida)}
             </span>

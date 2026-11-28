@@ -250,6 +250,7 @@ export function FormularioRecepcion({
             <input
               value={texto}
               onChange={(e) => setTexto(e.target.value)}
+              aria-label="Buscar mercadería"
               placeholder="Buscar mercadería por nombre, medida o código…"
               className="h-12 w-full rounded-lg border border-linea bg-background pl-9 pr-3 text-base"
             />

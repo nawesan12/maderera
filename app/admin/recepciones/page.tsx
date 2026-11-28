@@ -132,7 +132,7 @@ function Lista({ recepciones, veCostos }: { recepciones: Recepcion[]; veCostos: 
         <tbody className="divide-y divide-linea">
           {recepciones.map((r) => (
             <tr key={r.id} className="hover:bg-hundida">
-              <td className="tabular px-5 py-3 text-muted-foreground">{fechaCorta.format(r.fecha)}</td>
+              <td className="px-5 py-3 tabular-nums text-muted-foreground">{fechaCorta.format(r.fecha)}</td>
               <td className="px-5 py-3">
                 <Link href={`/admin/recepciones/${r.id}`} className="font-semibold hover:underline">
                   {r.proveedor}
@@ -170,12 +170,20 @@ function Lista({ recepciones, veCostos }: { recepciones: Recepcion[]; veCostos: 
                   enteras: al lado del neto, a 375 px la sucursal
                   quedaba en «Casa Centr…» (mes simulado). */}
               <span className="flex items-baseline justify-between gap-3 text-base">
-                <span className="codigo min-w-0 truncate text-muted-foreground">
-                  {r.numeroRemito ? `Remito ${r.numeroRemito}` : "Sin remito"}
+                {/* «Remito» en la letra del texto y el número en mono,
+                    entero: se cortaba en «Remito 0002-0003…» (M2S1-167). */}
+                <span className="min-w-0 text-muted-foreground">
+                  {r.numeroRemito ? (
+                    <>
+                      Remito <span className="codigo whitespace-nowrap">{r.numeroRemito}</span>
+                    </>
+                  ) : (
+                    "Sin remito"
+                  )}
                 </span>
                 {veCostos && <span className="tabular shrink-0 font-semibold">{formatearMonto(r.neto)}</span>}
               </span>
-              <span className="tabular block text-base text-muted-foreground">
+              <span className="block text-base tabular-nums text-muted-foreground">
                 {fechaCorta.format(r.fecha)}
                 {r.sucursal && ` · ${r.sucursal}`}
               </span>

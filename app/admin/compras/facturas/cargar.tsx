@@ -565,7 +565,7 @@ export function CargarFactura({
                       <input
                         inputMode="decimal"
                         value={devuelve[r.id] ?? ""}
-                        aria-label={`Cuánto se devuelve de ${r.descripcion}`}
+                        aria-label={`Cuánto se devuelve de ${r.descripcion}${r.remito ? ` del remito ${r.remito}` : ""}`}
                         aria-invalid={pedido > queda + 0.0001 || undefined}
                         onChange={(e) => setDevuelve((p) => ({ ...p, [r.id]: e.target.value }))}
                         className="tabular h-11 w-20 shrink-0 rounded-lg border border-linea bg-card px-2 text-right text-base"

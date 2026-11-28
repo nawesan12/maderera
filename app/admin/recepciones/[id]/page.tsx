@@ -123,7 +123,14 @@ export default async function RecepcionPage({ params }: { params: Promise<{ id: 
               const faltan = pedido !== null ? pedido - Number(i.yaRecibido ?? 0) : 0;
               // Los tres costos, solo los que dicen algo: con el mismo
               // $ 7.560 en los tres renglones no se leía nada (M3S3-026).
-              const conFlete = i.costoConGastos && Number(i.costoConGastos) !== Number(i.costoUnitario) ? i.costoConGastos : null;
+              // Tampoco si es lo mismo que «Quedó en»: sin costo de antes el
+              // costo con flete es el que queda (mes 23).
+              const conFlete =
+                i.costoConGastos &&
+                Number(i.costoConGastos) !== Number(i.costoUnitario) &&
+                Number(i.costoConGastos) !== Number(i.costoResultante)
+                  ? i.costoConGastos
+                  : null;
               // Sin costo de antes no «venía a $ 0»: no tenía (mes 23).
               const venia =
                 Number(i.costoAnterior) > 0 && Number(i.costoAnterior) !== Number(i.costoResultante) ? i.costoAnterior : null;

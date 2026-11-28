@@ -356,8 +356,9 @@ components:
     ReporteTotales:
       type: object
       description: El período entero con los mismos filtros, sin el tope de filas del corte
-      required: [total, cantidad, netoVenta, netoCosteado, costo, lineasSinCosto, filas, envios, renglones]
+      required: [total, cantidad, netoVenta, netoCosteado, costo, lineasSinCosto, filas, envios, renglones, manuales]
       properties:
+        manuales: { type: number, format: double, description: "Lo facturado a mano, sin pedido, sin IVA (solo sin filtros de rubro ni sucursal): es venta sin renglones" }
         total: { type: number, format: double, description: Con IVA, el total de los pedidos (con envío y descuento), el mismo en todos los cortes }
         renglones: { type: number, format: double, description: Lo que suman con IVA las filas del corte; en los cortes por renglón, total − renglones son los envíos y descuentos }
         cantidad: { type: number, format: double, description: Unidades o operaciones, según el corte }

@@ -87,8 +87,11 @@ export default async function ReportesPage({
    * pintaría de margen inventado seis meses de ventas.
    */
   const hayMargen = totales.costo !== null;
-  const vendido = totales.netoVenta;
-  const conCosto = totales.netoCosteado;
+  // Lo facturado a mano, sin pedido, es venta sin renglones ni costo de
+  // mercadería: suma como el Cierre, en su propio renglón (M4-099).
+  const manuales = totales.manuales ?? 0;
+  const vendido = totales.netoVenta + manuales;
+  const conCosto = totales.netoCosteado + manuales;
   const costoTotal = totales.costo ?? 0;
   const margenTotal = conCosto - costoTotal;
   const vendidoSinCosto = vendido - conCosto;
@@ -113,36 +116,45 @@ export default async function ReportesPage({
         titulo="Reportes"
         resumen={
           filas.length > 0
-            ? `${etiquetaCorte.toLowerCase()} · ${formatearMonto(total)} en ${
-                porRenglon
-                  ? plural(operaciones, "unidad", "unidades")
-                  : plural(operaciones, "operación", "operaciones")
+            ? `${etiquetaCorte.toLowerCase()} · ${formatearMonto(total)}${
+                // Las unidades de un corte por renglón mezclan metros, m² y
+                // placas: se cuentan las filas (M4-043).
+                corte === "producto"
+                  ? ` en ${plural(totales.filas, "producto", "productos")}`
+                  : corte === "rubro"
+                    ? ` en ${plural(totales.filas, "rubro", "rubros")}`
+                    : porRenglon
+                      ? ""
+                      : ` en ${plural(operaciones, "operación", "operaciones")}`
               }`
             : "Sin ventas en el período elegido"
         }
       >
         <Link
           href="/admin/reportes/reposicion"
-          className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+          title="Reposición"
+          className="inline-flex h-10 items-center gap-2 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted sm:px-3.5"
         >
-          <ShoppingCart className="h-5 w-5" />
-          Reposición
+          <ShoppingCart className="h-5 w-5" aria-hidden />
+          <span className="sr-only sm:not-sr-only">Reposición</span>
         </Link>
         <a
           href={`/admin/reportes/exportar?${parametros}`}
-          className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+          title="Exportar CSV"
+          className="inline-flex h-10 items-center gap-2 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted sm:px-3.5"
         >
-          <Download className="h-5 w-5" />
-          Exportar CSV
+          <Download className="h-5 w-5" aria-hidden />
+          <span className="sr-only sm:not-sr-only">Exportar CSV</span>
         </a>
         {/* El PDF es para mandar, no para trabajar: el CSV se abre en Excel y
             esto se adjunta a un correo o se le muestra al contador. */}
         <a
           href={`/admin/reportes/exportar?${parametros}&formato=pdf`}
-          className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+          title="PDF"
+          className="inline-flex h-10 items-center gap-2 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted sm:px-3.5"
         >
-          <FileText className="h-5 w-5" />
-          PDF
+          <FileText className="h-5 w-5" aria-hidden />
+          <span className="sr-only sm:not-sr-only">PDF</span>
         </a>
       </EncabezadoPanel>
 
@@ -267,37 +279,44 @@ export default async function ReportesPage({
                       {/* En un solo bloque: apilada en el teléfono la celda
                           es flex, y el nombre, el detalle y lo sin costo
                           salían en tres columnas (mes 23, M2S2-083). */}
-                      <div className="min-w-0">
-                        {f.etiqueta}
-                        {f.detalle && (
-                          <span className="block text-sm font-normal text-muted-foreground">
-                            {f.detalle}
-                          </span>
-                        )}
-                        {/* Lo que quedó fuera del margen, en su renglón y en
-                            pesos, como la tarjeta de arriba. */}
-                        {hayMargen && f.costo !== null && f.netoVenta - f.netoCosteado >= 0.5 && (
-                          <span className="estado-problema mt-0.5 block text-sm font-medium whitespace-nowrap">
-                            {formatearMonto(f.netoVenta - f.netoCosteado)} sin costo
-                          </span>
-                        )}
+                      {/* En el teléfono, el nombre y el total en el mismo
+                          renglón; debajo, el margen y la participación
+                          (M4-043). Las unidades, el neto y el costo quedan
+                          para la pantalla grande y al tocar el margen. */}
+                      <div className="flex w-full min-w-0 items-baseline justify-between gap-3">
+                        <div className="min-w-0">
+                          {f.etiqueta}
+                          {f.detalle && (
+                            <span className="block text-sm font-normal text-muted-foreground">
+                              {f.detalle}
+                            </span>
+                          )}
+                          {/* Lo que quedó fuera del margen, en su renglón y en
+                              pesos, como la tarjeta de arriba. */}
+                          {hayMargen && f.costo !== null && f.netoVenta - f.netoCosteado >= 0.5 && (
+                            <span className="estado-problema mt-0.5 block text-sm font-medium whitespace-nowrap">
+                              {formatearMonto(f.netoVenta - f.netoCosteado)} sin costo
+                            </span>
+                          )}
+                        </div>
+                        <span className="tabular shrink-0 font-semibold sm:hidden">{formatearMonto(f.total)}</span>
                       </div>
                     </td>
-                    <td className="tabular px-3 py-3 text-right">
+                    <td data-label={corte === "producto" ? "Unidades" : "Operaciones"} className="tabular hidden px-3 py-3 text-right sm:table-cell">
                       {f.cantidad.toLocaleString("es-AR")}
                     </td>
-                    <td className="tabular px-3 py-3 text-right font-semibold">
+                    <td data-label="Total" className="tabular hidden px-3 py-3 text-right font-semibold sm:table-cell">
                       {formatearMonto(f.total)}
                     </td>
                     {hayMargen && (
                       <>
-                        <td className="tabular px-3 py-3 text-right">
+                        <td data-label="Neto con costo" className="tabular hidden px-3 py-3 text-right sm:table-cell">
                           {f.costo === null ? "—" : formatearMonto(f.netoCosteado)}
                         </td>
-                        <td className="tabular px-3 py-3 text-right text-muted-foreground">
+                        <td data-label="Costo" className="tabular hidden px-3 py-3 text-right text-muted-foreground sm:table-cell">
                           {f.costo === null ? "—" : formatearMonto(f.costo)}
                         </td>
-                        <td className="px-3 py-3 text-right">
+                        <td data-label="Margen" className="px-3 py-3 text-right">
                           {f.costo === null ? (
                             <span className="estado-problema text-sm font-medium">
                               sin costo
@@ -309,7 +328,7 @@ export default async function ReportesPage({
                                  no, y la venta de los renglones sin costo no
                                  tiene contra qué medirse. */
                               const { margen, pct, color } = margenDelRenglon(f.netoCosteado, f.costo);
-                              return (
+                              const valor = (
                                 <>
                                   <span className={`tabular whitespace-nowrap font-semibold ${color}`}>
                                     {formatearMonto(margen)}
@@ -328,12 +347,25 @@ export default async function ReportesPage({
                                   </span>
                                 </>
                               );
+                              // En el teléfono, el neto y el costo al tocar el
+                              // margen: la tarjeta queda en tres renglones.
+                              return (
+                                <>
+                                  <details className="text-right sm:hidden">
+                                    <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">{valor}</summary>
+                                    <span className="tabular block whitespace-nowrap text-sm text-muted-foreground">
+                                      {formatearMonto(f.netoCosteado)} − {formatearMonto(f.costo)}
+                                    </span>
+                                  </details>
+                                  <span className="hidden sm:inline">{valor}</span>
+                                </>
+                              );
                             })()
                           )}
                         </td>
                       </>
                     )}
-                    <td className="py-3 pl-3 pr-5">
+                    <td data-label="Participación" className="py-3 pl-3 pr-5">
                       {/* La barra vale más que el porcentaje solo: el ojo
                           encuentra al que se lleva la mitad sin leer números. */}
                       <div className="flex items-center justify-end gap-2">
@@ -368,6 +400,23 @@ export default async function ReportesPage({
                     </>
                   )}
                   <td />
+                </tr>
+              )}
+              {manuales !== 0 && (
+                <tr className="font-normal text-muted-foreground">
+                  <td className="px-5 py-2.5">Facturas sin pedido</td>
+                  <td className="hidden sm:table-cell" />
+                  <td className="hidden sm:table-cell" />
+                  {hayMargen ? (
+                    <>
+                      <td data-label="Neto con costo" className="tabular px-3 py-2.5 text-right">{formatearMonto(manuales)}</td>
+                      <td className="hidden sm:table-cell" />
+                      <td className="hidden sm:table-cell" />
+                    </>
+                  ) : null}
+                  <td className={hayMargen ? "hidden sm:table-cell" : "tabular px-3 py-2.5 text-right"}>
+                    {hayMargen ? null : formatearMonto(manuales)}
+                  </td>
                 </tr>
               )}
               <tr>

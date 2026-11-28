@@ -417,6 +417,11 @@ export interface components {
         ReporteTotales: {
             /**
              * Format: double
+             * @description Lo facturado a mano, sin pedido, sin IVA (solo sin filtros de rubro ni sucursal): es venta sin renglones
+             */
+            manuales: number;
+            /**
+             * Format: double
              * @description Con IVA
              */
             total: number;

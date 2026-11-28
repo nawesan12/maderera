@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"mjbj/internal/jsmath"
 	"mjbj/internal/reglas"
 )
 
@@ -317,5 +318,39 @@ func TestElAvisoDelBancoEnElBCuentaLasVentasPorTransferencia(t *testing.T) {
 	p, ok := pendientesDe(t, cuerpo)["banco-b"]
 	if !ok || p.Cantidad != 1 || !strings.Contains(p.Detalle, "71.280") {
 		t.Errorf("el aviso: %+v (%s)", p, cuerpo)
+	}
+}
+
+// Recorrido M4-099 y M4-043: Reportes y el Cierre dan el mismo «Vendido sin
+// IVA»: la factura hecha a mano, sin pedido, va en los totales de Reportes
+// (Manuales). Y lo vendido y devuelto entero no deja una fila en $ 0.
+func TestReportesYCierreVendenLoMismo(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	placa, tirante := e.catalogo(t)
+	e.pedido(t, "PED-1", e.central, "entregado", "mostrador", time.Date(2026, 10, 5, 12, 0, 0, 0, Argentina), nil, [4]any{placa, 1.0, 12100.0, 5000.0})
+	devuelto := e.pedido(t, "PED-2", e.central, "entregado", "mostrador", time.Date(2026, 10, 6, 12, 0, 0, 0, Argentina), nil, [4]any{tirante, 1.0, 2420.0, 1000.0})
+	e.exec(t, `update order_items set cantidad = 0, subtotal = 0 where order_id = $1`, devuelto)
+	e.exec(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, cae)
+		values ('factura_b', 15, 3, 'Pedro Vecino', 15305.79, 3214.21, 0, 0, 0, 18520, 'autorizada', '2026-10-07T15:00:00Z', '7612')`)
+	desde, hasta := time.Date(2026, 10, 1, 0, 0, 0, 0, Argentina), time.Date(2026, 11, 1, 0, 0, 0, 0, Argentina)
+	rep, err := e.s.ReporteDeVentas(ctx, "producto", Periodo{Desde: &desde, Hasta: &hasta}, Filtros{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := e.s.ResultadoEntre(ctx, desde, hasta, time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Totales.Manuales != 15305.79 || jsmath.Redondear2(rep.Totales.NetoVenta+rep.Totales.Manuales) != res.VentasNetas {
+		t.Errorf("reportes %v + %v, cierre %v", rep.Totales.NetoVenta, rep.Totales.Manuales, res.VentasNetas)
+	}
+	for _, f := range rep.Filas {
+		if f.Total == 0 {
+			t.Errorf("fila en cero: %+v", f)
+		}
+	}
+	if len(rep.Filas) != 1 {
+		t.Errorf("filas: %+v", rep.Filas)
 	}
 }

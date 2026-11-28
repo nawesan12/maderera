@@ -28,8 +28,9 @@ type Config struct {
 	Sujeto  string `env:"VAPID_SUBJECT" envDefault:"mailto:info@mjbj.com.ar"`
 }
 
-// Aviso es lo que se muestra. Para elige a quién: un usuario, o el personal
-// que puede abrir una pantalla; sin Para, a todos los dispositivos.
+// Aviso es lo que se muestra. Para elige a quién: un usuario, unos roles,
+// o el personal que puede abrir una pantalla; sin nada, a todos los
+// dispositivos.
 type Aviso struct {
 	Titulo   string
 	Cuerpo   string
@@ -37,6 +38,9 @@ type Aviso struct {
 	Etiqueta string
 	Pantalla string
 	Usuario  string
+	// Roles: el parte del admin es del admin, aunque /admin lo abra todo el
+	// personal (mes 23: le llegaba al aserradero).
+	Roles []sqlc.StaffRole
 }
 
 // Avisador manda.
@@ -67,9 +71,13 @@ func (a *Avisador) destinatarios(ctx context.Context, av Aviso) ([]suscripcion, 
 			agregar(f.ID, f.Endpoint, f.P256dh, f.Auth)
 		}
 		return out, err
-	case av.Pantalla != "" && roles.QuienEntra(av.Pantalla) != nil:
+	case len(av.Roles) > 0 || (av.Pantalla != "" && roles.QuienEntra(av.Pantalla) != nil):
+		quienes := av.Roles
+		if len(quienes) == 0 {
+			quienes = roles.QuienEntra(av.Pantalla)
+		}
 		var nombres []string
-		for _, r := range roles.QuienEntra(av.Pantalla) {
+		for _, r := range quienes {
 			nombres = append(nombres, string(r))
 		}
 		filas, err := a.q.SuscripcionesDeRoles(ctx, nombres)

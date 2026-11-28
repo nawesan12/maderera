@@ -82,6 +82,19 @@ func TestAvisarAlPanel(t *testing.T) {
 		t.Errorf("registro: %s %q", estado, asunto)
 	}
 
+	// El parte del admin (FLUJO-F119) va por rol: /admin lo abre todo el
+	// personal, pero al aserradero no le llega.
+	antes := recibidos.Load()
+	a.Avisar(ctx, Aviso{Titulo: "Para hoy: 1 cosa urgente", URL: "/admin", Roles: []sqlc.StaffRole{sqlc.StaffRoleAdmin}})
+	if recibidos.Load()-antes != 1 {
+		t.Errorf("el parte le llegó a %d dispositivos vivos, tenía que ser 1 (el del admin)", recibidos.Load()-antes)
+	}
+	// Los candidatos a baja (FLUJO-F117) a quien abre /admin/productos.
+	antes = recibidos.Load()
+	a.Avisar(ctx, Aviso{Titulo: "1 producto para revisar", URL: "/admin/productos/candidatos", Pantalla: "/admin/productos"})
+	if recibidos.Load()-antes != 1 {
+		t.Errorf("los candidatos le llegaron a %d dispositivos vivos, tenía que ser 1", recibidos.Load()-antes)
+	}
 	// Sin claves: no se manda nada y queda registrado como omitido.
 	Nuevo(Config{}, q, slog.New(slog.NewTextHandler(io.Discard, nil))).Avisar(ctx, Aviso{Titulo: "x"})
 	_ = pool.QueryRow(ctx, `select estado::text from notifications_log order by created_at desc limit 1`).Scan(&estado)

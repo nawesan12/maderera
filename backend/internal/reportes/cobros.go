@@ -12,6 +12,7 @@ import (
 	"mjbj/internal/cobros"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/reglas"
+	"mjbj/internal/ventas/fragmentos"
 )
 
 func deref(s *string) string {
@@ -255,7 +256,16 @@ type llamada struct {
 // (cobros.Reparto): lo que cancela facturas con CAE contra Deudores, la seña
 // contra Anticipos de clientes y lo que paga ventas sin factura en el
 // circuito B. Cuando sale la factura de una seña, el anticipo se le aplica.
-func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time, reparto cobros.ResultadoDelReparto) ([]Asiento, error) {
+//
+// También devuelve los cheques del mostrador cuyo rechazo asentó el cobro
+// (asientosDeCheques los saltea).
+func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time, reparto cobros.ResultadoDelReparto) ([]Asiento, map[string]bool, error) {
+	alCobro := map[string]bool{}
+	a, err := s.asientosDeCobroEn(ctx, idesde, ihasta, reparto, alCobro)
+	return a, alCobro, err
+}
+
+func (s *Servicio) asientosDeCobroEn(ctx context.Context, idesde, ihasta time.Time, reparto cobros.ResultadoDelReparto, alCobro map[string]bool) ([]Asiento, error) {
 	asientos := []Asiento{}
 	for _, ap := range reparto.Aplicaciones {
 		if !entre(ap.Fecha, idesde, ihasta) {
@@ -477,7 +487,18 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 		                   AND l.operacion IN ('FECAESolicitar', 'FECompConsultar')), f.fecha_emision),
 		       -- Cuándo se emitió la primera factura del pedido, con CAE o sin él.
 		       (SELECT least(i.created_at, i.fecha_emision) FROM invoices i WHERE i.order_id = p.order_id AND i.tipo::text LIKE 'factura%'
-		         AND i.estado <> 'borrador' AND i.cae_ambiente IS DISTINCT FROM 'homologacion' ORDER BY i.created_at, i.id LIMIT 1)
+		         AND i.estado <> 'borrador' AND i.cae_ambiente IS DISTINCT FROM 'homologacion' ORDER BY i.created_at, i.id LIMIT 1),
+		       -- Los cheques de este cobro del mostrador que rebotaron y le
+		       -- devolvieron la deuda al cliente (la nota de débito), con la
+		       -- fecha con la que los asienta el cierre (M2S3-005).
+		       CASE WHEN p.medio IN ('cheque', 'echeq') AND p.proveedor = 'mostrador' THEN
+		         (SELECT coalesce(json_agg(json_build_object('id', c.id::text, 'fecha', `+fragmentos.FechaDelCheque("c", "e.at")+`,
+		                  'importe', c.importe::float8) ORDER BY e.at), '[]'::json)
+		          FROM order_payments op JOIN cheques c ON c.order_payment_id = op.id
+		          JOIN cheque_estados e ON e.cheque_id = c.id AND e.hacia = 'rechazado' AND e.desde IN ('cartera', 'depositado')
+		          WHERE op.order_id = p.order_id AND op.medio::text = p.medio AND op.importe = p.monto AND c.sentido = 'recibido'
+		            AND EXISTS (SELECT 1 FROM account_movements m WHERE m.cheque_id = c.id AND m.tipo = 'nota_debito'))
+		       ELSE '[]'::json END
 		FROM payments p
 		LEFT JOIN orders o ON o.id = p.order_id
 		LEFT JOIN customers c ON c.id = p.customer_id
@@ -522,8 +543,13 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 			// aviso de Mercado Pago.
 			Devolucion bool `json:"devolucion"`
 		}
+		var rechazos []struct {
+			ID      string    `json:"id"`
+			Fecha   time.Time `json:"fecha"`
+			Importe float64   `json:"importe"`
+		}
 		if err := rs.Scan(&id, &tipo, &medio, &monto, &comision, &estado, &actualizado, &cobrado, &factura, &tipoFactura, &pv, &nro, &pedido,
-			&cliente, &tramos, &facturadaAlCobrar, &caeAt, &emitida); err != nil {
+			&cliente, &tramos, &facturadaAlCobrar, &caeAt, &emitida, &rechazos); err != nil {
 			rs.Close()
 			return nil, err
 		}
@@ -583,6 +609,16 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 				}
 				if resto := float64(monto.F() - devuelto); estado == "reintegrado" && resto > toleranciaAsiento {
 					c.Tramos = append(c.Tramos, TramoDeCobro{Fecha: actualizado, Importe: resto, Entero: true})
+				}
+				// El cheque que rebotó antes de la factura con CAE da vuelta el
+				// cobro donde esperaba (Anticipos, o el B): no fue un pago. El
+				// que rebota después va a Deudores (asientosDeCheques).
+				for _, r := range rechazos {
+					if alCobro[r.ID] || (c.Factura != nil && !r.Fecha.Before(*c.Factura)) {
+						continue
+					}
+					alCobro[r.ID] = true
+					c.Tramos = append(c.Tramos, TramoDeCobro{Fecha: r.Fecha, Importe: r.Importe, Rechazo: true})
 				}
 				for _, a := range AsientosDelCobroAntesDeLaFactura(c) {
 					if entre(a.Fecha, idesde, ihasta) {

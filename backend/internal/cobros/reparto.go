@@ -293,17 +293,22 @@ func RepartoDeRecibo(deudoresAbiertos, total, retencion, negro float64, pendient
 	libre := jsmath.Redondear2(total - negro)
 	reservado = jsmath.Redondear2(min(max(reservado, 0), max(jsmath.Redondear2(libre-retencion), 0)))
 	libre = jsmath.Redondear2(libre - reservado)
-	blanco := min(libre, max(deudoresAbiertos, 0))
-	if blanco < retencion {
-		blanco = min(retencion, libre)
-	}
-	blanco = jsmath.Redondear2(blanco)
+	blanco := jsmath.Redondear2(min(libre, max(deudoresAbiertos, 0)))
 	resto := jsmath.Redondear2(libre - blanco)
 	r := Reparto{Deudores: blanco, B: jsmath.Redondear2(negro), Anticipo: reservado}
+	sena := 0.0
 	if pendiente {
-		sena := jsmath.Redondear2(min(resto, max(jsmath.Redondear2(porFacturar-reservado), 0)))
+		sena = jsmath.Redondear2(min(resto, max(jsmath.Redondear2(porFacturar-reservado), 0)))
 		r.Anticipo = jsmath.Redondear2(r.Anticipo + sena)
 		resto = jsmath.Redondear2(resto - sena)
+	}
+	// La retención es siempre del archivo del estudio: lo que la seña no
+	// cubre va a Deudores. Antes iba toda a Deudores aunque el cliente no
+	// debiera nada con CAE: la retención sobre la deuda de una factura que
+	// espera el CAE dejaba Deudores en negativo (M2S3-005).
+	if falta := jsmath.Redondear2(retencion - blanco - sena); falta > 0 {
+		extra := jsmath.Redondear2(min(falta, resto))
+		r.Deudores, resto = jsmath.Redondear2(r.Deudores+extra), jsmath.Redondear2(resto-extra)
 	}
 	r.B = jsmath.Redondear2(r.B + resto)
 	return r
@@ -749,13 +754,26 @@ SELECT * FROM (
   -- 1.1.03 quedaba encendido para siempre. Con la fecha del cierre
   -- (fragmentos.FechaDelCheque): el del mostrador rechazado antes de la
   -- factura cae con ella, igual que su cobro.
-  SELECT 'c:' || m.customer_id::text, ` + fragmentos.FechaDelCheque("c", "e.at") + `, 6, 'cheque:' || c.id::text, c.importe::float8, 0, 0, false, NULL, NULL, NULL,
-    '', 0, 0, '', '{}', 0, '', NULL::json, '', NULL::json, c.id::text, coalesce(` + ReciboDelCheque("c") + `, ''), NULL::timestamptz, 0::float8
+  --
+  -- El del mostrador que rebota antes de la factura con CAE da vuelta el
+  -- cobro que esperaba en Anticipos (reportes.AsientosDelCobroAntesDeLaFactura):
+  -- no toca Deudores hasta el CAE, como ese cobro (M2S3-005). Por eso va
+  -- con la fecha de la factura con CAE, y sin ella no está.
+  SELECT * FROM (
+  SELECT 'c:' || m.customer_id::text, CASE WHEN ` + ReciboDelCheque("c") + ` IS NULL AND c.order_payment_id IS NOT NULL AND e.desde <> 'entregado'
+      THEN CASE WHEN fc.fecha IS NOT NULL THEN greatest(` + fragmentos.FechaDelCheque("c", "e.at") + `, fc.fecha) END ELSE ` + fragmentos.FechaDelCheque("c", "e.at") + ` END AS fecha,
+    6, 'cheque:' || c.id::text, c.importe::float8, 0, 0, false, NULL::float8, NULL::float8, NULL::float8,
+    '', 0, 0, '', '{}'::text[], 0, '', NULL::json, '', NULL::json, c.id::text, coalesce(` + ReciboDelCheque("c") + `, ''), NULL::timestamptz, 0::float8
   FROM cheque_estados e JOIN cheques c ON c.id = e.cheque_id
   CROSS JOIN LATERAL (SELECT am.customer_id FROM account_movements am WHERE am.cheque_id = c.id AND am.tipo = 'nota_debito'
                       ORDER BY am.created_at LIMIT 1) m
+  LEFT JOIN LATERAL (SELECT i.fecha_emision AS fecha FROM order_payments op JOIN invoices i ON i.order_id = op.order_id
+                     WHERE op.id = c.order_payment_id AND i.tipo::text LIKE 'factura%' AND i.estado <> 'borrador' AND i.cae IS NOT NULL
+                       AND i.cae_ambiente IS DISTINCT FROM 'homologacion'
+                     ORDER BY (i.estado = 'anulada'), i.fecha_emision LIMIT 1) fc ON true
   WHERE c.sentido = 'recibido' AND (` + ReciboDelCheque("c") + ` IS NOT NULL OR ` + fragmentos.CircuitoDelCheque("c") + ` <> 'negro') AND e.hacia = 'rechazado' AND e.desde IN ('cartera', 'depositado', 'entregado')
-    AND ` + fragmentos.FechaDelCheque("c", "e.at") + ` <= $1 AND {M}
+    AND {M}) rch
+  WHERE rch.fecha <= $1
   UNION ALL
   -- La deuda cargada a mano en la cuenta (el saldo del sistema anterior, una
   -- nota de débito sin comprobante), con la regla «deuda_sin_comprobante» en

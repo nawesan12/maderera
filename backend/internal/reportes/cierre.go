@@ -133,12 +133,12 @@ func (s *Servicio) asientosDeDeudores(ctx context.Context, desde, hasta time.Tim
 	if err != nil {
 		return nil, err
 	}
-	cobros, err := s.asientosDeCobro(ctx, idesde, ihasta, reparto)
+	cobros, alCobro, err := s.asientosDeCobro(ctx, idesde, ihasta, reparto)
 	if err != nil {
 		return nil, err
 	}
 	asientos = append(asientos, cobros...)
-	cheques, err := s.asientosDeCheques(ctx, idesde, ihasta, reparto)
+	cheques, err := s.asientosDeCheques(ctx, idesde, ihasta, reparto, alCobro)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +161,7 @@ func (s *Servicio) asientosDelPeriodoCon(ctx context.Context, desde, hasta time.
 		return nil, err
 	}
 
-	cobros, err := s.asientosDeCobro(ctx, idesde, ihasta, reparto)
+	cobros, alCobro, err := s.asientosDeCobro(ctx, idesde, ihasta, reparto)
 	if err != nil {
 		return nil, err
 	}
@@ -264,7 +264,7 @@ func (s *Servicio) asientosDelPeriodoCon(ctx context.Context, desde, hasta time.
 		return nil, err
 	}
 
-	cheques, err := s.asientosDeCheques(ctx, idesde, ihasta, reparto)
+	cheques, err := s.asientosDeCheques(ctx, idesde, ihasta, reparto, alCobro)
 	if err != nil {
 		return nil, err
 	}
@@ -871,7 +871,13 @@ func (s *Servicio) asientosDeInventario(ctx context.Context, idesde, ihasta time
 // del blanco sale de Anticipos de clientes si el recibo había dejado ahí su
 // cobro y todavía no se aplicó (Rechazos), y el del B da vuelta la venta sin
 // factura que había cobrado.
-func (s *Servicio) asientosDeCheques(ctx context.Context, idesde, ihasta time.Time, reparto cobros.ResultadoDelReparto) ([]Asiento, error) {
+//
+// alCobro son los cheques del mostrador rechazados mientras su cobro
+// esperaba la factura con CAE (en Anticipos o en el B): ese rechazo lo
+// asienta el cobro (AsientosDelCobroAntesDeLaFactura), que da vuelta el
+// anticipo. Acá iba a Deudores y el anticipo quedaba como si el cliente
+// hubiera pagado (mes simulado, M2S3-005).
+func (s *Servicio) asientosDeCheques(ctx context.Context, idesde, ihasta time.Time, reparto cobros.ResultadoDelReparto, alCobro map[string]bool) ([]Asiento, error) {
 	// El período va sobre la fecha corrida (fragmentos.FechaDelCheque), que
 	// nunca es anterior al evento: por eso el evento ya puede filtrar el
 	// final del período adentro, con el índice.
@@ -899,6 +905,9 @@ func (s *Servicio) asientosDeCheques(ctx context.Context, idesde, ihasta time.Ti
 		if err := rs.Scan(&c.Fecha, &c.Numero, &c.Banco, &c.Sentido, &c.Desde, &c.Hacia, &c.Importe, &c.Circuito, &vence, &pagado,
 			&c.ADeudores, &c.DelMostradorEnB, &id, &recibo); err != nil {
 			return nil, err
+		}
+		if alCobro[id] && c.Hacia == "rechazado" {
+			continue
 		}
 		c.Diferido = c.Sentido == "entregado" && pagado != nil && ChequeDiferido(vence, *pagado)
 		if bl, ok := reparto.ChequesBlanco[id]; ok && recibo != "" && c.Sentido == "recibido" &&

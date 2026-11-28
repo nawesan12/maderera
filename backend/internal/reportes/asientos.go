@@ -968,6 +968,9 @@ type TramoDeCobro struct {
 	// por el banco); Entero: el reintegro de todo lo que quedaba, que lleva la
 	// comisión si no hubo tramos antes.
 	Devolucion, Entero bool
+	// Rechazo: el cheque del cobro rebotó (y la deuda volvió a la cuenta con
+	// la nota de débito). Sale de Valores a depositar, no del banco.
+	Rechazo bool
 }
 
 // CobroAntesDeLaFactura es el cobro sin recibo de un pedido que, el día que
@@ -1035,6 +1038,9 @@ func AsientosDelCobroAntesDeLaFactura(c CobroAntesDeLaFactura) []Asiento {
 		concepto := "Reintegro "
 		if !t.Entero {
 			concepto = "Reintegro parcial "
+		}
+		if t.Rechazo {
+			medio, concepto = c.Medio, "Cheque rechazado · cobro "
 		}
 		concepto += c.Comprobante + " · " + c.Cliente
 		if c.Factura == nil || t.Fecha.Before(*c.Factura) {

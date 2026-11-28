@@ -101,6 +101,14 @@ func TestBuscarLoQueFaltaba(t *testing.T) {
 	if r := primero(buscar(ven, "Bisagra"), "Producto"); r == nil || !strings.HasSuffix(r.Detalle, "1 medida") {
 		t.Errorf("singular: %+v", r)
 	}
+	// El depósito no abre la ficha: la bisagra lo lleva a su stock (mes 23,
+	// admin-atencion-Ndueña-admin-6: daba «Nada coincide»).
+	if r := primero(buscar(sqlc.StaffRoleDeposito, "Bisagra"), "Producto"); r == nil || r.Href != "/admin/stock?buscar=Bisagra+Cierre+Suave" {
+		t.Errorf("depósito, bisagra: %+v", r)
+	}
+	if n := len(buscar(ven, "Bisagra")); n != 1 {
+		t.Errorf("el vendedor ve la bisagra una sola vez: %d", n)
+	}
 	if r := primero(buscar(ven, "Lamas"), "Pedido"); r == nil || !strings.HasPrefix(r.Detalle, "Sin preparar") {
 		t.Errorf("el pedido en palabras: %+v", r)
 	}

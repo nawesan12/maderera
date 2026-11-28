@@ -11,6 +11,7 @@ import (
 	"mjbj/internal/cortes"
 	"mjbj/internal/cuit"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -396,6 +397,18 @@ func Buscar(ctx context.Context, pool Consultor, rol *sqlc.StaffRole, texto stri
 		// 18» no los encontraban. Van antes que los cortes que los usan.
 		{"/admin/productos", func() ([]Resultado, error) {
 			return productos(ctx, pool, texto)
+		}},
+		// El depósito no abre la ficha del producto pero sí su stock: «Bisagra»
+		// daba «Nada coincide» (mes 23). Lleva al stock filtrado por el nombre.
+		{"/admin/stock", func() ([]Resultado, error) {
+			if puede("/admin/productos") {
+				return nil, nil
+			}
+			r, err := productos(ctx, pool, texto)
+			for i := range r {
+				r[i].Href = "/admin/stock?buscar=" + url.QueryEscape(r[i].Titulo)
+			}
+			return r, err
 		}},
 		{"/admin/cortes", func() ([]Resultado, error) {
 			var a []any

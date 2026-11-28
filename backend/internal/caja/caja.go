@@ -82,6 +82,10 @@ type TurnoAbierto struct {
 	FondoBase        float64   `json:"fondoBase"`
 	VentasEnEfectivo float64   `json:"ventasEnEfectivo"`
 	OtrosIngresos    float64   `json:"otrosIngresos"`
+	// Cobros: el efectivo de los recibos que entró al turno (cuenta y
+	// pedidos). Iba dentro de «Otros ingresos» junto al ingreso a mano
+	// (M4-023: $ 606.947,50 eran $ 601.947,50 de cobros y $ 5.000 a mano).
+	Cobros           float64   `json:"cobros"`
 	Retiros          float64   `json:"retiros"`
 	// Devoluciones (anulaciones y devoluciones parciales en efectivo) y
 	// Gastos (los que se cargan en efectivo desde el panel) también salen del
@@ -95,13 +99,14 @@ type TurnoAbierto struct {
 // Abierto es turnoAbierto: nil si la sucursal no tiene caja abierta.
 func Abierto(ctx context.Context, c Consultador, sucursal string) (*TurnoAbierto, error) {
 	var t TurnoAbierto
-	var esperado, fondoBase, fondoInicial, ventas, ingresos, retiros, devoluciones, gastos jsmath.Num
+	var esperado, fondoBase, fondoInicial, ventas, ingresos, cobrosDelTurno, retiros, devoluciones, gastos jsmath.Num
 	err := c.QueryRow(ctx, `
 		SELECT s.id, s.branch_id, b.name, u.name, s.abierta_at,
 		       coalesce(sum(m.monto), 0), b.fondo_base,
 		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'apertura'), 0),
 		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'venta'), 0),
-		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'ingreso' AND NOT `+DevuelveUnGasto+`), 0),
+		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'ingreso' AND NOT `+DevuelveUnGasto+` AND NOT `+EsUnCobro+`), 0),
+		       coalesce(sum(m.monto) FILTER (WHERE `+EsUnCobro+`), 0),
 		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'retiro'), 0),
 		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'devolucion'), 0),
 		       coalesce(sum(m.monto) FILTER (WHERE m.tipo NOT IN ('apertura', 'venta', 'ingreso', 'retiro', 'devolucion') OR `+DevuelveUnGasto+`), 0),
@@ -113,7 +118,7 @@ func Abierto(ctx context.Context, c Consultador, sucursal string) (*TurnoAbierto
 		WHERE s.branch_id = $1 AND s.estado = 'abierta'
 		GROUP BY s.id, s.branch_id, b.name, b.fondo_base, u.name, s.abierta_at
 		LIMIT 1`, sucursal).Scan(&t.ID, &t.BranchID, &t.Sucursal, &t.AbiertaPor, &t.AbiertaAt,
-		&esperado, &fondoBase, &fondoInicial, &ventas, &ingresos, &retiros, &devoluciones, &gastos, &t.CantidadDeVentas)
+		&esperado, &fondoBase, &fondoInicial, &ventas, &ingresos, &cobrosDelTurno, &retiros, &devoluciones, &gastos, &t.CantidadDeVentas)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -122,9 +127,13 @@ func Abierto(ctx context.Context, c Consultador, sucursal string) (*TurnoAbierto
 	}
 	t.Esperado, t.FondoBase, t.FondoInicial = esperado.F(), fondoBase.F(), fondoInicial.F()
 	t.VentasEnEfectivo, t.OtrosIngresos, t.Retiros = ventas.F(), ingresos.F(), retiros.F()
-	t.Devoluciones, t.Gastos = devoluciones.F(), gastos.F()
+	t.Devoluciones, t.Gastos, t.Cobros = devoluciones.F(), gastos.F(), cobrosDelTurno.F()
 	return &t, nil
 }
+
+// EsUnCobro: el ingreso (alias m) es el efectivo de un recibo
+// (cobros.efectivoALaCaja lo anota «Recibo REC-… — …»).
+const EsUnCobro = `coalesce(m.tipo = 'ingreso' AND left(m.motivo, 7) = 'Recibo ' AND m.expense_id IS NULL AND m.supplier_payment_id IS NULL, false)`
 
 // DevuelveUnGasto: el ingreso (alias m) es el efectivo que vuelve de un gasto
 // o de un pago anulado. Cuenta con los gastos y no como otro ingreso: el
@@ -346,6 +355,16 @@ const MedioDeLaDevolucion = `CASE d.destino WHEN 'caja' THEN 'efectivo' WHEN 'af
 		   ORDER BY op.importe DESC LIMIT 1),
 		  (SELECT o2.medio_pago::text FROM orders o2 WHERE o2.id = d.order_id)) ELSE 'cuenta_corriente' END`
 
+// anuladaEnElTurno es, sobre la venta `o` y el turno `s`, la venta del
+// mostrador vendida y anulada en el mismo turno: no se cobró nada ni se
+// devolvió nada, y el Z no la cuenta de ningún lado (M4-109: «Efectivo (4)»
+// con la anulada adentro y aparte «Devoluciones −$ 8.820»). La anulada en
+// otro turno sigue como antes: venta en el suyo, devolución en el de la
+// anulación.
+const anuladaEnElTurno = `(o.estado = 'cancelado' AND o.origen = 'mostrador' AND o.created_at >= s.abierta_at
+	AND coalesce((SELECT max(h.created_at) FROM order_status_history h WHERE h.order_id = o.id AND h.estado = 'cancelado'), o.updated_at)
+	    <= coalesce(s.cerrada_at, now()))`
+
 // CierresDeTurnos es el cierre Z de cada turno: las ventas de la sucursal en
 // la ventana del turno, por medio (order_payments, o el medio único de las
 // ventas viejas), y aparte las devoluciones de las ventas anuladas durante
@@ -377,7 +396,7 @@ func CierresDeTurnos(ctx context.Context, c Consultador, sesiones []string) (map
 		     AND o.created_at >= s.abierta_at
 		     AND (s.cerrada_at IS NULL OR o.created_at <= s.cerrada_at)
 		LEFT JOIN order_payments p ON p.order_id = o.id
-		WHERE s.id = ANY($1::uuid[])
+		WHERE s.id = ANY($1::uuid[]) AND NOT `+anuladaEnElTurno+`
 		GROUP BY s.id, coalesce(p.medio::text, o.medio_pago::text)
 		UNION ALL
 		SELECT s.id, true, coalesce(p.medio::text, a.medio_pago::text),
@@ -393,6 +412,7 @@ func CierresDeTurnos(ctx context.Context, c Consultador, sesiones []string) (map
 		  FROM orders o
 		  WHERE coalesce(o.caja_branch_id, o.branch_id) = s.branch_id AND o.origen = 'mostrador' AND o.clave_mostrador IS NOT NULL AND o.estado = 'cancelado'
 		    AND o.created_at <= coalesce(s.cerrada_at, now())
+		    AND NOT `+anuladaEnElTurno+`
 		) a ON a.anulada_at >= s.abierta_at AND (s.cerrada_at IS NULL OR a.anulada_at <= s.cerrada_at)
 		LEFT JOIN order_payments p ON p.order_id = a.id
 		WHERE s.id = ANY($1::uuid[])
@@ -404,12 +424,12 @@ func CierresDeTurnos(ctx context.Context, c Consultador, sesiones []string) (map
 		JOIN devoluciones d ON d.branch_id = s.branch_id AND d.created_at >= s.abierta_at
 		     AND (s.cerrada_at IS NULL OR d.created_at <= s.cerrada_at)
 		JOIN orders o ON o.id = d.order_id
-		WHERE s.id = ANY($1::uuid[])
+		WHERE s.id = ANY($1::uuid[]) AND NOT `+anuladaEnElTurno+`
 		  AND (d.destino = 'caja' OR coalesce(d.origen, 'mostrador') = 'mostrador')
 		GROUP BY s.id, 3
 		UNION ALL
 		SELECT s.id, false, rp.medio::text, count(DISTINCT r.id)::int, coalesce(sum(rp.importe), 0), r.otro, true,
-		       CASE WHEN r.otro IS NOT NULL THEN string_agg(DISTINCT r.numero, ', ' ORDER BY r.numero) END, r.pedido
+		       string_agg(DISTINCT r.numero, ', ' ORDER BY r.numero), r.pedido
 		FROM cash_sessions s
 		JOIN LATERAL (
 		  SELECT r.id, r.numero, r.order_id IS NOT NULL AS pedido,

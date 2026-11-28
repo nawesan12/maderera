@@ -20,6 +20,8 @@ export interface Turno {
   fondoInicial: number;
   ventasEnEfectivo: number;
   otrosIngresos: number;
+  /** El efectivo de los recibos, aparte de los ingresos a mano (M4-023). */
+  cobros?: number;
   retiros: number;
   /** Anulaciones y devoluciones en efectivo, en negativo. */
   devoluciones: number;
@@ -61,6 +63,8 @@ export interface TurnoCerradoDelMostrador {
   fondo: number;
   ventas: number;
   otrosIngresos: number;
+  /** El efectivo de los recibos, aparte de los ingresos a mano (M4-023). */
+  cobros?: number;
   retiros: number;
   devoluciones: number;
   gastos: number;
@@ -126,6 +130,12 @@ export function papelDeLaVenta(u: UltimaVenta) {
 export interface Aviso {
   tipo: "ok" | "error";
   texto: string;
+  /**
+   * Lo que falta de una venta que salió (el comprobante sin CAE, lo vendido
+   * de más): en ámbar al lado del «registrada», que sigue en verde (M4-022:
+   * todo el cartel en rojo parecía que la venta había fallado).
+   */
+  pendiente?: string;
   /** El vuelto de la venta en efectivo, a la vista hasta la próxima (M2S1-176). */
   vuelto?: number;
 }

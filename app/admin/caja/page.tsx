@@ -241,6 +241,7 @@ export default async function CajaPage({
                 [
                   ["Fondo", t.fondo],
                   ["Ventas en efectivo", t.ventas],
+                  ["Cobros", t.cobros ?? 0],
                   ["Otros ingresos", t.otrosIngresos],
                   ["Retiros", t.retiros],
                   ["Devoluciones", t.devoluciones],

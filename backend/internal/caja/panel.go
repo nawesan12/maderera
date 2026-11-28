@@ -126,6 +126,8 @@ type TurnoCerrado struct {
 	Fondo         float64 `json:"fondo"`
 	Ventas        float64 `json:"ventas"`
 	OtrosIngresos float64 `json:"otrosIngresos"`
+	// Cobros: el efectivo de los recibos, aparte del ingreso a mano (M4-023).
+	Cobros        float64 `json:"cobros"`
 	Retiros       float64 `json:"retiros"`
 	Devoluciones  float64 `json:"devoluciones"`
 	Gastos        float64 `json:"gastos"`
@@ -173,7 +175,9 @@ const consultaDeTurnos = `
 		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'apertura'), 0),
 		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'venta' AND (m.created_at <= s.cerrada_at
 		                                 OR (m.monto > 0 AND m.declarado_at IS NOT NULL AND m.declarado_at <= s.cerrada_at))), 0),
-		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'ingreso' AND NOT ` + DevuelveUnGasto + ` AND (m.created_at <= s.cerrada_at
+		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'ingreso' AND NOT ` + DevuelveUnGasto + ` AND NOT ` + EsUnCobro + ` AND (m.created_at <= s.cerrada_at
+		                                 OR (m.monto > 0 AND m.declarado_at IS NOT NULL AND m.declarado_at <= s.cerrada_at))), 0),
+		       coalesce(sum(m.monto) FILTER (WHERE ` + EsUnCobro + ` AND (m.created_at <= s.cerrada_at
 		                                 OR (m.monto > 0 AND m.declarado_at IS NOT NULL AND m.declarado_at <= s.cerrada_at))), 0),
 		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'retiro' AND m.created_at <= s.cerrada_at), 0),
 		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'devolucion' AND m.created_at <= s.cerrada_at), 0),
@@ -213,16 +217,16 @@ func turnosCerrados(ctx context.Context, c Consultador, donde, limite string, ar
 	for filas.Next() {
 		var t TurnoCerrado
 		var contado, corregido *jsmath.Num
-		var esperado, tardios, bajoLista, credito, fondo, ventas, ingresos, retiros, devoluciones, gastos jsmath.Num
+		var esperado, tardios, bajoLista, credito, fondo, ventas, ingresos, cobrosDelTurno, retiros, devoluciones, gastos jsmath.Num
 		if err := filas.Scan(&t.ID, &t.Sucursal, &t.AbiertaAt, &t.CerradaAt, &contado, &t.Notas, &t.AbiertaPor,
 			&corregido, &t.CorreccionMotivo, &t.CorregidoPor, &t.CorregidoAt, &esperado,
-			&fondo, &ventas, &ingresos, &retiros, &devoluciones, &gastos, &t.Puesto, &t.Tardios, &tardios,
+			&fondo, &ventas, &ingresos, &cobrosDelTurno, &retiros, &devoluciones, &gastos, &t.Puesto, &t.Tardios, &tardios,
 			&t.BajoLista, &bajoLista, &t.CreditoSinAutorizar, &credito); err != nil {
 			return nil, err
 		}
 		t.Esperado, t.TardiosMonto, t.BajoListaMonto, t.CreditoSinAutorizarMonto = esperado.F(), tardios.F(), bajoLista.F(), credito.F()
 		t.Fondo, t.Ventas, t.OtrosIngresos, t.Retiros = fondo.F(), ventas.F(), ingresos.F(), retiros.F()
-		t.Devoluciones, t.Gastos = devoluciones.F(), gastos.F()
+		t.Devoluciones, t.Gastos, t.Cobros = devoluciones.F(), gastos.F(), cobrosDelTurno.F()
 		if contado != nil {
 			c := contado.F()
 			t.Contado = &c

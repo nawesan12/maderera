@@ -65,7 +65,7 @@ const PAGOS: [string, string][] = [
 
 /** El turno cerrado, como se imprime: el recién cerrado o el último de hoy. */
 interface TurnoCerrado {
-  turno: Pick<Turno, "sucursal" | "abiertaPor" | "abiertaAt" | "fondoInicial" | "ventasEnEfectivo" | "otrosIngresos" | "retiros" | "devoluciones" | "gastos" | "esperado">;
+  turno: Pick<Turno, "sucursal" | "abiertaPor" | "abiertaAt" | "fondoInicial" | "ventasEnEfectivo" | "otrosIngresos" | "cobros" | "retiros" | "devoluciones" | "gastos" | "esperado">;
   cierre: RenglonDelCierre[];
   movimientos: Movimiento[];
   contado: number;
@@ -84,6 +84,7 @@ function papelDelUltimo(u: TurnoCerradoDelMostrador): TurnoCerrado {
       fondoInicial: u.fondo,
       ventasEnEfectivo: u.ventas,
       otrosIngresos: u.otrosIngresos,
+      cobros: u.cobros,
       retiros: u.retiros,
       devoluciones: u.devoluciones,
       gastos: u.gastos,
@@ -682,12 +683,14 @@ export function CuentaDelTurno({
   turno,
   contado,
 }: {
-  turno: Pick<Turno, "fondoInicial" | "ventasEnEfectivo" | "otrosIngresos" | "retiros" | "devoluciones" | "gastos" | "esperado">;
+  turno: Pick<Turno, "fondoInicial" | "ventasEnEfectivo" | "otrosIngresos" | "cobros" | "retiros" | "devoluciones" | "gastos" | "esperado">;
   contado?: number;
 }) {
+  // Los cobros de recibos, aparte de lo que se ingresó a mano (M4-023).
   const recuadros: [string, number][] = [
     ["Fondo inicial", turno.fondoInicial],
     ["Ventas en efectivo", turno.ventasEnEfectivo],
+    ...(turno.cobros ? ([["Cobros", turno.cobros]] as [string, number][]) : []),
     ["Otros ingresos", turno.otrosIngresos],
     ["Retiros", turno.retiros],
   ];
@@ -817,6 +820,7 @@ function ResumenDelCierre({ cerrado }: { cerrado: TurnoCerrado }) {
               [
                 ["Fondo inicial", turno.fondoInicial],
                 ["Ventas en efectivo", turno.ventasEnEfectivo],
+                ["Cobros", turno.cobros ?? 0],
                 ["Otros ingresos", turno.otrosIngresos],
                 ["Retiros", turno.retiros],
                 ["Devoluciones", turno.devoluciones],

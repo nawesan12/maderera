@@ -303,6 +303,7 @@ components:
         transportista: { type: string, nullable: true }
         numeroSeguimiento: { type: string, nullable: true }
         cantidadLineas: { type: integer }
+        quien: { type: string, nullable: true, description: Quien hizo el remito }
     RemitoPreparado:
       type: object
       required: [ok, id, numero, firmaToken, pedidoCompleto]

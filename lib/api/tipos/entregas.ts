@@ -336,6 +336,8 @@ export interface components {
             transportista: string | null;
             numeroSeguimiento: string | null;
             cantidadLineas: number;
+            /** @description Quien hizo el remito */
+            quien?: string | null;
         };
         RemitoPreparado: {
             ok: string;

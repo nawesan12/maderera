@@ -394,10 +394,11 @@ func TestPorCorreoDeUnoEnviadoYRechazarSinPedidoVivo(t *testing.T) {
 	if _, err := e.s.CambiarEstadoPresupuesto(ctx, ses, id, "enviado"); err != nil || correos() != 0 {
 		t.Fatalf("un segundo «enviado» mandó correo: %v %v", err, correos())
 	}
-	for range 2 {
+	// El segundo clic no dice que lo mandó (mes 23, admin-atencion-Natención-4).
+	for i, quiero := range []string{"Le mandamos el presupuesto por correo.", "El correo con el presupuesto ya salió hace un momento."} {
 		r, err := e.s.CambiarEstadoPresupuestoConMotivo(ctx, ses, id, "enviado", MotivoPorCorreo)
-		if err != nil || r.Estado != "enviado" {
-			t.Fatalf("por correo: %+v %v", r, err)
+		if err != nil || r.Estado != "enviado" || r.Ok != quiero {
+			t.Fatalf("por correo %d: %+v %v", i+1, r, err)
 		}
 	}
 	if n := correos(); n != 1 {

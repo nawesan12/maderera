@@ -525,7 +525,7 @@ func (s *Servicio) CambiarEstadoPresupuestoConMotivo(ctx context.Context, ses *a
 	// solo cuando el presupuesto llega a «enviado» desde otro estado, y dos
 	// clics seguidos en «enviado» dan un solo aviso (el segundo espera al
 	// primero y ya lo encuentra enviado).
-	soloCorreo := false
+	soloCorreo, yaSalio := false, false
 	err := s.enTransaccion(ctx, func(tx pgx.Tx) error {
 		var anterior string
 		err := tx.QueryRow(ctx, `SELECT estado::text FROM quotes WHERE id = $1 FOR UPDATE`, id).Scan(&anterior)
@@ -559,6 +559,7 @@ func (s *Servicio) CambiarEstadoPresupuestoConMotivo(ctx context.Context, ses *a
 				return err
 			}
 			if reciente {
+				yaSalio = true
 				return nil
 			}
 			_, err := cola.Encolar(ctx, sqlc.New(tx), TrabajoPresupuestoPorCorreo, map[string]string{"quoteId": id}, time.Time{})
@@ -574,6 +575,11 @@ func (s *Servicio) CambiarEstadoPresupuestoConMotivo(ctx context.Context, ses *a
 	})
 	if err != nil {
 		return nil, err
+	}
+	// El segundo clic en dos minutos no manda otro: no se le dice que sí
+	// (mes 23: decía «Le mandamos el presupuesto por correo»).
+	if soloCorreo && yaSalio {
+		return &Resultado{Ok: "El correo con el presupuesto ya salió hace un momento.", Estado: estado}, nil
 	}
 	if soloCorreo {
 		s.anotar(ctx, ses, sqlc.AccionAuditoriaEditar, "presupuesto", id, "Mandó el presupuesto por correo", nil)

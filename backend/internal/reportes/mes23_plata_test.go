@@ -2,6 +2,7 @@ package reportes
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 )
@@ -34,5 +35,27 @@ func TestTarjetasSinLiquidarEsElMayor(t *testing.T) {
 	}
 	if v, err := e.s.TarjetasSinLiquidar(context.Background(), fin); err != nil || v != 5000 || v != mayor() {
 		t.Errorf("después de liquidar: %v (mayor %v) %v", v, mayor(), err)
+	}
+}
+
+// Mes 23: «en el CSV de reposición, la medida con stock negativo sale dos
+// veces» (Tirante Saligna 4.20, −2 en Central y 34 en el Aserradero). La
+// medida va una sola vez, arriba, con lo que se trae del Aserradero.
+func TestLaMedidaEnNegativoVaUnaVezEnElCsvDeReposicion(t *testing.T) {
+	e := armar(t)
+	_, tirante := e.catalogo(t)
+	e.exec(t, `update inventory set qty = -2, min_qty = 0 where variant_id = $1 and branch_id = $2`, tirante, e.central)
+	e.exec(t, `insert into inventory (variant_id, branch_id, qty, min_qty) values ($1, $2, 34, 0)`, tirante, e.aserradero)
+	e.pedido(t, "R-9", e.central, "entregado", "mostrador", ahoraDePrueba.Add(-2*24*time.Hour), nil, [4]any{tirante, 2.0, 1.0, nil})
+	r, err := e.s.Reposicion(context.Background(), OpcionesDeReposicion{DiasDelPeriodo: 30, CoberturaObjetivo: 30, Sucursal: "todos"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	csv := CsvReposicionPorSucursal(r)
+	if n := strings.Count(csv, ";TIR;"); n != 1 {
+		t.Fatalf("la medida sale %d veces:\n%s", n, csv)
+	}
+	if lineas := strings.Split(csv, "\r\n"); !strings.Contains(lineas[1], ";TIR;") {
+		t.Errorf("la del negativo no va arriba:\n%s", csv)
 	}
 }

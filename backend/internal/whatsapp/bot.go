@@ -625,12 +625,23 @@ func filtrarPorEspesor(ps []ProductoBot, mm int) []ProductoBot {
 		return ps
 	}
 	re := regexp.MustCompile(fmt.Sprintf(`(^|[^\d])%d\s*mm`, mm))
+	// «corredera de 50» es la de 50 cm: el número se dijo sin unidad y la
+	// medida está en centímetros. Sin esto se mostraban todas y el stock
+	// salía de la de 45 (mes 23).
+	reCm := regexp.MustCompile(fmt.Sprintf(`(^|[^\d])%d\s*cm\b`, mm))
 	var quedan []ProductoBot
 	for _, p := range ps {
 		var ms []string
 		for _, m := range p.Medidas {
 			if re.MatchString(m) {
 				ms = append(ms, m)
+			}
+		}
+		if len(ms) == 0 {
+			for _, m := range p.Medidas {
+				if reCm.MatchString(m) {
+					ms = append(ms, m)
+				}
 			}
 		}
 		if len(ms) > 0 {

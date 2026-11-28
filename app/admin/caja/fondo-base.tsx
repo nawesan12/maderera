@@ -46,6 +46,9 @@ export function FondoBase({
           }}
           placeholder="0"
           aria-label={`Cambio fijo de la sucursal`}
+          // Lo que hace el número, al pasar el puntero: fijo debajo de cada
+          // sucursal era una explicación que nadie relee (mes 23).
+          title={valor > 0 ? `No se puede retirar por debajo de ${formatearMonto(valor)}` : undefined}
           className="tabular h-10 w-32 rounded-lg border border-linea bg-background px-2.5 text-right text-base"
         />
       </label>
@@ -71,14 +74,8 @@ export function FondoBase({
         <span role="alert" className="text-sm text-saldo-debe">
           No se entiende el importe
         </span>
-      ) : aviso ? (
-        <span className="text-sm text-muted-foreground">{aviso}</span>
       ) : (
-        valor > 0 && (
-          <span className="text-sm text-muted-foreground">
-            No se puede retirar por debajo de {formatearMonto(valor)}.
-          </span>
-        )
+        aviso && <span className="text-sm text-muted-foreground">{aviso}</span>
       )}
     </div>
   );

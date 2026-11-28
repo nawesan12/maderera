@@ -43,6 +43,10 @@ function alicuotaDelCampo(texto: string): number {
 
 const CAMPO =
   "tabular mt-1 h-10 w-full rounded-lg border border-linea bg-background px-2.5 text-right text-base";
+/** Código, nombre y jurisdicción: texto, a la izquierda y en la letra del
+ *  texto. Con CAMPO más «text-left» ganaba el «text-right» y el nombre salía
+ *  en mono contra el borde derecho (mes 23). */
+const CAMPO_TEXTO = "mt-1 h-10 w-full rounded-lg border border-linea bg-background px-2.5 text-base";
 
 /**
  * Las alícuotas y los mínimos con los que se retiene, editables, y el alta
@@ -320,7 +324,7 @@ function Alta() {
             onChange={(e) => setCodigo(e.target.value)}
             aria-invalid={Boolean(estado.error && estado.codigo === codigo)}
             aria-describedby={estado.error && estado.codigo === codigo ? "alta-regimen-error" : undefined}
-            className={`${CAMPO} text-left`}
+            className={CAMPO_TEXTO}
           />
         </label>
         <label className="block">
@@ -342,7 +346,7 @@ function Alta() {
             placeholder="Ingresos Brutos · ARBA"
             value={nombre}
             onChange={(e) => setNombre(e.target.value)}
-            className={`${CAMPO} text-left`}
+            className={CAMPO_TEXTO}
           />
         </label>
         <label className="col-span-2 block">
@@ -353,7 +357,7 @@ function Alta() {
             placeholder="Buenos Aires"
             value={jurisdiccion}
             onChange={(e) => setJurisdiccion(e.target.value)}
-            className={`${CAMPO} text-left`}
+            className={CAMPO_TEXTO}
           />
         </label>
       </div>

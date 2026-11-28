@@ -5,6 +5,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { formatearMonto, importeParaElCampo, parsearImporte } from "@/lib/formato";
 import { NOMBRE_DEL_MEDIO, esCheque, type MedioDeCobro } from "@/lib/cobros/partes";
 import { CampoFecha } from "@/components/ui/campo-fecha";
+import { revisarNumeroDeCheque, tieneLetras as conLetras } from "@/lib/cheques/numero";
 
 /**
  * Con qué paga el cliente, renglón por renglón.
@@ -225,14 +226,20 @@ export function CobroMultimedio({
                       className="mt-1 block h-11 w-full rounded-lg border border-linea bg-background px-3 text-base text-foreground"
                     />
                   </label>
-                  <label className="text-sm text-muted-foreground">
+                  {/* Con una letra («E0055502») se marca en el campo: el cobro
+                      no se registraba y el aviso quedaba lejos, abajo (mes 23). */}
+                  <label className={`text-sm ${conLetras(r.numero) ? "font-semibold text-saldo-debe" : "text-muted-foreground"}`}>
                     N° de cheque
                     <input
                       value={r.numero}
                       onChange={(e) => cambiar(r.clave, "numero", e.target.value)}
                       required
                       inputMode="numeric"
-                      className="tabular mt-1 block h-11 w-full rounded-lg border border-linea bg-background px-3 text-base text-foreground"
+                      aria-invalid={conLetras(r.numero) || undefined}
+                      title={conLetras(r.numero) ? (revisarNumeroDeCheque(r.numero) ?? undefined) : undefined}
+                      className={`tabular mt-1 block h-11 w-full rounded-lg border border-linea bg-background px-3 text-base text-foreground ${
+                        conLetras(r.numero) ? "ring-2 ring-saldo-debe" : ""
+                      }`}
                     />
                   </label>
                   {/* Vacía al registrar, se marca: «Registrar» no hacía nada y no

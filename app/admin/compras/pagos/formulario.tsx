@@ -312,6 +312,10 @@ export function FormularioPago({
     }, 0),
   );
   const conFacturas = tildadas.some((f) => !esCheque(f) && !esAjuste(f));
+  // Un pago que solo repone un cheque rechazado o cancela un ajuste no es una
+  // compra: no hay base, y el interruptor quedaba prendido con «Base» vacío
+  // (mes 23). Sin nada tildado (a cuenta) la base se escribe a mano.
+  const soloReposiciones = tildadas.length > 0 && !conFacturas;
   // Con la regla base_retencion_iva en «total», la de IVA va sobre lo que se
   // paga de las facturas con su IVA (M3S2-027).
   const totalDeLasFacturas = redondear(
@@ -327,7 +331,7 @@ export function FormularioPago({
   const hoy = hoyEnArgentina();
   const regimenesDelProveedor = regimenes.filter((r) => leCorresponde(r, proveedor, hoy));
   const retenciones = regimenesDelProveedor
-    .filter((r) => retener[r.id])
+    .filter((r) => retener[r.id] && !soloReposiciones)
     .map((r) => ({ regimenId: r.id, base: baseDe(r) }))
     .filter((r) => r.base > 0);
   const basePasada = retenciones.some((r) => r.base - total > 0.009);
@@ -486,7 +490,7 @@ export function FormularioPago({
                               <>del {fechaCorta.format(fecha(f.fechaEmision))}</>
                             )}
                             {vence && dias === 0 ? (
-                              <span className="font-semibold text-brand-orange-dark"> · vence hoy</span>
+                              <span className="font-semibold text-acento-sobre-claro"> · vence hoy</span>
                             ) : vence && (
                               <span className={dias !== null && dias < 0 ? "font-semibold text-saldo-debe" : undefined}>
                                 {" · "}
@@ -844,7 +848,7 @@ export function FormularioPago({
           </Seccion>
         )}
 
-        {supplierId && regimenesDelProveedor.length > 0 && (
+        {supplierId && regimenesDelProveedor.length > 0 && !soloReposiciones && (
           <Seccion titulo="Retenciones" icono={Landmark} columnas={1}>
             <div className="grid gap-4 md:grid-cols-2">
               {regimenesDelProveedor.map((r) => {

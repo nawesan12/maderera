@@ -45,7 +45,7 @@ function Falta({
 }) {
   if (estado === "anulada") return <span className="text-muted-foreground">—</span>;
   if (pendiente > 0) return <span className="font-semibold text-saldo-debe">{corto ? `falta ${cantidad(pendiente)}` : cantidad(pendiente)}</span>;
-  if (pendiente < 0) return <span className="font-semibold text-brand-orange-dark">+{cantidad(-pendiente)}</span>;
+  if (pendiente < 0) return <span className="font-semibold text-acento-sobre-claro">+{cantidad(-pendiente)}</span>;
   return <span className="text-saldo-favor">completo</span>;
 }
 
@@ -173,7 +173,7 @@ export default async function OrdenPage({
                   <td className="tabular px-4 py-2.5 text-right">
                     {formatearMonto(Number(i.costoUnitario))}
                     {otroCosto !== null && (
-                      <span className="block text-sm font-semibold text-brand-orange-dark">
+                      <span className="block text-sm font-semibold text-acento-sobre-claro">
                         llegó a {formatearMonto(otroCosto)}
                       </span>
                     )}
@@ -210,7 +210,7 @@ export default async function OrdenPage({
                   <span className="font-semibold">{formatearMonto(pedido * Number(i.costoUnitario))}</span>
                 </p>
                 {otroCosto !== null && (
-                  <p className="tabular text-sm font-semibold text-brand-orange-dark">llegó a {formatearMonto(otroCosto)}</p>
+                  <p className="tabular text-sm font-semibold text-acento-sobre-claro">llegó a {formatearMonto(otroCosto)}</p>
                 )}
               </li>
             );

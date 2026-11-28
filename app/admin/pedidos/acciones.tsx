@@ -161,8 +161,10 @@ export function AccionesPedido({
     cortesSinTerminar.length > 0 && ["Marcar listo", "Despachar", "Marcar entregado"].includes(etiqueta ?? "");
   // Un acopio que ya empezó a salir se atiende de a remitos, esté como esté
   // el pedido: «Preparar» o «Marcar entregado» se llevaban todo lo que
-  // queda (mes simulado, H104).
-  const preparaRemito = acopio && tipoEntrega === "retiro" && ["pendiente", "preparando", "listo"].includes(estado);
+  // queda (mes simulado, H104). Preparando, no: «Marcar listo» no se lleva
+  // nada, y sin él el acopio con un remito parcial quedaba «Preparando» para
+  // siempre (mes 23, PED-1153).
+  const preparaRemito = acopio && tipoEntrega === "retiro" && ["pendiente", "listo"].includes(estado);
   // El envío en camino con algo por llevar: se firma el remito del camión.
   const esperaFirma = estado === "en-camino" && porLlevar;
   // Lo que falta cobrar se pregunta cuando la mercadería sale: al entregar

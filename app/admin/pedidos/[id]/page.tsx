@@ -149,6 +149,10 @@ export default async function FichaPedidoPage({
   // entregado» y había dos «Preparar remito» en la pantalla).
   const remitoArriba =
     acopioEnCurso || (pedido.tipoEntrega === "retiro" && pedido.estado === "listo" && porEntregar.length > 0);
+  // Preparando con un remito parcial ya firmado: el remito va arriba, pero
+  // «Marcar listo» no se pierde. Sin esto el pedido quedaba «Preparando» con
+  // el corte terminado y ningún rol lo podía marcar listo (mes 23, PED-1153).
+  const listoEnAcopio = acopioEnCurso && pedido.estado === "preparando";
   // El remito del camión sin firmar: en un envío en camino con algo por
   // llevar, firmarlo es lo que sigue (no «Marcar entregado»).
   const remitoEnLaCalle = remitos.find((r) => r.tipo === "envio" && seOfreceLaFirma(r));
@@ -440,7 +444,8 @@ export default async function FichaPedidoPage({
               sinCobrar={pedido.sinCobrar ? { numero: pedido.numero, monto: pedido.sinCobrar } : null}
               cortesSinTerminar={cortesSinTerminar}
               acopio={acopioEnCurso}
-              sinAvance={remitoArriba}
+              sinAvance={remitoArriba && !listoEnAcopio}
+              secundario={listoEnAcopio}
               porLlevar={porEntregar.length > 0}
               firmar={firmaEnLaCalle}
               enLaFicha

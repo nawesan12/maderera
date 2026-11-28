@@ -118,7 +118,9 @@ export function DialogoTraslado({ sucursales }: { sucursales: { id: string; name
             en la fila de los selectores y no depende de lo que el Select
             agrega debajo del botón (caía 8 px más abajo, M2S1-166). A 375 px,
             Desde y Hacia uno arriba del otro con el ⇆ al costado, entre los
-            dos: en tres columnas «Casa Central» se cortaba. */}
+            dos: en tres columnas «Casa Central» se cortaba. Solo inicio y fin
+            de fila: «sm:row-span-1» es el atajo grid-row y borraba el
+            row-start-2, y el ⇆ subía a la fila de las etiquetas. */}
         <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
           <Label htmlFor="traslado-origen" className="col-start-1 row-start-1">
             Desde
@@ -141,7 +143,7 @@ export function DialogoTraslado({ sucursales }: { sucursales: { id: string; name
             type="button"
             onClick={invertir}
             aria-label="Invertir origen y destino"
-            className="col-start-2 row-span-3 row-start-2 flex h-11 w-11 items-center justify-center self-center rounded-lg border text-muted-foreground hover:bg-muted hover:text-foreground sm:row-span-1 sm:self-start"
+            className="col-start-2 row-start-2 row-end-5 flex h-11 w-11 items-center justify-center self-center rounded-lg border text-muted-foreground hover:bg-muted hover:text-foreground sm:row-end-3"
           >
             <ArrowLeftRight className="h-4 w-4" aria-hidden="true" />
           </button>

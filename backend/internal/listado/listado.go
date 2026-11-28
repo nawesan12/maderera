@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"mjbj/internal/auth"
+	"mjbj/internal/busqueda"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
 )
@@ -144,6 +145,14 @@ func (c *Consulta) BusquedaFlexible(texto string, columnas []string, exacto ...s
 func (c *Consulta) PrimeroPalabrasEnteras(texto, expr string) string {
 	var partes []string
 	for _, t := range Terminos(texto) {
+		// «2x4» no arranca ninguna palabra de «Tirante Pino 2" x 4"», y el
+		// machimbre de 1/2" x 4" lo contiene compactado: salía primero por
+		// el nombre y Enter lo elegía en Trasladar y Recibir (mes 23, como
+		// M3S3-049 con pulgadas). La medida entera vale por las dos.
+		if re, ok := busqueda.MedidaPorPor(t); ok {
+			partes = append(partes, "((f_unaccent("+expr+") ~* "+c.Arg(re)+")::int * 2)")
+			continue
+		}
 		arg := c.Arg(regexp.QuoteMeta(t))
 		partes = append(partes, "(f_unaccent("+expr+") ~* ('\\m' || f_unaccent("+arg+"::text)))::int",
 			"(f_unaccent("+expr+") ~* ('\\m' || f_unaccent("+arg+"::text) || '(?![0-9])'))::int")

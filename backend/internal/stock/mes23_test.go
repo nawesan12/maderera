@@ -221,3 +221,20 @@ func TestElAjusteSinPromedioTomaLaListaDelProveedor(t *testing.T) {
 		t.Errorf("con la lista del proveedor: %s", costo)
 	}
 }
+
+// Mes 23, tercera prueba: «2x4» en Trasladar y Recibir pone primero el
+// tirante de 2" x 4" y no el machimbre de 1/2" x 4", que lo contiene
+// compactado y va antes por el nombre.
+func TestBuscar2x4TraeElTirante(t *testing.T) {
+	e := armar(t)
+	dep := e.staff(t, "deposito@prueba.test", "deposito")
+	cat := e.uno(t, `select id from categories limit 1`)
+	mach := e.uno(t, `insert into products (slug, name, category_id, description, unit) values ('machimbre-pino', 'Machimbre Pino', $1, '', 'unidad') returning id`, cat)
+	tir := e.uno(t, `insert into products (slug, name, category_id, description, unit) values ('tirante-pino', 'Tirante Pino', $1, '', 'unidad') returning id`, cat)
+	e.exec(t, `insert into product_variants (product_id, sku, label, sort_order) values ($1, 'MAC-12-4', '1/2" x 4" x 3,05 m', 0)`, mach)
+	e.exec(t, `insert into product_variants (product_id, sku, label, sort_order) values ($1, 'TIR-2-4', '2" x 4" x 3,05 m', 0)`, tir)
+	g := grilla(t, e, dep, "?busqueda=2x4")
+	if len(g.Filas) == 0 || g.Filas[0].SKU != "TIR-2-4" {
+		t.Fatalf("orden: %+v", g.Filas)
+	}
+}

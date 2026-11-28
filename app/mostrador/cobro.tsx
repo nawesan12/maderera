@@ -627,7 +627,14 @@ export function Cobro({
             aviso.tipo === "ok" ? "estado-ok" : "estado-problema"
           } bg-[var(--estado-fondo)] text-[var(--estado-tinta)]`}
         >
-          <p className="min-w-0">{aviso.texto}</p>
+          <p className="min-w-0">
+            {aviso.texto}
+            {aviso.pendiente && (
+              <span className="estado-espera ml-2 inline rounded-md bg-[var(--estado-fondo)] px-1.5 py-0.5 font-medium text-[var(--estado-tinta)] [box-decoration-break:clone]">
+                {aviso.pendiente}
+              </span>
+            )}
+          </p>
           {/* El vuelto, grande y hasta la próxima venta: es lo que se cuenta
               con el cliente delante (mes simulado, M2S1-176). */}
           {aviso.vuelto !== undefined && (

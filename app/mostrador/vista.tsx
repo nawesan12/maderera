@@ -1386,7 +1386,7 @@ export function VistaMostrador({
       const elVuelto = cambio !== null && cambio > 0 ? cambio : undefined;
       setAviso(
         avisos
-          ? { tipo: "error", texto: `${r.ok} ${avisos}`, vuelto: elVuelto }
+          ? { tipo: "ok", texto: r.ok ?? "Venta registrada.", pendiente: avisos, vuelto: elVuelto }
           : { tipo: "ok", texto: r.ok ?? "Venta registrada.", vuelto: elVuelto },
       );
 

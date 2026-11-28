@@ -15,6 +15,20 @@ import { NOMBRE_DEL_MEDIO } from "./medios";
 import type { Sucursal, Turno, Movimiento, TurnoCerradoDelMostrador, VentaDeHoy } from "./tipos";
 import { VentasDeHoy, type DatosParaRehacer } from "./ventas-de-hoy";
 
+/**
+ * Abrir, cerrar y mover la caja van en línea. Si la red se corta entre un
+ * latido y el clic (todavía figura «en línea»), la acción del servidor tira
+ * y el mostrador entero caía en «Se nos rompió algo» (recorrido, M4-035):
+ * se dice acá, y se prueba de nuevo cuando vuelve.
+ */
+async function enLaRed<T>(f: () => Promise<T>): Promise<T | { error: string; ok?: undefined }> {
+  try {
+    return await f();
+  } catch {
+    return { error: "Se cortó la conexión. Probá de nuevo cuando vuelva." };
+  }
+}
+
 
 type Destino = "banco" | "caja_fuerte" | "otro";
 
@@ -185,7 +199,7 @@ export function PanelDeCaja({
   function abrir() {
     if (!puedeAbrir || fondoTipeado === null) return;
     empezar(async () => {
-      const r = await abrirCaja(sucursal.id, fondoTipeado, { motivo: motivoApertura, cajaId, corregir: entreTurnos !== 0 && contoMal });
+      const r = await enLaRed(() => abrirCaja(sucursal.id, fondoTipeado, { motivo: motivoApertura, cajaId, corregir: entreTurnos !== 0 && contoMal }));
       setAviso(r.error ?? r.ok ?? null);
       if (!r.error) {
         setFondo("");
@@ -244,7 +258,7 @@ export function PanelDeCaja({
         onEncolado();
         return;
       }
-      const r = await registrarMovimientoDeCaja(turnoAbierto.id, t, importeDelMovimiento, motivo, destino, categoria);
+      const r = await enLaRed(() => registrarMovimientoDeCaja(turnoAbierto.id, t, importeDelMovimiento, motivo, destino, categoria));
       setAviso(r.error ?? r.ok ?? null);
       if (!r.error) {
         setMonto("");
@@ -593,7 +607,7 @@ export function PanelDeCaja({
                   onClick={() =>
                     empezar(async () => {
                       if (efectivoContado === null) return;
-                      const r = await cerrarCaja(turno.id, efectivoContado, notas);
+                      const r = await enLaRed(() => cerrarCaja(turno.id, efectivoContado, notas));
                       setAviso(r.error ?? null);
                       if (!r.error) {
                         setCerrado({

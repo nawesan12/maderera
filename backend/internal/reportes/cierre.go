@@ -1466,6 +1466,37 @@ func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihas
 			return nil, err
 		}
 	}
+	// Las facturas de los destinos que a fin de mes siguen esperando el CAE.
+	// La bolsa que nombra una factura que ya lo tiene (o que se dio de baja)
+	// no la está esperando: lo que le queda es la seña del pedido abierto. Con
+	// la factura ya autorizada, el aviso le asignaba $ 589.700 de «cobros de
+	// facturas sin CAE» a un cliente sin ninguna (recorrido M4-116).
+	esperaCae := map[string]bool{}
+	var facturasDeDestinos []string
+	for _, b := range reparto.Bolsas {
+		if entre(b.Fecha, idesde, ihasta) {
+			for _, d := range b.Destinos {
+				if strings.HasPrefix(d, "i:") && plataforma.UUIDValido(d[2:]) {
+					facturasDeDestinos = append(facturasDeDestinos, d[2:])
+				}
+			}
+		}
+	}
+	if len(facturasDeDestinos) > 0 {
+		rs, err := s.pool.Query(ctx, `SELECT f.id::text FROM invoices f WHERE f.id = ANY($1::uuid[]) AND f.estado <> 'anulada'
+			AND (f.cae IS NULL OR coalesce((SELECT max(l.created_at) FROM arca_log l WHERE l.invoice_id = f.id AND l.exito
+			  AND l.operacion IN ('FECAESolicitar', 'FECompConsultar')), f.fecha_emision) > $2)`, facturasDeDestinos, ihasta)
+		if err != nil {
+			return nil, err
+		}
+		var id string
+		if _, err := pgx.ForEachRow(rs, []any{&id}, func() error {
+			esperaCae[id] = true
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+	}
 	soloFacturas := func(b cobros.Bolsa) bool {
 		// Todos los pedidos que la seña esperaba ya tienen su factura.
 		if p := pedidoDe[b.Recibo]; p != "" && facturado[p] {
@@ -1481,10 +1512,19 @@ func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihas
 		if alguno && todos {
 			return true
 		}
-		deFactura, delPedido := false, false
+		deFactura, delPedido, pedidoAbierto := false, false, false
 		for _, d := range b.Destinos {
-			deFactura = deFactura || strings.HasPrefix(d, "i:")
+			deFactura = deFactura || (strings.HasPrefix(d, "i:") && esperaCae[d[2:]])
+			pedidoAbierto = pedidoAbierto || (strings.HasPrefix(d, "o:") && !facturado[d[2:]])
 			delPedido = delPedido || (pedidoDe[b.Recibo] != "" && d == "o:"+pedidoDe[b.Recibo])
+		}
+		if !deFactura && !pedidoAbierto {
+			// Nombra facturas que ya no esperan nada: sigue siendo cobranza.
+			for _, d := range b.Destinos {
+				if strings.HasPrefix(d, "i:") {
+					return true
+				}
+			}
 		}
 		return deFactura && (cobraFactura[b.Recibo] || !delPedido)
 	}

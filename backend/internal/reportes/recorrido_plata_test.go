@@ -3,6 +3,7 @@ package reportes
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -254,5 +255,48 @@ func TestLaRetencionSinFacturaEsperaEnAnticipos(t *testing.T) {
 	nov = DelCircuito(e.asientosDe(t, "2026-11"), "")
 	if d, a := cuenta(nov, Cuentas.Deudores), cuenta(nov, Cuentas.AnticiposDeClientes); d != 29480 || a != 0 {
 		t.Errorf("con CAE: Deudores %v (29.480), Anticipos %v", d, a)
+	}
+}
+
+// Recorrido M4-100 y M4-116: el pedido tomado a cuenta corriente y todavía
+// sin entregar ni facturar no es deuda del B: va en su columna. Y la seña
+// que nombraba una factura que ya tiene CAE no es «cobro de facturas sin
+// CAE»: es seña del pedido abierto.
+func TestDeudoresElPedidoSinEntregarNoEsDelB(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	obra := e.id(t, `insert into customers (nombre) values ('Obra Barrio Parque') returning id`)
+	viejo := e.pedido(t, "PED-1019", e.central, "entregado", "mostrador", time.Date(2026, 11, 2, 12, 0, 0, 0, Argentina), &obra)
+	e.exec(t, `update orders set total = 48400, medio_pago = 'cuenta_corriente' where id = $1`, viejo)
+	e.exec(t, `insert into account_movements (customer_id, tipo, monto, referencia, created_at) values ($1, 'compra', 48400, 'PED-1019', '2026-11-02T15:00:00Z')`, obra)
+	f := e.facturaSinCae(t, &obra, &viejo, 30, 48400, "2026-11-02T15:00:00Z")
+	abierto := e.pedido(t, "PED-1024", e.central, "pendiente", "tienda", time.Date(2026, 11, 3, 12, 0, 0, 0, Argentina), &obra)
+	e.exec(t, `update orders set total = 826800, medio_pago = 'cuenta_corriente' where id = $1`, abierto)
+	e.exec(t, `insert into account_movements (customer_id, tipo, monto, referencia, created_at) values ($1, 'compra', 826800, 'PED-1024', '2026-11-03T15:00:00Z')`, obra)
+	r, rep := e.reciboDe(t, &obra, nil, "REC-0008", "2026-11-04T15:00:00Z", [2]any{"transferencia", 589700.0})
+	e.exec(t, `insert into account_movements (customer_id, tipo, monto, referencia, receipt_id, created_at) values ($1, 'pago', -589700, 'REC-0008', $2, '2026-11-04T15:00:00Z')`, obra, r)
+	if rep.Anticipo != 589700 {
+		t.Fatalf("seña: %+v", rep)
+	}
+	// La factura del pedido viejo ya tiene su CAE.
+	e.exec(t, `update invoices set cae = '7612', estado = 'autorizada', fecha_emision = '2026-11-05T15:00:00Z' where id = $1`, f)
+
+	d, err := e.s.CsvDeudores(ctx, time.Date(2026, 11, 27, 12, 0, 0, 0, Argentina))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Debe 826.800 + 48.400 − 589.700 = 285.500: nada con CAE (la seña pagó la
+	// factura), todo del pedido sin entregar y nada del B.
+	if !strings.Contains(d, ";285500,00;") || !strings.Contains(d, ";0,00;0,00;285500,00;0,00\r") {
+		t.Errorf("deudores:\n%s", d)
+	}
+	_, cuerpo, _ := pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-11")
+	p := pendientesDe(t, cuerpo)
+	if _, ok := p["cobros-sin-cae"]; ok {
+		t.Errorf("no hay facturas sin CAE: %s", cuerpo)
+	}
+	if _, ok := p["senas-del-mes"]; !ok {
+		t.Errorf("es la seña del pedido abierto: %s", cuerpo)
 	}
 }

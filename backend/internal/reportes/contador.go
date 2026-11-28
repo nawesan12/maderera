@@ -25,7 +25,7 @@ import (
 // CsvDeudores es la deuda de cada cliente por antigüedad, **con el mismo
 // saldo que su ficha** más lo que debe fuera de la cuenta: las facturas con
 // saldo (el de Facturación) y lo entregado sin factura y sin cobrar (la cifra
-// de «Me deben»), y partida en tres columnas que suman ese total
+// de «Me deben»), y partida en cuatro columnas que suman ese total
 // (mes simulado, M2S1-008 y M3S4-001):
 //
 //   - **Con CAE**: el mayor de Deudores por ventas (1.1.03) del archivo del
@@ -33,6 +33,8 @@ import (
 //     saldo de 1.1.03, y el cierre avisa si no (PendientesDelCierre).
 //   - **Facturas sin CAE**: lo que se debe de facturas emitidas que esperan
 //     el CAE, hasta lo que la cuenta debe de verdad.
+//   - **Pedidos sin entregar ni facturar**: lo que la cuenta debe de pedidos
+//     tomados a cuenta corriente que todavía no son venta.
 //   - **El circuito B**: el resto, lo que se debe de ventas sin factura.
 //
 // Antes el listado era solo el mayor: el estudio recibía $ 84.300 de
@@ -93,6 +95,25 @@ func (s *Servicio) CsvDeudores(ctx context.Context, ahora time.Time) (string, er
 	}); err != nil {
 		return "", err
 	}
+	// Lo que la cuenta debe de pedidos que todavía no son venta: tomados a la
+	// cuenta corriente y sin entregar ni facturar. No es deuda del B: va en
+	// su columna (recorrido M4-100 y M4-116).
+	porFacturar := map[string]float64{}
+	rs, err = s.lectura.Query(ctx, `
+		SELECT 'c:' || am.customer_id::text, sum(am.monto)::float8
+		FROM account_movements am JOIN orders o ON o.numero = am.referencia AND o.customer_id = am.customer_id
+		WHERE am.tipo = 'compra' AND am.created_at <= $1 AND o.estado <> 'cancelado' AND NOT `+fragmentos.SalioMercaderia+`
+		  AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.order_id = o.id AND i.tipo::text LIKE 'factura%' AND i.estado IN ('emitida', 'autorizada', 'rechazada'))
+		GROUP BY am.customer_id`, ahora)
+	if err != nil {
+		return "", err
+	}
+	if _, err := pgx.ForEachRow(rs, []any{&clave, &monto}, func() error {
+		porFacturar[clave] = monto
+		return nil
+	}); err != nil {
+		return "", err
+	}
 	claves := map[string]bool{}
 	for k := range movs {
 		claves[k] = true
@@ -140,7 +161,7 @@ func (s *Servicio) CsvDeudores(ctx context.Context, ahora time.Time) (string, er
 		c                    cuenta
 		aging                cobros.Aging
 		total, mayor, sinCae float64
-		b                    float64
+		porFacturar, b       float64
 	}
 	var filas []fila
 	for k := range claves {
@@ -148,7 +169,9 @@ func (s *Servicio) CsvDeudores(ctx context.Context, ahora time.Time) (string, er
 		total := jsmath.Redondear2(a.Total - a.AFavor)
 		mayor := jsmath.Redondear2(reparto.Deudores[k])
 		sc := jsmath.Redondear2(min(max(sinCae[k], 0), max(jsmath.Redondear2(total-mayor), 0)))
-		f := fila{c: datos[k], aging: a, total: total, mayor: mayor, sinCae: sc, b: jsmath.Redondear2(total - mayor - sc)}
+		resto := jsmath.Redondear2(total - mayor - sc)
+		pf := jsmath.Redondear2(min(max(resto, 0), max(porFacturar[k], 0)))
+		f := fila{c: datos[k], aging: a, total: total, mayor: mayor, sinCae: sc, porFacturar: pf, b: jsmath.Redondear2(resto - pf)}
 		if math.Abs(f.total) > 0.005 || math.Abs(f.mayor) > 0.005 {
 			filas = append(filas, f)
 		}
@@ -165,8 +188,8 @@ func (s *Servicio) CsvDeudores(ctx context.Context, ahora time.Time) (string, er
 	})
 	var out [][]string
 	type suma struct {
-		tramos                  [4]float64
-		total, mayor, sinCae, b float64
+		tramos                               [4]float64
+		total, mayor, sinCae, porFacturar, b float64
 	}
 	var deben, aFavor, todo suma
 	sumar := func(x *suma, f fila) {
@@ -176,6 +199,7 @@ func (s *Servicio) CsvDeudores(ctx context.Context, ahora time.Time) (string, er
 		x.total += f.total
 		x.mayor += f.mayor
 		x.sinCae += f.sinCae
+		x.porFacturar += f.porFacturar
 		x.b += f.b
 	}
 	for _, f := range filas {
@@ -193,7 +217,8 @@ func (s *Servicio) CsvDeudores(ctx context.Context, ahora time.Time) (string, er
 		for _, t := range f.aging.Tramos {
 			r = append(r, csvexcel.NumeroCsv(t.Monto, 2))
 		}
-		r = append(r, csvexcel.NumeroCsv(f.total, 2), dias, csvexcel.NumeroCsv(f.mayor, 2), csvexcel.NumeroCsv(f.sinCae, 2), csvexcel.NumeroCsv(f.b, 2))
+		r = append(r, csvexcel.NumeroCsv(f.total, 2), dias, csvexcel.NumeroCsv(f.mayor, 2), csvexcel.NumeroCsv(f.sinCae, 2),
+			csvexcel.NumeroCsv(f.porFacturar, 2), csvexcel.NumeroCsv(f.b, 2))
 		out = append(out, r)
 		if f.total >= 0 {
 			sumar(&deben, f)
@@ -208,13 +233,14 @@ func (s *Servicio) CsvDeudores(ctx context.Context, ahora time.Time) (string, er
 			r = append(r, csvexcel.NumeroCsv(jsmath.Redondear2(t), 2))
 		}
 		return append(r, csvexcel.NumeroCsv(jsmath.Redondear2(x.total), 2), "", csvexcel.NumeroCsv(jsmath.Redondear2(x.mayor), 2),
-			csvexcel.NumeroCsv(jsmath.Redondear2(x.sinCae), 2), csvexcel.NumeroCsv(jsmath.Redondear2(x.b), 2))
+			csvexcel.NumeroCsv(jsmath.Redondear2(x.sinCae), 2), csvexcel.NumeroCsv(jsmath.Redondear2(x.porFacturar), 2),
+			csvexcel.NumeroCsv(jsmath.Redondear2(x.b), 2))
 	}
 	out = append(out, renglon("Deben", deben), renglon("Saldos a favor", aFavor))
 	circuito := reglas.Circuito(ctx, s.pool)
 	return csvexcel.ArmarCsv(
 		[]string{"Código", "Cliente", "CUIT", "Teléfono", "Al día (0-30)", "31 a 60 días", "61 a 90 días", "Más de 90 días", "Total", "Días de la más vieja",
-			"Con CAE (1.1.03)", "Facturas sin CAE", strings.ToUpper(circuito[:1]) + circuito[1:]},
+			"Con CAE (1.1.03)", "Facturas sin CAE", "Pedidos sin entregar ni facturar", strings.ToUpper(circuito[:1]) + circuito[1:]},
 		out, renglon("Total", todo),
 	), nil
 }

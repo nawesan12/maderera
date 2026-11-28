@@ -34,9 +34,12 @@ const PASOS = ["Vos", "Tu trabajo", "Contacto"] as const;
 export function FormularioProfesional({
   emailSugerido,
   nombreSugerido,
+  telefonoSugerido,
 }: {
   emailSugerido?: string | null;
   nombreSugerido?: string | null;
+  /** El de la cuenta (lo dejó al registrarse): no se pide de nuevo (mes 23). */
+  telefonoSugerido?: string | null;
 }) {
   const [estado, accion, enviando] = useActionState(solicitarAcceso, inicial);
   const previo = estado.valores;
@@ -119,7 +122,7 @@ export function FormularioProfesional({
 
           <fieldset hidden={paso !== 2} className="space-y-4">
             <Campo nombre="email" etiqueta="Correo" tipo="email" requerido defecto={previo?.email || emailSugerido} autoComplete="email" />
-            <Campo nombre="telefono" etiqueta="WhatsApp" requerido defecto={previo?.telefono} autoComplete="tel" inputMode="tel" />
+            <Campo nombre="telefono" etiqueta="WhatsApp" requerido defecto={previo?.telefono || telefonoSugerido} autoComplete="tel" inputMode="tel" />
             <div>
               <label htmlFor="mensaje" className="block text-sm font-medium">
                 Algo más (opcional)

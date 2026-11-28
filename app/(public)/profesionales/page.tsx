@@ -253,6 +253,7 @@ export default async function ProfesionalesPage() {
                     <FormularioProfesional
                       emailSugerido={cliente?.email ?? sesion?.email}
                       nombreSugerido={cliente?.nombre ?? sesion?.name}
+                      telefonoSugerido={cliente?.telefono}
                     />
                   </div>
                 </div>

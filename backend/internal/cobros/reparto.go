@@ -304,13 +304,15 @@ func RepartoDeRecibo(deudoresAbiertos, total, retencion, negro float64, pendient
 		r.Anticipo = jsmath.Redondear2(r.Anticipo + sena)
 		resto = jsmath.Redondear2(resto - sena)
 	}
-	// La retención es siempre del archivo del estudio: lo que la seña no
-	// cubre va a Deudores. Antes iba toda a Deudores aunque el cliente no
-	// debiera nada con CAE: la retención sobre la deuda de una factura que
-	// espera el CAE dejaba Deudores en negativo (M2S3-005).
-	if falta := jsmath.Redondear2(retencion - blanco - sena); falta > 0 {
+	// La retención es siempre del archivo del estudio: lo que no cancela
+	// Deudores ni la seña va a Anticipos, y se aplica con la factura que
+	// llegue. Antes iba toda a Deudores aunque el cliente no debiera nada con
+	// CAE: la retención sobre la deuda de una factura que espera el CAE (o
+	// cargada antes de cualquier factura) dejaba Deudores en negativo
+	// (M2S3-005, recorrido M4-115).
+	if falta := jsmath.Redondear2(retencion - blanco - sena - reservado); falta > 0 {
 		extra := jsmath.Redondear2(min(falta, resto))
-		r.Deudores, resto = jsmath.Redondear2(r.Deudores+extra), jsmath.Redondear2(resto-extra)
+		r.Anticipo, resto = jsmath.Redondear2(r.Anticipo+extra), jsmath.Redondear2(resto-extra)
 	}
 	r.B = jsmath.Redondear2(r.B + resto)
 	return r

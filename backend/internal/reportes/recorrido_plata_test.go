@@ -234,3 +234,25 @@ func TestPlataHoyLaCajaFuerteEsSuSaldo(t *testing.T) {
 		t.Errorf("caja fuerte %v (300.000), banco entró %v (100.000)", p.CajaFuerte, p.BancoEntro)
 	}
 }
+
+// Recorrido M4-115: la retención cargada antes de cualquier factura con CAE
+// espera en Anticipos y se aplica cuando la factura sale; Deudores no queda
+// en negativo.
+func TestLaRetencionSinFacturaEsperaEnAnticipos(t *testing.T) {
+	e := armar(t)
+	cons := e.id(t, `insert into customers (nombre) values ('Constructora') returning id`)
+	_, rep := e.reciboDe(t, &cons, nil, "REC-0001", "2026-11-02T08:51:00Z", [2]any{"retencion", 12520.0})
+	if rep.Anticipo != 12520 || rep.Deudores != 0 || rep.B != 0 {
+		t.Fatalf("la retención sin factura: %+v", rep)
+	}
+	f := e.facturaSinCae(t, &cons, nil, 9, 42000, "2026-11-05T15:00:00Z")
+	nov := DelCircuito(e.asientosDe(t, "2026-11"), "")
+	if d, a := cuenta(nov, Cuentas.Deudores), cuenta(nov, Cuentas.AnticiposDeClientes); d != 0 || a != -12520 {
+		t.Errorf("sin CAE: Deudores %v, Anticipos %v", d, a)
+	}
+	e.exec(t, `update invoices set cae = '7612', estado = 'autorizada', fecha_emision = '2026-11-06T15:00:00Z' where id = $1`, f)
+	nov = DelCircuito(e.asientosDe(t, "2026-11"), "")
+	if d, a := cuenta(nov, Cuentas.Deudores), cuenta(nov, Cuentas.AnticiposDeClientes); d != 29480 || a != 0 {
+		t.Errorf("con CAE: Deudores %v (29.480), Anticipos %v", d, a)
+	}
+}

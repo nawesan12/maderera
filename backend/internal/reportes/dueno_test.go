@@ -124,7 +124,8 @@ func TestNumerosDelDueno(t *testing.T) {
 		p.Banco != 120 || p.MercadoPago != 80 || p.Tarjetas != 80 || p.Cheques != (Monto{500, 2}) ||
 		// El depositado sin acreditar sigue siendo plata de la casa (H406).
 		// Lo movido hoy en el banco (120) no suma sin un saldo cargado (M2S2-100).
-		p.ChequesDepositados != (Monto{200, 1}) || p.Total != 2080 {
+		// El retiro a la caja fuerte está en su saldo (recorrido M4-113).
+		p.CajaFuerte != 200 || p.ChequesDepositados != (Monto{200, 1}) || p.Total != 2280 {
 		t.Errorf("plata hoy: %+v", p)
 	}
 	g := n.Ganancia

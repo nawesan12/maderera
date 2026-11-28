@@ -1277,6 +1277,12 @@ export interface operations {
                             /** Format: double */
                             monto: number;
                         }[];
+                        /** @description los cheques que informó desde el portal y nadie aceptó */
+                        informados?: {
+                            cantidad: number;
+                            /** Format: double */
+                            total: number;
+                        };
                     };
                 };
             };

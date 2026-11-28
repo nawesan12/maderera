@@ -40,6 +40,7 @@ export function SaldoDelCliente({
     de: string;
     monto: number;
     sinCobrar: { id: string; numero: string; monto: number }[];
+    informados: { cantidad: number; total: number };
   } | null>(null);
   const [abierto, setAbierto] = useState(false);
 
@@ -48,7 +49,7 @@ export function SaldoDelCliente({
     let vigente = true;
     cuentaDelCliente(cliente.id).then((c) => {
       if (!vigente) return;
-      setSaldo({ de: cliente.id, monto: c.saldo, sinCobrar: c.sinCobrar });
+      setSaldo({ de: cliente.id, monto: c.saldo, sinCobrar: c.sinCobrar, informados: c.informados });
       onSaldo?.(cliente.id, c.saldo);
     });
     return () => {
@@ -182,6 +183,7 @@ export function SaldoDelCliente({
           cliente={cliente}
           branchId={branchId}
           debe={monto}
+          informados={saldo?.informados}
           onCerrar={() => {
             setAbierto(false);
             enfocar("buscador");
@@ -198,11 +200,17 @@ export function CobroDeCuenta({
   cliente,
   branchId,
   debe,
+  informados,
   onCerrar,
 }: {
   cliente: Cliente;
   branchId: string;
   debe: number;
+  /**
+   * Los cheques informados desde el portal: a la vista antes de cobrar la
+   * misma deuda por otro lado, como en el panel (M4-065, recorrido 2).
+   */
+  informados?: { cantidad: number; total: number };
   onCerrar: () => void;
 }) {
   // Una por cobro (el diálogo nace al abrirse): si se pierde la respuesta y
@@ -242,6 +250,12 @@ export function CobroDeCuenta({
           <DialogTitle className="text-xl font-bold tracking-tight">
             Cobro de cuenta — {cliente.nombre}
           </DialogTitle>
+          {informados && informados.cantidad > 0 && (
+            <span className="estado-espera mt-1 inline-flex w-fit items-center rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)]">
+              {informados.cantidad === 1 ? "1 cheque informado" : `${informados.cantidad} cheques informados`} ·{" "}
+              <span className="tabular ml-1">{formatearMonto(informados.total)}</span>
+            </span>
+          )}
         </DialogHeader>
         <p className="text-base text-muted-foreground">
           Debe <strong className="tabular text-foreground">{formatearMonto(debe)}</strong>. Si paga

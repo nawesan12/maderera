@@ -401,6 +401,13 @@ paths:
                         id: { type: string }
                         numero: { type: string }
                         monto: { type: number, format: double }
+                  informados:
+                    type: object
+                    description: "los cheques que informó desde el portal y nadie aceptó"
+                    required: [cantidad, total]
+                    properties:
+                      cantidad: { type: integer }
+                      total: { type: number, format: double }
   /api/v1/mostrador/clientes/{id}/cobro:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string } }

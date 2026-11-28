@@ -486,6 +486,26 @@ func (s *Servicio) PedidosSinCobrar(ctx context.Context, cliente string) ([]Pedi
 }
 
 // SaldoDeCuenta es lo que debe un cliente (positivo: debe).
+// ChequesInformados son los cheques que el cliente informó desde el portal
+// y nadie aceptó todavía: el cobro de cuenta del mostrador los muestra, como
+// el del panel (M4-065). Sin eso se cobraba en efectivo la misma deuda que el
+// cheque ya pagaba (recorrido 2).
+type ChequesInformados struct {
+	Cantidad int     `json:"cantidad"`
+	Total    float64 `json:"total"`
+}
+
+// InformadosDe es ChequesInformados del cliente.
+func (s *Servicio) InformadosDe(ctx context.Context, cliente string) (ChequesInformados, error) {
+	var c ChequesInformados
+	if !plataforma.UUIDValido(cliente) {
+		return c, nil
+	}
+	err := s.pool.QueryRow(ctx, `SELECT count(*)::int, coalesce(sum(importe), 0)::float8 FROM cheques
+		WHERE customer_id = $1 AND sentido = 'recibido' AND estado = 'informado'`, cliente).Scan(&c.Cantidad, &c.Total)
+	return c, err
+}
+
 func (s *Servicio) SaldoDeCuenta(ctx context.Context, cliente string) (float64, error) {
 	if !plataforma.UUIDValido(cliente) {
 		return 0, nil

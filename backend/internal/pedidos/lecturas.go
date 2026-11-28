@@ -151,7 +151,11 @@ func (s *Servicio) ListarPresupuestos(ctx context.Context, f Filtros, limite, de
 		cond = append(cond, "b.slug = "+a.poner(f.Sucursal))
 	}
 	if f.Busqueda != "" {
-		if c := a.coincide(f.Busqueda, "q.numero", "q.contacto_nombre", "c.razon_social"); c != "" {
+		// También por el correo y el teléfono, que es lo que el vendedor
+		// tiene a mano cuando el cliente escribe desde otro lado (M4-074).
+		if c := a.coincide(f.Busqueda, "q.numero", "q.contacto_nombre", "c.razon_social", "q.contacto_email", "c.email",
+			`regexp_replace(coalesce(q.contacto_telefono, ''), '[^0-9]', '', 'g')`,
+			`regexp_replace(coalesce(c.telefono, ''), '[^0-9]', '', 'g')`); c != "" {
 			cond = append(cond, c)
 		}
 	}

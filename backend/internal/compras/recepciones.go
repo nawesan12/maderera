@@ -127,9 +127,10 @@ type LineaDeRecepcion struct {
 	CostoResultante  *string `json:"costoResultante"`
 	Orden            int32   `json:"orden"`
 	// Unidad es la del producto («20 u.», «5 placas»: decía «20 ·»,
-	// M3S4-037). Pedido y YaRecibido son los del renglón de la orden, si la
-	// recepción salió de una: el borrador dice «Vino [20] de 30» y la
-	// confirmada «16 de 20 · faltan 4» (M2S1-077, M3S3-026).
+	// M3S4-037). Pedido es el del renglón de la orden, si la recepción salió
+	// de una, y YaRecibido lo que había llegado antes de esta: el borrador
+	// dice «Vino [1] de 2» y la confirmada lo mismo, «1 de 2 · falta 1», y no
+	// contra el total de la orden (M2S1-077, M3S3-026, M4-042, M4-082).
 	Unidad     *string `json:"unidad"`
 	Pedido     *string `json:"pedido"`
 	YaRecibido *string `json:"yaRecibido"`
@@ -176,7 +177,14 @@ func (s *Servicio) ObtenerRecepcion(ctx context.Context, id string) (*Recepcion,
 	filas, err := s.pool.Query(ctx, `
 		SELECT i.id, i.variant_id, p.name, v.label, v.sku, i.cantidad::text, i.costo_unitario::text, i.alicuota_iva::text,
 		  i.costo_con_gastos::text, i.cantidad_anterior::text, i.costo_anterior::text, i.costo_resultante::text, i.orden,
-		  p.unit::text, oi.cantidad::text, oi.cantidad_recibida::text
+		  p.unit::text, oi.cantidad::text,
+		  -- Lo recibido antes de esta recepción: confirmada, sin ella ni las
+		  -- que vinieron después (M4-042, M4-082).
+		  (CASE WHEN r.estado = 'confirmada' THEN oi.cantidad_recibida - coalesce((
+		    SELECT sum(gi.cantidad) FROM goods_receipt_items gi JOIN goods_receipts g ON g.id = gi.receipt_id
+		    WHERE g.purchase_order_id = r.purchase_order_id AND gi.variant_id = i.variant_id AND gi.purchase_order_item_id IS NOT NULL AND g.estado = 'confirmada'
+		      AND g.confirmada_at >= r.confirmada_at), 0)
+		  ELSE oi.cantidad_recibida END)::text
 		FROM goods_receipt_items i
 		JOIN goods_receipts r ON r.id = i.receipt_id
 		LEFT JOIN product_variants v ON v.id = i.variant_id
@@ -306,7 +314,7 @@ func (s *Servicio) CrearRecepcion(ctx context.Context, ses *auth.Sesion, m map[s
 		for i, l := range r.Lineas {
 			if _, err := tx.Exec(ctx, `
 				INSERT INTO goods_receipt_items (receipt_id, variant_id, cantidad, costo_unitario, alicuota_iva, orden)
-				VALUES ($1, $2, $3::numeric, $4::numeric, $5::numeric, $6)`, id, l.VariantID,
+				VALUES ($1, $2, $3::numeric, $4::numeric, `+alicuotaDelProveedor("(SELECT g.supplier_id FROM goods_receipts g WHERE g.id = $1)", "$5::numeric")+`, $6)`, id, l.VariantID,
 				jsmath.ToFixed(l.Cantidad, 4), jsmath.ToFixed(l.CostoUnitario, 4), jsmath.Fijo2(l.AlicuotaIva), i); err != nil {
 				return err
 			}
@@ -432,6 +440,12 @@ func (s *Servicio) ConfirmarRecepcion(ctx context.Context, ses *auth.Sesion, id 
 			return fallo("Esta recepción ya estaba confirmada.")
 		case "anulada":
 			return fallo("Esta recepción está anulada.")
+		}
+		// Un borrador de antes, o uno cargado con el IVA a mano: al que no
+		// discrimina IVA no se le suma (M4-037).
+		if _, err := tx.Exec(ctx, `UPDATE goods_receipt_items SET alicuota_iva = `+alicuotaDelProveedor("$2", "alicuota_iva")+`
+			WHERE receipt_id = $1`, id, c.supplier); err != nil {
+			return err
 		}
 		items, err := leerItems(ctx, tx, id)
 		if err != nil {

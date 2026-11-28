@@ -366,7 +366,7 @@ func (s *Servicio) ObtenerFactura(ctx context.Context, id string) (*FichaDeFactu
 // total (en negativo si es nota de crédito) o, si cubre una recepción, solo
 // la diferencia con lo que la recepción ya cargó. Devuelve el tipo de
 // movimiento, el monto y el detalle.
-func cargoDeFactura(tipo string, total float64, conRecepcion bool, yaCargado float64) (string, float64, string) {
+func cargoDeFactura(tipo string, total float64, conRecepcion bool, yaCargado float64, p percepcionesDeFactura) (string, float64, string) {
 	mov, monto, detalle := "factura", total, "Factura de compra"
 	// La nota se nombra como nota: el renglón decía «Nota de crédito ·
 	// Factura de compra» (mes 23).
@@ -381,11 +381,33 @@ func cargoDeFactura(tipo string, total float64, conRecepcion bool, yaCargado flo
 		if yaCargado != 0 {
 			detalle = "Factura de compra (diferencia con la recepción)"
 		}
+		if yaCargado != 0 && p.Total() > 0 && math.Abs(monto-p.Total()) < 0.01 {
+			// Lo único distinto de la recepción son las percepciones: se
+			// nombran, y no parece que el proveedor cobró de más (M4-007).
+			detalle = p.Nombre()
+		}
 		if monto < 0 {
 			mov = "ajuste"
 		}
 	}
 	return mov, monto, detalle
+}
+
+// percepcionesDeFactura son las percepciones que trae la factura: la
+// recepción no las carga, así que la diferencia de una factura que coincide
+// con el remito son ellas.
+type percepcionesDeFactura struct{ iva, iibb, otras float64 }
+
+func (p percepcionesDeFactura) Total() float64 { return jsmath.Redondear2(p.iva + p.iibb + p.otras) }
+
+func (p percepcionesDeFactura) Nombre() string {
+	switch {
+	case p.iibb > 0 && p.iva == 0 && p.otras == 0:
+		return "Percepción IIBB"
+	case p.iva > 0 && p.iibb == 0 && p.otras == 0:
+		return "Percepción de IVA"
+	}
+	return "Percepciones"
 }
 
 // esCero es «no hay movimiento que anotar»: a centavos.
@@ -622,7 +644,11 @@ func (s *Servicio) CargarFactura(ctx context.Context, ses *auth.Sesion, m map[st
 				return err
 			}
 		}
-		tipo, monto, detalle := cargoDeFactura(d.Tipo, total, len(recepciones) > 0, yaCargado)
+		perc := percepcionesDeFactura{d.PercepcionIva, d.PercepcionIibb, 0}
+		if !d.conPercepciones {
+			perc = percepcionesDeFactura{otras: d.Percepciones}
+		}
+		tipo, monto, detalle := cargoDeFactura(d.Tipo, total, len(recepciones) > 0, yaCargado, perc)
 		if len(recepciones) > 0 && esCero(monto) {
 			return nil
 		}
@@ -837,7 +863,7 @@ func loQueCargo(ctx context.Context, tx pgx.Tx, id string, f facturaBloqueada) (
 	if err != nil {
 		return 0, err
 	}
-	_, monto, _ := cargoDeFactura(f.tipo, f.total, f.receiptID != nil, ya)
+	_, monto, _ := cargoDeFactura(f.tipo, f.total, f.receiptID != nil, ya, percepcionesDeFactura{})
 	return monto, nil
 }
 
@@ -919,7 +945,7 @@ func (s *Servicio) CorregirFactura(ctx context.Context, ses *auth.Sesion, id str
 		if err != nil {
 			return err
 		}
-		_, nuevo, _ := cargoDeFactura(d.Tipo, total, f.receiptID != nil, ya)
+		_, nuevo, _ := cargoDeFactura(d.Tipo, total, f.receiptID != nil, ya, percepcionesDeFactura{})
 		diferencia = jsmath.Redondear2(nuevo - cargado)
 		var dias int32
 		if err := tx.QueryRow(ctx, `SELECT dias_pago FROM suppliers WHERE id = $1`, f.supplierID).Scan(&dias); err != nil {

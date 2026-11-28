@@ -722,6 +722,16 @@ func diaDeHoy(ahora time.Time) time.Time {
 // por lo que el proveedor ya había devuelto) y, si se pagó en el acto como
 // un gasto, su total entero. Es la única regla del saldo de una factura:
 // la usan el listado, el pago, el Resumen y los CSV.
+// alicuotaDelProveedor es la alícuota de un renglón según quién vende: el
+// que no discrimina IVA (monotributista, exento; factura C) cobra el precio
+// tal cual, y sumarle el 21 % inflaba la deuda hasta que la factura la
+// corregía con una «diferencia» negativa (M4-003, M4-037). Sin condición
+// cargada, la del renglón, como antes.
+func alicuotaDelProveedor(proveedor, alicuota string) string {
+	return `CASE WHEN (SELECT s.condicion_iva::text FROM suppliers s WHERE s.id = ` + proveedor + `)
+	  IN ('monotributista', 'exento', 'consumidor_final', 'no_categorizado') THEN 0 ELSE ` + alicuota + ` END`
+}
+
 // ImputadoAlAjuste es lo que ya cubre un ajuste que subió la deuda: lo
 // pagado (sin los pagos anulados) y los ajustes que bajan la deuda aplicados
 // a él (M4-036).

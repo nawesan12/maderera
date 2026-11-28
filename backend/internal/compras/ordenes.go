@@ -227,7 +227,7 @@ func (s *Servicio) CrearOrden(ctx context.Context, ses *auth.Sesion, m map[strin
 		for i, l := range o.Lineas {
 			if _, err := tx.Exec(ctx, `
 				INSERT INTO purchase_order_items (purchase_order_id, variant_id, descripcion, cantidad, costo_unitario, alicuota_iva, orden)
-				VALUES ($1, $2, $3, $4::numeric, $5::numeric, $6::numeric, $7)`, id, l.VariantID, l.Descripcion,
+				VALUES ($1, $2, $3, $4::numeric, $5::numeric, `+alicuotaDelProveedor("(SELECT o.supplier_id FROM purchase_orders o WHERE o.id = $1)", "$6::numeric")+`, $7)`, id, l.VariantID, l.Descripcion,
 				jsmath.ToFixed(l.Cantidad, 4), jsmath.ToFixed(l.CostoUnitario, 4), jsmath.Fijo2(l.AlicuotaIva), i); err != nil {
 				return err
 			}
@@ -444,7 +444,7 @@ func (s *Servicio) RecibirDeLaOrden(ctx context.Context, ses *auth.Sesion, orden
 			falta := jsmath.ToFixed(float64(p.cantidad)-float64(p.recibida), 4)
 			if _, err := tx.Exec(ctx, `
 				INSERT INTO goods_receipt_items (receipt_id, variant_id, purchase_order_item_id, cantidad, costo_unitario, alicuota_iva, orden)
-				VALUES ($1, $2, $3, $4::numeric, $5::numeric, $6::numeric, $7)`, recepcion, p.variante, p.id, falta, p.costo, p.alicuota, i); err != nil {
+				VALUES ($1, $2, $3, $4::numeric, $5::numeric, `+alicuotaDelProveedor("(SELECT g.supplier_id FROM goods_receipts g WHERE g.id = $1)", "$6::numeric")+`, $7)`, recepcion, p.variante, p.id, falta, p.costo, p.alicuota, i); err != nil {
 				return err
 			}
 		}

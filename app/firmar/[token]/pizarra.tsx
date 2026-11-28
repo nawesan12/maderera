@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { VolverAlPedido } from "./volver";
 import { Check, Eraser, Loader2, TriangleAlert } from "lucide-react";
 import { firmarRemito, type EstadoFirma } from "./actions";
+import { revisarDocumentoDeRetiro } from "@/lib/entregas/documento";
 
 const inicial: EstadoFirma = {};
 
@@ -52,6 +53,29 @@ export function Pizarra({
   const antes = (nombreSugerido ?? "").trim().toLowerCase();
   const ahora = nombre.trim().toLowerCase();
   const otraPersona = Boolean(documentoSugerido) && antes !== "" && !ahora.startsWith(antes) && !antes.startsWith(ahora);
+  const dniObligatorio = otraPersona || !envio;
+  // Lo que falta se dice en la página, en el lugar del error: el globo del
+  // navegador salía en inglés («Please fill out this field.», mes 23).
+  const [aviso, setAviso] = useState<{ campo: "receptorNombre" | "receptorDocumento"; texto: string } | null>(null);
+
+  function revisar(e: React.FormEvent<HTMLFormElement>) {
+    const datos = new FormData(e.currentTarget);
+    const n = String(datos.get("receptorNombre") ?? "").trim();
+    const d = String(datos.get("receptorDocumento") ?? "");
+    const hayCampoDni = datos.has("receptorDocumento");
+    let falta: typeof aviso = null;
+    if (!n) falta = { campo: "receptorNombre", texto: envio ? "Falta el nombre de quien recibe." : "Falta el nombre de quien retira." };
+    else if (hayCampoDni && (dniObligatorio || d.trim() !== "")) {
+      const problema = revisarDocumentoDeRetiro(d);
+      if (problema) falta = { campo: "receptorDocumento", texto: envio && !d.trim() ? "Falta el DNI de quien recibe." : problema };
+    }
+    setAviso(falta);
+    if (falta) {
+      e.preventDefault();
+      document.getElementById(falta.campo)?.focus();
+    }
+  }
+
   // Ya estaba firmado: la página vuelve a leerse y muestra la constancia.
   useEffect(() => {
     if (estado.yaFirmado) router.refresh();
@@ -160,6 +184,8 @@ export function Pizarra({
 
   return (
     <form
+      noValidate
+      onSubmit={revisar}
       action={(formData) => {
         volcarFirma(formData);
         firmar(formData);
@@ -177,9 +203,13 @@ export function Pizarra({
           id="receptorNombre"
           name="receptorNombre"
           value={nombre}
-          onChange={(e) => setNombre(e.target.value)}
+          onChange={(e) => {
+            setNombre(e.target.value);
+            if (aviso?.campo === "receptorNombre") setAviso(null);
+          }}
           autoComplete="name"
           required
+          aria-invalid={aviso?.campo === "receptorNombre" || undefined}
           className="mt-1 h-12 w-full rounded-lg border bg-background px-3 text-base"
         />
       </div>
@@ -199,7 +229,9 @@ export function Pizarra({
             id="receptorDocumento"
             name="receptorDocumento"
             inputMode="numeric"
-            required={otraPersona || !envio}
+            required={dniObligatorio}
+            aria-invalid={aviso?.campo === "receptorDocumento" || undefined}
+            onChange={() => aviso?.campo === "receptorDocumento" && setAviso(null)}
             autoFocus={cambiarDni && Boolean(documentoSugerido)}
             className="tabular mt-1 h-12 w-full rounded-lg border bg-background px-3 text-base"
           />
@@ -249,10 +281,10 @@ export function Pizarra({
         )}
       </div>
 
-      {estado.error && (
-        <p className="flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+      {(aviso || estado.error) && (
+        <p role="alert" className="flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-          {estado.error}
+          {aviso?.texto ?? estado.error}
         </p>
       )}
 

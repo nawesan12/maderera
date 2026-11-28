@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"mjbj/internal/caja"
 	"mjbj/internal/cobros"
 	"mjbj/internal/compras"
 	"mjbj/internal/jsmath"
@@ -111,7 +112,10 @@ type CajaAbierta struct {
 type PlataHoy struct {
 	Cajas    []CajaAbierta `json:"cajas"`
 	Efectivo float64       `json:"efectivo"`
-	// CajaFuerte: lo retirado hoy de las cajas a la caja fuerte.
+	// CajaFuerte: lo que hay en las cajas fuertes, como /admin/caja (lo que
+	// llegó de los cajones menos lo que volvió y lo que se depositó). Era lo
+	// retirado hoy: un depósito de hoy en el banco seguía sumando en la caja
+	// fuerte y lo de ayer no estaba (recorrido M4-113).
 	CajaFuerte float64 `json:"cajaFuerte"`
 	// Banco es BancoEntro − BancoSalio.
 	Banco       float64 `json:"banco"`
@@ -478,8 +482,8 @@ const RetiroAlBanco = `coalesce(m.destino = 'banco', m.motivo ~* '(banco|dep[oó
 // simulado, M2S3-002).
 const RetiroACajaFuerte = `coalesce(m.destino = 'caja_fuerte', NOT coalesce(m.motivo ~* '(banco|dep[oó]sit)', false) AND coalesce(m.motivo, '') NOT LIKE 'Entre turnos:%')`
 
-// PlataHoy: las cajas (abiertas, o la de hoy ya cerrada), lo retirado hoy a
-// la caja fuerte, lo que entró y salió hoy del banco, lo cobrado por Mercado
+// PlataHoy: las cajas (abiertas, o la de hoy ya cerrada), lo que hay en
+// las cajas fuertes, lo que entró y salió hoy del banco, lo cobrado por Mercado
 // Pago y los cheques en cartera o depositados.
 //
 // Lo cobrado sale de tres lados que no se pisan: las partes de los recibos
@@ -493,7 +497,7 @@ const RetiroACajaFuerte = `coalesce(m.destino = 'caja_fuerte', NOT coalesce(m.mo
 // caja, así que no se suma otra vez.
 //
 // Al banco también entran los cheques recibidos acreditados hoy y los
-// retiros de caja que fueron depósitos (RetiroAlBanco). Del banco salen los
+// retiros de caja y de la caja fuerte que fueron depósitos. Del banco salen los
 // pagos a proveedores de hoy que no fueron en efectivo ni con cheque (el
 // efectivo sale de una caja; el cheque de un tercero, de la cartera; el
 // propio, cuando el banco lo debita, que es cuando se marca acreditado), los
@@ -544,8 +548,7 @@ func (s *Servicio) PlataHoy(ctx context.Context, ahora time.Time) (PlataHoy, err
 		  (SELECT count(*)::int FROM cheques WHERE sentido = 'recibido' AND estado = 'cartera'),
 		  (SELECT coalesce(sum(importe), 0) FROM cheques WHERE sentido = 'recibido' AND estado = 'depositado'),
 		  (SELECT count(*)::int FROM cheques WHERE sentido = 'recibido' AND estado = 'depositado'),
-		  (SELECT coalesce(-sum(m.monto) FILTER (WHERE `+RetiroACajaFuerte+`), 0) FROM cash_movements m
-		    WHERE m.tipo = 'retiro' AND m.created_at >= $1 AND m.created_at < $2)
+		  (SELECT coalesce(sum(`+caja.SaldoDeCajaFuerteSQL+`), 0) FROM branches b WHERE b.active = true)
 		FROM cobrado`, hoy, manana).
 		Scan(&mp, &tarjetas, &cheques, &p.Cheques.Cantidad, &depositados, &p.ChequesDepositados.Cantidad, &cajaFuerte)
 	if err != nil {
@@ -633,7 +636,9 @@ func (s *Servicio) movimientosDelBanco(ctx context.Context, desde, hasta time.Ti
 		WITH cobrado AS (`+cobradoEntre+`)
 		SELECT coalesce(sum(importe) FILTER (WHERE donde = 'banco'), 0),
 		  (SELECT coalesce(-sum(m.monto) FILTER (WHERE `+RetiroAlBanco+`), 0) FROM cash_movements m
-		    WHERE m.tipo = 'retiro' AND m.created_at >= $1 AND m.created_at < $2),
+		    WHERE m.tipo = 'retiro' AND m.created_at >= $1 AND m.created_at < $2)
+		  + (SELECT coalesce(sum(f.monto), 0) FROM caja_fuerte_movimientos f
+		    WHERE f.tipo = 'deposito' AND f.created_at >= $1 AND f.created_at < $2),
 		  (SELECT coalesce(sum(c.importe), 0) FROM cheque_estados e JOIN cheques c ON c.id = e.cheque_id
 		    WHERE c.sentido = 'recibido' AND e.hacia = 'acreditado' AND e.at >= $1 AND e.at < $2),
 		  (SELECT coalesce(sum(CASE WHEN EXISTS (SELECT 1 FROM supplier_payment_parts x WHERE x.payment_id = p.id)

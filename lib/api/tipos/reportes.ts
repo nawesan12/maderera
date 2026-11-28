@@ -852,7 +852,7 @@ export interface components {
             efectivo: number;
             /**
              * Format: double
-             * @description Lo retirado hoy de las cajas a la caja fuerte
+             * @description Lo que hay en las cajas fuertes (como /admin/caja)
              */
             cajaFuerte: number;
             /**

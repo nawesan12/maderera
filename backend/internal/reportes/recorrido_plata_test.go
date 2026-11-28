@@ -2,6 +2,7 @@ package reportes
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -206,5 +207,30 @@ func TestElDepositoDelEfectivoDelB(t *testing.T) {
 				t.Errorf("sin fondos negativos: %+v", negativos)
 			}
 		})
+	}
+}
+
+// Recorrido M4-113: «Plata hoy» muestra lo que hay en la caja fuerte, como
+// /admin/caja: lo de días anteriores suma y lo que hoy se mandó al banco ya
+// no está ahí, sino en lo que entró hoy al banco.
+func TestPlataHoyLaCajaFuerteEsSuSaldo(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	usuario := e.id(t, `select id from "user" limit 1`)
+	ayer := e.id(t, `insert into cash_sessions (branch_id, abierta_por, abierta_at, estado, cerrada_at, contado) values ($1, $2, '2026-10-14T12:00:00Z', 'cerrada', '2026-10-14T22:00:00Z', 0) returning id`, e.central, usuario)
+	e.exec(t, `insert into cash_movements (session_id, tipo, monto, motivo, destino, created_at) values ($1, 'retiro', -300000, 'Cierre', 'caja_fuerte', '2026-10-14T21:00:00Z')`, ayer)
+	hoy := e.id(t, `insert into cash_sessions (branch_id, abierta_por, abierta_at) values ($1, $2, '2026-10-15T08:00:00Z') returning id`, e.central, usuario)
+	e.exec(t, `insert into cash_movements (session_id, tipo, monto, motivo, destino, created_at) values
+		($1, 'apertura', 100000, 'Fondo inicial', null, '2026-10-15T08:00:00Z'),
+		($1, 'retiro', -100000, 'A la caja fuerte', 'caja_fuerte', '2026-10-15T08:03:00Z')`, hoy)
+	e.exec(t, `insert into caja_fuerte_movimientos (branch_id, tipo, monto, motivo, clave, created_at)
+		values ($1, 'deposito', 100000, 'Al banco', 'cf-hoy', '2026-10-15T08:05:00Z')`, e.central)
+	_, cuerpo, _ := pedir(t, adm, e.u+"inicio/dueno")
+	var n NumerosDelDueno
+	if err := json.Unmarshal([]byte(cuerpo), &n); err != nil {
+		t.Fatal(cuerpo)
+	}
+	if p := n.PlataHoy; p.CajaFuerte != 300000 || p.BancoEntro != 100000 {
+		t.Errorf("caja fuerte %v (300.000), banco entró %v (100.000)", p.CajaFuerte, p.BancoEntro)
 	}
 }

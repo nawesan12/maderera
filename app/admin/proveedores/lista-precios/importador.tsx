@@ -88,8 +88,23 @@ export function ImportadorDeLista({
     return r;
   }, inicial);
 
-  // Las columnas que ofrece el select salen del archivo que se acaba de subir.
-  const columnas = vista?.columnas ?? [];
+  /*
+   * Las columnas que ofrece el select salen del archivo apenas se elige: la
+   * primera vez había que tocar «Ver qué va a pasar», comerse «Elegí la
+   * columna del código» y volver a elegir el archivo (M4-005, M4-038).
+   */
+  const [leidas, setLeidas] = useState<string[]>([]);
+  const columnas = vista?.columnas?.length ? vista.columnas : leidas;
+  const propuesta = (patron: RegExp) => columnas.find((c) => patron.test(c.normalize("NFD").replace(/[\u0300-\u036f]/g, "")));
+
+  function leerColumnas(archivo: File | undefined) {
+    setLeidas([]);
+    if (!archivo) return;
+    const datos = new FormData();
+    datos.set("supplierId", supplierId);
+    datos.set("archivo", archivo);
+    void previsualizarLista(datos).then((v) => setLeidas(v.columnas ?? []));
+  }
 
   const apareadas = (vista?.filas ?? []).filter((f) => f.variantId);
   const conCambios = apareadas.filter((f) => !sinCambios(f));
@@ -126,8 +141,12 @@ export function ImportadorDeLista({
         </p>
       </div>
 
+      {/* Con onSubmit y no con `action`: React vacía el formulario después de
+          una acción, y el archivo elegido se perdía (M4-005). */}
       <form
-        action={(datos) =>
+        onSubmit={(e) => {
+          e.preventDefault();
+          const datos = new FormData(e.currentTarget);
           mirar(async () => {
             setUsado({
               columnaCodigo: String(datos.get("columnaCodigo") ?? ""),
@@ -140,8 +159,8 @@ export function ImportadorDeLista({
             setVista(v);
             setElegidas(deEntrada(v.filas));
             setAplicada(false);
-          })
-        }
+          });
+        }}
         className="space-y-4 px-5 py-4"
       >
         <input type="hidden" name="supplierId" value={supplierId} />
@@ -169,7 +188,10 @@ export function ImportadorDeLista({
             type="file"
             accept=".csv,.xlsx,text/csv"
             required
-            onChange={(e) => setNombreArchivo(e.target.files?.[0]?.name ?? null)}
+            onChange={(e) => {
+              setNombreArchivo(e.target.files?.[0]?.name ?? null);
+              leerColumnas(e.target.files?.[0]);
+            }}
             className="sr-only"
           />
           {/* Un PDF no: sacar una tabla de un PDF es adivinar, y adivinar precios de compra sale caro. */}
@@ -188,20 +210,20 @@ export function ImportadorDeLista({
             nombre="columnaCodigo"
             etiqueta="Columna del código"
             columnas={columnas}
-            defecto={usado?.columnaCodigo || perfil?.columnaCodigo}
+            defecto={usado?.columnaCodigo || perfil?.columnaCodigo || propuesta(/c(o|ó)d|sku|art/i)}
           />
           <Columna
             nombre="columnaPrecio"
             etiqueta="Columna del precio"
             columnas={columnas}
-            defecto={usado?.columnaPrecio || perfil?.columnaPrecio}
+            defecto={usado?.columnaPrecio || perfil?.columnaPrecio || propuesta(/precio|costo|importe|valor/i)}
           />
           <Columna
             nombre="columnaDescripcion"
             etiqueta="Columna de la descripción"
             columnas={columnas}
             defecto={
-              usado?.columnaDescripcion || perfil?.columnaDescripcion || undefined
+              usado?.columnaDescripcion || perfil?.columnaDescripcion || propuesta(/desc|detalle|producto|nombre/i)
             }
             opcional
           />

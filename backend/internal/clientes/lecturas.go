@@ -582,9 +582,9 @@ type Gestion struct {
 	// Vencida: el día argentino de la próxima acción ya pasó. ParaHoy: es
 	// hoy. Comparando el mediodía guardado con la hora, la de hoy pasaba a
 	// «Vencía el» a las 12 (mes 23: a las 21 se leía vencida).
-	Vencida bool `json:"vencida"`
-	ParaHoy bool `json:"paraHoy"`
-	CreatedAt       time.Time  `json:"createdAt"`
+	Vencida   bool      `json:"vencida"`
+	ParaHoy   bool      `json:"paraHoy"`
+	CreatedAt time.Time `json:"createdAt"`
 	// Saldo es lo que debe el cliente en la cuenta (positivo, debe): la
 	// tarjeta no lo decía y había que escribirlo en el asunto (mes simulado 2).
 	Saldo float64 `json:"saldo"`

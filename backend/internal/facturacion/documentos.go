@@ -48,6 +48,18 @@ func dia(t *time.Time) *time.Time {
 	return &d
 }
 
+// diaGuardado es una fecha que se cargó como día del calendario
+// («1985-03-01», el inicio de actividades): Next la guarda a medianoche UTC,
+// así que pasarla por la hora argentina la corría al día anterior (M2S1-016).
+func diaGuardado(t *time.Time) *time.Time {
+	if t == nil {
+		return nil
+	}
+	u := t.UTC()
+	d := time.Date(u.Year(), u.Month(), u.Day(), 0, 0, 0, 0, time.UTC)
+	return &d
+}
+
 // Pdf arma el comprobante en PDF (internal/pdf, idéntico al de pdf-lib).
 // Las fechas van como el día en Argentina, el mismo que se le informó a ARCA.
 func (s *Servicio) Pdf(ctx context.Context, c *Completo) ([]byte, string, error) {
@@ -56,7 +68,7 @@ func (s *Servicio) Pdf(ctx context.Context, c *Completo) ([]byte, string, error)
 		return nil, "", err
 	}
 	emisor := &pdf.EmisorFiscal{Emisor: pdf.Emisor{RazonSocial: e.RazonSocial, NombreFantasia: de(e.NombreFantasia), Domicilio: de(e.Domicilio),
-		Cuit: de(e.Cuit)}, CondicionIva: e.CondicionIva, IngresosBrutos: de(e.IngresosBrutos), InicioActividades: dia(e.InicioActividades)}
+		Cuit: de(e.Cuit)}, CondicionIva: e.CondicionIva, IngresosBrutos: de(e.IngresosBrutos), InicioActividades: diaGuardado(e.InicioActividades)}
 	cp := pdf.ComprobantePdf{Tipo: c.Tipo, PuntoVenta: float64(c.PuntoVenta), Numero: float64(c.Numero), ReceptorNombre: c.ReceptorNombre,
 		ReceptorCuit: de(c.ReceptorCuit), ReceptorCondicionIva: c.ReceptorCondicionIva, ReceptorDomicilio: de(c.ReceptorDomicilio),
 		Neto: c.Neto, Iva21: c.Iva21, Iva27: c.Iva27, Iva105: c.Iva105, Exento: c.Exento, TributosTotal: c.TributosTotal, Total: c.Total,

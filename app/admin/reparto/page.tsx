@@ -219,6 +219,7 @@ function FilaDeReparto({ pedido: p, cobra }: { pedido: PedidoListado; cobra: boo
           sinCobrar={p.sinCobrar != null ? { numero: p.numero, monto: p.sinCobrar } : null}
           cortesSinTerminar={p.cortesSinTerminar}
           porLlevar={p.porEntregar.length > 0}
+          fleteSinCotizar={p.fleteACotizar}
           firmar={
             enElCamion[0]?.firmaToken
               ? `/firmar/${enElCamion[0].firmaToken}?volver=${encodeURIComponent("/admin/reparto")}`

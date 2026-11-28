@@ -299,6 +299,10 @@ export const orders = pgTable(
     efectivoRecibido: numeric({ precision: 12, scale: 2 }),
     /** La sucursal de la caja que la cobró, si no es branchId: la venta de un corte de otra sucursal (00452). */
     cajaBranchId: uuid().references(() => branches.id, { onDelete: "set null" }),
+    /** El admin que firmó con su PIN la salida sin cobrar, cuánto faltaba y cuándo (00465). */
+    salidaAutorizadaPor: text(),
+    salidaSinCobrar: numeric({ precision: 12, scale: 2 }),
+    salidaAutorizadaAt: timestamp({ withTimezone: true }),
   },
 
   (t) => [

@@ -187,6 +187,22 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
         ],
       },
       {
+        clave: "despacho_contra_entrega",
+        pregunta: "El envío que se cobra en efectivo en la puerta",
+        opciones: [
+          { valor: "con_pin", texto: "Sale con el PIN de un admin" },
+          { valor: "sin_pin", texto: "Sale sin PIN y queda a cobrar" },
+        ],
+      },
+      {
+        clave: "flete_sin_cotizar",
+        pregunta: "El envío con el flete sin cotizar",
+        opciones: [
+          { valor: "avisa", texto: "Sale, avisando antes" },
+          { valor: "frena", texto: "No sale hasta cotizarlo o marcarlo sin cargo" },
+        ],
+      },
+      {
         clave: "retencion_en_el_cobro",
         pregunta: "La retención que trae el cliente con el pago, ¿quién la carga en el cobro?",
         opciones: [

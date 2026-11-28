@@ -123,6 +123,15 @@ const (
 	// tenga ni haya tenido esa medida); «las_que_la_manejan», solo las que la
 	// tienen o tuvieron movimientos de ella. La lee catalogo.ReponerEnFila.
 	ReponerPorSucursal = "reponer_por_sucursal"
+	// Recorrido (M4-077): el envío a una zona «a cotizar» sin flete cargado.
+	// «avisa» es lo de siempre (sale, y el despacho lo pregunta antes);
+	// «frena», no sale hasta cotizarlo o elegir «Sin cargo».
+	FleteSinCotizar = "flete_sin_cotizar"
+	// Recorrido (M4-078): el envío que se cobra en efectivo en la puerta.
+	// «con_pin» es lo de siempre (el depósito lo despacha con el PIN de un
+	// admin, como cualquier salida sin cobrar); «sin_pin», sale sin PIN y
+	// queda «A cobrar» en el reparto hasta que se registre el cobro.
+	DespachoContraEntrega = "despacho_contra_entrega"
 )
 
 // Opciones son los valores posibles de cada regla, el de arranque primero.
@@ -159,6 +168,8 @@ var Opciones = map[string][]string{
 	DepositoDeEfectivo:          {"estudio", "lo_que_hay"},
 	RetencionesAlPagar:          {"con_base", "las_que_corresponden"},
 	ReponerPorSucursal:          {"con_minimo", "las_que_la_manejan"},
+	FleteSinCotizar:             {"avisa", "frena"},
+	DespachoContraEntrega:       {"con_pin", "sin_pin"},
 }
 
 // Arranque es el valor de una regla cuando la fila no está o tiene algo que

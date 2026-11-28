@@ -74,6 +74,10 @@ type Resultado struct {
 // entregó con algo sin cobrar.
 const NotaEntregadoSinCobrar = fragmentos.NotaEntregadoSinCobrar
 
+// NotaSalioSinCobrar encabeza la del envío que sale sin cobrar con el PIN
+// de un admin.
+const NotaSalioSinCobrar = "Salió sin cobrar"
+
 // OrdenDelPedido es el recorrido, fijo y de una sola dirección.
 var OrdenDelPedido = []string{"pendiente", "preparando", "listo", "en-camino", "entregado"}
 
@@ -151,7 +155,9 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 	var p *filaDePedido
 	var siguiente string
 	var remito *entregas.EntregaCreada
+	var autorizoFuera string
 	err := s.enTransaccion(ctx, func(tx pgx.Tx) error {
+		autorizoFuera = ""
 		// La serie de remitos antes que la fila del pedido: el mismo orden
 		// que preparar un remito, por si este avance tiene que emitir uno.
 		if err := numeracion.BloquearRemitos(ctx, tx); err != nil {
@@ -225,6 +231,15 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 		// al despachar (acompaña al camión y lo firma quien recibe); en un
 		// retiro, al entregar. Antes el envío salía sin papel y el remito
 		// nacía al marcarlo entregado.
+		// El envío con el flete sin cotizar (M4-077): con la regla en
+		// «frena» no sale; si sale, el historial lo dice.
+		var fleteSinCotizar bool
+		var autorizo string
+		if p.tipoEntrega == "envio" && (siguiente == "en-camino" || siguiente == "entregado") {
+			if fleteSinCotizar, err = entregas.FleteSinCotizar(ctx, tx, id); err != nil {
+				return err
+			}
+		}
 		if siguiente == "entregado" || (siguiente == "en-camino" && p.tipoEntrega == "envio") {
 			var sucursal *string
 			if err := tx.QueryRow(ctx, `SELECT branch_id FROM orders WHERE id = $1`, id).Scan(&sucursal); err != nil {
@@ -242,7 +257,7 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 						return plataforma.Invalido(map[string]string{campo: msj})
 					}
 				}
-				if _, err := entregas.AutorizarSinCobrar(ctx, tx, s.aut, ses, id, quien.SinCobrar); err != nil {
+				if autorizo, err = entregas.AutorizarSinCobrar(ctx, tx, s.aut, ses, id, quien.SinCobrar); err != nil {
 					return err
 				}
 			}
@@ -271,16 +286,33 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 		// deja firma: la pantalla pregunta y el historial guarda cuánto
 		// faltaba y quién soltó la mercadería. Si no, «Entregar igual» se
 		// toca sin leer y nadie sabe después quién entregó.
-		var nota *string
-		if siguiente == "entregado" {
+		// El envío que sale sin cobrar lo dice al despachar, con quien lo
+		// autorizó (M4-114: el historial no nombraba a nadie).
+		var partes []string
+		if siguiente == "entregado" || (siguiente == "en-camino" && autorizo != "") {
 			var falta *float64
 			if err := tx.QueryRow(ctx, `SELECT `+fragmentos.SinCobrarDelPedido+`::float8 FROM orders o WHERE o.id = $1`, id).Scan(&falta); err != nil {
 				return err
 			}
 			if falta != nil && *falta > 0.009 {
-				n := NotaEntregadoSinCobrar + " · " + formato.Importe(*falta)
-				nota = &n
+				cabeza := NotaEntregadoSinCobrar
+				if siguiente == "en-camino" {
+					cabeza = NotaSalioSinCobrar
+				}
+				partes = append(partes, cabeza+" · "+formato.Importe(*falta))
 			}
+		}
+		if autorizo != "" {
+			partes = append(partes, "autorizó "+autorizo)
+			autorizoFuera = autorizo
+		}
+		if fleteSinCotizar {
+			partes = append(partes, entregas.NotaFleteSinCotizar)
+		}
+		var nota *string
+		if len(partes) > 0 {
+			n := strings.Join(partes, " · ")
+			nota = &n
 		}
 		if _, err := tx.Exec(ctx, `UPDATE orders SET estado = $2, updated_at = now() WHERE id = $1`, id, siguiente); err != nil {
 			return err
@@ -300,7 +332,11 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 	if err != nil {
 		return nil, err
 	}
-	s.anotar(ctx, ses, sqlc.AccionAuditoriaCambiarEstado, "pedido", id, p.numero+": "+p.estado+" → "+siguiente, nil)
+	desc := p.numero + ": " + p.estado + " → " + siguiente
+	if autorizoFuera != "" {
+		desc += " · sin cobrar, autorizó " + autorizoFuera
+	}
+	s.anotar(ctx, ses, sqlc.AccionAuditoriaCambiarEstado, "pedido", id, desc, nil)
 	texto := textoDelEstado[siguiente]
 	if siguiente == "listo" && p.tipoEntrega == "envio" {
 		texto = "listo para despachar"

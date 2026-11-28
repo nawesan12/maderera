@@ -31,6 +31,8 @@ var textoDeRegla = map[string]struct {
 	// Las que faltaban y salían con su clave (mes 23, M2S4-052).
 	"descuento_con_escala":     {"Un descuento tipeado y el de la forma de pago", map[string]string{"reemplaza": "Vale el tipeado", "suma": "Se suman"}},
 	"redondeo_efectivo":        {"El total en efectivo, ¿con centavos?", map[string]string{"no": "Con centavos", "al_peso": "Al peso, a favor del cliente"}},
+	"despacho_contra_entrega":  {"El envío que se cobra en efectivo en la puerta", map[string]string{"con_pin": "Sale con el PIN de un admin", "sin_pin": "Sale sin PIN y queda a cobrar"}},
+	"flete_sin_cotizar":        {"El envío con el flete sin cotizar", map[string]string{"avisa": "Sale, avisando antes", "frena": "No sale hasta cotizarlo o marcarlo sin cargo"}},
 	"entregar_sin_cobrar":      {"Entregar sin cobrar, ¿quién pide el PIN?", map[string]string{"deposito": "Solo el depósito", "fuera_de_la_cuenta": "También quien vende, fuera de la cuenta corriente"}},
 	"retencion_en_el_cobro":    {"La retención que trae el cliente con el pago, ¿quién la carga en el cobro?", map[string]string{"admin": "Solo un admin", "quien_cobra": "Quien cobra"}},
 	"escala_con_lista":         {"En la tienda, ¿el descuento por medio de pago se suma al precio de profesional?", map[string]string{"si": "Sí", "no": "No, ese precio ya es de contado"}},

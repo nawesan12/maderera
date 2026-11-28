@@ -38,6 +38,8 @@ export const OPCIONES_DE_REGLAS = {
   deposito_de_efectivo: ["estudio", "lo_que_hay"],
   retenciones_al_pagar: ["con_base", "las_que_corresponden"],
   reponer_por_sucursal: ["con_minimo", "las_que_la_manejan"],
+  flete_sin_cotizar: ["avisa", "frena"],
+  despacho_contra_entrega: ["con_pin", "sin_pin"],
 } as const;
 
 

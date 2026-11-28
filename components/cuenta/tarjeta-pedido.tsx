@@ -55,7 +55,7 @@ export function TarjetaPedido({ pedido, compacta = false }: { pedido: PedidoProp
           </span>
         </span>
         <span className="tabular shrink-0 font-semibold">{formatearMonto(pedido.total)}</span>
-        <EtiquetaEstado estado={pedido.estado} contexto="pedido" />
+        <EtiquetaEstado estado={pedido.estado} contexto="pedido" retiro={pedido.tipoEntrega === "retiro"} />
       </Link>
     );
   }

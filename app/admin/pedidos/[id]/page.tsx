@@ -330,7 +330,7 @@ export default async function FichaPedidoPage({
         titulo={pedido.cliente}
         estado={
           <>
-            <EtiquetaEstado estado={pedido.estado} contexto="pedido" />
+            <EtiquetaEstado estado={pedido.estado} contexto="pedido" retiro={pedido.tipoEntrega === "retiro"} />
             {/* La misma regla que «Me deben» y que el encabezado de Pedidos:
                 lo que va a cuenta corriente ya está en la cuenta y no se
                 cobra en la puerta (mes simulado: el encabezado no lo sumaba

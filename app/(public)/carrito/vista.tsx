@@ -1,5 +1,7 @@
 "use client";
 
+import { laLista } from "@/lib/precios/nombre-de-lista";
+import { sobreQuePlaca } from "@/lib/cortes/placa";
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -145,7 +147,8 @@ export function VistaDelCarrito({
           <div>
             {listaDiferenciada && (
               <p className="mb-4 rounded-xl border border-brand-green/30 bg-brand-green/5 px-4 py-3 text-sm">
-                Estás viendo la lista <strong>{listaDiferenciada}</strong>
+                Estás viendo {laLista(listaDiferenciada).antes}
+                <strong>{laLista(listaDiferenciada).nombre}</strong>
                 {ahorroPorVolumen > 0 && (
                   <>
                     {" "}
@@ -213,9 +216,7 @@ export function VistaDelCarrito({
                                 media placa un corte chico cobra las pasadas y
                                 no la placa, y el renglón parecía incluirla
                                 (mes simulado, M3S1-008). */}
-                            {corte.mitad
-                              ? `Sobre media placa de ${corte.placaLargoMm} × ${corte.placaAnchoMm} mm`
-                              : `Sobre placa de ${corte.placaLargoMm} × ${corte.placaAnchoMm} mm`}
+                            {sobreQuePlaca(corte)}
                             {" · "}
                             {corte.piezas}{" "}
                             {corte.piezas === 1 ? "pieza" : "piezas"}

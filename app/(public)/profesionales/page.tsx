@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { laLista } from "@/lib/precios/nombre-de-lista";
 import { metadatosDePagina } from "@/lib/seo";
 import { ajustesDelSitio, tienda } from "@/lib/dal/contenido";
 import { preciosDelProfesional } from "@/lib/tienda";
@@ -368,7 +369,7 @@ function PanelDelProfesional({
       icono: Percent,
       titulo: "Tus precios en el catálogo",
       detalle: nombreLista
-        ? `Estás viendo la lista ${nombreLista}.`
+        ? `Estás viendo ${laLista(nombreLista).antes}${laLista(nombreLista).nombre}.`
         : "Los precios que ves ya son los tuyos.",
     },
     {

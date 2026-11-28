@@ -31,3 +31,22 @@ describe("los resúmenes concuerdan con 1 (Ndueña-admin-4 y 5)", () => {
     expect(contar(0, "quedó afuera", "quedaron afuera")).toBe("0 quedaron afuera");
   });
 });
+
+describe("la bitácora muestra el antes y el después (Natención-5)", () => {
+  it("los SKU de la lista del proveedor con su precio de antes y el nuevo", async () => {
+    const { renglonesDelDetalle } = await import("@/lib/bitacora-detalle");
+    const r = renglonesDelDetalle(
+      JSON.stringify({ cambios: [{ sku: "PLA-MDF-18", antes: "78000.00", despues: "81876.92" }, { sku: "TOR", antes: null, despues: "500.00" }] }),
+    );
+    expect(r).toHaveLength(2);
+    expect(r[0]).toMatch(/^PLA-MDF-18: \$\s?78\.000 → \$\s?81\.876,92$/);
+    expect(r[1]).toMatch(/^TOR: — → \$\s?500$/);
+  });
+  it("el texto de un aviso y lo que no es un cambio", async () => {
+    const { renglonesDelDetalle } = await import("@/lib/bitacora-detalle");
+    expect(renglonesDelDetalle(JSON.stringify({ antes: "Hola", despues: "Hola {{nombre}}" }))).toEqual(["Hola → Hola {{nombre}}"]);
+    expect(renglonesDelDetalle(JSON.stringify({ total: 28080 }))).toEqual([]);
+    expect(renglonesDelDetalle(null)).toEqual([]);
+    expect(renglonesDelDetalle("no es json")).toEqual([]);
+  });
+});

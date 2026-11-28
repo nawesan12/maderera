@@ -52,7 +52,8 @@ func TestLeerLaBitacora(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	persona := &auth.Sesion{UserID: id, Nombre: "Ana", Correo: "ana@prueba.test"}
+	adm := sqlc.StaffRoleAdmin
+	persona := &auth.Sesion{UserID: id, Nombre: "Ana", Correo: "ana@prueba.test", RolStaff: &adm}
 	for i, d := range []string{"Creó el banner de invierno", "Editó el precio del fenólico", "Anuló el recibo REC-0001"} {
 		Anotar(ctx, sqlc.New(pool), silencio, persona, []sqlc.AccionAuditoria{sqlc.AccionAuditoriaCrear, sqlc.AccionAuditoriaEditar, sqlc.AccionAuditoriaAnular}[i],
 			[]string{"banner", "precio", "recibo"}[i], "", d, nil)
@@ -90,7 +91,16 @@ func TestLeerLaBitacora(t *testing.T) {
 	if _, b := leer("/api/v1/admin/bitacora?accion=anular"); !strings.Contains(b, "REC-0001") || !strings.Contains(b, `"total":1`) {
 		t.Errorf("acción: %s", b)
 	}
-	if _, b := leer("/api/v1/admin/bitacora/opciones"); !strings.Contains(b, `"entidades":["banner","precio","recibo"]`) || !strings.Contains(b, `"usuarioNombre":"Ana"`) {
+	// Todo un puesto, en el mismo «Quién» (recorrido, M4-060).
+	ven := sqlc.StaffRoleVendedor
+	Anotar(ctx, sqlc.New(pool), silencio, &auth.Sesion{UserID: "otro", Nombre: "Beto", RolStaff: &ven}, sqlc.AccionAuditoriaCrear, "pedido", "", "Tomó el pedido PED-1", nil)
+	if _, b := leer("/api/v1/admin/bitacora?usuario=rol:vendedor"); !strings.Contains(b, "PED-1") || !strings.Contains(b, `"total":1`) {
+		t.Errorf("por puesto: %s", b)
+	}
+	if _, b := leer("/api/v1/admin/bitacora?usuario=rol:admin"); !strings.Contains(b, `"total":3`) {
+		t.Errorf("por puesto, admin: %s", b)
+	}
+	if _, b := leer("/api/v1/admin/bitacora/opciones"); !strings.Contains(b, `"entidades":["banner","pedido","precio","recibo"]`) || !strings.Contains(b, `"usuarioNombre":"Ana"`) {
 		t.Errorf("opciones: %s", b)
 	}
 	if r, _ := http.Get(srv.URL + "/api/v1/admin/bitacora"); r.StatusCode != 401 {

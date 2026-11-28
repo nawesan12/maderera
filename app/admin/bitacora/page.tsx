@@ -6,7 +6,7 @@ import {
   etiquetaDeEntidad,
   rutaDeEntidad,
 } from "@/lib/dal/admin/rutas-entidad";
-import { etiquetaDeRol } from "@/lib/roles";
+import { ETIQUETA_ROL, etiquetaDeRol } from "@/lib/roles";
 import { fechaHora, haceCuanto } from "@/lib/formato";
 import { renglonesDelDetalle } from "@/lib/bitacora-detalle";
 import {
@@ -161,10 +161,20 @@ export default async function BitacoraPage({
           etiqueta="Quién"
           nombre="usuario"
           valor={usuarioId}
-          opciones={opciones.personas.map((p) => ({
-            valor: p.usuarioId!,
-            texto: p.usuarioNombre,
-          }))}
+          // Un puesto entero también (recorrido, M4-060): lo que hizo Ventas
+          // en el día sin ir persona por persona.
+          opciones={[
+            ...(Object.entries(ETIQUETA_ROL) as [string, string][]).map(([rol, texto]) => ({
+              valor: `rol:${rol}`,
+              texto,
+              grupo: "Puesto",
+            })),
+            ...opciones.personas.map((p) => ({
+              valor: p.usuarioId!,
+              texto: p.usuarioNombre,
+              grupo: "Persona",
+            })),
+          ]}
         />
 
         <button
@@ -209,7 +219,7 @@ export default async function BitacoraPage({
             <li key={fila.id} className="flex flex-wrap items-start gap-x-4 gap-y-1 px-4 py-3">
               <div className="min-w-[16rem] flex-1">
                 <p className="text-base">{sinCentavosCero(fila.descripcion)}</p>
-                <DetalleDeLaFila detalle={fila.detalle} />
+                <DetalleDeLaFila detalle={fila.detalle} entidad={fila.entidad} />
                 <p className="mt-0.5 text-sm text-muted-foreground">
                   {fila.usuarioNombre}
                   {fila.usuarioRol ? ` · ${etiquetaDeRol(fila.usuarioRol)}` : ""} ·{" "}
@@ -298,9 +308,17 @@ function Selector({
   etiqueta: string;
   nombre: string;
   valor?: string;
-  opciones: { valor: string; texto: string }[];
+  /** Con `grupo`, las opciones van en un `<optgroup>` por grupo. */
+  opciones: { valor: string; texto: string; grupo?: string }[];
 }) {
   if (opciones.length === 0) return null;
+  const grupos = [...new Set(opciones.map((o) => o.grupo ?? ""))];
+  const lista = (de: typeof opciones) =>
+    de.map((o) => (
+      <option key={o.valor} value={o.valor}>
+        {o.texto}
+      </option>
+    ));
 
   return (
     <div>
@@ -314,11 +332,13 @@ function Selector({
         className="mt-1 h-10 rounded-lg border bg-background px-3 text-base"
       >
         <option value="">Todo</option>
-        {opciones.map((o) => (
-          <option key={o.valor} value={o.valor}>
-            {o.texto}
-          </option>
-        ))}
+        {grupos.length > 1 || grupos[0]
+          ? grupos.map((g) => (
+              <optgroup key={g} label={g}>
+                {lista(opciones.filter((o) => (o.grupo ?? "") === g))}
+              </optgroup>
+            ))
+          : lista(opciones)}
       </select>
     </div>
   );
@@ -328,8 +348,8 @@ function Selector({
  * El «antes → después» de la entrada (los precios de la lista del
  * proveedor, el texto de un aviso), plegado si son muchos.
  */
-function DetalleDeLaFila({ detalle }: { detalle: string | null }) {
-  const renglones = renglonesDelDetalle(detalle);
+function DetalleDeLaFila({ detalle, entidad }: { detalle: string | null; entidad: string }) {
+  const renglones = renglonesDelDetalle(detalle, entidad);
   if (renglones.length === 0) return null;
   const lista = (
     <ul className="tabular mt-1 space-y-0.5 text-sm text-muted-foreground">

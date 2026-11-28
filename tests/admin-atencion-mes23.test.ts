@@ -48,5 +48,7 @@ describe("la bitácora muestra el antes y el después (Natención-5)", () => {
     expect(renglonesDelDetalle(JSON.stringify({ total: 28080 }))).toEqual([]);
     expect(renglonesDelDetalle(null)).toEqual([]);
     expect(renglonesDelDetalle("no es json")).toEqual([]);
+    // Una regla: el título ya dice «Hasta 5 % → Ninguno»; abajo, «$ 5 → 0» (M4-053).
+    expect(renglonesDelDetalle(JSON.stringify({ antes: "5", despues: "0" }), "regla")).toEqual([]);
   });
 });

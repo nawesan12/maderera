@@ -343,7 +343,7 @@ export interface operations {
             query?: {
                 busqueda?: string;
                 categoria?: string;
-                estado?: "todas" | "sin-stock" | "reponer" | "con-stock";
+                estado?: "todas" | "sin-stock" | "reponer" | "con-stock" | "negativo";
                 marca?: string;
                 proveedor?: string;
                 /** @description El slug de una sucursal; los grupos miran solo esa */
@@ -371,6 +371,8 @@ export interface operations {
                             sinStock: number;
                             reponer: number;
                             conStock: number;
+                            /** @description Lo vendido de más; cae también en reponer */
+                            negativo: number;
                         };
                         sucursales: components["schemas"]["Sucursal"][];
                     };

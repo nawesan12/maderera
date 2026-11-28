@@ -54,7 +54,7 @@ export interface FilaStock {
 /** Dos columnas de tarjetas. */
 export const STOCK_POR_PAGINA = 30;
 
-const ESTADOS_DE_STOCK = ["sin-stock", "reponer", "con-stock"] as const;
+const ESTADOS_DE_STOCK = ["sin-stock", "reponer", "con-stock", "negativo"] as const;
 export type EstadoDeStock = (typeof ESTADOS_DE_STOCK)[number];
 
 export function estadoDeStock(v: string | undefined): EstadoDeStock | undefined {

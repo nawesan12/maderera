@@ -510,7 +510,9 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 		Detalle: detalle("Llegó al mínimo o se vendió de más"), Href: "/admin/stock?estado=reponer"})
 	// El stock en negativo (se vendió lo que no había): aparte y urgente,
 	// porque el número de Stock está mal hasta que se cuente o se reciba
-	// (mes simulado, M2S4-001). Lleva a la reposición, donde va arriba.
+	// (mes simulado, M2S4-001). Lleva a la reposición, donde va arriba; a
+	// quien no entra ahí (ventas), a Stock filtrado por lo negativo: el link
+	// lo devolvía al inicio (recorrido, M4-017 y M4-028).
 	if ve("/admin/stock") {
 		var negativos int
 		if err := s.pool.QueryRow(ctx, `SELECT count(DISTINCT i.variant_id)::int FROM inventory i
@@ -518,8 +520,12 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 			WHERE p.active AND v.active AND i.qty - coalesce(i.reservado, 0) < 0`).Scan(&negativos); err != nil {
 			return nil, err
 		}
+		hrefNegativo := "/admin/reportes/reposicion"
+		if !ve(hrefNegativo) {
+			hrefNegativo = "/admin/stock?estado=negativo"
+		}
 		agregar(negativos, Pendiente{Clave: "stock-negativo", Texto: uno(negativos, "medida con stock en negativo", "medidas con stock en negativo"),
-			Href: "/admin/reportes/reposicion", Urgente: true, Vencido: true})
+			Href: hrefNegativo, Urgente: true, Vencido: true})
 	}
 	// El precio de lista bajo el costo: cada venta pierde plata (H139).
 	agregar(c.bajoCosto, Pendiente{Clave: "bajo-costo", Texto: uno(c.bajoCosto, "medida con el precio bajo el costo", "medidas con el precio bajo el costo"),

@@ -66,6 +66,34 @@ paths:
                   proposito: { type: string, enum: [activacion, ingreso] }
         "410": { $ref: "#/components/responses/Problema" }
         "429": { $ref: "#/components/responses/Problema" }
+  /api/v1/sesion/enlace/clave:
+    post:
+      operationId: ClaveConEnlace
+      summary: La contraseña que elige alguien del personal con el link del alta (un solo uso; no abre sesión)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, clave]
+              additionalProperties: false
+              properties:
+                token: { type: string, maxLength: 100 }
+                clave: { type: string, maxLength: 200 }
+      responses:
+        "200":
+          description: Quedó la contraseña; entra con su correo
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [correo]
+                properties:
+                  correo: { type: string }
+        "410": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+        "429": { $ref: "#/components/responses/Problema" }
   /api/v1/sesion/enlace/pedir:
     post:
       operationId: PedirEnlace

@@ -108,3 +108,32 @@ export async function pedirEnlace(_previo: EstadoPedidoEnlace, formData: FormDat
   if (!r.response.ok) return { error: mensajeDe(r.error as Problema | undefined, "No pudimos mandarlo. Probá en un rato.") };
   return { enviado: true };
 }
+
+/**
+ * La contraseña que elige alguien del personal con el link del alta
+ * (recorrido, M4-006). El link no abre sesión: con la clave puesta se entra
+ * como siempre, con el correo y esa clave, y se va a su pantalla.
+ */
+export async function elegirClaveConEnlace(_previo: EstadoIngreso, formData: FormData): Promise<EstadoIngreso> {
+  const token = String(formData.get("token") ?? "").slice(0, 100);
+  const clave = String(formData.get("password") ?? "");
+  let r;
+  try {
+    r = await (await api()).POST("/api/v1/sesion/enlace/clave", { body: { token, clave } });
+  } catch {
+    return { error: "No pudimos guardarla ahora. Probá en un rato." };
+  }
+  if (!r.data) {
+    return { error: mensajeDe(r.error as Problema | undefined, "No pudimos usar este link. Pedile uno nuevo a quien te dio de alta.") };
+  }
+  let sesion;
+  try {
+    sesion = await (await api()).POST("/api/v1/sesion", { body: { correo: r.data.correo, clave } });
+  } catch {
+    redirect("/ingresar");
+  }
+  if (!sesion.data) redirect("/ingresar");
+  await copiarCookies(sesion.response);
+  await renovarSenal();
+  redirect(sesion.data.rol === "staff" ? inicioDelRol(sesion.data.rolStaff) : "/mi-cuenta");
+}

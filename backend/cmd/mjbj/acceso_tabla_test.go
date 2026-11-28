@@ -181,6 +181,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"ContactoDeLaConsulta":            "/admin/cortes/nuevo",           // GET /api/v1/admin/cortes/consulta/{token}/contacto
 	"CategoriasDeDocumentos":          "/admin/documentacion",          // GET /api/v1/admin/documentos/categorias
 	"ActivarDocumento":                "/admin/documentacion",          // POST /api/v1/admin/documentos/{id}/activo
+	"ArchivoNuevoDeDocumento":         "/admin/documentacion",          // POST /api/v1/admin/documentos/{id}/archivo
 	"VisibilidadDocumento":            "/admin/documentacion",          // POST /api/v1/admin/documentos/{id}/visibilidad
 	"DestinosDeDocumento":             "/admin/documentacion",          // PUT /api/v1/admin/documentos/{id}/destinos
 	"AdminDocumentos":                 "/admin/documentacion",          // GET /api/v1/admin/documentos
@@ -545,5 +546,6 @@ var pantallaDeCadaRuta = map[string]string{
 	"VerSesion":                       "sesion",                        // GET /api/v1/sesion
 	"Entrar":                          "publico",                       // POST /api/v1/sesion
 	"EntrarConEnlace":                 "publico",                       // POST /api/v1/sesion/enlace
+	"ClaveConEnlace":                  "publico",                       // POST /api/v1/sesion/enlace/clave
 	"PedirEnlace":                     "publico",                       // POST /api/v1/sesion/enlace/pedir
 }

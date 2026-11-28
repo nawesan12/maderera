@@ -67,7 +67,12 @@ func AltaDePersonal(ctx context.Context, tx pgx.Tx, correo, nombre, clave string
 		return "", false, plataforma.Invalido(map[string]string{"correo": "Ese correo no es válido."})
 	}
 	q := sqlc.New(tx)
+	// Sin clave, la cuenta nace sin ella: la elige la persona con el link del
+	// alta (EnlaceClavePersonal; recorrido, M4-006).
 	ponerClave := func(id string) error {
+		if clave == "" {
+			return nil
+		}
 		if utf8.RuneCountInString(clave) < 8 {
 			return plataforma.Invalido(map[string]string{"clave": "La contraseña necesita 8 caracteres o más."})
 		}

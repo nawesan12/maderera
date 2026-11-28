@@ -40,6 +40,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sesion/enlace/clave": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** La contraseña que elige alguien del personal con el link del alta (un solo uso; no abre sesión) */
+        post: operations["ClaveConEnlace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sesion/enlace/pedir": {
         parameters: {
             query?: never;
@@ -288,6 +305,38 @@ export interface operations {
                 };
             };
             410: components["responses"]["Problema"];
+            429: components["responses"]["Problema"];
+        };
+    };
+    ClaveConEnlace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                    clave: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Quedó la contraseña; entra con su correo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        correo: string;
+                    };
+                };
+            };
+            410: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
             429: components["responses"]["Problema"];
         };
     };

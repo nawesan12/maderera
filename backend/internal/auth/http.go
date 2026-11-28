@@ -64,6 +64,28 @@ func (a *API) EntrarConEnlace(ctx context.Context, req sesionapi.EntrarConEnlace
 	return sesionapi.EntrarConEnlace200JSONResponse{Sesion: dto(ses), Proposito: sesionapi.EntrarConEnlace200JSONResponseBodyProposito(proposito)}, nil
 }
 
+// ClaveConEnlace pone la contraseña que eligió alguien del personal con el
+// link del alta. Con el freno del ingreso por IP, como el link mágico.
+func (a *API) ClaveConEnlace(ctx context.Context, req sesionapi.ClaveConEnlaceRequestObject) (sesionapi.ClaveConEnlaceResponseObject, error) {
+	ip, _ := ipYAgente(ctx)
+	if v := a.lim.Permitido(ctx, limites.Ingresar, "ip:"+ip); !v.Permitido {
+		return nil, espera(v)
+	}
+	correo, err := a.s.PonerClaveConEnlace(ctx, req.Body.Token, req.Body.Clave)
+	switch {
+	case errors.Is(err, ErrClaveCorta):
+		return nil, plataforma.Invalido(map[string]string{"clave": "La contraseña necesita 8 caracteres o más."})
+	case errors.Is(err, ErrEnlaceVencido):
+		return nil, plataforma.NuevoProblema(http.StatusGone, "El link venció. Pedile uno nuevo a quien te dio de alta.")
+	case errors.Is(err, ErrEnlaceInvalido):
+		return nil, plataforma.NuevoProblema(http.StatusGone, "Este link ya se usó o no es válido.")
+	case err != nil:
+		return nil, err
+	}
+	a.lim.Devolver(ctx, limites.Ingresar, "ip:"+ip)
+	return sesionapi.ClaveConEnlace200JSONResponse{Correo: correo}, nil
+}
+
 // PedirEnlace manda un link de ingreso al correo, si es de una cuenta.
 // Contesta lo mismo en los dos casos: la respuesta no dice si el correo
 // existe.

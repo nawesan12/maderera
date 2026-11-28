@@ -153,6 +153,12 @@ type EntrarConEnlaceJSONBody struct {
 // EntrarConEnlace200JSONResponseBodyProposito defines parameters for EntrarConEnlace.
 type EntrarConEnlace200JSONResponseBodyProposito string
 
+// ClaveConEnlaceJSONBody defines parameters for ClaveConEnlace.
+type ClaveConEnlaceJSONBody struct {
+	Clave string `json:"clave"`
+	Token string `json:"token"`
+}
+
 // PedirEnlaceJSONBody defines parameters for PedirEnlace.
 type PedirEnlaceJSONBody struct {
 	Correo string `json:"correo"`
@@ -180,6 +186,9 @@ type CambiarClaveJSONRequestBody = CambioDeClave
 
 // EntrarConEnlaceJSONRequestBody defines body for EntrarConEnlace for application/json ContentType.
 type EntrarConEnlaceJSONRequestBody EntrarConEnlaceJSONBody
+
+// ClaveConEnlaceJSONRequestBody defines body for ClaveConEnlace for application/json ContentType.
+type ClaveConEnlaceJSONRequestBody ClaveConEnlaceJSONBody
 
 // PedirEnlaceJSONRequestBody defines body for PedirEnlace for application/json ContentType.
 type PedirEnlaceJSONRequestBody PedirEnlaceJSONBody
@@ -213,6 +222,9 @@ type ServerInterface interface {
 	// EntrarConEnlace Entrar con un link mágico (un solo uso)
 	// (POST /api/v1/sesion/enlace)
 	EntrarConEnlace(w http.ResponseWriter, r *http.Request)
+	// ClaveConEnlace La contraseña que elige alguien del personal con el link del alta (un solo uso; no abre sesión)
+	// (POST /api/v1/sesion/enlace/clave)
+	ClaveConEnlace(w http.ResponseWriter, r *http.Request)
 	// PedirEnlace Manda un link de ingreso al correo, si tiene cuenta (contesta igual si no)
 	// (POST /api/v1/sesion/enlace/pedir)
 	PedirEnlace(w http.ResponseWriter, r *http.Request)
@@ -322,6 +334,20 @@ func (siw *ServerInterfaceWrapper) EntrarConEnlace(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.EntrarConEnlace(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ClaveConEnlace operation middleware
+func (siw *ServerInterfaceWrapper) ClaveConEnlace(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ClaveConEnlace(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -497,6 +523,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/sesion", wrapper.VerSesion)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/sesion", wrapper.Entrar)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/sesion/enlace", wrapper.EntrarConEnlace)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/sesion/enlace/clave", wrapper.ClaveConEnlace)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/sesion/enlace/pedir", wrapper.PedirEnlace)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/sesion/clave", wrapper.EstadoDeClave)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/sesion/clave", wrapper.CambiarClave)
@@ -803,6 +830,74 @@ func (response EntrarConEnlace429ApplicationProblemPlusJSONResponse) VisitEntrar
 	return err
 }
 
+type ClaveConEnlaceRequestObject struct {
+	Body *ClaveConEnlaceJSONRequestBody
+}
+
+type ClaveConEnlaceResponseObject interface {
+	VisitClaveConEnlaceResponse(w http.ResponseWriter) error
+}
+
+type ClaveConEnlace200JSONResponse struct {
+	Correo string `json:"correo"`
+}
+
+func (response ClaveConEnlace200JSONResponse) VisitClaveConEnlaceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ClaveConEnlace410ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response ClaveConEnlace410ApplicationProblemPlusJSONResponse) VisitClaveConEnlaceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(410)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ClaveConEnlace422ApplicationProblemPlusJSONResponse Problema
+
+func (response ClaveConEnlace422ApplicationProblemPlusJSONResponse) VisitClaveConEnlaceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ClaveConEnlace429ApplicationProblemPlusJSONResponse Problema
+
+func (response ClaveConEnlace429ApplicationProblemPlusJSONResponse) VisitClaveConEnlaceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type PedirEnlaceRequestObject struct {
 	Body *PedirEnlaceJSONRequestBody
 }
@@ -1020,6 +1115,9 @@ type StrictServerInterface interface {
 	// EntrarConEnlace Entrar con un link mágico (un solo uso)
 	// (POST /api/v1/sesion/enlace)
 	EntrarConEnlace(ctx context.Context, request EntrarConEnlaceRequestObject) (EntrarConEnlaceResponseObject, error)
+	// ClaveConEnlace La contraseña que elige alguien del personal con el link del alta (un solo uso; no abre sesión)
+	// (POST /api/v1/sesion/enlace/clave)
+	ClaveConEnlace(ctx context.Context, request ClaveConEnlaceRequestObject) (ClaveConEnlaceResponseObject, error)
 	// PedirEnlace Manda un link de ingreso al correo, si tiene cuenta (contesta igual si no)
 	// (POST /api/v1/sesion/enlace/pedir)
 	PedirEnlace(ctx context.Context, request PedirEnlaceRequestObject) (PedirEnlaceResponseObject, error)
@@ -1266,6 +1364,37 @@ func (sh *strictHandler) EntrarConEnlace(w http.ResponseWriter, r *http.Request)
 	}
 }
 
+// ClaveConEnlace operation middleware
+func (sh *strictHandler) ClaveConEnlace(w http.ResponseWriter, r *http.Request) {
+	var request ClaveConEnlaceRequestObject
+
+	var body ClaveConEnlaceJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ClaveConEnlace(ctx, request.(ClaveConEnlaceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ClaveConEnlace")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ClaveConEnlaceResponseObject); ok {
+		if err := validResponse.VisitClaveConEnlaceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // PedirEnlace operation middleware
 func (sh *strictHandler) PedirEnlace(w http.ResponseWriter, r *http.Request) {
 	var request PedirEnlaceRequestObject
@@ -1364,32 +1493,33 @@ func (sh *strictHandler) DestrabarPin(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"Pe7g12Lx5wA=",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

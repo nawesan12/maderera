@@ -34,6 +34,16 @@ type API struct {
 	ahora            func() time.Time
 	sitio            string
 	enviarInvitacion func(ctx context.Context, correo, nombre, url string)
+	// enviarClave manda el link con que alguien del personal elige su
+	// contraseña.
+	enviarClave func(ctx context.Context, correo, nombre, url string)
+}
+
+// ConClaveDelPersonal le da a la API cómo mandar el link del alta del
+// personal.
+func (a *API) ConClaveDelPersonal(enviar func(ctx context.Context, correo, nombre, url string)) *API {
+	a.enviarClave = enviar
+	return a
 }
 
 // NuevaAPI arma los handlers.
@@ -521,11 +531,25 @@ func (a *API) AltaDePersonal(ctx context.Context, r cuentasapi.AltaDePersonalReq
 	if err != nil {
 		return nil, err
 	}
-	m, err := a.clientes.AltaDePersonal(ctx, ses, r.Body.Nombre, r.Body.Correo, r.Body.Clave, sqlc.StaffRole(r.Body.Rol))
+	clave := ""
+	if r.Body.Clave != nil {
+		clave = *r.Body.Clave
+	}
+	m, quien, token, err := a.clientes.AltaDePersonal(ctx, ses, r.Body.Nombre, r.Body.Correo, clave, sqlc.StaffRole(r.Body.Rol))
 	if err != nil {
 		return nil, err
 	}
-	return mensaje(m), nil
+	out := map[string]string{"ok": m}
+	// Sin clave: el link para elegirla va a su correo y vuelve a la
+	// pantalla, para copiarlo o mandarlo por WhatsApp (recorrido, M4-006).
+	if token != "" {
+		url := a.sitio + "/entrar/clave/" + token
+		if a.enviarClave != nil {
+			a.enviarClave(ctx, strings.TrimSpace(strings.ToLower(r.Body.Correo)), quien, url)
+		}
+		out["enlace"], out["nombre"] = url, quien
+	}
+	return ok(out), nil
 }
 
 func (a *API) CambiarPuesto(ctx context.Context, r cuentasapi.CambiarPuestoRequestObject) (cuentasapi.CambiarPuestoResponseObject, error) {

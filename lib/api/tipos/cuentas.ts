@@ -1682,13 +1682,25 @@ export interface operations {
                     nombre: string;
                     correo: string;
                     rol: components["schemas"]["Puesto"];
-                    /** @description La contraseña inicial */
-                    clave: string;
+                    /** @description La contraseña inicial; sin ella */
+                    clave?: string;
                 };
             };
         };
         responses: {
-            200: components["responses"]["Ok"];
+            /** @description Dado de alta; sin clave, con el link para elegirla (también va a su correo) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok: string;
+                        enlace?: string;
+                        nombre?: string;
+                    };
+                };
+            };
             422: components["responses"]["Problema"];
         };
     };

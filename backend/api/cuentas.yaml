@@ -512,15 +512,25 @@ paths:
           application/json:
             schema:
               type: object
-              required: [nombre, correo, rol, clave]
+              required: [nombre, correo, rol]
               additionalProperties: false
               properties:
                 nombre: { type: string, maxLength: 120 }
                 correo: { type: string, maxLength: 200 }
                 rol: { $ref: "#/components/schemas/Puesto" }
-                clave: { type: string, maxLength: 200, description: La contraseña inicial }
+                clave: { type: string, maxLength: 200, description: La contraseña inicial; sin ella, la persona la elige con el link del alta }
       responses:
-        "200": { $ref: "#/components/responses/Ok" }
+        "200":
+          description: Dado de alta; sin clave, con el link para elegirla (también va a su correo)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: string }
+                  enlace: { type: string }
+                  nombre: { type: string }
         "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/personal/{id}/puesto:
     parameters:

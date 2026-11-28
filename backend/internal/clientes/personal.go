@@ -27,15 +27,16 @@ func (s *Servicio) Personal(ctx context.Context) ([]auth.Persona, error) {
 	return auth.ListarPersonal(ctx, s.pool)
 }
 
-// AltaDePersonal da de alta a alguien. Devuelve el mensaje para la pantalla.
-func (s *Servicio) AltaDePersonal(ctx context.Context, ses *auth.Sesion, nombre, correo, clave string, rol sqlc.StaffRole) (string, error) {
-	var mensaje string
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		id, conSuClave, err := auth.AltaDePersonal(ctx, tx, correo, nombre, clave, rol, time.Now())
+// AltaDePersonal da de alta a alguien. Devuelve el mensaje para la pantalla,
+// el nombre y, si entra sin clave, el token del link con que la elige
+// (recorrido, M4-006: la dueña tenía que inventarla y pasarla por WhatsApp).
+func (s *Servicio) AltaDePersonal(ctx context.Context, ses *auth.Sesion, nombre, correo, clave string, rol sqlc.StaffRole) (mensaje, quien, token string, err error) {
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		ahora := time.Now()
+		id, conSuClave, err := auth.AltaDePersonal(ctx, tx, correo, nombre, clave, rol, ahora)
 		if err != nil {
 			return err
 		}
-		var quien string
 		if err := tx.QueryRow(ctx, `SELECT name FROM "user" WHERE id = $1`, id).Scan(&quien); err != nil {
 			return err
 		}
@@ -45,14 +46,20 @@ func (s *Servicio) AltaDePersonal(ctx context.Context, ses *auth.Sesion, nombre,
 			}
 		}
 		mensaje = quien + " ya puede entrar."
-		if conSuClave {
+		switch {
+		case conSuClave:
 			mensaje = quien + " ya puede entrar, con la contraseña que ya tenía."
+		case clave == "":
+			if token, err = auth.NuevoEnlace(ctx, tx, id, auth.EnlaceClavePersonal, auth.VenceClavePersonal, ahora); err != nil {
+				return err
+			}
+			mensaje = "Falta que " + quien + " elija su contraseña con el link."
 		}
 		bitacora.Anotar(ctx, s.q.WithTx(tx), s.log, ses, sqlc.AccionAuditoriaCrear, "usuario", id,
 			"Dio de alta a "+quien+" en el personal ("+string(rol)+")", nil)
 		return nil
 	})
-	return mensaje, err
+	return mensaje, quien, token, err
 }
 
 // CambiarPuesto cambia el rol de alguien del personal.

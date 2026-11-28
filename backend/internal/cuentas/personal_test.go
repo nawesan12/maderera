@@ -124,3 +124,43 @@ func TestPersonalDesdeElPanel(t *testing.T) {
 		t.Errorf("bitácora: %d", anotadas)
 	}
 }
+
+// El alta sin contraseña (recorrido, M4-006): la persona la elige con un
+// link de un solo uso, que no abre sesión ni sirve en /entrar; nadie más la
+// conoce. Después entra con su correo y esa clave.
+func TestAltaDePersonalSinClave(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	adm := e.staff(t, "duena@prueba.test", "admin")
+	u := e.srv.URL + "/api/v1/admin/personal"
+
+	c, cuerpo := pedir(t, adm, "POST", u, map[string]string{"nombre": "Beto Gómez", "correo": "beto@prueba.test", "rol": "deposito"})
+	var r struct{ Ok, Enlace, Nombre string }
+	if err := json.Unmarshal([]byte(cuerpo), &r); err != nil || c != 200 || !strings.Contains(r.Enlace, "/entrar/clave/") || r.Nombre != "Beto Gómez" {
+		t.Fatalf("alta sin clave: %d %s", c, cuerpo)
+	}
+	token := r.Enlace[strings.LastIndex(r.Enlace, "/")+1:]
+	if _, err := e.ses.Entrar(ctx, httptest.NewRecorder(), "beto@prueba.test", "", "", "", true); err == nil {
+		t.Fatal("entró sin clave")
+	}
+	// En /entrar no abre sesión, y probarlo no lo gasta.
+	if _, _, err := e.ses.UsarEnlace(ctx, httptest.NewRecorder(), token, "", ""); err == nil {
+		t.Fatal("el link de la clave abrió una sesión")
+	}
+	if _, err := e.ses.PonerClaveConEnlace(ctx, token, "corta"); err == nil {
+		t.Fatal("aceptó una clave corta")
+	}
+	if correo, err := e.ses.PonerClaveConEnlace(ctx, token, "la que elegí yo"); err != nil || correo != "beto@prueba.test" {
+		t.Fatalf("poner la clave: %q %v", correo, err)
+	}
+	if _, err := e.ses.Entrar(ctx, httptest.NewRecorder(), "beto@prueba.test", "la que elegí yo", "", "", true); err != nil {
+		t.Fatalf("entra con la clave que eligió: %v", err)
+	}
+	if _, err := e.ses.PonerClaveConEnlace(ctx, token, "otra más larga"); err == nil {
+		t.Error("el link sirvió dos veces")
+	}
+	// Con una clave puesta, el alta sigue como antes.
+	if c, cuerpo := pedir(t, adm, "POST", u, map[string]string{"nombre": "Ana", "correo": "ana@prueba.test", "rol": "vendedor", "clave": "una clave inicial"}); c != 200 || strings.Contains(cuerpo, "enlace") {
+		t.Errorf("con clave: %d %s", c, cuerpo)
+	}
+}

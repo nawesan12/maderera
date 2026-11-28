@@ -325,6 +325,8 @@ export interface components {
             clienteExistente: {
                 id: string;
                 nombre: string;
+                /** @description La de la ficha; va con el CUIT */
+                condicionIva: string | null;
             } | null;
             /** Format: date-time */
             createdAt: string;

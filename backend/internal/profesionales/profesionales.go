@@ -65,6 +65,9 @@ func invalido(m string) error { return plataforma.NuevoProblema(http.StatusUnpro
 type ClienteExistente struct {
 	ID     string `json:"id"`
 	Nombre string `json:"nombre"`
+	// CondicionIva es la de la ficha: va con el CUIT, así que es la que se
+	// propone al habilitarlo (recorrido, M4-073: arrancaba en «Elegí una»).
+	CondicionIva *string `json:"condicionIva"`
 }
 
 // SolicitudListada es una solicitud del panel.
@@ -129,14 +132,14 @@ func (s *Servicio) Solicitudes(ctx context.Context) ([]SolicitudListada, error) 
 	}
 	porCuit := map[string]*ClienteExistente{}
 	if len(buscados) > 0 {
-		ex, err := s.pool.Query(ctx, `select id, nombre, coalesce(cuit, '') from customers where active and cuit = any($1::text[])`, buscados)
+		ex, err := s.pool.Query(ctx, `select id, nombre, coalesce(cuit, ''), condicion_iva::text from customers where active and cuit = any($1::text[])`, buscados)
 		if err != nil {
 			return nil, err
 		}
 		for ex.Next() {
 			var c ClienteExistente
 			var cu string
-			if err := ex.Scan(&c.ID, &c.Nombre, &cu); err != nil {
+			if err := ex.Scan(&c.ID, &c.Nombre, &cu, &c.CondicionIva); err != nil {
 				ex.Close()
 				return nil, err
 			}

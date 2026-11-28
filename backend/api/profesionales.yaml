@@ -259,10 +259,11 @@ components:
         clienteExistente:
           type: object
           nullable: true
-          required: [id, nombre]
+          required: [id, nombre, condicionIva]
           properties:
             id: { type: string }
             nombre: { type: string }
+            condicionIva: { type: string, nullable: true, description: La de la ficha; va con el CUIT }
         createdAt: { type: string, format: date-time }
         resueltoAt: { type: string, format: date-time, nullable: true }
     ListaAsignable:

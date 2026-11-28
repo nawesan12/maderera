@@ -78,9 +78,11 @@ export function CajasFisicas({
 
   function renglon(c: CajaFisica) {
     return (
-      <li key={c.id} className="flex items-center gap-3 px-5 py-3.5">
+      <li key={c.id} className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
+        {/* A 375 el ícono se va: con él, «CAJA1 Mostrador — puesto 1» y la
+            conexión partían en cuatro renglones (M4-108). */}
         <span
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+          className={`hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl sm:flex ${
             c.activo
               ? "bg-hundida text-muted-foreground"
               : "bg-muted text-muted-foreground opacity-50"
@@ -90,7 +92,10 @@ export function CajasFisicas({
         </span>
 
         <div className="min-w-0 flex-1">
-          <p className="text-base font-semibold">
+          <p
+            className="truncate text-base font-semibold"
+            title={c.nombre ? `${c.codigo} ${c.nombre}` : c.codigo}
+          >
             {c.codigo}
             {c.nombre && (
               <span className="ml-2 font-normal text-muted-foreground">
@@ -98,7 +103,10 @@ export function CajasFisicas({
               </span>
             )}
           </p>
-          <p className="text-sm text-muted-foreground">
+          <p
+            className="truncate text-sm text-muted-foreground"
+            title={`${c.sucursal ?? "Sin sucursal"} · ${c.cuando}`}
+          >
             {c.sucursal ?? "Sin sucursal"} ·{" "}
             {c.cuando}
           </p>

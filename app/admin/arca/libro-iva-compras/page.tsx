@@ -142,7 +142,7 @@ export default async function LibroIvaComprasPage({
                 <div className="min-w-0">
                   <p className="text-base">
                     <span className="codigo">{numeroDeCompra(f.puntoVenta, f.numero)}</span>{" "}
-                    <span className="text-sm text-muted-foreground">{abreviatura(f.tipo)}</span>
+                    <span className="whitespace-nowrap text-sm text-muted-foreground">{abreviatura(f.tipo)}</span>
                   </p>
                   <p className="break-words text-base">{f.proveedor}</p>
                   <p className="tabular text-sm text-muted-foreground">

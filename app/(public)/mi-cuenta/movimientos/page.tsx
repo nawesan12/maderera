@@ -113,18 +113,9 @@ export default async function MovimientosPage({
         </section>
       )}
 
-      {saldo > 0 && (
-        <p className="text-[15px] text-muted-foreground">
-          Para pagar tu cuenta con transferencia, depósito o cheque, entrá a{" "}
-          <Link
-            href="/mi-cuenta/cuenta-corriente"
-            className="font-medium text-acento-texto hover:underline"
-          >
-            Cuenta corriente
-          </Link>
-          .
-        </p>
-      )}
+      {/* Sin pie que nombre medios: el saldo de arriba lleva a pagar, y
+          allá están los que de verdad hay (M4-064: prometía transferencia y
+          depósito sin datos bancarios cargados). */}
     </div>
   );
 }

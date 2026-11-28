@@ -211,8 +211,10 @@ func TestElCierreAvisaLaCajaEnNegativo(t *testing.T) {
 	if !ok || len(p.Casos) != 1 || !strings.HasPrefix(p.Casos[0].Nombre, "1.1.01") || *p.Casos[0].Importe != -1000 {
 		t.Errorf("el aviso: %s", cuerpo)
 	}
-	// «Resolver» lleva a la caja, no al mismo cierre (mes 23).
-	if p.Donde != "/admin/caja" || p.Casos[0].Donde != "/admin/caja" {
+	// «Resolver» lleva a donde se arregla, no al mismo cierre (mes 23) ni a
+	// la caja, donde no hay nada para hacer: la regla de los depósitos
+	// (recorrido M4-095).
+	if p.Donde != "/admin/reglas" || p.Casos[0].Donde != "/admin/reglas" {
 		t.Errorf("adónde lleva: %q %q", p.Donde, p.Casos[0].Donde)
 	}
 }

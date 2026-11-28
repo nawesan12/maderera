@@ -35,6 +35,7 @@ export const OPCIONES_DE_REGLAS = {
   listo_con_el_corte: ["mostrador", "todos"],
   endoso_espera_cae: ["si", "al_cae"],
   redondeo_lista_proveedor: ["centavos", "peso", "decena", "centena"],
+  deposito_de_efectivo: ["estudio", "lo_que_hay"],
 } as const;
 
 

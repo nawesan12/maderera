@@ -42,6 +42,7 @@ var textoDeRegla = map[string]struct {
 	"listo_con_el_corte":       {"Con el último corte terminado, pasa solo a «Listo»", map[string]string{"mostrador": "La venta del mostrador", "todos": "Cualquier pedido"}},
 	"endoso_espera_cae":        {"El cheque de una factura sin CAE se endosa", map[string]string{"si": "Sí, como blanco", "al_cae": "Recién con el CAE"}},
 	"redondeo_lista_proveedor": {"El precio que propone la lista del proveedor", map[string]string{"centavos": "Con centavos", "peso": "Al peso", "decena": "A la decena", "centena": "A la centena"}},
+	"deposito_de_efectivo":     {"El efectivo que va al banco sale de", map[string]string{"estudio": "La Caja del estudio", "lo_que_hay": "La del estudio hasta lo que tiene; el resto, del circuito sin factura"}},
 }
 
 // DescripcionDeRegla es el renglón de la bitácora del cambio de una regla.

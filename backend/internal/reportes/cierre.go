@@ -297,7 +297,7 @@ func (s *Servicio) asientosDelPeriodoCon(ctx context.Context, desde, hasta time.
 			concepto += " de " + sucursal
 		}
 		d := asiento(fecha, concepto, []RenglonDeAsiento{renglon(Cuentas.Banco, importe, 0), renglon(Cuentas.Caja, 0, importe)})
-		d.Instante = true
+		d.Instante, d.deposito = true, true
 		asientos = append(asientos, d)
 	}
 	rs.Close()
@@ -371,6 +371,20 @@ func (s *Servicio) asientosDelPeriodoCon(ctx context.Context, desde, hasta time.
 	asientos = append(asientos, mas...)
 
 	OrdenarAsientos(asientos)
+	if v, err := reglas.Valor(ctx, s.pool, reglas.DepositoDeEfectivo); err != nil {
+		return nil, err
+	} else if v == "lo_que_hay" {
+		antes := 0.0
+		if inicio := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC); desde.After(inicio) {
+			previos, err := s.asientosDelPeriodoCon(ctx, inicio, desde.AddDate(0, 0, -1), reparto)
+			if err != nil {
+				return nil, err
+			}
+			antes = SaldoDeCuenta(DelCircuito(previos, ""), Cuentas.Caja)
+		}
+		asientos = DepositosConLoQueHay(asientos, antes)
+		OrdenarAsientos(asientos)
+	}
 	return asientos, nil
 }
 
@@ -654,9 +668,16 @@ const ingresoDelBanco = `(m.destino = 'banco' OR (m.destino IS NULL AND m.motivo
 // (caja.consultaDeTurnos).
 func (s *Servicio) asientosDeCaja(ctx context.Context, idesde, ihasta time.Time) ([]Asiento, error) {
 	var out []Asiento
+	// El fondo con el que se abrió la primera caja de cada sucursal (el
+	// cambio fijo que ya estaba en el cajón): entra a Caja contra Saldos
+	// iniciales. Los turnos siguientes arrancan con lo que quedó contado, así
+	// que es la única plata que aparece sin un movimiento detrás. Sin esto la
+	// Caja del archivo quedaba $ 80.000 por debajo del efectivo y el cierre
+	// la marcaba en negativo (recorrido M4-095).
 	rs, err := s.lectura.Query(ctx, `SELECT m.created_at, m.monto::float8, coalesce(b.name, '')
 		FROM cash_movements m JOIN cash_sessions cs ON cs.id = m.session_id LEFT JOIN branches b ON b.id = cs.branch_id
-		WHERE m.tipo = 'ingreso' AND m.monto > 0 AND m.created_at >= $1 AND m.created_at <= $2 AND `+ingresoDelBanco+`
+		WHERE m.tipo = 'apertura' AND m.monto > 0 AND m.created_at >= $1 AND m.created_at <= $2
+		  AND NOT EXISTS (SELECT 1 FROM cash_sessions p WHERE p.branch_id = cs.branch_id AND (p.abierta_at, p.id) < (cs.abierta_at, cs.id))
 		ORDER BY m.created_at`, idesde, ihasta)
 	if err != nil {
 		return nil, err
@@ -664,6 +685,25 @@ func (s *Servicio) asientosDeCaja(ctx context.Context, idesde, ihasta time.Time)
 	var fecha time.Time
 	var importe float64
 	var sucursal string
+	if _, err := pgx.ForEachRow(rs, []any{&fecha, &importe, &sucursal}, func() error {
+		concepto := "Fondo inicial de la caja"
+		if sucursal != "" {
+			concepto += " de " + sucursal
+		}
+		a := asiento(fecha, concepto, []RenglonDeAsiento{renglon(Cuentas.Caja, importe, 0), renglon(Cuentas.SaldosIniciales, 0, importe)})
+		a.Instante = true
+		out = append(out, a)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	rs, err = s.lectura.Query(ctx, `SELECT m.created_at, m.monto::float8, coalesce(b.name, '')
+		FROM cash_movements m JOIN cash_sessions cs ON cs.id = m.session_id LEFT JOIN branches b ON b.id = cs.branch_id
+		WHERE m.tipo = 'ingreso' AND m.monto > 0 AND m.created_at >= $1 AND m.created_at <= $2 AND `+ingresoDelBanco+`
+		ORDER BY m.created_at`, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
 	if _, err := pgx.ForEachRow(rs, []any{&fecha, &importe, &sucursal}, func() error {
 		concepto := "Extracción del banco a la caja"
 		if sucursal != "" {
@@ -695,7 +735,7 @@ func (s *Servicio) asientosDeCaja(ctx context.Context, idesde, ihasta time.Time)
 			concepto += " de " + sucursal
 		}
 		a := asiento(fecha, concepto, []RenglonDeAsiento{renglon(Cuentas.Banco, importe, 0), renglon(Cuentas.Caja, 0, importe)})
-		a.Instante = true
+		a.Instante, a.deposito = true, true
 		out = append(out, a)
 		return nil
 	}); err != nil {
@@ -1291,6 +1331,14 @@ func (s *Servicio) pendientesDeLosCircuitos(ctx context.Context, desde, hasta ti
 	// las cobranzas del banco y la cartera de cheques. «Resolver» llevaba al
 	// mismo cierre (mes 23).
 	dondeSeMira := map[string]string{Cuentas.Caja: "/admin/caja", Cuentas.Banco: "/admin/pagos", Cuentas.ValoresADepositar: "/admin/cheques"}
+	// La Caja en negativo casi siempre es efectivo del B que se depositó: se
+	// arregla con la regla «deposito_de_efectivo», no en la caja, donde no hay
+	// nada para hacer (recorrido M4-095).
+	if v, err := reglas.Valor(ctx, s.pool, reglas.DepositoDeEfectivo); err != nil {
+		return nil, err
+	} else if v == "estudio" {
+		dondeSeMira[Cuentas.Caja] = "/admin/reglas"
+	}
 	var enRojo []CasoDelCierre
 	for _, c := range []string{Cuentas.Caja, Cuentas.Banco, Cuentas.ValoresADepositar} {
 		if saldo := SaldoDeCuenta(DelCircuito(fondos, "blanco"), c); saldo < -0.009 {

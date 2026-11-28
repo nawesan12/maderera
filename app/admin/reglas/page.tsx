@@ -94,6 +94,14 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
           { valor: "saldo_inicial", texto: "Al estudio, contra Saldos iniciales" },
         ],
       },
+      {
+        clave: "deposito_de_efectivo",
+        pregunta: "El efectivo que va al banco sale de",
+        opciones: [
+          { valor: "estudio", texto: "La Caja del estudio" },
+          { valor: "lo_que_hay", texto: "La del estudio hasta lo que tiene; el resto, del circuito sin factura" },
+        ],
+      },
     ],
   },
   {

@@ -107,6 +107,12 @@ const (
 	// proveedor. «centavos» es lo de siempre (MDF $ 81.876,92); los demás
 	// suben al peso, a la decena o a la centena, como el ajuste masivo.
 	RedondeoListaProveedor = "redondeo_lista_proveedor"
+	// Recorrido (00461): de qué Caja sale el efectivo que va al banco en los
+	// asientos. «estudio» es lo de siempre (toda de la Caja del archivo del
+	// estudio, que puede quedar en negativo si el efectivo era del B);
+	// «lo_que_hay» la saca de esa Caja hasta lo que tiene y el resto, de la
+	// Caja del B contra Movimientos a imputar.
+	DepositoDeEfectivo = "deposito_de_efectivo"
 )
 
 // Opciones son los valores posibles de cada regla, el de arranque primero.
@@ -140,6 +146,7 @@ var Opciones = map[string][]string{
 	ListoConElCorte:             {"mostrador", "todos"},
 	EndosoEsperaCAE:             {"si", "al_cae"},
 	RedondeoListaProveedor:      {"centavos", "peso", "decena", "centena"},
+	DepositoDeEfectivo:          {"estudio", "lo_que_hay"},
 }
 
 // Arranque es el valor de una regla cuando la fila no está o tiene algo que

@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"mjbj/internal/reglas"
 )
 
 // Recorrido M4-094: un cliente sin deuda trae un cheque de $ 40.000 a
@@ -134,5 +136,75 @@ func TestLaDevolucionDeUnaVentaQuePasoAlBVaPorElB(t *testing.T) {
 	}
 	if n := cuenta(b, Cuentas.Caja); n != 158562 {
 		t.Errorf("Caja del B: %v", n)
+	}
+}
+
+// Recorrido M4-095: el cambio fijo con el que se abrió la primera caja está
+// en el cajón y entra a Caja contra Saldos iniciales. El efectivo de una
+// venta del B que se manda al banco: con la regla de arranque sale entero de
+// la Caja del estudio (que queda en negativo, y «Resolver» lleva a la regla);
+// con «lo_que_hay», de esa Caja hasta lo que tiene y el resto del B, contra
+// Movimientos a imputar en los dos archivos.
+func TestElDepositoDelEfectivoDelB(t *testing.T) {
+	for _, regla := range []string{"estudio", "lo_que_hay"} {
+		t.Run(regla, func(t *testing.T) {
+			e := armar(t)
+			ctx := context.Background()
+			e.staff(t, "admin@prueba.test", "admin")
+			if err := reglas.Fijar(ctx, e.pool, reglas.DepositoDeEfectivo, regla); err != nil {
+				t.Fatal(err)
+			}
+			sesion := e.id(t, `insert into cash_sessions (branch_id, abierta_por, abierta_at, estado, cerrada_at, contado) select $1, id, '2026-11-02T11:00:00Z', 'cerrada', '2026-11-02T22:00:00Z', 80000 from "user" limit 1 returning id`, e.central)
+			e.exec(t, `insert into cash_movements (session_id, tipo, monto, motivo, created_at) values ($1, 'apertura', 80000, 'Fondo inicial', '2026-11-02T11:00:00Z')`, sesion)
+			// Un segundo turno arranca con lo que quedó: no es plata nueva.
+			otra := e.id(t, `insert into cash_sessions (branch_id, abierta_por, abierta_at) select $1, id, '2026-11-03T11:00:00Z' from "user" limit 1 returning id`, e.central)
+			e.exec(t, `insert into cash_movements (session_id, tipo, monto, motivo, created_at) values ($1, 'apertura', 80000, 'Fondo inicial', '2026-11-03T11:00:00Z')`, otra)
+			venta := e.pedido(t, "PED-1035", e.central, "entregado", "mostrador", time.Date(2026, 11, 3, 10, 0, 0, 0, Argentina), nil)
+			e.exec(t, `insert into payments (order_id, tipo, proveedor, medio, monto, estado, created_at)
+				values ($1, 'pedido', 'mostrador', 'efectivo', 150000, 'aprobado', '2026-11-03T13:00:00Z')`, venta)
+			e.exec(t, `insert into caja_fuerte_movimientos (branch_id, tipo, monto, motivo, clave, created_at)
+				values ($1, 'deposito', 100000, 'Al banco', 'cf-1', '2026-11-04T13:00:00Z')`, e.central)
+
+			nov := e.asientosDe(t, "2026-11")
+			blanco, b := DelCircuito(nov, ""), DelCircuito(nov, CircuitoNegro)
+			if n := cuenta(blanco, Cuentas.SaldosIniciales); n != -80000 {
+				t.Errorf("el cambio fijo entra una vez contra Saldos iniciales: %v", n)
+			}
+			if n := cuenta(blanco, Cuentas.Banco); n != 100000 {
+				t.Errorf("Banco: %v", n)
+			}
+			p := PeriodoDelCierre("2026-11", ahoraDePrueba)
+			lista, err := e.s.PendientesDelCierre(ctx, p.Desde, p.Hasta)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var negativos *PendienteDelCierre
+			for i := range lista {
+				if lista[i].Clave == "fondos-negativos" {
+					negativos = &lista[i]
+				}
+			}
+			if regla == "estudio" {
+				if n := cuenta(blanco, Cuentas.Caja); n != -20000 {
+					t.Errorf("Caja del estudio: %v", n)
+				}
+				if negativos == nil || negativos.Donde != "/admin/reglas" {
+					t.Errorf("«Resolver» lleva a la regla: %+v", negativos)
+				}
+				return
+			}
+			if n := cuenta(blanco, Cuentas.Caja); n != 0 {
+				t.Errorf("Caja del estudio: %v", n)
+			}
+			if n := cuenta(blanco, Cuentas.MovimientosAImputar); n != -20000 {
+				t.Errorf("a imputar en el estudio: %v", n)
+			}
+			if n, m := cuenta(b, Cuentas.Caja), cuenta(b, Cuentas.MovimientosAImputar); n != 130000 || m != 20000 {
+				t.Errorf("Caja del B %v, a imputar %v", n, m)
+			}
+			if negativos != nil {
+				t.Errorf("sin fondos negativos: %+v", negativos)
+			}
+		})
 	}
 }

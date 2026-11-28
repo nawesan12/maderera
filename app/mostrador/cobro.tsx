@@ -166,7 +166,7 @@ export function Cobro({
   pidePin: Autorizacion | null;
   onPin: (pin: string) => void;
   onCancelarPin: () => void;
-  aviso: { tipo: "ok" | "error"; texto: string; vuelto?: number } | null;
+  aviso: { tipo: "ok" | "error"; texto: string; pendiente?: string; vuelto?: number } | null;
   ultima: UltimaVenta | null;
   /** Ya empezó otra venta: el papel de la anterior queda en un botón. */
   ultimaCompacta: boolean;

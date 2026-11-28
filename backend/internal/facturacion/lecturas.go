@@ -443,10 +443,22 @@ type Completo struct {
 	// lo que pide ARCA y lo que busca el contador; la nota impresa decía solo
 	// el pedido (mes simulado, M3S3-006).
 	Asociado *string `json:"asociado"`
+	// NotasDeCredito: las que acreditaron esta factura. En Cobros van al lado
+	// del recibo: la factura de $ 169.000 «cobrada» con un solo cobro de
+	// $ 84.500 parecía deuda (recorrido M4-104).
+	NotasDeCredito []NotaDeLaFactura `json:"notasDeCredito"`
 	// Devolucion: la nota de una devolución dice cómo y cuándo salió la
 	// plata (por la caja, a la cuenta, por afuera con cada medio). La nota
 	// tenía «Cobros» vacío y el egreso no estaba en ningún lado (M2S3-046).
 	Devolucion *DevolucionDeNota `json:"devolucion"`
+}
+
+// NotaDeLaFactura es una nota de crédito que acreditó la factura.
+type NotaDeLaFactura struct {
+	ID       string    `json:"id"`
+	Etiqueta string    `json:"etiqueta"`
+	Total    float64   `json:"total"`
+	Fecha    time.Time `json:"fecha"`
 }
 
 // DevolucionDeNota es la plata de la devolución que hizo una nota.
@@ -487,6 +499,11 @@ type CobroDelPedido struct {
 	Fecha    time.Time `json:"fecha"`
 	Recibo   *string   `json:"recibo"`
 	ReciboID *string   `json:"reciboId"`
+	// Tarjeta y Cuotas: la marca y las cuotas del pago con tarjeta de la
+	// caja, para la condición de venta del papel («Tarjeta de crédito ·
+	// Naranja · 6 cuotas», recorrido M4-020).
+	Tarjeta *string `json:"tarjeta"`
+	Cuotas  int     `json:"cuotas"`
 }
 
 // cobrosDelPedido llena CobrosDelPedido: lo de la caja (order_payments), los
@@ -514,19 +531,20 @@ func (s *Servicio) cobrosDelPedido(ctx context.Context, c *Completo) error {
 		devueltos = `
 		  UNION ALL
 		  SELECT pg.medio, -(pg.monto - coalesce((SELECT sum(t.importe) FROM payment_refunds t WHERE t.payment_id = pg.id AND t.devolucion_id IS NOT NULL), 0))::float8,
-		    pg.updated_at, NULL, NULL
+		    pg.updated_at, NULL, NULL, NULL, 1
 		    FROM payments pg WHERE pg.order_id = $1 AND pg.estado = 'reintegrado' AND coalesce(pg.medio, '') NOT IN ('', 'cuenta_corriente')`
 	}
-	filas, err := s.pool.Query(ctx, `SELECT medio, monto, fecha, recibo, recibo_id FROM (
-		  SELECT op.medio::text AS medio, op.importe::float8 AS monto, op.created_at AS fecha, NULL::text AS recibo, NULL::text AS recibo_id
+	filas, err := s.pool.Query(ctx, `SELECT medio, monto, fecha, recibo, recibo_id, tarjeta, cuotas FROM (
+		  SELECT op.medio::text AS medio, op.importe::float8 AS monto, op.created_at AS fecha, NULL::text AS recibo, NULL::text AS recibo_id,
+		    nullif(op.tarjeta, '') AS tarjeta, op.cuotas AS cuotas
 		    FROM order_payments op WHERE op.order_id = $1 AND op.medio <> 'cuenta_corriente'
 		  UNION ALL
 		  SELECT coalesce((SELECT rp.medio::text FROM receipt_parts rp WHERE rp.receipt_id = r.id ORDER BY rp.orden LIMIT 1), 'recibo'),
-		    r.total::float8, r.created_at, r.numero, r.id::text
+		    r.total::float8, r.created_at, r.numero, r.id::text, NULL, 1
 		    FROM receipts r WHERE r.estado = 'emitido' AND r.id IN `+fragmentos.RecibosDelPedido("$1::uuid")+`
 		      AND NOT EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.receipt_id = r.id AND ip.invoice_id = $2)
 		  UNION ALL
-		  SELECT coalesce(pg.medio, 'mercado_pago'), pg.monto::float8, pg.created_at, NULL, NULL FROM payments pg WHERE pg.order_id = $1 AND pg.estado = 'aprobado'
+		  SELECT coalesce(pg.medio, 'mercado_pago'), pg.monto::float8, pg.created_at, NULL, NULL, NULL, 1 FROM payments pg WHERE pg.order_id = $1 AND pg.estado = 'aprobado'
 		    AND NOT (pg.proveedor = 'mostrador' AND EXISTS (SELECT 1 FROM order_payments opm WHERE opm.order_id = $1))`+devueltos+`
 		) x WHERE monto <> 0 ORDER BY fecha`, *c.OrderID, c.ID)
 	if err != nil {
@@ -535,7 +553,7 @@ func (s *Servicio) cobrosDelPedido(ctx context.Context, c *Completo) error {
 	defer filas.Close()
 	for filas.Next() {
 		var p CobroDelPedido
-		if err := filas.Scan(&p.Medio, &p.Monto, &p.Fecha, &p.Recibo, &p.ReciboID); err != nil {
+		if err := filas.Scan(&p.Medio, &p.Monto, &p.Fecha, &p.Recibo, &p.ReciboID, &p.Tarjeta, &p.Cuotas); err != nil {
 			return err
 		}
 		c.CobrosDelPedido = append(c.CobrosDelPedido, p)
@@ -580,9 +598,14 @@ func (s *Servicio) Obtener(ctx context.Context, id string) (*Completo, error) {
 		c.Items = append(c.Items, i)
 	}
 	filas.Close()
-	filas, err = s.pool.Query(ctx, `SELECT p.id, p.invoice_id, p.medio::text, p.monto::text, p.referencia, p.receipt_id, r.numero, p.fecha,
+	// La tarjeta del cobro con su tipo, el del recibo: la manual cobrada con
+	// débito decía «Tarjeta» y Cobranzas «Débito» (recorrido M4-105).
+	filas, err = s.pool.Query(ctx, `SELECT p.id, p.invoice_id,
+		CASE WHEN p.medio::text = 'tarjeta' THEN coalesce((SELECT x.medio::text FROM receipt_parts x WHERE x.receipt_id = p.receipt_id
+		  AND x.medio::text IN ('tarjeta_debito', 'tarjeta_credito', 'debito', 'credito') ORDER BY x.orden LIMIT 1), 'tarjeta') ELSE p.medio::text END,
+		p.monto::text, p.referencia, p.receipt_id, r.numero, p.fecha,
 		p.created_by_user_id, p.created_at FROM invoice_payments p LEFT JOIN receipts r ON r.id = p.receipt_id
-		WHERE p.invoice_id = $1 ORDER BY p.fecha DESC`, id)
+		WHERE p.invoice_id = $1 AND (r.id IS NULL OR r.estado <> 'anulado') ORDER BY p.fecha DESC`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -623,6 +646,25 @@ func (s *Servicio) Obtener(ctx context.Context, id string) (*Completo, error) {
 	c.Saldo = saldo.F()
 	if err := s.cobrosDelPedido(ctx, &c); err != nil {
 		return nil, err
+	}
+	c.NotasDeCredito = []NotaDeLaFactura{}
+	if !strings.HasPrefix(c.Tipo, "nota_") {
+		filas, err := s.pool.Query(ctx, `SELECT n.id::text, n.tipo::text, n.punto_venta::bigint, n.numero::bigint, n.total::float8, n.fecha_emision
+			FROM invoices n WHERE n.comprobante_origen_id = $1 AND n.tipo::text LIKE 'nota_credito%' AND n.estado IN ('emitida', 'autorizada', 'rechazada')
+			ORDER BY n.fecha_emision, n.numero`, id)
+		if err != nil {
+			return nil, err
+		}
+		var n NotaDeLaFactura
+		var tipo string
+		var pv, numero int64
+		if _, err := pgx.ForEachRow(filas, []any{&n.ID, &tipo, &pv, &numero, &n.Total, &n.Fecha}, func() error {
+			n.Etiqueta = etiqueta(tipo, pv, numero)
+			c.NotasDeCredito = append(c.NotasDeCredito, n)
+			return nil
+		}); err != nil {
+			return nil, err
+		}
 	}
 	if strings.HasPrefix(c.Tipo, "nota_credito") {
 		var d DevolucionDeNota

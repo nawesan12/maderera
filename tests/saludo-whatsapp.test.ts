@@ -18,4 +18,10 @@ describe("nombreDeSaludo", () => {
     expect(nombreDeSaludo("Sim V1at Aberturas Norte SRL")).toBe("Sim V1at Aberturas Norte");
     expect(nombreDeSaludo("Ana María Taller")).toBe("Ana");
   });
+
+  it("un club o una escuela, con la asociación civil afuera (M4-106)", () => {
+    expect(nombreDeSaludo("Sim Club Náutico Sur Asociación Civil")).toBe("Sim Club Náutico Sur");
+    expect(nombreDeSaludo("Club Atlético Kimberley")).toBe("Club Atlético Kimberley");
+    expect(nombreDeSaludo("Sim Escuela Técnica 5")).toBe("Sim Escuela Técnica 5");
+  });
 });

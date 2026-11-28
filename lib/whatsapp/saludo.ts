@@ -15,6 +15,8 @@ const RUBROS = new Set([
   // Del mes simulado: «Hola Sim» a «Sim Mueblería Atlántica» y a «Sim Obra Barrio Parque».
   "muebleria", "obra", "barraca", "pintureria", "vivero", "techos", "estructuras", "arquitectura", "viviendas",
   "desarrollos",
+  // Del recorrido (M4-106): «Hola Sim» a «Sim Club Náutico Sur Asociación Civil» y a «Sim Escuela Técnica 5».
+  "club", "asociacion", "fundacion", "escuela", "colegio", "instituto",
 ]);
 
 function clave(palabra: string): string {
@@ -32,7 +34,9 @@ export function nombreDeSaludo(nombre: string | null | undefined, primera: (n: s
   if (palabras.length === 0) return "";
   let corte = palabras.length;
   for (let i = 1; i < palabras.length; i++) {
-    if (FORMAS_SOCIETARIAS.has(clave(palabras[i]))) {
+    // «Asociación Civil» cierra la razón social como una sociedad.
+    const civil = clave(palabras[i]) === "asociacion" && clave(palabras[i + 1] ?? "") === "civil";
+    if (FORMAS_SOCIETARIAS.has(clave(palabras[i])) || civil) {
       corte = i;
       break;
     }

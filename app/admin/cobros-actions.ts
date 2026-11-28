@@ -158,6 +158,9 @@ export async function anularReciboDesdeElPanel(receiptId: string, motivo: string
   revalidatePath("/admin/caja");
   // La retención sufrida se anula con su recibo, desde su lista (M3S1-027).
   revalidatePath("/admin/arca/retenciones");
+  // Y desde la factura que cobraba (M4-097).
+  revalidatePath("/admin/facturacion/[id]", "page");
+  revalidatePath("/admin/pagos");
   return { ok: r.data.ok };
 }
 

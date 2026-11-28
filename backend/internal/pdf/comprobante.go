@@ -160,7 +160,9 @@ func comprobanteCodigo(tipo string) string {
 //
 // En las dos, con los decimales que hagan falta para que cantidad ×
 // unitario dé el subtotal impreso (UnitarioQueCierra, M2S1-154).
-func precioImpreso(item ItemComprobante, discrimina bool) string {
+//
+// Con la misma cantidad de decimales en toda la columna (decimalesDeLaColumna).
+func precioImpreso(item ItemComprobante, discrimina bool, decimales int) string {
 	cantidad := jsmath.Numero(item.Cantidad)
 	if !(cantidad > 0) {
 		return Moneda2De(item.PrecioUnitario)
@@ -169,9 +171,25 @@ func precioImpreso(item ItemComprobante, discrimina bool) string {
 		if item.Neto == "" {
 			return Moneda2De(item.PrecioUnitario)
 		}
-		return UnitarioQueCierra(jsmath.Numero(item.Neto), cantidad)
+		return UnitarioConDecimales(jsmath.Numero(item.Neto), cantidad, decimales)
 	}
-	return UnitarioQueCierra(jsmath.Numero(item.Subtotal), cantidad)
+	return UnitarioConDecimales(jsmath.Numero(item.Subtotal), cantidad, decimales)
+}
+
+// decimalesDeLaColumna son los que pide el renglón que más necesita.
+func decimalesDeLaColumna(items []ItemComprobante, discrimina bool) int {
+	d := 2
+	for _, item := range items {
+		cantidad := jsmath.Numero(item.Cantidad)
+		base := item.Subtotal
+		if discrimina {
+			base = item.Neto
+		}
+		if cantidad > 0 && base != "" {
+			d = max(d, DecimalesQueCierran(jsmath.Numero(base), cantidad))
+		}
+	}
+	return d
 }
 
 // Comprobante arma el PDF del comprobante fiscal.
@@ -341,6 +359,7 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 	}
 	espacio := func(necesario float64, detalle bool) { espacioHasta(necesario, limite, detalle) }
 
+	decimales := decimalesDeLaColumna(c.Items, discrimina)
 	for _, item := range c.Items {
 		renglones := len(Renglones(item.Descripcion, Helvetica, 8.5, anchoDescripcion))
 		// La unidad concordada con la cantidad y la media placa como medias
@@ -351,7 +370,7 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 		alto := h.EscribirParrafo(item.Descripcion, Parrafo{Opciones: Opciones{X: Margen, Y: cursor, Tamano: 8.5}, Ancho: anchoDescripcion})
 		h.EscribirNumero(numeroJS(num(item.Cantidad)), Opciones{X: colCantidad, Y: cursor, Tamano: 8.5, Fuente: Mono, Derecha: true}, anchoCantidad)
 		alto = maximo(alto, h.EscribirParrafo(unidad, Parrafo{Opciones: Opciones{X: colUnidad, Y: cursor, Tamano: 8, Derecha: true}, Ancho: anchoUnidad, Interlineado: 10}))
-		h.EscribirNumero(precioImpreso(item, discrimina), Opciones{X: colPrecio, Y: cursor, Tamano: 8.5, Fuente: Mono, Derecha: true}, anchoPrecio)
+		h.EscribirNumero(precioImpreso(item, discrimina, decimales), Opciones{X: colPrecio, Y: cursor, Tamano: 8.5, Fuente: Mono, Derecha: true}, anchoPrecio)
 		if discrimina {
 			h.EscribirNumero(numeroJS(num(item.AlicuotaIva))+"%", Opciones{X: colIva, Y: cursor, Tamano: 8, Derecha: true}, anchoIva)
 		}

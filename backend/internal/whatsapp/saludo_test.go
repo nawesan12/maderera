@@ -19,6 +19,10 @@ func TestNombreDeSaludo(t *testing.T) {
 		"Sim V1at Aberturas Norte SRL": "Sim V1at Aberturas Norte",
 		"Sim V1at Bruno Arce":          "Sim",
 		"Ana María Taller":             "Ana",
+		// Recorrido M4-106.
+		"Sim Club Náutico Sur Asociación Civil": "Sim Club Náutico Sur",
+		"Club Atlético Kimberley":               "Club Atlético Kimberley",
+		"Sim Escuela Técnica 5":                 "Sim Escuela Técnica 5",
 	} {
 		if got := NombreDeSaludo(entra); got != sale {
 			t.Errorf("%q: %q, se esperaba %q", entra, got, sale)

@@ -49,6 +49,13 @@ export function DarDeBaja({
   const [abierto, setAbierto] = useState(false);
   const propio = numeroFormateado(puntoVenta, numero);
 
+  // Lo que no se puede dar de baja no ofrece el botón: dice por qué, a la
+  // vista (M4-103). El recibo que la traba se anula desde su fila en Cobros
+  // (M4-097).
+  if (bloqueo) {
+    return <p className="text-sm text-muted-foreground">{bloqueo}</p>;
+  }
+
   if (!abierto) {
     return (
       <button
@@ -63,28 +70,6 @@ export function DarDeBaja({
   }
 
   const cerrar = () => setAbierto(false);
-
-  if (bloqueo) {
-    return (
-      <div className="space-y-2.5 rounded-xl border bg-background p-4">
-        <p
-          role="alert"
-          className="estado-problema flex items-start gap-2 rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-base text-[var(--estado-tinta)]"
-        >
-          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
-          {bloqueo}
-        </p>
-        <button
-          type="button"
-          onClick={cerrar}
-          autoFocus
-          className="inline-flex h-10 items-center rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
-        >
-          Cerrar
-        </button>
-      </div>
-    );
-  }
 
   return (
     <form

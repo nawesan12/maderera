@@ -15,7 +15,7 @@ import {
   Truck,
 } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
-import { cantidadConUnidad, fechaCorta, fechaLarga, formatearCuit, formatearMonto, formatearMontoContable, hoyEnArgentina, plural, unitarioQueCierra, ZONA } from "@/lib/formato";
+import { cantidadConUnidad, fechaCorta, fechaLarga, formatearCuit, formatearMonto, formatearMontoContable, hoyEnArgentina, plural, decimalesDeLaColumna, unitarioConDecimales, ZONA } from "@/lib/formato";
 import { datosDeDevolucion, obtenerComprobante, serieDelComprobante } from "@/lib/dal/admin/facturacion";
 import {
   discriminaIva,
@@ -30,6 +30,7 @@ import {
 } from "./acciones";
 import { NotasSobreElComprobante } from "./notas";
 import { DarDeBaja } from "./baja";
+import { AnularRecibo } from "@/components/cobros/anular-recibo";
 
 const MES = new Intl.DateTimeFormat("es-AR", { month: "long", timeZone: ZONA });
 
@@ -121,6 +122,9 @@ export default async function FichaComprobantePage({
   const aviso = comprobante.estado !== "borrador" ? await avisoManual("documento", { tipo: "invoice", id }) : null;
 
   const discrimina = discriminaIva(comprobante.tipo);
+  const decimalesDelUnitario = decimalesDeLaColumna(
+    comprobante.items.map((i) => ({ subtotal: Number(discrimina ? i.neto : i.subtotal), cantidad: Number(i.cantidad) })),
+  );
   const totalIva =
     Number(comprobante.iva21) +
     Number(comprobante.iva105) +
@@ -372,9 +376,10 @@ export default async function FichaComprobantePage({
                         {cantidadConUnidad(Number(item.cantidad), item.unidad || "unidad", item.descripcion)}
                       </td>
                       {/* Con los decimales que hagan falta para que
-                          cantidad × unitario dé el subtotal (M3S2-063). */}
+                          cantidad × unitario dé el subtotal (M3S2-063), los
+                          mismos en toda la columna (M4-018). */}
                       <td className="tabular px-3 py-3 text-right text-base">
-                        {unitarioQueCierra(Number(discrimina ? item.neto : item.subtotal), Number(item.cantidad))}
+                        {unitarioConDecimales(Number(discrimina ? item.neto : item.subtotal), Number(item.cantidad), decimalesDelUnitario)}
                       </td>
                       {discrimina && (
                         <td className="tabular px-3 py-3 text-right text-base text-muted-foreground">
@@ -516,6 +521,28 @@ export default async function FichaComprobantePage({
               </ul>
             )}
 
+            {/* La nota de crédito que la acreditó, al lado del recibo: una
+                factura «cobrada» con un solo cobro de la mitad parecía
+                deuda (M4-104). */}
+            {(comprobante.notasDeCredito ?? []).length > 0 && (
+              <ul className="divide-y border-b">
+                {(comprobante.notasDeCredito ?? []).map((nota) => (
+                  <li key={nota.id} className="flex items-baseline justify-between gap-3 px-5 py-3">
+                    <span className="text-base">
+                      <Link
+                        href={`/admin/facturacion/${nota.id}`}
+                        className="underline decoration-current/30 underline-offset-4 hover:decoration-current"
+                      >
+                        {nota.etiqueta}
+                      </Link>
+                      <span className="tabular ml-2 text-sm text-muted-foreground">{fechaCorta.format(new Date(nota.fecha))}</span>
+                    </span>
+                    <span className="tabular text-base font-medium">{formatearMonto(nota.total)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
             {comprobante.cobros.length > 0 && (
               <ul className="divide-y border-b">
                 {comprobante.cobros.map((cobro) => (
@@ -544,8 +571,21 @@ export default async function FichaComprobantePage({
                         </a>
                       )}
                     </span>
-                    <span className="tabular text-base font-medium">
-                      {formatearMonto(cobro.monto)}
+                    <span className="flex shrink-0 items-center gap-1">
+                      <span className="tabular text-base font-medium">
+                        {formatearMonto(cobro.monto)}
+                      </span>
+                      {/* El recibo se anula desde acá: el de alguien sin
+                          ficha no tenía desde dónde, y la baja quedaba
+                          trabada (M4-097). */}
+                      {cobro.receiptId && !anulada && (
+                        <AnularRecibo
+                          id={cobro.receiptId}
+                          numero={cobro.recibo ?? ""}
+                          importe={Number(cobro.monto)}
+                          cliente={comprobante.receptorNombre}
+                        />
+                      )}
                     </span>
                   </li>
                 ))}

@@ -934,7 +934,7 @@ components:
         importe: { type: string }
     ComprobanteCompleto:
       type: object
-      required: [id, tipo, puntoVenta, numero, estado, customerId, orderId, receptorNombre, receptorCuit, receptorCondicionIva, receptorDomicilio, neto, iva21, iva105, iva27, exento, tributosTotal, total, cae, caeVencimiento, caeAmbiente, observacionesArca, comprobanteOrigenId, acreditado, debitado, fechaEmision, fechaVencimiento, observaciones, puntoVentaNombre, sucursal, items, cobros, tributos, cobrado, saldo, qrUrl, enCuenta, pedido, ventaAnulada, cobrosDelPedido]
+      required: [id, tipo, puntoVenta, numero, estado, customerId, orderId, receptorNombre, receptorCuit, receptorCondicionIva, receptorDomicilio, neto, iva21, iva105, iva27, exento, tributosTotal, total, cae, caeVencimiento, caeAmbiente, observacionesArca, comprobanteOrigenId, acreditado, debitado, fechaEmision, fechaVencimiento, observaciones, puntoVentaNombre, sucursal, items, cobros, tributos, cobrado, saldo, qrUrl, enCuenta, pedido, ventaAnulada, cobrosDelPedido, notasDeCredito]
       properties:
         id: { type: string }
         tipo: { $ref: "#/components/schemas/TipoComprobante" }
@@ -980,13 +980,26 @@ components:
           type: array
           items:
             type: object
-            required: [medio, monto, fecha, recibo, reciboId]
+            required: [medio, monto, fecha, recibo, reciboId, tarjeta, cuotas]
             properties:
               medio: { type: string }
               monto: { type: number, format: double }
               fecha: { type: string, format: date-time }
               recibo: { type: string, nullable: true }
               reciboId: { type: string, nullable: true }
+              tarjeta: { type: string, nullable: true, description: La marca del pago con tarjeta de la caja }
+              cuotas: { type: integer, description: Las cuotas del pago con tarjeta de la caja (1 si no) }
+        notasDeCredito:
+          type: array
+          description: Las notas de crédito que acreditaron la factura (en Cobros, al lado del recibo)
+          items:
+            type: object
+            required: [id, etiqueta, total, fecha]
+            properties:
+              id: { type: string }
+              etiqueta: { type: string }
+              total: { type: number, format: double }
+              fecha: { type: string, format: date-time }
         qrUrl: { type: string, nullable: true, description: El enlace de verificación de ARCA (solo con CAE) }
         asociado: { type: string, nullable: true, description: "En una nota, el comprobante que corrige, para el papel (Anula parcialmente: Factura A 0015-00000105 del 27/11/26)" }
         devolucion:

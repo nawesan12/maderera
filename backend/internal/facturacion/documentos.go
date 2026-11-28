@@ -2,6 +2,7 @@ package facturacion
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
@@ -107,6 +108,23 @@ var mediosImpresos = map[string]string{
 	"tarjeta_credito": "Tarjeta de crédito", "cheque": "Cheque", "echeq": "e-Cheq", "retencion": "Retención",
 }
 
+// MedioConCuotas es el medio del cobro de la caja con la marca y las cuotas
+// de la tarjeta («Tarjeta de crédito · Naranja · 6 cuotas»); los demás, la
+// clave del medio (recorrido M4-020).
+func MedioConCuotas(p CobroDelPedido) string {
+	n, ok := mediosImpresos[p.Medio]
+	if !ok || !strings.HasPrefix(n, "Tarjeta") || (p.Tarjeta == nil && p.Cuotas <= 1) {
+		return p.Medio
+	}
+	if p.Tarjeta != nil {
+		n += " · " + *p.Tarjeta
+	}
+	if p.Cuotas > 1 {
+		n += " · " + strconv.Itoa(p.Cuotas) + " cuotas"
+	}
+	return n
+}
+
 // condicionDeVenta es lo que va en «Condición de venta» del papel: cuenta
 // corriente, o contado con los medios con que se cobró (los de la factura y
 // los del pedido). Sin ningún cobro, nada: no se sabe todavía.
@@ -117,7 +135,11 @@ func condicionDeVenta(c *Completo) string {
 	var medios []string
 	visto := map[string]bool{}
 	sumar := func(m string) {
-		if n, ok := mediosImpresos[m]; ok && !visto[n] {
+		n, ok := mediosImpresos[m]
+		if !ok && strings.HasPrefix(m, "Tarjeta") {
+			n, ok = m, true
+		}
+		if ok && !visto[n] {
 			visto[n] = true
 			medios = append(medios, n)
 		}
@@ -126,7 +148,7 @@ func condicionDeVenta(c *Completo) string {
 		sumar(p.Medio)
 	}
 	for _, p := range c.CobrosDelPedido {
-		sumar(p.Medio)
+		sumar(MedioConCuotas(p))
 	}
 	if len(medios) == 0 {
 		return ""

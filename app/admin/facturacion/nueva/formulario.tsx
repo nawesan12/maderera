@@ -113,12 +113,11 @@ export function FormularioFacturaManual({
 
   const [condicion, setCondicion] = useState<CondicionIva>("consumidor_final");
   const [lineas, setLineas] = useState<Linea[]>([{ ...LINEA_VACIA }]);
-  const [comoPaga, setComoPaga] = useState<ComoPaga>("contado");
+  const [comoPagaElegido, setComoPaga] = useState<ComoPaga>("contado");
   const [medio, setMedio] = useState<Medio>("efectivo");
   // Con una sola caja abierta, Go la usa sola; con varias, el efectivo no
   // entraba a ningún arqueo, así que se elige acá.
   const [caja, setCaja] = useState<string | null>(null);
-  const eligeCaja = comoPaga === "contado" && medio === "efectivo" && cajas.length > 1;
 
   /*
    * A quién se le factura.
@@ -129,6 +128,12 @@ export function FormularioFacturaManual({
    * pantalla. Ahora se busca, y si no está, se crea con estos mismos datos.
    */
   const [cliente, setCliente] = useState<ClienteElegido | null>(null);
+  // A cuenta corriente solo un cliente con la cuenta habilitada (límite y sin
+  // bloquear): sin ficha, o con una sin cuenta, la opción no aparece. Antes
+  // se ofrecía y avisaba recién después de confirmar (M4-101).
+  const conCuenta = Boolean(cliente && (cliente.limiteCredito ?? 0) > 0 && !cliente.cuentaBloqueada);
+  const comoPaga: ComoPaga = conCuenta ? comoPagaElegido : "contado";
+  const eligeCaja = comoPaga === "contado" && medio === "efectivo" && cajas.length > 1;
   const [receptor, setReceptor] = useState({
     nombre: "",
     cuit: "",
@@ -420,12 +425,14 @@ export function FormularioFacturaManual({
           )}
           {eligeCaja && caja && <input type="hidden" name="sucursal" value={caja} />}
           <div className="space-y-3">
-            <Elegir
-              etiqueta="Cómo paga"
-              opciones={[...COMO_PAGA]}
-              valor={comoPaga}
-              alCambiar={setComoPaga}
-            />
+            {conCuenta && (
+              <Elegir
+                etiqueta="Cómo paga"
+                opciones={[...COMO_PAGA]}
+                valor={comoPaga}
+                alCambiar={setComoPaga}
+              />
+            )}
             {comoPaga === "contado" && (
               <Elegir
                 etiqueta="Medio de pago"
@@ -515,6 +522,8 @@ interface ClienteElegido {
   cuit: string | null;
   condicionIva: string;
   direccion: string | null;
+  limiteCredito?: number;
+  cuentaBloqueada?: boolean;
 }
 
 /**

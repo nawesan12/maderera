@@ -363,6 +363,15 @@ func (s *Servicio) CorregirReceptor(ctx context.Context, id string, c map[string
 		if m := fiscal.FaltaIdentificarComprador(tipo, total, cuit, s.ahora()); m != "" {
 			return errEmision(m)
 		}
+		// El recibo del que no tiene ficha lleva el nombre del receptor: se
+		// corrige con la factura que cobra. Cobranzas seguía diciendo «Sim
+		// Pedro Vesino» con la factura ya en «Vecino» (recorrido M4-098).
+		if _, err = tx.Exec(ctx, `UPDATE receipts r SET recibido_de = $2
+			FROM invoices i WHERE i.id = $1 AND r.customer_id IS NULL AND r.recibido_de = i.receptor_nombre
+			  AND r.id IN (SELECT p.receipt_id FROM invoice_payments p WHERE p.invoice_id = $1 AND p.receipt_id IS NOT NULL)`,
+			id, cab.nombre); err != nil {
+			return err
+		}
 		if _, err = tx.Exec(ctx, `UPDATE invoices SET receptor_nombre = $2, receptor_cuit = $3, receptor_condicion_iva = $4::condicion_iva,
 			receptor_domicilio = $5, estado = 'emitida', observaciones_arca = NULL, updated_at = now() WHERE id = $1`,
 			id, cab.nombre, cuit, cab.condicion, cab.domicilio); err != nil {

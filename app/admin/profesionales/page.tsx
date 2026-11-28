@@ -17,6 +17,7 @@ import {
 } from "@/lib/dal/admin/profesionales";
 import { LinkDeAcceso } from "./link-acceso";
 import { ResolverSolicitud } from "./resolver";
+import { nombreDeSaludo } from "@/lib/whatsapp/saludo";
 
 export const metadata: Metadata = { title: "Profesionales" };
 
@@ -178,7 +179,7 @@ function Fila({
             {/* El teléfono abre WhatsApp: es por donde se le contesta. */}
             {solicitud.telefono ? (
               <a
-                href={enlaceDeWhatsapp(solicitud.telefono, `Hola ${solicitud.nombre}, te escribimos de Maderera Juan B. Justo por tu solicitud.`)}
+                href={enlaceDeWhatsapp(solicitud.telefono, `Hola ${nombreDeSaludo(solicitud.nombre)}, te escribimos de Maderera Juan B. Justo por tu solicitud.`)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="tabular underline-offset-4 hover:text-foreground hover:underline"

@@ -319,6 +319,7 @@ function Alta() {
             value={codigo}
             onChange={(e) => setCodigo(e.target.value)}
             aria-invalid={Boolean(estado.error && estado.codigo === codigo)}
+            aria-describedby={estado.error && estado.codigo === codigo ? "alta-regimen-error" : undefined}
             className={`${CAMPO} text-left`}
           />
         </label>
@@ -357,6 +358,7 @@ function Alta() {
         </label>
       </div>
       <Numeros
+        impuesto={impuesto}
         alicuota={alicuota}
         setAlicuota={setAlicuota}
         noInscripto={noInscripto}
@@ -366,6 +368,13 @@ function Alta() {
         minimoRetencion={minimoRetencion}
         setMinimoRetencion={setMinimoRetencion}
       />
+      {/* En su propio renglón, arriba de los botones: al lado de Cancelar no
+          se veía y el código repetido parecía no hacer nada (mes 23). */}
+      {estado.error && estado.codigo === codigo && (
+        <p id="alta-regimen-error" role="alert" className="text-base font-medium text-saldo-debe">
+          {estado.error}
+        </p>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="submit"
@@ -382,11 +391,6 @@ function Alta() {
         >
           Cancelar
         </button>
-        {estado.error && estado.codigo === codigo && (
-          <span role="alert" className="text-sm text-saldo-debe">
-            {estado.error}
-          </span>
-        )}
       </div>
     </form>
   );

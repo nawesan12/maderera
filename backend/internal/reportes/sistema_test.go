@@ -18,6 +18,8 @@ func TestElSistemaMuestraLoQueFallo(t *testing.T) {
 	e.exec(t, `insert into trabajos (tipo, carga, estado) values ('revalidar', '{}', 'hecho')`)
 	e.exec(t, `insert into tareas_corridas (tarea, periodo, estado, error) values ('vencer-portada', '2026-11-26T05', 'ok', null),
 		('parte-y-limpieza', '2026-11-26', 'error', 'sin conexión')`)
+	e.exec(t, `insert into tareas_corridas (tarea, periodo, estado, resultado) values ('resenas-google', '2026-W48', 'ok',
+		'{"resenasNuevas": 0, "resenasError": "Faltan GOOGLE_PLACES_API_KEY y GOOGLE_PLACE_ID."}')`)
 
 	if c, _, _ := pedir(t, ven, e.u+"sistema"); c != 403 {
 		t.Fatalf("el vendedor no entra: %d", c)
@@ -27,8 +29,21 @@ func TestElSistemaMuestraLoQueFallo(t *testing.T) {
 	if err := json.Unmarshal([]byte(cuerpo), &v); err != nil {
 		t.Fatal(cuerpo)
 	}
-	if len(v.Trabajos) != 1 || v.Trabajos[0].ID != id || v.Trabajos[0].UltimoError == nil || len(v.Tareas) != 2 {
+	if len(v.Trabajos) != 1 || v.Trabajos[0].ID != id || v.Trabajos[0].UltimoError == nil || len(v.Tareas) != 3 {
 		t.Fatalf("sistema: %+v", v)
+	}
+	// Sin la clave de Google no es «Bien» (recorrido, M4-121).
+	for _, x := range v.Tareas {
+		switch x.Tarea {
+		case "resenas-google":
+			if x.Estado != "aviso" || x.Error == nil || *x.Error != "Faltan GOOGLE_PLACES_API_KEY y GOOGLE_PLACE_ID." {
+				t.Errorf("reseñas sin clave: %+v", x)
+			}
+		case "vencer-portada":
+			if x.Estado != "ok" || x.Error != nil {
+				t.Errorf("la que anduvo: %+v", x)
+			}
+		}
 	}
 	req, _ := http.NewRequest("POST", e.u+"sistema/trabajos/"+id+"/reintentar", nil)
 	resp, err := adm.Do(req)

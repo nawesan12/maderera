@@ -560,8 +560,25 @@ func (s *Servicio) CrearGestion(ctx context.Context, ses *auth.Sesion, cliente, 
 	if err := noEnElPasado(cuando, time.Now()); err != nil {
 		return err
 	}
-	if err := s.q.CrearGestion(ctx, sqlc.CrearGestionParams{CustomerID: cliente, Asunto: a, Notas: nulo(n),
-		ProximaAccionAt: cuando, ResponsableUserID: &ses.UserID}); err != nil {
+	// La misma gestión abierta dos veces (un doble envío) no se duplica
+	// (M4-033: quedaban dos tarjetas iguales en «Para hacer»). El candado
+	// del cliente ordena dos altas a la vez.
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('seguimiento:' || $1))`, cliente); err != nil {
+			return err
+		}
+		var ya bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM customer_follow_ups
+			WHERE customer_id = $1 AND etapa <> 'cerrado' AND lower(trim(asunto)) = lower($2))`, cliente, a).Scan(&ya); err != nil {
+			return err
+		}
+		if ya {
+			return mal("asunto", "Ese cliente ya tiene un seguimiento abierto con ese asunto: movelo desde su tarjeta.")
+		}
+		return s.q.WithTx(tx).CrearGestion(ctx, sqlc.CrearGestionParams{CustomerID: cliente, Asunto: a, Notas: nulo(n),
+			ProximaAccionAt: cuando, ResponsableUserID: &ses.UserID})
+	})
+	if err != nil {
 		return err
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "cliente", cliente, "Abrió un seguimiento: "+a, nil)

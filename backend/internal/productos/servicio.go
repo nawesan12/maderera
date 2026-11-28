@@ -838,9 +838,12 @@ func (s *Servicio) Candidatos(ctx context.Context, meses int, ahora time.Time) (
 			c.Motivos = append(c.Motivos, "Ninguna medida tiene precio")
 		}
 		// «Nunca se vendió» se dice con cualquier umbral: con 12 meses no salía
-		// y con 1 sí, siendo el mismo producto (M2S4-033).
+		// y con 1 sí, siendo el mismo producto (M2S4-033). Pero no de lo que se
+		// compró dentro del umbral: la escalera recibida hoy salía «Nunca se
+		// vendió» el mismo día en que entró (M4-015).
 		peso[c.ID] = len(c.Motivos)
-		if len(c.Motivos) > 0 && !f.UltimaVenta.Valid && !slices.Contains(c.Motivos, "Nunca se vendió") {
+		compradoHacePoco := f.UltimaCompra.Valid && !f.UltimaCompra.Time.Before(corte)
+		if len(c.Motivos) > 0 && !f.UltimaVenta.Valid && !compradoHacePoco && !slices.Contains(c.Motivos, "Nunca se vendió") {
 			c.Motivos = append([]string{"Nunca se vendió"}, c.Motivos...)
 		}
 		if len(c.Motivos) > 0 {

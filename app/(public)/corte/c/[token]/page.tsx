@@ -108,7 +108,8 @@ async function Consulta({ params }: { params: Promise<{ token: string }> }) {
                 {g.piezas.map((p, i) => (
                   <li key={i} className="py-2.5 first:pt-0 last:pb-0">
                     <p className="text-base font-semibold">
-                      <span className="tabular">{p.cantidad} ×</span> {p.etiqueta || `${p.largoMm} × ${p.anchoMm}`}
+                      <span className="tabular">{`${p.cantidad} ×`}</span>
+                      {` ${(p.etiqueta || `${p.largoMm} × ${p.anchoMm}`).trim()}`}
                     </p>
                     <p className="tabular text-base text-texto-2">
                       {[

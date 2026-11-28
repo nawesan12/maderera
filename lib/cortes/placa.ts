@@ -112,3 +112,13 @@ export function medidaEnOrden(etiqueta: string): string {
     return `${l} × ${n} mm`;
   });
 }
+
+/**
+ * El renglón del corte en el carrito: «Sobre placa de …», no «Placa de …».
+ * Con la regla de la media placa un corte chico cobra las pasadas y no la
+ * placa, y «Placa de 2600 × 1830 mm» al lado de $ 2.400 parecía incluirla
+ * (mes simulado, M3S1-008).
+ */
+export function sobreQuePlaca(c: { mitad: string | null; placaLargoMm: number; placaAnchoMm: number }): string {
+  return `Sobre ${c.mitad ? "media placa" : "placa"} de ${c.placaLargoMm} × ${c.placaAnchoMm} mm`;
+}

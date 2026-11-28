@@ -8,6 +8,7 @@ import {
   type EstadoProfesionales,
 } from "./actions";
 import type { ListaAsignable } from "@/lib/dal/admin/profesionales";
+import { importeParaElCampo } from "@/lib/formato";
 
 const inicial: EstadoProfesionales = {};
 
@@ -36,7 +37,7 @@ export function ResolverSolicitud({
   id: string;
   nombre: string;
   listas: ListaAsignable[];
-  clienteExistente: { id: string; nombre: string; condicionIva?: string | null } | null;
+  clienteExistente: { id: string; nombre: string; condicionIva?: string | null; limiteCredito?: number } | null;
   /** El CUIT de la solicitud: decide qué condición frente al IVA se propone. */
   cuit?: string | null;
 }) {
@@ -66,7 +67,9 @@ export function ResolverSolicitud({
   const condicionPropuesta =
     deLaFicha ??
     (digitos.length !== 11 ? "consumidor_final" : /^3[034]/.test(digitos) ? "responsable_inscripto" : "");
-  const [limite, setLimite] = useState("0");
+  // Y el límite de la ficha: con «0» la aprobación le sacaba la cuenta
+  // corriente a quien ya la tenía (recorrido, M4-073).
+  const [limite, setLimite] = useState(importeParaElCampo(clienteExistente?.limiteCredito ?? 0) || "0");
 
   if (modo === "cerrado") {
     return (

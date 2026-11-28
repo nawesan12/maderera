@@ -68,6 +68,9 @@ type ClienteExistente struct {
 	// CondicionIva es la de la ficha: va con el CUIT, así que es la que se
 	// propone al habilitarlo (recorrido, M4-073: arrancaba en «Elegí una»).
 	CondicionIva *string `json:"condicionIva"`
+	// LimiteCredito es el de la ficha: aprobar con la ficha que ya existe
+	// pisaba el límite con el cero del formulario (recorrido, M4-073).
+	LimiteCredito float64 `json:"limiteCredito"`
 }
 
 // SolicitudListada es una solicitud del panel.
@@ -132,14 +135,14 @@ func (s *Servicio) Solicitudes(ctx context.Context) ([]SolicitudListada, error) 
 	}
 	porCuit := map[string]*ClienteExistente{}
 	if len(buscados) > 0 {
-		ex, err := s.pool.Query(ctx, `select id, nombre, coalesce(cuit, ''), condicion_iva::text from customers where active and cuit = any($1::text[])`, buscados)
+		ex, err := s.pool.Query(ctx, `select id, nombre, coalesce(cuit, ''), condicion_iva::text, coalesce(limite_credito, 0)::float8 from customers where active and cuit = any($1::text[])`, buscados)
 		if err != nil {
 			return nil, err
 		}
 		for ex.Next() {
 			var c ClienteExistente
 			var cu string
-			if err := ex.Scan(&c.ID, &c.Nombre, &cu, &c.CondicionIva); err != nil {
+			if err := ex.Scan(&c.ID, &c.Nombre, &cu, &c.CondicionIva, &c.LimiteCredito); err != nil {
 				ex.Close()
 				return nil, err
 			}

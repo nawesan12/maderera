@@ -327,6 +327,8 @@ export interface components {
                 nombre: string;
                 /** @description La de la ficha; va con el CUIT */
                 condicionIva: string | null;
+                /** @description El límite de cuenta corriente de la ficha; se propone al habilitar */
+                limiteCredito: number;
             } | null;
             /** Format: date-time */
             createdAt: string;

@@ -196,7 +196,9 @@ async function PanelConSesion({
         <header className="textura sticky top-0 z-30 flex h-[60px] items-center gap-2 border-b border-linea bg-background/90 px-4 backdrop-blur-lg sm:gap-4 lg:px-7">
           <div className="flex min-w-0 max-w-[420px] flex-1 items-center gap-3 pl-12 lg:pl-0">
             <BuscadorGlobal
-              queBusca={usuario.staffRole === "aserradero" ? "Buscar corte o pedido…" : undefined}
+              // Sin «Buscar»: la lupa ya lo dice, y a 375 px «Buscar corte o
+              // pedido…» se cortaba en «Buscar corte o pe» (recorrido, M4-092).
+              queBusca={usuario.staffRole === "aserradero" ? "Corte o pedido…" : undefined}
             />
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3.5">

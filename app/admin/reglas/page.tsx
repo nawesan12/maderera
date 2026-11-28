@@ -147,14 +147,6 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
         ],
       },
       {
-        clave: "descuento_al_flete",
-        pregunta: "El descuento por medio de pago, ¿alcanza al flete?",
-        opciones: [
-          { valor: "no", texto: "No" },
-          { valor: "si", texto: "Sí" },
-        ],
-      },
-      {
         clave: "descuento_con_escala",
         pregunta: "Un descuento tipeado y el de la forma de pago",
         opciones: [
@@ -229,6 +221,8 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
     ],
   },
   {
+    // La del flete estaba también en «Mostrador», y las dos copias no se
+    // enteraban de lo que guardaba la otra (recorrido, M4-051).
     titulo: "Descuento por medio de pago",
     reglas: [
       {

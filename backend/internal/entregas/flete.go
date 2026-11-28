@@ -13,9 +13,9 @@ import (
 // cotizar» (por el nombre que pone la tienda o por la lista de zonas) sin
 // flete cargado ni «Sin cargo» elegido. Es la del chip «Flete sin cotizar»
 // del reparto y de la ficha.
-const CondicionFleteSinCotizar = `(o.tipo_entrega = 'envio' AND o.costo_envio = 0 AND NOT o.flete_sin_cargo
+const CondicionFleteSinCotizar = `coalesce(o.tipo_entrega = 'envio' AND o.costo_envio = 0 AND NOT o.flete_sin_cargo
 	AND (o.zona_envio ~* 'a cotizar'
-	  OR EXISTS (SELECT 1 FROM shipping_zones z WHERE z.a_cotizar AND lower(z.nombre) = lower(trim(o.zona_envio)))))`
+	  OR EXISTS (SELECT 1 FROM shipping_zones z WHERE z.a_cotizar AND lower(z.nombre) = lower(trim(o.zona_envio)))), false)`
 
 // NotaFleteSinCotizar va en el historial del pedido que sale igual.
 const NotaFleteSinCotizar = "Flete sin cotizar"

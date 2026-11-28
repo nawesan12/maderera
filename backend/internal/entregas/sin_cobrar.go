@@ -49,7 +49,7 @@ func AutorizarSinCobrar(ctx context.Context, tx pgx.Tx, aut *autorizacion.Servic
 	var cliente, sucursal *string
 	var contraEntrega bool
 	err := tx.QueryRow(ctx, `SELECT `+fragmentos.SinCobrarDelPedido+`::float8, o.customer_id::text, o.branch_id::text,
-		o.tipo_entrega = 'envio' AND o.medio_pago = 'efectivo'
+		coalesce(o.tipo_entrega = 'envio' AND o.medio_pago = 'efectivo', false)
 		FROM orders o WHERE o.id = $1`, pedido).Scan(&sinCobrar, &cliente, &sucursal, &contraEntrega)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", nil

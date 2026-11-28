@@ -176,9 +176,12 @@ export function DialogoCliente({
   // como a cualquiera.
   const listaProfesional =
     listas.find((l) => !l.isDefault && /profesional/i.test(l.name)) ?? listas.find((l) => !l.isDefault);
+  // Y al revés (M4-002): apagarla devuelve la general si la que quedaba era
+  // la profesional; una lista especial elegida a mano no se toca.
   function cambiarTipo(nuevo: string) {
     setTipo(nuevo);
     if (nuevo === "profesional" && lista === "" && listaProfesional) setLista(listaProfesional.id);
+    if (nuevo !== "profesional" && listaProfesional && lista === listaProfesional.id) setLista("");
   }
 
   // El rubro propone la cuenta profesional, pero no toca la condición frente
@@ -194,7 +197,7 @@ export function DialogoCliente({
     if (delGremio) {
       if (!tipoElegido) cambiarTipo("profesional");
     } else if (!tipoElegido) {
-      setTipo("particular");
+      cambiarTipo("particular");
     }
   }
 

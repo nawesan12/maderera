@@ -109,10 +109,17 @@ func OrdenDePago(d DatosOrdenDePago) ([]byte, error) {
 			y = AltoA4 - Margen - 10
 		}
 		h.Escribir(izq, Opciones{X: Margen, Y: y, Tamano: 9.5})
-		if medio != "" {
-			h.Escribir(Elipsis(medio, Normal, 8.5, Mm(80)), Opciones{X: Margen + Mm(62), Y: y, Tamano: 8.5, Color: TintaSuave})
-		}
 		h.Escribir(Moneda2(importe), Opciones{X: derecha, Y: y, Tamano: 9.5, Derecha: true})
+		// El detalle en los renglones que haga falta: el del e-Cheq (número,
+		// banco y fecha) se cortaba en «al 30/...» (mes 23).
+		if medio != "" {
+			for i, linea := range Renglones(medio, Normal, 8.5, Mm(80)) {
+				if i > 0 {
+					y -= Mm(4)
+				}
+				h.Escribir(linea, Opciones{X: Margen + Mm(62), Y: y, Tamano: 8.5, Color: TintaSuave})
+			}
+		}
 		y -= Mm(6)
 	}
 

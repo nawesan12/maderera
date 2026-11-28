@@ -188,8 +188,12 @@ function TableroDelTaller({
       />
     ));
 
+  // Sin nada en la máquina ni terminado, la cola se lleva el ancho entero,
+  // de a dos tarjetas (M4-090).
+  const sola = maquina.length === 0 && terminados.length === 0;
+
   return (
-    <div className="mt-[18px] grid items-start gap-3 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+    <div className={`mt-[18px] grid items-start gap-3 ${sola ? "" : "lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]"}`}>
       {maquina.length > 0 && (
         <div className="lg:col-start-2 lg:row-start-1">
           <ColumnaTablero titulo="En la máquina" cantidad={maquina.length} detalle={m2(maquina)} estado="en-proceso" tope={Infinity} largo>
@@ -199,7 +203,7 @@ function TableroDelTaller({
       )}
       <div className="lg:col-start-1 lg:row-span-3 lg:row-start-1">
         {cola.length > 0 ? (
-          <ColumnaTablero titulo="En cola" cantidad={cola.length} detalle={m2(cola)} estado="en-cola" tope={Infinity} largo>
+          <ColumnaTablero titulo="En cola" cantidad={cola.length} detalle={m2(cola)} estado="en-cola" tope={Infinity} largo enDos={sola}>
             {tarjetas(cola, true)}
           </ColumnaTablero>
         ) : (
@@ -298,7 +302,9 @@ function TarjetaCorte({
         </div>
       )}
 
-      <p className="mt-2 text-base">{corte.material}</p>
+      {/* El espesor primero: es lo que mira el operario para bajar la
+          placa, y al final pasaba al segundo renglón (M4-091). */}
+      <MaterialConEspesor material={corte.material} />
 
       {/* Las tres cifras que define el trabajo del operario: las placas son
           las del plano, que es lo que se baja del depósito. */}
@@ -365,10 +371,24 @@ function TarjetaCorte({
             sinCargo={corte.sinCargo}
             compacto
             soloMaquina={soloMaquina}
+            // El naranja lleno, solo en el primero de la cola: tres
+            // «Empezar» iguales no dicen cuál va (M4-091).
+            secundario={posicion !== undefined && posicion > 1}
           />
         </div>
       )}
     </TarjetaTablero>
+  );
+}
+
+/** «Melamina Blanca — 2600 × 1830 mm — 18mm» como «18 mm Melamina Blanca — 2600 × 1830 mm». */
+function MaterialConEspesor({ material }: { material: string }) {
+  const m = /^(.*?)\s*[—-]\s*(\d+(?:[.,]\d+)?)\s*mm\s*$/i.exec(material);
+  if (!m || !m[1]) return <p className="mt-2 text-base">{material}</p>;
+  return (
+    <p className="mt-2 text-base">
+      <span className="tabular font-semibold">{m[2]} mm</span> {m[1]}
+    </p>
   );
 }
 

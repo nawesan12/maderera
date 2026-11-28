@@ -47,8 +47,14 @@ export function ColumnaTablero({
   tope = TOPE_VISIBLE,
   secundaria = false,
   largo = false,
+  enDos = false,
   children,
 }: {
+  /**
+   * Las tarjetas de a dos desde lg: la cola del taller sola en la pantalla
+   * (M4-090: ocupaba 3/5 en una columna y el resto quedaba vacío).
+   */
+  enDos?: boolean;
   /**
    * Sin scroll propio: la columna crece con la página. En el taller la
    * columna de terminados cortaba la última tarjeta por la mitad (M2S4-040).
@@ -140,7 +146,9 @@ export function ColumnaTablero({
         Para lo largo está el pliegue.
       */}
       {cantidad > 0 && (
-        <div className={`flex flex-col gap-2.5 px-2.5 pb-2.5 ${largo ? "" : "@5xl:max-h-[calc(100vh-300px)] @5xl:overflow-y-auto"}`}>
+        <div
+          className={`${enDos ? "grid lg:grid-cols-2" : "flex flex-col"} gap-2.5 px-2.5 pb-2.5 ${largo ? "" : "@5xl:max-h-[calc(100vh-300px)] @5xl:overflow-y-auto"}`}
+        >
           {visibles}
 
           {hayDeMas && !expandida && (

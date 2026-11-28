@@ -62,6 +62,18 @@ export function DialogoTraslado({ sucursales }: { sucursales: { id: string; name
     buscador.current?.focus();
   }
 
+  // Elegir de dónde sale el mismo lugar al que va corre el destino a otra
+  // sucursal: quedaba «Desde Aserradero · Hacia Aserradero» (M4-085).
+  function elegirOrigen(v: string) {
+    setOrigen(v);
+    if (v === destino) setDestino(v === origen ? (sucursales.find((s) => s.id !== v)?.id ?? "") : origen);
+  }
+
+  function elegirDestino(v: string) {
+    setDestino(v);
+    if (v === origen) setOrigen(v === destino ? (sucursales.find((s) => s.id !== v)?.id ?? "") : destino);
+  }
+
   function invertir() {
     setOrigen(destino);
     setDestino(origen);
@@ -126,7 +138,7 @@ export function DialogoTraslado({ sucursales }: { sucursales: { id: string; name
             Desde
           </Label>
           <div className="min-w-0 col-start-1 row-start-2">
-            <Select value={origen} onValueChange={(v) => v && setOrigen(v)} items={nombres}>
+            <Select value={origen} onValueChange={(v) => v && elegirOrigen(v)} items={nombres}>
               <SelectTrigger id="traslado-origen" className="h-11 w-full text-base data-[size=default]:h-11">
                 <SelectValue />
               </SelectTrigger>
@@ -151,7 +163,7 @@ export function DialogoTraslado({ sucursales }: { sucursales: { id: string; name
             Hacia
           </Label>
           <div className="min-w-0 col-start-1 row-start-4 sm:col-start-3 sm:row-start-2">
-            <Select value={destino} onValueChange={(v) => v && setDestino(v)} items={nombres}>
+            <Select value={destino} onValueChange={(v) => v && elegirDestino(v)} items={nombres}>
               <SelectTrigger id="traslado-destino" className="h-11 w-full text-base data-[size=default]:h-11">
                 <SelectValue />
               </SelectTrigger>

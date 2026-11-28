@@ -89,13 +89,25 @@ export function DevolverPedido({
   // Ya cobrado: la plata sale por la caja o por el banco, hasta lo que entró
   // por cada uno.
   const cobrado = Boolean(datos && !datos.aCuenta && total > datos.deuda + 0.005);
+  // Por donde no entró nada no se ofrece (cobrado por transferencia, «De la
+  // caja» se veía apagada sin decir por qué), y si queda una sola, va
+  // elegida. Apagada por la caja cerrada, lo dice al pasar el puntero.
   const opciones = datos
     ? [
-        { valor: "caja" as const, texto: "De la caja", deshabilitada: !datos.cajaAbierta || datos.caja + 0.005 < total },
-        { valor: "afuera" as const, texto: "Por el banco", deshabilitada: datos.afuera + 0.005 < total },
-      ]
+        {
+          valor: "caja" as const,
+          texto: "De la caja",
+          deshabilitada: !datos.cajaAbierta || datos.caja + 0.005 < total,
+          motivo: datos.cajaAbierta ? undefined : "No hay caja abierta",
+          entro: datos.caja,
+        },
+        { valor: "afuera" as const, texto: "Por el banco", deshabilitada: datos.afuera + 0.005 < total, entro: datos.afuera },
+      ].filter((o) => o.entro > 0.005)
     : [];
-  const elegido = cobrado ? (opciones.find((o) => o.valor === destino && !o.deshabilitada)?.valor ?? null) : null;
+  const habilitadas = opciones.filter((o) => !o.deshabilitada);
+  const elegido = cobrado
+    ? (habilitadas.find((o) => o.valor === destino)?.valor ?? (habilitadas.length === 1 ? habilitadas[0].valor : null))
+    : null;
 
   function abrir(v: boolean) {
     if (v && !abierto) {

@@ -95,11 +95,22 @@ export function DevolverFacturado({
   // Lo que no entra en la cuenta o en la deuda ya se cobró: vuelve por la
   // caja o por el banco, hasta lo que entró por cada uno.
   const cobrado = importe !== null && importe > tope + 0.005;
+  // Por donde no entró nada no se ofrece, y si queda una sola, va elegida
+  // (como en la devolución sin factura).
   const opciones = [
-    { valor: "caja" as const, texto: "De la caja", deshabilitada: !cajaAbierta || importe === null || caja + 0.005 < importe },
-    { valor: "afuera" as const, texto: "Por el banco", deshabilitada: importe === null || afuera + 0.005 < importe },
-  ];
-  const elegido = cobrado ? (opciones.find((o) => o.valor === plata && !o.deshabilitada)?.valor ?? null) : null;
+    {
+      valor: "caja" as const,
+      texto: "De la caja",
+      deshabilitada: !cajaAbierta || importe === null || caja + 0.005 < importe,
+      motivo: cajaAbierta ? undefined : "No hay caja abierta",
+      entro: caja,
+    },
+    { valor: "afuera" as const, texto: "Por el banco", deshabilitada: importe === null || afuera + 0.005 < importe, entro: afuera },
+  ].filter((o) => o.entro > 0.005);
+  const habilitadas = opciones.filter((o) => !o.deshabilitada);
+  const elegido = cobrado
+    ? (habilitadas.find((o) => o.valor === plata)?.valor ?? (habilitadas.length === 1 ? habilitadas[0].valor : null))
+    : null;
   const pasa = cobrado && opciones.every((o) => o.deshabilitada);
 
   function abrir(v: boolean) {

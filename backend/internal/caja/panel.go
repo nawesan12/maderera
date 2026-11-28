@@ -173,14 +173,14 @@ const consultaDeTurnos = `
 		       coalesce(sum(m.monto) FILTER (WHERE m.created_at <= s.cerrada_at
 		                                 OR (m.monto > 0 AND m.declarado_at IS NOT NULL AND m.declarado_at <= s.cerrada_at)), 0),
 		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'apertura'), 0),
-		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'venta' AND (m.created_at <= s.cerrada_at
+		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'venta' AND NOT ` + DeUnaAnuladaEnElTurno + ` AND (m.created_at <= s.cerrada_at
 		                                 OR (m.monto > 0 AND m.declarado_at IS NOT NULL AND m.declarado_at <= s.cerrada_at))), 0),
 		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'ingreso' AND NOT ` + DevuelveUnGasto + ` AND NOT ` + EsUnCobro + ` AND (m.created_at <= s.cerrada_at
 		                                 OR (m.monto > 0 AND m.declarado_at IS NOT NULL AND m.declarado_at <= s.cerrada_at))), 0),
 		       coalesce(sum(m.monto) FILTER (WHERE ` + EsUnCobro + ` AND (m.created_at <= s.cerrada_at
 		                                 OR (m.monto > 0 AND m.declarado_at IS NOT NULL AND m.declarado_at <= s.cerrada_at))), 0),
 		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'retiro' AND m.created_at <= s.cerrada_at), 0),
-		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'devolucion' AND m.created_at <= s.cerrada_at), 0),
+		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'devolucion' AND NOT ` + DeUnaAnuladaEnElTurno + ` AND m.created_at <= s.cerrada_at), 0),
 		       coalesce(sum(m.monto) FILTER (WHERE (m.tipo NOT IN ('apertura', 'venta', 'ingreso', 'retiro', 'devolucion') OR ` + DevuelveUnGasto + `)
 		                                 AND m.created_at <= s.cerrada_at), 0),
 		       d.codigo,

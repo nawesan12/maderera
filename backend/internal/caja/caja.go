@@ -104,13 +104,13 @@ func Abierto(ctx context.Context, c Consultador, sucursal string) (*TurnoAbierto
 		SELECT s.id, s.branch_id, b.name, u.name, s.abierta_at,
 		       coalesce(sum(m.monto), 0), b.fondo_base,
 		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'apertura'), 0),
-		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'venta'), 0),
+		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'venta' AND NOT `+DeUnaAnuladaEnElTurno+`), 0),
 		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'ingreso' AND NOT `+DevuelveUnGasto+` AND NOT `+EsUnCobro+`), 0),
 		       coalesce(sum(m.monto) FILTER (WHERE `+EsUnCobro+`), 0),
 		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'retiro'), 0),
-		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'devolucion'), 0),
+		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'devolucion' AND NOT `+DeUnaAnuladaEnElTurno+`), 0),
 		       coalesce(sum(m.monto) FILTER (WHERE m.tipo NOT IN ('apertura', 'venta', 'ingreso', 'retiro', 'devolucion') OR `+DevuelveUnGasto+`), 0),
-		       count(*) FILTER (WHERE m.tipo = 'venta')::int
+		       count(*) FILTER (WHERE m.tipo = 'venta' AND NOT `+DeUnaAnuladaEnElTurno+`)::int
 		FROM cash_sessions s
 		JOIN branches b ON b.id = s.branch_id
 		JOIN "user" u ON u.id = s.abierta_por
@@ -364,6 +364,14 @@ const MedioDeLaDevolucion = `CASE d.destino WHEN 'caja' THEN 'efectivo' WHEN 'af
 const anuladaEnElTurno = `(o.estado = 'cancelado' AND o.origen = 'mostrador' AND o.created_at >= s.abierta_at
 	AND coalesce((SELECT max(h.created_at) FROM order_status_history h WHERE h.order_id = o.id AND h.estado = 'cancelado'), o.updated_at)
 	    <= coalesce(s.cerrada_at, now()))`
+
+// DeUnaAnuladaEnElTurno: el movimiento (alias m) del turno `s` es la venta
+// o la devolución de una venta vendida y anulada en ese mismo turno. La plata
+// entró y salió del cajón, así que «Debería haber» la sigue sumando, pero los
+// recuadros «Ventas en efectivo» y «Devoluciones» no: decían $ 16.020 y
+// −$ 8.010 al lado de un Z con «Efectivo (1) $ 8.010» (recorrido 2, M4-109).
+const DeUnaAnuladaEnElTurno = `(m.order_id IS NOT NULL AND m.tipo IN ('venta', 'devolucion')
+	AND EXISTS (SELECT 1 FROM orders o WHERE o.id = m.order_id AND ` + anuladaEnElTurno + `))`
 
 // CierresDeTurnos es el cierre Z de cada turno: las ventas de la sucursal en
 // la ventana del turno, por medio (order_payments, o el medio único de las

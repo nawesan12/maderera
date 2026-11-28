@@ -197,7 +197,7 @@ export default async function CajaPage({
       />
 
       <section className="tarjeta overflow-hidden">
-        <header className="tarjeta-cabecera grid grid-cols-[1fr_auto] items-baseline gap-x-4 px-5 py-3.5 sm:grid-cols-[1fr_repeat(3,8.5rem)_1.25rem]">
+        <header className="tarjeta-cabecera grid grid-cols-[1fr_auto] items-baseline gap-x-4 px-5 py-3.5 sm:grid-cols-[1fr_repeat(3,8.5rem)_1.25rem] lg:grid-cols-[1fr_repeat(3,10.5rem)_1.25rem]">
           <h2 className="text-base font-semibold">
             Turnos cerrados <span className="tabular ml-1 text-muted-foreground">{turnosDelMes.total}</span>
           </h2>
@@ -205,7 +205,9 @@ export default async function CajaPage({
               no tienen nada abajo (M2S1-118). */}
           {cerrados.length > 0 && (
             <>
-              <span className="hidden text-right text-sm uppercase tracking-wide text-muted-foreground sm:block">Tendría que haber</span>
+              {/* En una línea desde lg: a 1280 «TENDRÍA QUE HABER» y
+                  «cierra · -$ 0,60» se partían en dos (mes 23). */}
+              <span className="hidden text-right text-sm uppercase tracking-wide text-muted-foreground sm:block lg:whitespace-nowrap">Tendría que haber</span>
               <span className="hidden text-right text-sm uppercase tracking-wide text-muted-foreground sm:block">Contado</span>
               <span className="text-right text-sm uppercase tracking-wide text-muted-foreground">Diferencia</span>
             </>
@@ -248,7 +250,7 @@ export default async function CajaPage({
               return (
                 <li key={t.id}>
                   <details className="group">
-                    <summary className="grid cursor-pointer list-none grid-cols-[1fr_auto] items-baseline gap-x-4 gap-y-1 px-5 py-3 hover:bg-hundida/40 sm:grid-cols-[1fr_repeat(3,8.5rem)_1.25rem] [&::-webkit-details-marker]:hidden">
+                    <summary className="grid cursor-pointer list-none grid-cols-[1fr_auto] items-baseline gap-x-4 gap-y-1 px-5 py-3 hover:bg-hundida/40 sm:grid-cols-[1fr_repeat(3,8.5rem)_1.25rem] lg:grid-cols-[1fr_repeat(3,10.5rem)_1.25rem] [&::-webkit-details-marker]:hidden">
                       <span className="min-w-0">
                         <span className="block truncate text-base font-medium">
                           {t.sucursal}
@@ -266,7 +268,7 @@ export default async function CajaPage({
                           redondeada, una diferencia de 40 centavos se leía
                           «-$ 0» (H164, H263, H363). */}
                       <span
-                        className={`tabular text-right text-base font-semibold ${
+                        className={`tabular text-right text-base font-semibold lg:whitespace-nowrap ${
                           diferencia === null
                             ? "text-muted-foreground"
                             : cuadra

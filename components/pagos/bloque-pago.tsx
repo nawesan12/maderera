@@ -23,6 +23,7 @@ import {
 } from "@/app/(public)/pago-actions";
 import type { DatosParaTransferir } from "@/lib/dal/pagos";
 import { DatosBancarios } from "@/components/pagos/datos-bancarios";
+import { caminoDelPago } from "@/lib/pagos/camino";
 
 /**
  * El bloque de pago de la pantalla de confirmación del pedido.
@@ -150,11 +151,10 @@ export function BloquePago({
     );
   }
 
-  // Mercado Pago sin con qué cobrar (pedidos de antes de que la tienda
-  // dejara de ofrecerlo): nunca un «Pagar» que falla (M2S2-002, M2S2-049,
-  // M2S3-051). Con datos bancarios se transfiere (abajo); sin ellos, se paga
-  // como el efectivo.
-  if (medioPago === "efectivo" || (medioPago === "mercado_pago" && !disponible && !banco)) {
+  // Solo Mercado Pago con con qué cobrar ofrece «Pagar»: débito, crédito y
+  // efectivo se pagan al retirar (M2S3-051, ver `caminoDelPago`).
+  const camino = caminoDelPago(medioPago, disponible, banco !== null);
+  if (camino === "al_retirar") {
     return (
       <Card className="border-0 shadow-sm">
         <CardContent className="flex items-start gap-3 p-5">
@@ -167,9 +167,7 @@ export function BloquePago({
     );
   }
 
-  // Sin pago en línea, el pedido de Mercado Pago se cobra por
-  // transferencia: el botón «Pagar» fallaba y, al recargar, volvía.
-  if (medioPago === "transferencia" || !disponible) {
+  if (camino === "transferencia") {
     return (
       <TransferenciaBancaria
         numero={numero}

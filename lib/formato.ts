@@ -246,6 +246,17 @@ export const fechaLarga = fechaSegunTipo({ day: "numeric", month: "long", year: 
 /** «30/11»: la fecha prometida de una orden decía «29/11» en Stock (M3S2-025). */
 export const diaCorto = fechaSegunTipo({ day: "2-digit", month: "2-digit" });
 
+const diaDeLaSemana = fechaSegunTipo({ weekday: "short" });
+
+/**
+ * «lun 30/11»: el día de la semana y el día con barra, como el resto del
+ * panel. Pedido junto, Intl de es-AR escribe «lun 30-11» (mes 23, el
+ * reparto).
+ */
+export const diaConSemana = {
+  format: (fecha: Date | number) => `${diaDeLaSemana.format(fecha)} ${diaCorto.format(fecha)}`,
+};
+
 export const fechaHora = new Intl.DateTimeFormat("es-AR", {
   timeZone: ZONA,
   day: "2-digit",

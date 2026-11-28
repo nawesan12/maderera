@@ -198,3 +198,10 @@ describe("documentoConTipo", () => {
     expect(documentoConTipo("30111222")).toBe("DNI 30.111.222");
   });
 });
+
+describe("diaConSemana", () => {
+  it("escribe el día con barra, no con guion (mes 23, el reparto)", async () => {
+    const { diaConSemana } = await import("@/lib/formato");
+    expect(diaConSemana.format(new Date("2026-11-30T00:00:00Z"))).toBe("lun 30/11");
+  });
+});

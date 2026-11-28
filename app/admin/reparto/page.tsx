@@ -3,7 +3,7 @@ import { Banknote, CalendarDays, Check, Landmark, MapPin, Truck } from "lucide-r
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { moneda, plural } from "@/components/admin/formato";
-import { cantidadConUnidad } from "@/lib/formato";
+import { cantidadConUnidad, diaConSemana } from "@/lib/formato";
 import { listarPedidos, type PedidoListado } from "@/lib/dal/admin/ventas";
 import { listarZonasDeEnvio } from "@/lib/dal/envios";
 import { requireStaff } from "@/lib/dal/session";
@@ -24,13 +24,6 @@ const MEDIO: Record<string, string> = {
   cheque: "Cheque",
 };
 
-/** «Vie 28/11», en hora argentina. */
-const diaCorto = new Intl.DateTimeFormat("es-AR", {
-  weekday: "short",
-  day: "2-digit",
-  month: "2-digit",
-  timeZone: "UTC",
-});
 
 /**
  * El reparto: lo que hay que llevar, por zona y por día.
@@ -110,7 +103,7 @@ export default async function RepartoPage() {
                     viaje por zona y día. */}
                 {ps[0]?.entregarEl && (
                   <span className="inline-flex items-center gap-1 text-base font-semibold">
-                    · {diaCorto.format(new Date(`${ps[0].entregarEl}T12:00:00Z`))}
+                    · {diaConSemana.format(new Date(`${ps[0].entregarEl}T00:00:00Z`))}
                   </span>
                 )}
                 <span className="text-base font-normal text-muted-foreground">
@@ -150,7 +143,7 @@ function FilaDeReparto({ pedido: p, cobra }: { pedido: PedidoListado; cobra: boo
         {p.entregarEl && (
           <span className="inline-flex items-center gap-1.5 text-base font-semibold">
             <CalendarDays className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            {diaCorto.format(new Date(`${p.entregarEl}T12:00:00Z`))}
+            {diaConSemana.format(new Date(`${p.entregarEl}T00:00:00Z`))}
           </span>
         )}
       </div>

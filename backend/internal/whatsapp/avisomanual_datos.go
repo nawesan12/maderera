@@ -302,8 +302,14 @@ func (s *Servicio) historiaDelAviso(ctx context.Context, evento, entidadID strin
 			}
 			out = append(out, HistoriaDelAviso{canal, f.estado, t, !salio})
 		default:
+			// Simulado, como en /admin/avisos: «El correo salió» con el
+			// correo de demostración hacía creer que había llegado (el mismo
+			// problema que M4-056, recorrido 2).
 			t := "El correo no salió (" + cuando + ")."
-			if salio {
+			switch f.estado {
+			case "simulada":
+				t = "Correo simulado el " + cuando + ": no salió."
+			case "enviada":
 				t = "El correo salió el " + cuando + "."
 			}
 			out = append(out, HistoriaDelAviso{canal, f.estado, t, !salio})

@@ -26,7 +26,7 @@ import {
   letraQueCorresponde,
   type CondicionIva,
 } from "@/lib/fiscal/comprobantes";
-import { formatearCuit, moneda } from "@/lib/formato";
+import { formatearCuit, importeDelCampo, moneda } from "@/lib/formato";
 import {
   BarraGuardar,
   Hoja,
@@ -148,11 +148,11 @@ export function FormularioFacturaManual({
 
   const totales = calcularTotales(
     lineas
-      .filter((l) => l.descripcion.trim() && Number(l.precio) > 0)
+      .filter((l) => l.descripcion.trim() && importeDelCampo(l.precio) > 0)
       .map((l) => ({
         descripcion: l.descripcion,
         cantidad: Number(l.cantidad) || 0,
-        precioFinalUnitario: Number(l.precio) || 0,
+        precioFinalUnitario: importeDelCampo(l.precio),
         alicuota: Number(l.alicuota),
       })),
   );

@@ -103,3 +103,21 @@ func TestMargenConElDescuentoDelPedido(t *testing.T) {
 		t.Fatalf("margen: %+v", f.Margen)
 	}
 }
+
+// M4-026: el presupuesto sin contacto propio pasa a pedido con el correo y
+// el teléfono de la ficha del cliente (los avisos de estado leen esos).
+func TestPedidoTomaElContactoDeLaFicha(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	_, ven := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	cliente := e.id(t, `insert into customers (nombre, email, telefono) values ('Sim Carpintería Ferreyra', 'sim.carpintero@ejemplo.test', '2236000000') returning id`)
+	q := e.presupuesto(t, ven, 1)
+	e.exec(t, `update quotes set customer_id = $2, contacto_email = null, contacto_telefono = '' where id = $1`, q, cliente)
+	r, err := e.s.ConvertirEnPedido(ctx, ven, q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := e.texto(t, `select coalesce(contacto_email, '') || ' ' || coalesce(contacto_telefono, '') from orders where id = $1`, r.ID); c != "sim.carpintero@ejemplo.test 2236000000" {
+		t.Errorf("contacto: %q", c)
+	}
+}

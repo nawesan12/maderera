@@ -1016,7 +1016,11 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 			                    estado, origen, subtotal, total, notas, seller_id, created_by_user_id,
 			                    tipo_entrega, direccion_entrega, zona_envio, costo_envio, medio_pago, entregar_el,
 			                    dejado_de_cobrar, autorizado_por, a_cuenta, flete_sin_cargo)
-			VALUES ($1, $2, $3, $4, $5, $6,
+			VALUES ($1, $2, $3, $4,
+			        -- Sin contacto propio, el de la ficha (M4-026: el presupuesto
+			        -- del mostrador no avisaba por correo en ningún estado).
+			        coalesce(nullif(trim($5), ''), (SELECT nullif(trim(email), '') FROM customers WHERE id = $2::uuid)),
+			        coalesce(nullif(trim($6), ''), (SELECT nullif(trim(telefono), '') FROM customers WHERE id = $2::uuid)),
 			        CASE WHEN $13::tipo_entrega = 'retiro'
 			             THEN coalesce($7::uuid, (SELECT id FROM branches WHERE active ORDER BY sort_order LIMIT 1))
 			             ELSE $7::uuid END,

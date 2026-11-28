@@ -2,7 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Loader2, Monitor, Plus } from "lucide-react";
+import { ChevronDown, Ellipsis, Loader2, Monitor, Plus } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Confirmar } from "@/components/admin/confirmar";
 import { crearCaja, darDeBajaCaja, type EstadoCajas } from "./actions";
 
@@ -72,7 +78,7 @@ export function CajasFisicas({
 
   function renglon(c: CajaFisica) {
     return (
-      <li key={c.id} className="flex flex-wrap items-center gap-3 px-5 py-3.5">
+      <li key={c.id} className="flex items-center gap-3 px-5 py-3.5">
         <span
           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
             c.activo
@@ -104,27 +110,39 @@ export function CajasFisicas({
           </span>
         )}
 
+        {/* En un menú «⋯»: a 375 el botón dejaba el código, el nombre y la
+            conexión en tres o cuatro renglones (M4-108). */}
         {c.activo && (
-          <button
-            type="button"
-            onClick={() => {
-              // La guarda de verdad está en el servidor; esto evita ir y
-              // volver por algo que ya se ve en pantalla.
-              if (c.pendientes > 0) {
-                setEstado({
-                  error: `${c.codigo} tiene ${c.pendientes} ${
-                    c.pendientes === 1 ? "venta" : "ventas"
-                  } sin subir. Conectá la caja y esperá a que suban.`,
-                });
-                return;
-              }
-              setPorDarDeBaja({ id: c.id, codigo: c.codigo });
-            }}
-            disabled={enCurso}
-            className="inline-flex h-11 shrink-0 items-center rounded-lg border border-linea px-3.5 text-base font-medium transition-colors hover:bg-hundida disabled:opacity-60"
-          >
-            Dar de baja
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              aria-label={`Más acciones de ${c.codigo}`}
+              disabled={enCurso}
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-linea hover:bg-hundida disabled:opacity-60"
+            >
+              <Ellipsis className="h-5 w-5" aria-hidden />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem
+                variant="destructive"
+                className="h-10 text-base"
+                onClick={() => {
+                  // La guarda de verdad está en el servidor; esto evita ir y
+                  // volver por algo que ya se ve en pantalla.
+                  if (c.pendientes > 0) {
+                    setEstado({
+                      error: `${c.codigo} tiene ${c.pendientes} ${
+                        c.pendientes === 1 ? "venta" : "ventas"
+                      } sin subir. Conectá la caja y esperá a que suban.`,
+                    });
+                    return;
+                  }
+                  setPorDarDeBaja({ id: c.id, codigo: c.codigo });
+                }}
+              >
+                Dar de baja
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </li>
     );

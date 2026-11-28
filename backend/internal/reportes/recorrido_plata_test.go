@@ -354,3 +354,20 @@ func TestReportesYCierreVendenLoMismo(t *testing.T) {
 		t.Errorf("filas: %+v", rep.Filas)
 	}
 }
+
+// Recorrido M4-117: el cierre cuenta aparte lo emitido que espera el CAE,
+// con su IVA, para que la tarjeta del IVA no diga «a favor» sin él.
+func TestElResumenCuentaLoQueEsperaElCae(t *testing.T) {
+	e := armar(t)
+	cli := e.id(t, `insert into customers (nombre) values ('Constructora') returning id`)
+	e.facturaSinCae(t, &cli, nil, 9, 121000, "2026-11-05T15:00:00Z")
+	e.facturaSinCae(t, &cli, nil, 10, 60500, "2026-11-06T15:00:00Z")
+	p := PeriodoDelCierre("2026-11", ahoraDePrueba)
+	r, err := e.s.ResumenDelMes(context.Background(), p.Desde, p.Hasta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Ventas.Cantidad != 0 || r.VentasSinCae.Cantidad != 2 || r.VentasSinCae.Iva != 31500 {
+		t.Errorf("ventas %+v, sin CAE %+v", r.Ventas, r.VentasSinCae)
+	}
+}

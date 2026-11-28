@@ -681,14 +681,19 @@ type ReusoDelNumero struct {
 	InvoiceID      string  `json:"invoiceId"`
 	ReceptorNombre string  `json:"receptorNombre"`
 	Pedido         *string `json:"pedido"`
+	// Total y Fecha del que lo usa: con dos «B 0004» distintas en la lista,
+	// el importe y la hora dicen cuál es cuál (recorrido M4-122).
+	Total float64    `json:"total"`
+	Fecha *time.Time `json:"fecha"`
 }
 
 // DadosDeBaja lista las bajas, la más nueva primero.
 func (s *Servicio) DadosDeBaja(ctx context.Context) ([]DadoDeBaja, error) {
 	filas, err := s.pool.Query(ctx, `SELECT b.id, b.tipo::text, b.punto_venta, b.numero, b.receptor_nombre, b.total::float8, b.fecha_emision, b.motivo,
-		b.usuario_nombre, b.created_at, b.renumerados, v.id::text, v.receptor_nombre, v.pedido
+		b.usuario_nombre, b.created_at, b.renumerados, v.id::text, v.receptor_nombre, v.pedido, v.total, v.fecha
 		FROM invoices_dadas_de_baja b
-		LEFT JOIN LATERAL (SELECT i.id, i.receptor_nombre, o.numero AS pedido FROM invoices i LEFT JOIN orders o ON o.id = i.order_id
+		LEFT JOIN LATERAL (SELECT i.id, i.receptor_nombre, o.numero AS pedido, i.total::float8 AS total, least(i.created_at, i.fecha_emision) AS fecha
+		  FROM invoices i LEFT JOIN orders o ON o.id = i.order_id
 		  WHERE i.tipo = b.tipo AND i.punto_venta = b.punto_venta AND i.numero = b.numero LIMIT 1) v ON true
 		ORDER BY b.created_at DESC LIMIT 500`)
 	if err != nil {
@@ -701,12 +706,18 @@ func (s *Servicio) DadosDeBaja(ctx context.Context) ([]DadoDeBaja, error) {
 		var ren []byte
 		var reuso, reusoNombre *string
 		var reusoPedido *string
+		var reusoTotal *float64
+		var reusoFecha *time.Time
 		if err := filas.Scan(&d.ID, &d.Tipo, &d.PuntoVenta, &d.Numero, &d.ReceptorNombre, &d.Total, &d.FechaEmision, &d.Motivo,
-			&d.UsuarioNombre, &d.CreatedAt, &ren, &reuso, &reusoNombre, &reusoPedido); err != nil {
+			&d.UsuarioNombre, &d.CreatedAt, &ren, &reuso, &reusoNombre, &reusoPedido, &reusoTotal, &reusoFecha); err != nil {
 			return nil, err
 		}
 		if reuso != nil {
 			d.Reuso = &ReusoDelNumero{InvoiceID: *reuso, ReceptorNombre: de(reusoNombre), Pedido: reusoPedido}
+			if reusoTotal != nil {
+				d.Reuso.Total = *reusoTotal
+			}
+			d.Reuso.Fecha = reusoFecha
 		}
 		d.Renumerados = []Corrimiento{}
 		if err := json.Unmarshal(ren, &d.Renumerados); err != nil {

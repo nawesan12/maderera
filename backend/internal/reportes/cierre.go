@@ -1855,6 +1855,11 @@ type TotalesConIva struct {
 // ResumenDelMes es lo que devuelve resumenDelMes.
 type ResumenDelMes struct {
 	Ventas TotalesConIva `json:"ventas"`
+	// VentasSinCae: los comprobantes del mes emitidos que esperan el CAE. No
+	// entran al débito fiscal hasta que ARCA los autorice, pero el IVA va a
+	// estar: la tarjeta del IVA decía «saldo a favor» sin ellos (recorrido
+	// M4-117).
+	VentasSinCae TotalesConIva `json:"ventasSinCae"`
 	// Vendido: lo vendido en el mes repartido según su factura (ver
 	// vendidoDelMes). Solo para la pantalla: no va a los asientos ni a
 	// ningún archivo del contador.
@@ -1945,6 +1950,18 @@ func (s *Servicio) ResumenDelMes(ctx context.Context, desde, hasta time.Time) (R
 	if err != nil {
 		return r, err
 	}
+	var sn, si, st jsmath.Num
+	if err := s.lectura.QueryRow(ctx, `
+		SELECT
+		  coalesce(sum(CASE WHEN tipo::text LIKE 'nota_credito%' THEN -1 ELSE 1 END * neto), 0),
+		  coalesce(sum(CASE WHEN tipo::text LIKE 'nota_credito%' THEN -1 ELSE 1 END * (iva21 + iva105 + iva27)), 0),
+		  coalesce(sum(CASE WHEN tipo::text LIKE 'nota_credito%' THEN -1 ELSE 1 END * total), 0),
+		  count(*)::int
+		FROM invoices WHERE least(created_at, fecha_emision) >= $1 AND least(created_at, fecha_emision) <= $2
+		  AND cae IS NULL AND estado IN ('emitida', 'rechazada')`, idesde, ihasta).Scan(&sn, &si, &st, &r.VentasSinCae.Cantidad); err != nil {
+		return r, err
+	}
+	r.VentasSinCae.Neto, r.VentasSinCae.Iva, r.VentasSinCae.Total = numero(sn), numero(si), numero(st)
 	err = s.lectura.QueryRow(ctx, `
 		-- El IVA es de todas las facturas de compra; el neto, el total y la
 		-- cantidad, sin las de un gasto, que van en Gastos (mes simulado,

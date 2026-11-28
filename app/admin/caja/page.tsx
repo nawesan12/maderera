@@ -295,8 +295,11 @@ export default async function CajaPage({
                           {/* Lo que cobró otra persona y entró a este cajón: la
                               diferencia se explica sin preguntar (M2S2-041). */}
                           {deOtros.map((m) => (
-                            <span key={m.id} className="tabular text-muted-foreground">
-                              {m.motivo?.replace(/ — .*$/, "") ?? "Ingreso"} · {m.quien} · {formatearImporte(m.monto)}
+                            // En la letra del texto, y el importe entero:
+                            // en monoespaciada cortaba el monto a 375 (M4-108).
+                            <span key={m.id} className="text-muted-foreground">
+                              {m.motivo?.replace(/ — .*$/, "") ?? "Ingreso"} · {m.quien} ·{" "}
+                              <span className="tabular whitespace-nowrap">{formatearImporte(m.monto)}</span>
                             </span>
                           ))}
                           {t.tardios > 0 && (

@@ -654,6 +654,10 @@ export interface components {
                 invoiceId: string;
                 receptorNombre: string;
                 pedido: string | null;
+                /** Format: double */
+                total: number;
+                /** Format: date-time */
+                fecha: string | null;
             } | null;
         };
         RenglonesADevolver: {

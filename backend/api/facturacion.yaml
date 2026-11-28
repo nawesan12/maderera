@@ -731,11 +731,13 @@ components:
           description: el comprobante vivo que tiene hoy ese número
           nullable: true
           type: object
-          required: [invoiceId, receptorNombre, pedido]
+          required: [invoiceId, receptorNombre, pedido, total, fecha]
           properties:
             invoiceId: { type: string }
             receptorNombre: { type: string }
             pedido: { type: string, nullable: true }
+            total: { type: number, format: double }
+            fecha: { type: string, format: date-time, nullable: true }
     RenglonesADevolver:
       type: array
       items:

@@ -16,6 +16,8 @@ import type { RolStaff } from "@/lib/roles";
  */
 export async function proxy(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith("/pedido/")) return seguimiento(request);
+  const hoja = request.nextUrl.pathname.match(/^\/(comprobante|remito)\/([0-9a-fA-F-]{36})\/?$/);
+  if (hoja) return hojaAjena(request, hoja[1] as "comprobante" | "remito", hoja[2]);
 
   /*
    * El manifiesto del panel pasa sin sesión.
@@ -144,6 +146,37 @@ async function seguimiento(request: NextRequest): Promise<NextResponse> {
     }
   } catch {
     // Go no contestó: decide la página.
+  }
+  return NextResponse.next();
+}
+
+/** El id del build que no existe: su hoja sale con 404 (app/(impresion)/preparando.tsx). */
+const HOJA_QUE_NO_EXISTE = "00000000-0000-0000-0000-000000000000";
+
+/**
+ * El comprobante o el remito de otro cliente, o sin sesión, da un 404 de
+ * verdad, como el PDF (recorrido M4-068): la hoja decide quién la ve adentro
+ * de su `<Suspense>`, con la respuesta ya en 200. Le pregunta a Go lo mismo
+ * que la hoja —el comprobante por su JSON, el remito por su PDF, que son los
+ * que miran quién pide— y, si dice que no, reescribe al id del build, que
+ * sale con su 404. Si Go no contesta, decide la hoja.
+ */
+async function hojaAjena(request: NextRequest, que: "comprobante" | "remito", id: string): Promise<NextResponse> {
+  if (id === HOJA_QUE_NO_EXISTE) return NextResponse.next();
+  const noEsta = () => NextResponse.rewrite(new URL(`/${que}/${HOJA_QUE_NO_EXISTE}`, request.url));
+  const cookie = request.headers.get("cookie");
+  if (!cookie) return noEsta();
+  const ruta = que === "comprobante" ? `/api/v1/comprobantes/${id}` : `/api/v1/remitos/${id}/pdf`;
+  try {
+    const r = await fetch(new URL(ruta, API_URL), {
+      method: que === "comprobante" ? "GET" : "HEAD",
+      headers: { cookie },
+      cache: "no-store",
+      signal: AbortSignal.timeout(4000),
+    });
+    if ([400, 401, 403, 404].includes(r.status)) return noEsta();
+  } catch {
+    // Go no contestó: decide la hoja.
   }
   return NextResponse.next();
 }

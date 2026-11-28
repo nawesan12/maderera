@@ -579,6 +579,7 @@ export interface components {
         CierreResumen: {
             cerrado: components["schemas"]["MesCerrado"];
             ventas: components["schemas"]["CierreTotalesConIva"];
+            ventasSinCae: components["schemas"]["CierreTotalesConIva"];
             vendido: components["schemas"]["CierreVendido"];
             compras: components["schemas"]["CierreTotalesConIva"];
             gastos: components["schemas"]["CierreTotales"];

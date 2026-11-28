@@ -35,7 +35,7 @@ export function ConfiguracionDelBot({ encendido, numero }: { encendido: boolean;
   return (
     <Hoja>
       <Seccion titulo="Respuestas automáticas" icono={Bot} columnas={1}>
-        <Interruptor etiqueta="Contesta el bot" icono={Bot} marcado={prendido} alCambiar={cambiar} />
+        <Interruptor etiqueta="Contesta el bot" marcado={prendido} alCambiar={cambiar} />
       </Seccion>
       <Seccion titulo="Pasa a una persona" icono={UserRound} columnas={1}>
         <form {...sinReiniciar(guardar)} className="flex flex-wrap items-end gap-3">

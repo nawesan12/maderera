@@ -50,6 +50,8 @@ export function Asistentes({ asistentes, empezo }: { asistentes: Asistente[]; em
     );
   }
 
+  const anotados = asistentes.filter((a) => a.estado !== "cancelada").length;
+
   return (
     <div>
       <button
@@ -63,7 +65,9 @@ export function Asistentes({ asistentes, empezo }: { asistentes: Asistente[]; em
         ) : (
           <ChevronRight className="h-4 w-4" />
         )}
-        {asistentes.length} anotado{asistentes.length === 1 ? "" : "s"}
+        {/* Sin las canceladas, como el cupo: tras quitar al único decía
+            «0 de 4» arriba y «1 anotado» acá (recorrido 2). */}
+        {anotados} anotado{anotados === 1 ? "" : "s"}
       </button>
 
       {abierto && (

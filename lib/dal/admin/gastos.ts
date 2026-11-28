@@ -20,10 +20,19 @@ export async function listarGastos({ desde, hasta, limite = 200 }: { desde: Date
   return filas.map((f) => ({ ...f, fecha: new Date(f.fecha) }));
 }
 
-/** Cuánto se gastó por categoría en un período (lo más gastado primero). */
-export async function gastosPorCategoria(desde: Date, hasta: Date) {
+/**
+ * Cuánto se gastó por categoría (o por sucursal) en un período, lo más
+ * gastado primero. Con un circuito, solo los de ese, como la lista (M4-044).
+ */
+export async function gastosPorCategoria(
+  desde: Date,
+  hasta: Date,
+  { circuito, por }: { circuito?: "blanco" | "negro"; por?: "categoria" | "sucursal" } = {},
+) {
   const filas = datos(
-    await (await api()).GET("/api/v1/admin/compras/gastos/por-categoria", { params: { query: rango(desde, hasta) } }),
+    await (await api()).GET("/api/v1/admin/compras/gastos/por-categoria", {
+      params: { query: { ...rango(desde, hasta), ...(circuito ? { circuito } : {}), ...(por ? { por } : {}) } },
+    }),
   );
   return filas.map(({ clave, ...f }) => ({ categoria: clave, ...f }));
 }

@@ -950,7 +950,12 @@ func (a *API) GastosPorCategoria(ctx context.Context, r comprasapi.GastosPorCate
 	if _, err := compras(ctx); err != nil {
 		return nil, err
 	}
-	v, err := a.s.GastosPorCategoria(ctx, r.Params.Desde, r.Params.Hasta)
+	circuito := ""
+	if r.Params.Circuito != nil {
+		circuito = string(*r.Params.Circuito)
+	}
+	porSucursal := r.Params.Por != nil && string(*r.Params.Por) == "sucursal"
+	v, err := a.s.GastosPorCategoria(ctx, r.Params.Desde, r.Params.Hasta, circuito, porSucursal)
 	return ok(v), err
 }
 

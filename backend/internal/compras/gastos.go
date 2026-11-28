@@ -248,11 +248,19 @@ type TotalDeGastos struct {
 	Total    string `json:"total"`
 }
 
-// GastosPorCategoria es gastosPorCategoria (lo más gastado primero).
-func (s *Servicio) GastosPorCategoria(ctx context.Context, desde, hasta time.Time) ([]TotalDeGastos, error) {
+// GastosPorCategoria es gastosPorCategoria (lo más gastado primero). Con
+// un circuito, solo los de ese: la lista se filtraba y el total y las
+// categorías seguían sumando los dos (M4-044). Con porSucursal, el mismo
+// corte por sucursal.
+func (s *Servicio) GastosPorCategoria(ctx context.Context, desde, hasta time.Time, circuito string, porSucursal bool) ([]TotalDeGastos, error) {
+	clave := "e.categoria::text"
+	if porSucursal {
+		clave = "coalesce(b.name, '')"
+	}
 	filas, err := s.pool.Query(ctx, `
-		SELECT categoria::text, count(*)::int, sum(importe)::text FROM expenses WHERE fecha >= $1 AND fecha <= $2 AND anulado_at IS NULL
-		GROUP BY categoria ORDER BY sum(importe) DESC`, desde, hasta)
+		SELECT `+clave+`, count(*)::int, sum(e.importe)::text FROM expenses e LEFT JOIN branches b ON b.id = e.branch_id
+		WHERE e.fecha >= $1 AND e.fecha <= $2 AND e.anulado_at IS NULL AND ($3 = '' OR e.circuito::text = $3)
+		GROUP BY 1 ORDER BY sum(e.importe) DESC`, desde, hasta, circuito)
 	if err != nil {
 		return nil, err
 	}

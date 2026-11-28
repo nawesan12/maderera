@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Las pruebas del grupo de compras del recorrido M4.
@@ -153,5 +154,34 @@ func TestDevolvibleConCostoFacturadoYFactura(t *testing.T) {
 	_ = json.Unmarshal([]byte(b), &filas)
 	if len(filas) != 1 || filas[0].CostoFacturado != 10 || filas[0].CostoUnitario != 11 || filas[0].FacturaID == nil || *filas[0].FacturaID != f {
 		t.Errorf("devolvibles: %s", b)
+	}
+}
+
+// M4-044: con el circuito elegido, las categorías suman solo los de ese, y
+// el corte por sucursal reparte lo mismo.
+func TestGastosPorCategoriaSiguenElCircuito(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	if _, err := e.pool.Exec(ctx, `insert into expenses (fecha, categoria, descripcion, importe, medio, circuito, branch_id) values
+		(now(), 'mantenimiento', 'Con factura', 96800, 'transferencia', 'blanco', $1),
+		(now(), 'mantenimiento', 'Sin factura', 140000, 'efectivo', 'negro', $1),
+		(now(), 'combustible', 'Nafta', 18500, 'efectivo', 'negro', $2)`, e.central, e.aserradero); err != nil {
+		t.Fatal(err)
+	}
+	s := Nuevo(e.pool, silencio)
+	desde, hasta := time.Now().Add(-time.Hour), time.Now().Add(time.Hour)
+	negro, err := s.GastosPorCategoria(ctx, desde, hasta, "negro", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(negro) != 2 || negro[0].Clave != "mantenimiento" || negro[0].Total != "140000.00" {
+		t.Errorf("categorías del B: %+v", negro)
+	}
+	suc, err := s.GastosPorCategoria(ctx, desde, hasta, "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(suc) != 2 || suc[0].Clave != "Casa Central" || suc[0].Total != "236800.00" {
+		t.Errorf("por sucursal: %+v", suc)
 	}
 }

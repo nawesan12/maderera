@@ -101,7 +101,9 @@ const ESTADOS: Record<string, Estilo> = {
 
   // Banners y promociones del sitio: si hoy se ven.
   al_aire: { etiqueta: "Al aire", familia: "ok", abierto: false },
-  fuera_de_fecha: { etiqueta: "Fuera de fecha", familia: "cerrado", abierto: false },
+  // Lo que todavía no empezó no es lo vencido: uno va a salir solo (M4-009).
+  banner_programado: { etiqueta: "Programado", familia: "info", abierto: false },
+  fuera_de_fecha: { etiqueta: "Vencido", familia: "cerrado", abierto: false },
   apagado: { etiqueta: "Apagado", familia: "cerrado", abierto: false },
 
   // Reseñas de producto.

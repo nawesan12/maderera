@@ -5,7 +5,7 @@ import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { requireStaff } from "@/lib/dal/session";
 import { fechaParaInput, listarBannersDelPanel } from "@/lib/dal/admin/contenido";
-import { EditorDeBanner } from "./editor";
+import { CrearAviso, EditorDeBanner } from "./editor";
 import { UBICACIONES } from "./ubicaciones";
 
 export const metadata: Metadata = { title: "Avisos y promociones" };
@@ -55,15 +55,9 @@ export default async function BannersPage() {
         resumen={enVivo === 0 ? "Ninguno al aire" : `${enVivo} al aire`}
       />
 
-      <details className="tarjeta group overflow-hidden">
-        <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-4 text-base font-semibold hover:bg-muted/40">
-          <Plus className="h-5 w-5 text-brand-orange transition-transform group-open:rotate-45" aria-hidden />
-          Crear un aviso
-        </summary>
-        <div className="px-5 pb-5 sm:px-8">
-          <EditorDeBanner banner={null} />
-        </div>
-      </details>
+      <CrearAviso titulo="Crear un aviso">
+        <Plus className="h-5 w-5 text-brand-orange transition-transform group-open:rotate-45" aria-hidden />
+      </CrearAviso>
 
       {UBICACIONES.map((ubicacion) => {
         const deAca = filas.filter((b) => b.ubicacion === ubicacion.valor);
@@ -79,7 +73,13 @@ export default async function BannersPage() {
             ) : (
               <div className="tarjeta divide-y overflow-hidden">
                 {deAca.map((b) => {
-                  const estado = !b.activo ? "apagado" : alAire(b) ? "al_aire" : "fuera_de_fecha";
+                  const estado = !b.activo
+                    ? "apagado"
+                    : alAire(b)
+                      ? "al_aire"
+                      : b.desde && b.desde > ahora
+                        ? "banner_programado"
+                        : "fuera_de_fecha";
                   return (
                     <details key={b.id} className="group">
                       <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 hover:bg-muted/40">

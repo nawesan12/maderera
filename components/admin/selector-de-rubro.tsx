@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
+import { nombresDeRubros } from "@/lib/catalogo/rubros";
 
 /**
  * Filtrar una pantalla por rubro.
@@ -29,9 +30,7 @@ export function SelectorDeRubro({
 }) {
   const router = useRouter();
   const parametros = useSearchParams();
-  const vistos = new Map<string, number>();
-  for (const g of grupos) for (const r of g.rubros) vistos.set(r.name, (vistos.get(r.name) ?? 0) + 1);
-  const repetidos = new Set([...vistos].filter(([, n]) => n > 1).map(([nombre]) => nombre));
+  const nombres = nombresDeRubros(grupos);
   const [pendiente, iniciar] = useTransition();
 
   function elegir(valor: string) {
@@ -60,7 +59,7 @@ export function SelectorDeRubro({
               <option key={r.id} value={r.id}>
                 {/* El nombre que se repite en otra categoría lleva la suya:
                     el teléfono no siempre muestra el grupo (M2S4-034). */}
-                {repetidos.has(r.name) ? `${r.name} · ${g.categoria}` : r.name}
+                {nombres.get(r.id) ?? r.name}
               </option>
             ))}
           </optgroup>

@@ -60,6 +60,15 @@ export function estadoVisibleDelPedido(
 }
 
 /**
+ * El paso de la barra de etapas para el estado que se muestra: el retiro con
+ * el remito sin firmar queda en «Listo para retirar» hasta la firma. Decía
+ * «Retirado · 4 de 4» con la pastilla en «Para firmar» (mes 23, M2S1-071).
+ */
+export function etapaDelPedido(estadoVisible: string): string {
+  return estadoVisible === "por-firmar" ? "listo" : estadoVisible;
+}
+
+/**
  * El título de los remitos de un pedido, sin los anulados: un envío no es un
  * retiro («1 retiro» con «Te lo llevamos a», M2S1-155).
  */

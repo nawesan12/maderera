@@ -36,7 +36,7 @@ import {
   numeroFormateado,
   type TipoComprobante,
 } from "@/lib/fiscal/comprobantes";
-import { estadoDelPago, estadoVisibleDelPedido, mensajeDeConsulta, tituloDeRemitos } from "@/lib/cuenta/portal";
+import { estadoDelPago, estadoVisibleDelPedido, etapaDelPedido, mensajeDeConsulta, tituloDeRemitos } from "@/lib/cuenta/portal";
 import { VolverAPedir } from "./volver-a-pedir";
 import { tienda } from "@/lib/dal/contenido";
 import { obtenerCarrito } from "@/lib/dal/carrito";
@@ -261,8 +261,7 @@ export default async function DetallePedidoPage({
 
       {!cancelado && (
         <section className="rounded-xl bg-card p-5 tarjeta">
-          {/* El que falta firmar ya lo retiró: el paso es «Retirado». */}
-          <Pasos etapas={etapas} actual={estadoVisible === "por-firmar" ? "entregado" : estadoVisible} />
+          <Pasos etapas={etapas} actual={etapaDelPedido(estadoVisible)} />
         </section>
       )}
 
@@ -452,7 +451,7 @@ export default async function DetallePedidoPage({
                 <div className="flex justify-between gap-3 text-saldo-favor">
                   <dt>{nombreDelDescuento(pedido.descuentoMotivo)}</dt>
                   <dd className="tabular">
-                    − {formatearMonto(Math.abs(cuentas.ahorro))}
+                    −{formatearMonto(Math.abs(cuentas.ahorro))}
                   </dd>
                 </div>
               )}
@@ -476,7 +475,7 @@ export default async function DetallePedidoPage({
                 <>
                   <div className="flex justify-between text-saldo-favor">
                     <dt>Devuelto</dt>
-                    <dd className="tabular">− {formatearMonto(pedido.devoluciones)}</dd>
+                    <dd className="tabular">−{formatearMonto(pedido.devoluciones)}</dd>
                   </div>
                   <div className="flex items-baseline justify-between">
                     <dt className="font-semibold">Total neto</dt>

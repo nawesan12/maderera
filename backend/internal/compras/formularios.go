@@ -364,6 +364,12 @@ func leerGasto(m map[string]any) (FormGasto, error) {
 		x.Tipo = c.opcion("tipo", "", tiposComprobanteCompra...)
 		x.PuntoVenta = c.numero("puntoVenta", nil, entero(), minimo(0), maximo(99999))
 		x.Numero = c.numero("numero", nil, entero(), minimo(1))
+		// Una factura o una nota tiene su punto de venta: sin él quedaba
+		// «0000-00000345» en el libro IVA compras (mes 23). El ticket y el
+		// «otro» pueden no tenerlo.
+		if c.ok() && x.PuntoVenta < 1 && x.Tipo != "ticket" && x.Tipo != "otro" {
+			c.mal("puntoVenta", "Falta el punto de venta de la factura.")
+		}
 		x.Iva21 = c.numero("iva21", f(0), minimo(0))
 		x.Iva105 = c.numero("iva105", f(0), minimo(0))
 		x.Iva27 = c.numero("iva27", f(0), minimo(0))

@@ -281,7 +281,9 @@ export function AccionesCorte({
       {etiqueta && (
         <button
           onClick={() => {
-            if (estado === "en-proceso" && pasadas > 0) {
+            // Sin cargo no se cobra nada: se termina de una (M4-032; la
+            // tarjeta del tablero ya mandaba cero, la ficha no).
+            if (estado === "en-proceso" && pasadas > 0 && !sinCargo) {
               setCuantas(pasadas);
               setConfirmando(true);
             } else avanzar();

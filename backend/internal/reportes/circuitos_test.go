@@ -151,16 +151,17 @@ func TestReciboPorCircuito(t *testing.T) {
 	if ap := buscarAsiento(blanco, "Aplica anticipo"); ap == nil || ap.Renglones[0] != renglon(Cuentas.AnticiposDeClientes, 300, 0) {
 		t.Fatalf("la seña aplicada: %+v", ap)
 	}
-	if r := buscarAsiento(blanco, "Recibo R-RET"); r == nil || len(r.Renglones) != 2 || r.Renglones[1] != renglon(Cuentas.Deudores, 0, 30) {
+	// La retención sin factura detrás espera la factura en Anticipos, no
+	// deja Deudores en negativo (recorrido M4-115).
+	if r := buscarAsiento(blanco, "Recibo R-RET"); r == nil || len(r.Renglones) != 2 || r.Renglones[1] != renglon(Cuentas.AnticiposDeClientes, 0, 30) {
 		t.Fatalf("la retención: %+v", r)
 	}
-	// Anticipos cierra en cero; Deudores queda con lo que de verdad se debe
-	// facturado: la factura de Mixto (su recibo se anuló) menos la retención
-	// sin factura de Retención.
-	if a := cuenta(blanco, Cuentas.AnticiposDeClientes); a != 0 {
+	// Anticipos queda con la retención de Retención; Deudores con lo que de
+	// verdad se debe facturado: la factura de Mixto (su recibo se anuló).
+	if a := cuenta(blanco, Cuentas.AnticiposDeClientes); a != -30 {
 		t.Errorf("Anticipos: %v", a)
 	}
-	if d := cuenta(blanco, Cuentas.Deudores); d != 970 {
+	if d := cuenta(blanco, Cuentas.Deudores); d != 1000 {
 		t.Errorf("Deudores: %v", d)
 	}
 	if strings.Contains(conceptos(b), "Seña") || buscarAsiento(b, "Recibo R-SEÑA") != nil {
@@ -176,14 +177,25 @@ func TestReciboPorCircuito(t *testing.T) {
 	if !strings.Contains(csv, "en negro") || strings.Contains(csv, "en blanco") || !strings.Contains(h.Get("Content-Disposition"), "asientos-B-2026-10.csv") {
 		t.Errorf("csv del B: %s %v", csv, h)
 	}
+	// Cada archivo que sale para el estudio queda en la bitácora (recorrido,
+	// M4-107): solo quedaban los libros IVA.
+	pedir(t, adm, e.u+"contador/deudores-csv")
+	pedir(t, adm, e.u+"contador/cuentas-a-pagar-csv")
+	var exportados []string
+	if filas, err := e.pool.Query(context.Background(), `select descripcion from audit_log where accion = 'exportar' order by created_at, descripcion`); err == nil {
+		exportados, _ = pgx.CollectRows(filas, pgx.RowTo[string])
+	}
+	if strings.Join(exportados, "|") != "Exportó los asientos de 2026-10|Exportó los asientos B de 2026-10|Exportó los deudores|Exportó las cuentas a pagar" {
+		t.Errorf("bitácora de lo exportado: %q", exportados)
+	}
 	_, lista, _ := pedir(t, adm, e.u+"cierre/asientos?periodo=2026-10")
 	if strings.Contains(lista, "en negro") {
 		t.Errorf("la lista del cierre muestra el B: %s", lista)
 	}
 
-	// La deuda de Retención queda a favor en Deudores: se avisa.
+	// Nadie queda con Deudores en negativo.
 	_, pend, _ := pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-10")
-	if !strings.Contains(pend, `"clave":"deudores"`) {
+	if strings.Contains(pend, `"clave":"deudores"`) {
 		t.Errorf("pendientes: %s", pend)
 	}
 }

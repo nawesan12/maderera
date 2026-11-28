@@ -162,7 +162,7 @@ func (s *Servicio) EditarOrden(ctx context.Context, ses *auth.Sesion, id string,
 		for i, l := range o.Lineas {
 			if _, err := tx.Exec(ctx, `
 				INSERT INTO purchase_order_items (purchase_order_id, variant_id, descripcion, cantidad, costo_unitario, alicuota_iva, orden)
-				VALUES ($1, $2, $3, $4::numeric, $5::numeric, $6::numeric, $7)`, id, l.VariantID, l.Descripcion,
+				VALUES ($1, $2, $3, $4::numeric, $5::numeric, `+alicuotaDelProveedor("(SELECT o.supplier_id FROM purchase_orders o WHERE o.id = $1)", "$6::numeric")+`, $7)`, id, l.VariantID, l.Descripcion,
 				jsmath.ToFixed(l.Cantidad, 4), jsmath.ToFixed(l.CostoUnitario, 4), jsmath.Fijo2(l.AlicuotaIva), i); err != nil {
 				return err
 			}

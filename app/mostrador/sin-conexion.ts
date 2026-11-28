@@ -188,7 +188,7 @@ export async function cobrarSinConexion(
   if (!cajaFisica) {
     setAviso({
       tipo: "error",
-      texto: "Esta máquina todavía no está vinculada a una caja. Conectate una vez para vincularla.",
+      texto: "Conectate para vincular esta PC a una caja.",
     });
     return;
   }

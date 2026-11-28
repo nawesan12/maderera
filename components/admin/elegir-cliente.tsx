@@ -270,7 +270,8 @@ export function ElegirCliente({
                 </span>
                 {(c.cuit || (c.razonSocial && c.razonSocial !== c.nombre)) && (
                   <span className="tabular text-base text-muted-foreground">
-                    {[c.razonSocial && c.razonSocial !== c.nombre ? c.razonSocial : null, c.cuit]
+                    {/* El CUIT con guiones, como en el elegido (M4-047). */}
+                    {[c.razonSocial && c.razonSocial !== c.nombre ? c.razonSocial : null, c.cuit ? formatearCuit(c.cuit) : null]
                       .filter(Boolean)
                       .join(" · ")}
                   </span>

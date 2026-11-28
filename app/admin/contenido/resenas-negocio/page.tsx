@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft, Star } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { requireStaff } from "@/lib/dal/session";
+import { fechaParaInput } from "@/lib/dal/admin/contenido";
 import { listarResenasDelNegocio } from "@/lib/google/resenas";
 import { EditorDeResenas } from "./editor";
 import { MINIMO_EN_PORTADA } from "@/components/home/resenas";
@@ -69,6 +70,7 @@ export default async function ResenasDelNegocioPage() {
             year: "2-digit",
             timeZone: "America/Argentina/Buenos_Aires",
           }),
+          fechaIso: fechaParaInput(r.fecha),
           origen: r.origen,
           publicada: r.publicada,
         }))}

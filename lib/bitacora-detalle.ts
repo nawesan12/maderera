@@ -6,8 +6,12 @@ import { formatearImporte } from "@/lib/formato";
  * y el nuevo, y la pantalla no lo mostraba: el cambio quedaba invisible
  * (mes 23). Solo esas formas; el resto del detalle sigue sin mostrarse.
  */
-export function renglonesDelDetalle(detalle: string | null): string[] {
+export function renglonesDelDetalle(detalle: string | null, entidad?: string): string[] {
   if (!detalle) return [];
+  // Una regla guarda sus claves («5» → «0») y el título ya lo dice con las
+  // palabras de la pantalla: «Hasta 5 % → Ninguno». Abajo salía «$ 5 → 0»
+  // (recorrido, M4-053).
+  if (entidad === "regla") return [];
   let d: unknown;
   try {
     d = JSON.parse(detalle);

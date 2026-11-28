@@ -117,9 +117,9 @@ export default async function RetencionesSufridasPage({
                 <th className="px-5 py-2.5 font-semibold">Impuesto</th>
                 <th className="px-5 py-2.5 text-right font-semibold">Base</th>
                 <th className="px-5 py-2.5 text-right font-semibold">Retenido</th>
-                <th className="px-5 py-2.5">
-                  <span className="sr-only">Anular</span>
-                </th>
+                {/* Sin rótulo: apilada a 375, la tarjeta decía «Anular» al lado
+                    del botón «Anular» (M4-047). El botón dice qué anula. */}
+                <th className="px-5 py-2.5" aria-hidden />
               </tr>
             </thead>
             <tbody className="divide-y divide-linea">

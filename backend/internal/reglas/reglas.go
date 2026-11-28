@@ -107,39 +107,74 @@ const (
 	// proveedor. «centavos» es lo de siempre (MDF $ 81.876,92); los demás
 	// suben al peso, a la decena o a la centena, como el ajuste masivo.
 	RedondeoListaProveedor = "redondeo_lista_proveedor"
+	// Recorrido (00461): de qué Caja sale el efectivo que va al banco en los
+	// asientos. «estudio» es lo de siempre (toda de la Caja del archivo del
+	// estudio, que puede quedar en negativo si el efectivo era del B);
+	// «lo_que_hay» la saca de esa Caja hasta lo que tiene y el resto, de la
+	// Caja del B contra Movimientos a imputar.
+	DepositoDeEfectivo = "deposito_de_efectivo"
+	// Recorrido (00463, M4-004): qué retenciones arrancan tildadas al pagarle
+	// a un proveedor. «con_base» es lo de siempre (las que ya tuvieron base
+	// en el mes); «las_que_corresponden» también la única de cada impuesto
+	// que le corresponde y retiene algo.
+	RetencionesAlPagar = "retenciones_al_pagar"
+	// Recorrido (00464, M4-079): qué sucursales cuentan para «Para reponer».
+	// «con_minimo» es lo de siempre (cualquiera con mínimo puesto, aunque no
+	// tenga ni haya tenido esa medida); «las_que_la_manejan», solo las que la
+	// tienen o tuvieron movimientos de ella. La lee catalogo.ReponerEnFila.
+	ReponerPorSucursal = "reponer_por_sucursal"
+	// Recorrido (M4-077): el envío a una zona «a cotizar» sin flete cargado.
+	// «avisa» es lo de siempre (sale, y el despacho lo pregunta antes);
+	// «frena», no sale hasta cotizarlo o elegir «Sin cargo».
+	FleteSinCotizar = "flete_sin_cotizar"
+	// Recorrido (M4-078): el envío que se cobra en efectivo en la puerta.
+	// «con_pin» es lo de siempre (el depósito lo despacha con el PIN de un
+	// admin, como cualquier salida sin cobrar); «sin_pin», sale sin PIN y
+	// queda «A cobrar» en el reparto hasta que se registre el cobro.
+	DespachoContraEntrega = "despacho_contra_entrega"
+	// Recorrido (M4-030): el presupuesto de un pedido que se cancela.
+	// «queda_aceptado» es lo de siempre (vuelve a «aceptado sin pedido» y
+	// se puede pasar de nuevo); «se_rechaza» lo cierra con el motivo.
+	PresupuestoDelPedidoCancelado = "presupuesto_del_pedido_cancelado"
 )
 
 // Opciones son los valores posibles de cada regla, el de arranque primero.
 var Opciones = map[string][]string{
-	VentaReconocida:             {"entregar_o_facturar", "tomar", "entregar", "facturar"},
-	CobroAntesDeFacturar:        {"circuito_b", "anticipos"},
-	ExcedenteCuentaCorriente:    {"circuito_b", "anticipos"},
-	AsientoSinCAE:               {"al_cae", "transitoria"},
-	CorteChicoMaterial:          {"sin_cargo", "cobrar"},
-	CorteChicoStock:             {"no_mueve", "descuenta"},
-	ContadoPorLista:             {"con_ventaja", "siempre"},
-	DescuentoAlFlete:            {"no", "si"},
-	FacturaAlMonotributista:     {"a", "b"},
-	PreciosProfesionalSinTienda: {"no", "si"},
-	SucursalDelCorteSuelto:      {"primera", "preguntar"},
-	FirmaSinPIN:                 {"contrasena", "solo_pin"},
-	AceptarPresupuestoPendiente: {"no", "si"},
-	EtiquetaDelCircuito:         {"b", "sin_factura", "interno"},
-	DatosFiscalesDelCliente:     {"hasta_facturar", "ninguno"},
-	LoteYCupon:                  {"obligatorio", "opcional"},
-	DescuentoConEscala:          {"reemplaza", "suma"},
-	RedondeoEfectivo:            {"no", "al_peso"},
-	CaeEnCompras:                {"opcional", "exigido"},
-	DeudaSinComprobante:         {"circuito_b", "saldo_inicial"},
-	EntregarSinCobrar:           {"deposito", "fuera_de_la_cuenta"},
-	ExportarSicore:              {"no", "si"},
-	BaseRetencionIva:            {"neto", "total"},
-	RetencionEnElCobro:          {"admin", "quien_cobra"},
-	EscalaConLista:              {"si", "no"},
-	AltaDeProducto:              {"activo", "inactivo"},
-	ListoConElCorte:             {"mostrador", "todos"},
-	EndosoEsperaCAE:             {"si", "al_cae"},
-	RedondeoListaProveedor:      {"centavos", "peso", "decena", "centena"},
+	VentaReconocida:               {"entregar_o_facturar", "tomar", "entregar", "facturar"},
+	CobroAntesDeFacturar:          {"circuito_b", "anticipos"},
+	ExcedenteCuentaCorriente:      {"circuito_b", "anticipos"},
+	AsientoSinCAE:                 {"al_cae", "transitoria"},
+	CorteChicoMaterial:            {"sin_cargo", "cobrar"},
+	CorteChicoStock:               {"no_mueve", "descuenta"},
+	ContadoPorLista:               {"con_ventaja", "siempre"},
+	DescuentoAlFlete:              {"no", "si"},
+	FacturaAlMonotributista:       {"a", "b"},
+	PreciosProfesionalSinTienda:   {"no", "si"},
+	SucursalDelCorteSuelto:        {"primera", "preguntar"},
+	FirmaSinPIN:                   {"contrasena", "solo_pin"},
+	AceptarPresupuestoPendiente:   {"no", "si"},
+	EtiquetaDelCircuito:           {"b", "sin_factura", "interno"},
+	DatosFiscalesDelCliente:       {"hasta_facturar", "ninguno"},
+	LoteYCupon:                    {"obligatorio", "opcional"},
+	DescuentoConEscala:            {"reemplaza", "suma"},
+	RedondeoEfectivo:              {"no", "al_peso"},
+	CaeEnCompras:                  {"opcional", "exigido"},
+	DeudaSinComprobante:           {"circuito_b", "saldo_inicial"},
+	EntregarSinCobrar:             {"deposito", "fuera_de_la_cuenta"},
+	ExportarSicore:                {"no", "si"},
+	BaseRetencionIva:              {"neto", "total"},
+	RetencionEnElCobro:            {"admin", "quien_cobra"},
+	EscalaConLista:                {"si", "no"},
+	AltaDeProducto:                {"activo", "inactivo"},
+	ListoConElCorte:               {"mostrador", "todos"},
+	EndosoEsperaCAE:               {"si", "al_cae"},
+	RedondeoListaProveedor:        {"centavos", "peso", "decena", "centena"},
+	DepositoDeEfectivo:            {"estudio", "lo_que_hay"},
+	RetencionesAlPagar:            {"con_base", "las_que_corresponden"},
+	ReponerPorSucursal:            {"con_minimo", "las_que_la_manejan"},
+	FleteSinCotizar:               {"avisa", "frena"},
+	DespachoContraEntrega:         {"con_pin", "sin_pin"},
+	PresupuestoDelPedidoCancelado: {"queda_aceptado", "se_rechaza"},
 }
 
 // Arranque es el valor de una regla cuando la fila no está o tiene algo que

@@ -101,7 +101,9 @@ const ESTADOS: Record<string, Estilo> = {
 
   // Banners y promociones del sitio: si hoy se ven.
   al_aire: { etiqueta: "Al aire", familia: "ok", abierto: false },
-  fuera_de_fecha: { etiqueta: "Fuera de fecha", familia: "cerrado", abierto: false },
+  // Lo que todavía no empezó no es lo vencido: uno va a salir solo (M4-009).
+  banner_programado: { etiqueta: "Programado", familia: "info", abierto: false },
+  fuera_de_fecha: { etiqueta: "Vencido", familia: "cerrado", abierto: false },
   apagado: { etiqueta: "Apagado", familia: "cerrado", abierto: false },
 
   // Reseñas de producto.
@@ -169,8 +171,20 @@ const EN_CONTEXTO: Record<string, Record<string, string>> = {
   pago: { pendiente: "Sin cobrar" },
 };
 
-export function EtiquetaEstado({ estado, contexto }: { estado: string; contexto?: "pedido" | "pago" }) {
-  const etiqueta = (contexto && EN_CONTEXTO[contexto][estado]) ?? estiloDeEstado(estado).etiqueta;
+export function EtiquetaEstado({
+  estado,
+  contexto,
+  retiro = false,
+}: {
+  estado: string;
+  contexto?: "pedido" | "pago";
+  /** Un retiro entregado dice «Retirado», como su paso (M4-070, M4-081). */
+  retiro?: boolean;
+}) {
+  const etiqueta =
+    retiro && estado === "entregado"
+      ? "Retirado"
+      : ((contexto && EN_CONTEXTO[contexto][estado]) ?? estiloDeEstado(estado).etiqueta);
 
   return (
     <span

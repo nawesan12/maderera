@@ -43,7 +43,9 @@ function queSeAutoriza(a: Autorizacion): string {
     case "cheque_devuelto":
       return `Devolver al cliente un cheque de ${formatearMonto(a.monto)}`;
     case "sin_cobrar":
-      return `Entregar ${formatearMonto(a.monto)} sin cobrar`;
+      // Sirve al despachar y al entregar (M4-078: «Despachar sin cobrar»
+      // abría un «Entregar … sin cobrar»).
+      return `${formatearMonto(a.monto)} sin cobrar`;
   }
 }
 
@@ -169,7 +171,9 @@ export function CampoPin({
             maxLength={conClave ? 128 : 8}
             disabled={bloqueado || enviando}
             value={pin}
-            placeholder={conClave ? "Contraseña admin" : "PIN admin"}
+            // Corto: a 375 px, al lado de «Autorizar», «PIN admin» quedaba
+            // en «PIN ac» (M4-084). El nombre completo va en la etiqueta.
+            placeholder={conClave ? "Contraseña" : "PIN"}
             aria-invalid={autorizacion.pinIncorrecto || corto || undefined}
             onChange={(e) => {
               setCorto(false);

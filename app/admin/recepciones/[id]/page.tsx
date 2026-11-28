@@ -119,8 +119,11 @@ export default async function RecepcionPage({ params }: { params: Promise<{ id: 
             {recepcion.items.map((i) => {
               const descripcion = [i.producto, i.variante].filter(Boolean).join(" ");
               const vino = Number(i.cantidad);
-              const pedido = i.pedido != null ? Number(i.pedido) : null;
-              const faltan = pedido !== null ? pedido - Number(i.yaRecibido ?? 0) : 0;
+              // Contra lo que faltaba cuando llegó, como en el borrador: «1 de
+              // 2 · falta 1» y no «1 de 6», ni «12 de 72» en la que completa
+              // la orden (M4-042, M4-082).
+              const pendiente = i.pedido != null ? Number(i.pedido) - Number(i.yaRecibido ?? 0) : null;
+              const faltan = pendiente !== null ? pendiente - vino : 0;
               // Los tres costos, solo los que dicen algo: con el mismo
               // $ 7.560 en los tres renglones no se leía nada (M3S3-026).
               // Tampoco si es lo mismo que «Quedó en»: sin costo de antes el
@@ -145,11 +148,13 @@ export default async function RecepcionPage({ params }: { params: Promise<{ id: 
                           renglón del precio se perdía para el depósito (mes 23). */}
                       <span className="tabular shrink-0 text-right text-base font-semibold">
                         {cantidadConUnidad(vino, i.unidad ?? null, descripcion)}
-                        {pedido !== null && pedido !== vino && (
-                          <span className="font-normal text-muted-foreground"> de {cantidad(pedido)}</span>
+                        {pendiente !== null && pendiente !== vino && (
+                          <span className="font-normal text-muted-foreground"> de {cantidad(pendiente)}</span>
                         )}
                         {recepcion.estado === "confirmada" && faltan > 0 && (
-                          <span className="block text-saldo-debe">faltan {cantidad(faltan)}</span>
+                          <span className="block text-saldo-debe">
+                            {faltan === 1 ? "falta" : "faltan"} {cantidad(faltan)}
+                          </span>
                         )}
                       </span>
                     </p>
@@ -159,7 +164,9 @@ export default async function RecepcionPage({ params }: { params: Promise<{ id: 
                         {veCostos && (
                           <span className="tabular">
                             {i.sku ? " · " : ""}
-                            {formatearMonto(Number(i.costoUnitario))} · IVA {Number(i.alicuotaIva)}%
+                            {formatearMonto(Number(i.costoUnitario))}
+                            {/* Sin IVA (el que no lo discrimina), no se dice (M4-003). */}
+                            {Number(i.alicuotaIva) > 0 && ` · IVA ${Number(i.alicuotaIva)}%`}
                           </span>
                         )}
                       </p>

@@ -35,6 +35,12 @@ export const OPCIONES_DE_REGLAS = {
   listo_con_el_corte: ["mostrador", "todos"],
   endoso_espera_cae: ["si", "al_cae"],
   redondeo_lista_proveedor: ["centavos", "peso", "decena", "centena"],
+  deposito_de_efectivo: ["estudio", "lo_que_hay"],
+  retenciones_al_pagar: ["con_base", "las_que_corresponden"],
+  reponer_por_sucursal: ["con_minimo", "las_que_la_manejan"],
+  flete_sin_cotizar: ["avisa", "frena"],
+  despacho_contra_entrega: ["con_pin", "sin_pin"],
+  presupuesto_del_pedido_cancelado: ["queda_aceptado", "se_rechaza"],
 } as const;
 
 

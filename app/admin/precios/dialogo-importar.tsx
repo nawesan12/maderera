@@ -103,8 +103,8 @@ export function DialogoImportar() {
       onOpenChange={(valor) => (valor ? setAbierto(true) : cerrar())}
     >
       <DialogTrigger className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted">
-        <Upload className="h-5 w-5" />
-        Importar planilla
+        <Upload className="h-5 w-5" aria-hidden="true" />
+        <span className="sr-only sm:not-sr-only">Importar planilla</span>
       </DialogTrigger>
       <DialogContent className="sm:max-w-4xl max-h-[88vh] overflow-y-auto">
         <DialogHeader>

@@ -3,6 +3,7 @@ package productos
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 
 	"mjbj/internal/formato"
@@ -52,6 +53,9 @@ func TestValidarComoZod(t *testing.T) {
 		_ = json.Unmarshal(c.Entrada, &crudo)
 		if v, ok := crudo["precioMediaPct"]; ok && v == "" {
 			continue // la acción del TS nunca lo manda vacío: lo cambiaba por "50"
+		}
+		if strings.Contains(string(c.Entrada), `84.500,50`) {
+			continue // zod lo rechazaba; ahora se lee como importe (TestPrecioConFormatoArgentino)
 		}
 		p, e := Validar(f)
 		if c.Error != "" {
@@ -139,5 +143,31 @@ func TestFotoConRutaDelSitio(t *testing.T) {
 		if urlValida(s) != quiero {
 			t.Errorf("urlValida(%q) = %v", s, !quiero)
 		}
+	}
+}
+
+// El precio de una medida se escribe como en el resto del panel: «55.000» se
+// guardaba como $ 55 porque solo se cambiaba la coma por el punto (M4-001).
+func TestPrecioConFormatoArgentino(t *testing.T) {
+	casos := map[string]string{
+		"55.000":    "55000",
+		"84.500,50": "84500.5",
+		"1.500.000": "1500000",
+		"55000.00":  "55000",
+		"84500,5":   "84500.5",
+		"1234.5":    "1234.5",
+		"$ 12.000":  "12000",
+		" 1200 ":    "1200",
+	}
+	for entrada, quiere := range casos {
+		v := &validador{}
+		if r := v.precio("p", entrada); r != quiere || v.primero != nil {
+			t.Errorf("precio(%q) = %q (%v), quiere %q", entrada, r, v.primero, quiere)
+		}
+	}
+	v := &validador{}
+	v.precio("p", "-1")
+	if v.primero == nil {
+		t.Error("un precio negativo pasó")
 	}
 }

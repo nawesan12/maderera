@@ -3,6 +3,7 @@ package cobros
 import (
 	"context"
 	"fmt"
+	"math"
 	"slices"
 	"sort"
 	"strings"
@@ -175,7 +176,8 @@ type EventoDeCuenta struct {
 	Cheque, Recibo string
 	// Del pase: cuándo se creó el pedido y, si el pedido se debe en la cuenta
 	// corriente, cuánto de él estaba pagado ese día según la cuenta (-1 si no
-	// va a la cuenta).
+	// va a la cuenta). Del recibo a cuenta sin reparto fijado, la deuda de la
+	// cuenta antes de él (+Inf si no se sabe: SaldoAFavorBancarizado).
 	Desde    time.Time
 	EnCuenta float64
 }
@@ -302,16 +304,52 @@ func RepartoDeRecibo(deudoresAbiertos, total, retencion, negro float64, pendient
 		r.Anticipo = jsmath.Redondear2(r.Anticipo + sena)
 		resto = jsmath.Redondear2(resto - sena)
 	}
-	// La retención es siempre del archivo del estudio: lo que la seña no
-	// cubre va a Deudores. Antes iba toda a Deudores aunque el cliente no
-	// debiera nada con CAE: la retención sobre la deuda de una factura que
-	// espera el CAE dejaba Deudores en negativo (M2S3-005).
-	if falta := jsmath.Redondear2(retencion - blanco - sena); falta > 0 {
+	// La retención es siempre del archivo del estudio: lo que no cancela
+	// Deudores ni la seña va a Anticipos, y se aplica con la factura que
+	// llegue. Antes iba toda a Deudores aunque el cliente no debiera nada con
+	// CAE: la retención sobre la deuda de una factura que espera el CAE (o
+	// cargada antes de cualquier factura) dejaba Deudores en negativo
+	// (M2S3-005, recorrido M4-115).
+	if falta := jsmath.Redondear2(retencion - blanco - sena - reservado); falta > 0 {
 		extra := jsmath.Redondear2(min(falta, resto))
-		r.Deudores, resto = jsmath.Redondear2(r.Deudores+extra), jsmath.Redondear2(resto-extra)
+		r.Anticipo, resto = jsmath.Redondear2(r.Anticipo+extra), jsmath.Redondear2(resto-extra)
 	}
 	r.B = jsmath.Redondear2(r.B + resto)
 	return r
+}
+
+// SaldoAFavorBancarizado pasa a Anticipos lo que un cobro a cuenta deja de
+// saldo a favor cuando entró por el banco: lo que supera toda la deuda de la
+// cuenta (deudaAntes, la del libro del cliente sin este recibo, con lo del
+// circuito B) y que el reparto mandaba al B en partes bancarizadas. No paga
+// ninguna venta, ni con factura ni sin ella: es un anticipo, y va al archivo
+// del estudio para aplicarse a la factura que venga, con cualquier valor de
+// la regla «excedente_cuenta_corriente» (que sigue decidiendo el efectivo).
+// Antes un cheque de $ 40.000 de un cliente sin deuda se asentaba en el B
+// contra Ventas sin factura y la venta blanca que vino después volvía a
+// consumirlo: la misma plata, ingreso dos veces (recorrido M4-094).
+// deudaAntes infinita (+Inf) es «no se sabe» (sin cliente): no se toca.
+func SaldoAFavorBancarizado(rep Reparto, partes []ParteCobrada, total, deudaAntes float64) Reparto {
+	if math.IsInf(deudaAntes, 1) || math.IsNaN(deudaAntes) {
+		return rep
+	}
+	sobra := jsmath.Redondear2(total - max(deudaAntes, 0))
+	if sobra <= 0.005 || rep.B <= 0.005 {
+		return rep
+	}
+	enB := 0.0
+	for i, x := range BlancoDeCadaParte(partes, rep.Blanco()) {
+		if partes[i].bancarizada() {
+			enB = jsmath.Redondear2(enB + partes[i].Importe - x)
+		}
+	}
+	mover := jsmath.Redondear2(min(sobra, enB, rep.B))
+	if mover <= 0.005 {
+		return rep
+	}
+	rep.Anticipo = jsmath.Redondear2(rep.Anticipo + mover)
+	rep.B = jsmath.Redondear2(rep.B - mover)
+	return rep
 }
 
 // ExcedenteAAnticipos pasa a Anticipos lo que el reparto mandaba al B sin
@@ -340,6 +378,35 @@ func TramoPorCircuito(rep Reparto, tramo float64) Reparto {
 	d := jsmath.Redondear2(float64(tramo*rep.Deudores) / total)
 	a := jsmath.Redondear2(float64(tramo*rep.Anticipo) / total)
 	return Reparto{Deudores: d, Anticipo: a, B: jsmath.Redondear2(tramo - d - a)}
+}
+
+// conLoPasado es el reparto de un recibo con lo que pasó del B a Anticipos
+// (o volvió al B, en negativo) hasta ese momento: un reintegro después de
+// que el pedido se entregó sin factura sale del B, adonde fue el cobro, y no
+// de unos Anticipos que ya no lo tienen (recorrido M4-112).
+func conLoPasado(rep Reparto, pasado float64) Reparto {
+	if pasado > 0.005 || pasado < -0.005 {
+		rep.Anticipo, rep.B = jsmath.Redondear2(rep.Anticipo+pasado), jsmath.Redondear2(rep.B-pasado)
+	}
+	return rep
+}
+
+// PasadoAl es lo que pasó del recibo del B a Anticipos (o volvió, en
+// negativo) hasta `fecha`, en el orden del motor: el pase del mismo instante
+// va antes que el tramo y la vuelta, después.
+func (r ResultadoDelReparto) PasadoAl(recibo string, fecha time.Time) float64 {
+	total := 0.0
+	for _, p := range r.Pases {
+		if p.Recibo != recibo || p.Fecha.After(fecha) || (p.AlB && !p.Fecha.Before(fecha)) {
+			continue
+		}
+		if p.AlB {
+			total = jsmath.Redondear2(total - p.Importe)
+		} else {
+			total = jsmath.Redondear2(total + p.Importe)
+		}
+	}
+	return total
 }
 
 // RepartirCobros recorre cada cuenta en orden de fecha. Pura: la usan la
@@ -430,6 +497,11 @@ func RepartirCobros(eventos []EventoDeCuenta) ResultadoDelReparto {
 						rep = nuevo
 						res.PorRegla[e.ID] = true
 					}
+				} else if e.PedidoDelRecibo == "" {
+					if nuevo := SaldoAFavorBancarizado(rep, e.Partes, e.Monto, e.EnCuenta); nuevo != rep {
+						rep = nuevo
+						res.PorRegla[e.ID] = true
+					}
 				}
 				res.Calculados = append(res.Calculados, e.ID)
 			}
@@ -478,7 +550,7 @@ func RepartirCobros(eventos []EventoDeCuenta) ResultadoDelReparto {
 			deudores = r2(deudores + e.Monto)
 		case EventoTramo:
 			if rep, ok := res.Recibos[e.ID]; ok {
-				t := TramoPorCircuito(rep, e.Monto)
+				t := TramoPorCircuito(conLoPasado(rep, res.Pasado[e.ID]), e.Monto)
 				deudores, anticipo = r2(deudores+t.Deudores), r2(anticipo-t.Anticipo)
 				// Lo que vuelve sale primero del saldo a favor y después de la seña.
 				falta := t.Anticipo
@@ -646,7 +718,11 @@ const columnasDelRecibo = `(SELECT coalesce(json_agg(json_build_object('medio', 
         AND CASE WHEN i.cae IS NULL THEN i.estado IN ('emitida', 'rechazada')
                  ELSE coalesce((SELECT max(l.created_at) FROM arca_log l WHERE l.invoice_id = i.id AND l.exito
                                  AND l.operacion IN ('FECAESolicitar', 'FECompConsultar')), i.fecha_emision) > r.created_at END) END,
-    '', '', NULL::timestamptz, 0::float8`
+    '', '', NULL::timestamptz,
+    CASE WHEN {G} AND r.customer_id IS NOT NULL AND r.order_id IS NULL THEN coalesce((SELECT sum(am.monto) FROM account_movements am
+        WHERE am.customer_id = r.customer_id AND am.receipt_id IS DISTINCT FROM r.id
+          AND NOT (am.tipo = 'pago' AND am.referencia = r.numero) AND am.created_at <= r.created_at), 0)
+      ELSE 'Infinity' END::float8`
 
 // DeudaSinComprobante: el movimiento `m` de la cuenta de un cliente es deuda
 // (o un crédito) cargada a mano, sin comprobante ni recibo ni cheque: el
@@ -657,6 +733,14 @@ const DeudaSinComprobante = `(m.tipo IN ('ajuste', 'nota_debito') AND m.receipt_
 // entró (nulo si entró por el mostrador o se cargó suelto).
 func ReciboDelCheque(c string) string {
 	return strings.ReplaceAll(`coalesce(c.receipt_id::text, (SELECT x.receipt_id::text FROM receipt_parts x WHERE x.cheque_id = c.id ORDER BY x.receipt_id LIMIT 1))`, "c.", c+".")
+}
+
+// ChequeNoAceptado es, sobre la fila `c` de cheques, si es uno que un
+// cliente informó desde el portal y se rechazó sin aceptarlo: nunca entró a
+// la cartera, así que no tiene asiento ni va a Movimientos a imputar
+// (recorrido M4-093 y M4-111: quedaba en Valores a depositar por $ 30.000).
+func ChequeNoAceptado(c string) string {
+	return strings.ReplaceAll(`EXISTS (SELECT 1 FROM cheque_estados cna WHERE cna.cheque_id = c.id AND cna.desde = 'informado' AND cna.hacia = 'rechazado')`, "c.", c+".")
 }
 
 // ramaDelRecibo es la de los recibos en eventosSQL. La columna «pendiente»

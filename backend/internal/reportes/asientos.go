@@ -177,6 +177,9 @@ type Asiento struct {
 	// cambio de estado de un cheque) y el CSV la fecha en hora argentina. Si
 	// no, es un día guardado a las 0 UTC (un gasto, una factura de compra).
 	Instante bool `json:"-"`
+	// deposito: el efectivo de una caja (o de la caja fuerte) que fue al
+	// banco (DepositosConLoQueHay).
+	deposito bool
 }
 
 // CircuitoNegro es el circuito B.
@@ -854,17 +857,19 @@ func diaDelAsiento(a Asiento) time.Time {
 // argentina) quedaba entre los asientos del 26 y el diario salía 26, 27, 26,
 // 27 (mes simulado, M3S1-009). Los días sin hora van primero en su día.
 func OrdenarAsientos(asientos []Asiento) {
-	sort.SliceStable(asientos, func(i, j int) bool {
-		di, dj := diaDelAsiento(asientos[i]), diaDelAsiento(asientos[j])
-		ki, kj := di.Year()*10000+int(di.Month())*100+di.Day(), dj.Year()*10000+int(dj.Month())*100+dj.Day()
-		if ki != kj {
-			return ki < kj
-		}
-		if asientos[i].Instante != asientos[j].Instante {
-			return !asientos[i].Instante
-		}
-		return asientos[i].Fecha.Before(asientos[j].Fecha)
-	})
+	sort.SliceStable(asientos, func(i, j int) bool { return antesEnElDiario(asientos[i], asientos[j]) })
+}
+
+func antesEnElDiario(a, b Asiento) bool {
+	di, dj := diaDelAsiento(a), diaDelAsiento(b)
+	ki, kj := di.Year()*10000+int(di.Month())*100+di.Day(), dj.Year()*10000+int(dj.Month())*100+dj.Day()
+	if ki != kj {
+		return ki < kj
+	}
+	if a.Instante != b.Instante {
+		return !a.Instante
+	}
+	return a.Fecha.Before(b.Fecha)
 }
 
 // CsvAsientos es app/admin/cierre/exportar: un renglón por línea con el
@@ -1228,4 +1233,47 @@ func AsientoDeLiquidacion(fecha time.Time, referencia string, bruto, comision fl
 	a := asiento(fecha, concepto, append(r, renglon(Cuentas.TarjetasAAcreditar, 0, bruto)))
 	a.Instante = true
 	return a
+}
+
+// DepositosConLoQueHay es la regla «deposito_de_efectivo» en «lo_que_hay»:
+// el efectivo que va al banco sale de la Caja del archivo del estudio hasta
+// lo que esa Caja tiene en ese momento (cajaAntes es su saldo antes del
+// primer asiento). Lo que falta era efectivo del circuito B: sale de la Caja
+// del B y entra al Banco del estudio contra Movimientos a imputar, en los
+// dos archivos, a la vista del estudio, que decide cómo se registra. Con
+// «estudio», el de arranque, todo el depósito sale de la Caja del estudio y
+// esa Caja puede quedar en negativo (recorrido M4-095).
+func DepositosConLoQueHay(asientos []Asiento, cajaAntes float64) []Asiento {
+	out := append([]Asiento(nil), asientos...)
+	orden := make([]int, len(out))
+	for i := range orden {
+		orden[i] = i
+	}
+	sort.SliceStable(orden, func(i, j int) bool { return antesEnElDiario(out[orden[i]], out[orden[j]]) })
+	saldo := cajaAntes
+	for _, i := range orden {
+		a := out[i]
+		if a.circuito() != "blanco" {
+			continue
+		}
+		if a.deposito {
+			importe := SaldoDeCuenta([]Asiento{a}, Cuentas.Banco)
+			if falta := redondear(importe - max(saldo, 0)); falta > toleranciaAsiento {
+				deLaCaja := redondear(importe - falta)
+				r := []RenglonDeAsiento{renglon(Cuentas.Banco, importe, 0)}
+				if deLaCaja > toleranciaAsiento {
+					r = append(r, renglon(Cuentas.Caja, 0, deLaCaja))
+				}
+				out[i] = asiento(a.Fecha, a.Concepto, append(r, renglon(Cuentas.MovimientosAImputar, 0, falta)))
+				out[i].Instante, out[i].deposito = a.Instante, true
+				b := asiento(a.Fecha, a.Concepto+" · efectivo del circuito B", []RenglonDeAsiento{
+					renglon(Cuentas.MovimientosAImputar, falta, 0), renglon(Cuentas.Caja, 0, falta)})
+				b.Instante, b.Circuito = a.Instante, CircuitoNegro
+				out = append(out, b)
+				a = out[i]
+			}
+		}
+		saldo = redondear(saldo + SaldoDeCuenta([]Asiento{a}, Cuentas.Caja))
+	}
+	return out
 }

@@ -320,6 +320,15 @@ export default async function CierrePage({
                 <dd className="tabular text-right">{formatearMonto(resumen.iva.saldoLibre)}</dd>
               </div>
             )}
+            {/* El IVA de lo emitido que espera el CAE: no es débito hasta que
+                ARCA lo autorice, pero va a estar. Sin esto la tarjeta decía
+                «a favor» con 22 facturas esperando (M4-117). */}
+            {Math.abs(resumen.ventasSinCae.iva) > 0.005 && (
+              <div className="estado-espera contents font-medium">
+                <dt>Débito sin CAE</dt>
+                <dd className="tabular text-right">{formatearMonto(resumen.ventasSinCae.iva)}</dd>
+              </div>
+            )}
           </dl>
         </article>
       </section>
@@ -393,19 +402,21 @@ export default async function CierrePage({
         <Tarjeta
           titulo="Facturado neto"
           valor={resumen.ventas.neto}
-          detalle={plural(resumen.ventas.cantidad, "comprobante")}
+          detalle={`${plural(resumen.ventas.cantidad, "comprobante")}${
+            resumen.ventasSinCae.cantidad > 0 ? ` · ${resumen.ventasSinCae.cantidad} sin CAE` : ""
+          }`}
           href={`/admin/arca/libro-iva?periodo=${periodo.clave}`}
         />
         <Tarjeta
           titulo="Compras netas"
           valor={resumen.compras.neto}
-          detalle={`${resumen.compras.cantidad} comprobantes`}
+          detalle={plural(resumen.compras.cantidad, "comprobante")}
           href={`/admin/arca/libro-iva-compras?periodo=${periodo.clave}`}
         />
         <Tarjeta
           titulo="Gastos"
           valor={resumen.gastos.total}
-          detalle={`${resumen.gastos.cantidad} anotados`}
+          detalle={plural(resumen.gastos.cantidad, "anotado")}
           href={`/admin/compras/gastos?periodo=${periodo.clave}`}
         />
         <LiquidarTarjetas saldo={resumen.tarjetasSinLiquidar} hoy={hoyEnArgentina()} />
@@ -418,22 +429,24 @@ export default async function CierrePage({
         <dl className="divide-y divide-linea">
           <Renglon
             titulo="IVA débito fiscal"
-            detalle={`${resumen.ventas.cantidad} comprobantes`}
+            detalle={plural(resumen.ventas.cantidad, "comprobante")}
             valor={resumen.ventas.iva}
           />
           <Renglon
             titulo="IVA crédito fiscal computable"
-            detalle={`${resumen.compras.cantidad} comprobantes`}
+            detalle={plural(resumen.compras.cantidad, "comprobante")}
             valor={-resumen.compras.iva}
           />
           <Renglon
             titulo="Retenciones practicadas"
-            detalle={`${resumen.retencionesPracticadas.cantidad} certificados entregados`}
+            detalle={plural(resumen.retencionesPracticadas.cantidad, "certificado entregado", "certificados entregados")}
             valor={resumen.retencionesPracticadas.total}
+            // El CSV del mes elegido, para el estudio (M4-120).
+            descarga={`/admin/compras/pagos/exportar?periodo=${periodo.clave}`}
           />
           <Renglon
             titulo="Retenciones sufridas"
-            detalle={`${resumen.retencionesSufridas.cantidad} certificados recibidos`}
+            detalle={plural(resumen.retencionesSufridas.cantidad, "certificado recibido", "certificados recibidos")}
             valor={-resumen.retencionesSufridas.total || 0}
           />
           <Renglon
@@ -540,16 +553,29 @@ function Renglon({
   titulo,
   detalle,
   valor,
+  descarga,
 }: {
   titulo: string;
   detalle: string;
   valor: number;
+  /** Un archivo que baja lo del renglón: el título es el enlace. */
+  descarga?: string;
 }) {
   return (
     <div className="flex flex-wrap items-baseline gap-3 px-5 py-3">
       {/* Un solo nivel adentro del <dl>: el detalle va dentro del <dt>. */}
       <dt className="min-w-0 flex-1">
-        <span className="block text-base">{titulo}</span>
+        {descarga ? (
+          <a
+            href={descarga}
+            className="inline-flex items-center gap-1.5 text-base underline decoration-current/30 underline-offset-4 hover:decoration-current"
+          >
+            {titulo}
+            <Download className="h-4 w-4 text-muted-foreground" aria-hidden />
+          </a>
+        ) : (
+          <span className="block text-base">{titulo}</span>
+        )}
         <span className="block text-sm text-muted-foreground">{detalle}</span>
       </dt>
       <dd className="tabular shrink-0 text-base font-semibold">

@@ -39,6 +39,7 @@ import {
 } from "@/lib/cuenta-corriente/prioridad";
 import { BuscadorClientes } from "./buscador";
 import { DialogoCliente } from "./dialogo-cliente";
+import { nombreDeSaludo } from "@/lib/whatsapp/saludo";
 
 /** Cuántos trae cada página de cada grupo (los de Go: DeudoresPorPagina y AlDiaPorPagina). */
 const POR_PAGINA = 30;
@@ -318,7 +319,7 @@ function TarjetaCliente({ cliente }: { cliente: ClienteListado }) {
                 href: cliente.telefono
                   ? enlaceDeWhatsapp(
                       cliente.telefono,
-                      `Hola ${cliente.nombre}, te escribimos de Maderera Juan B. Justo.`,
+                      `Hola ${nombreDeSaludo(cliente.nombre)}, te escribimos de Maderera Juan B. Justo.`,
                     )
                   : undefined,
                 deshabilitada: !cliente.telefono,

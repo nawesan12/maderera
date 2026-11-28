@@ -155,6 +155,13 @@ export default async function FichaPedidoPage({
   const listoEnAcopio = acopioEnCurso && pedido.estado === "preparando";
   // El remito del camión sin firmar: en un envío en camino con algo por
   // llevar, firmarlo es lo que sigue (no «Marcar entregado»).
+  // La zona «a cotizar» sin flete ni «Sin cargo» (lo mismo que el reparto).
+  const fleteSinCotizar =
+    pedido.tipoEntrega === "envio" &&
+    Number(pedido.costoEnvio) === 0 &&
+    !pedido.fleteSinCargo &&
+    pedido.estado !== "cancelado" &&
+    (await zonaACotizar(pedido.zonaEnvio));
   const remitoEnLaCalle = remitos.find((r) => r.tipo === "envio" && seOfreceLaFirma(r));
   const firmaEnLaCalle = remitoEnLaCalle
     ? `/firmar/${remitoEnLaCalle.firmaToken}?volver=${encodeURIComponent(`/admin/pedidos/${pedido.id}`)}`
@@ -323,7 +330,7 @@ export default async function FichaPedidoPage({
         titulo={pedido.cliente}
         estado={
           <>
-            <EtiquetaEstado estado={pedido.estado} contexto="pedido" />
+            <EtiquetaEstado estado={pedido.estado} contexto="pedido" retiro={pedido.tipoEntrega === "retiro"} />
             {/* La misma regla que «Me deben» y que el encabezado de Pedidos:
                 lo que va a cuenta corriente ya está en la cuenta y no se
                 cobra en la puerta (mes simulado: el encabezado no lo sumaba
@@ -457,6 +464,7 @@ export default async function FichaPedidoPage({
               porLlevar={porEntregar.length > 0}
               firmar={firmaEnLaCalle}
               remitoAFirmar={remitoEnLaCalle?.numero ?? null}
+              fleteSinCotizar={fleteSinCotizar}
               enLaFicha
             />
           </>
@@ -672,10 +680,9 @@ export default async function FichaPedidoPage({
                     panel no lleva «(a cotizar)» en el nombre (M2S2-054). */}
                 {/* «Sin cargo» elegido a propósito no se cotiza, y lo
                     entregado ya no se cotiza (mes 23, depósito). */}
-                {Number(pedido.costoEnvio) === 0 &&
-                  !pedido.fleteSinCargo &&
-                  !["entregado", "cancelado"].includes(pedido.estado) &&
-                  (await zonaACotizar(pedido.zonaEnvio)) && (
+                {/* Entregado sigue a la vista (M4-077): el chip se iba y el
+                    flete no se había cobrado. */}
+                {fleteSinCotizar && (
                   <span className="estado-problema mt-2 inline-block rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)]">
                     Flete sin cotizar
                   </span>

@@ -66,8 +66,13 @@ func (s *Servicio) Sistema(ctx context.Context) (EstadoDelSistema, error) {
 			out.Trabajos[i].UltimoError = &x
 		}
 	}
+	// Una tarea que corrió bien pero no pudo hacer lo suyo (las reseñas de
+	// Google sin la clave) es «aviso», con el motivo: decía «Bien» con
+	// resenasError guardado (recorrido, M4-121).
 	rs, err = s.pool.Query(ctx, `
-		SELECT DISTINCT ON (tarea) tarea, periodo, estado::text, error, iniciada_at, terminada_at
+		SELECT DISTINCT ON (tarea) tarea, periodo,
+		  CASE WHEN estado = 'ok' AND coalesce(resultado->>'aviso', resultado->>'resenasError') IS NOT NULL THEN 'aviso' ELSE estado::text END,
+		  coalesce(error, resultado->>'aviso', resultado->>'resenasError'), iniciada_at, terminada_at
 		FROM tareas_corridas ORDER BY tarea, iniciada_at DESC`)
 	if err != nil {
 		return out, err

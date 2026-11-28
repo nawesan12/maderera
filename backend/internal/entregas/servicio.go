@@ -448,9 +448,24 @@ func (s *Servicio) CrearEntrega(ctx context.Context, ses *auth.Sesion, f FormRem
 					return ErrorDeEntrega("Lo de otro pedido sale junto si está listo y cobrado.")
 				}
 			}
-			if _, err := AutorizarSinCobrar(ctx, tx, s.aut, ses, parte.OrderID, f.SinCobrar); err != nil {
+			autorizo, err := AutorizarSinCobrar(ctx, tx, s.aut, ses, parte.OrderID, f.SinCobrar)
+			if err != nil {
 				return err
 			}
+			var extra []string
+			if autorizo != "" {
+				extra = append(extra, "autorizó "+autorizo)
+			}
+			if parte.Tipo == "envio" {
+				sin, err := FleteSinCotizar(ctx, tx, parte.OrderID)
+				if err != nil {
+					return err
+				}
+				if sin {
+					extra = append(extra, NotaFleteSinCotizar)
+				}
+			}
+			parte.notaSalida = strings.Join(extra, " · ")
 			creada, delCliente, err := crearEnTransaccion(ctx, tx, parte, usuario, visita)
 			if err != nil {
 				return err
@@ -629,6 +644,9 @@ func crearEnTransaccion(ctx context.Context, tx pgx.Tx, f FormRemito, usuario, v
 		if !control.Completo {
 			nota = "Remito " + numero + ": salió en camino una parte"
 		}
+		if f.notaSalida != "" {
+			nota += " · " + f.notaSalida
+		}
 		if err := pasarA(ctx, tx, f.OrderID, "en-camino", nota, usuario, true); err != nil {
 			return nil, nil, err
 		}
@@ -638,6 +656,9 @@ func crearEnTransaccion(ctx context.Context, tx pgx.Tx, f FormRemito, usuario, v
 		nota, err := notaSinCobrar(ctx, tx, f.OrderID, "Remito "+numero+": se retiró todo lo que quedaba")
 		if err != nil {
 			return nil, nil, err
+		}
+		if f.notaSalida != "" {
+			nota += " · " + f.notaSalida
 		}
 		if err := pasarA(ctx, tx, f.OrderID, "entregado", nota, usuario, false); err != nil {
 			return nil, nil, err

@@ -299,6 +299,10 @@ export const orders = pgTable(
     efectivoRecibido: numeric({ precision: 12, scale: 2 }),
     /** La sucursal de la caja que la cobró, si no es branchId: la venta de un corte de otra sucursal (00452). */
     cajaBranchId: uuid().references(() => branches.id, { onDelete: "set null" }),
+    /** El admin que firmó con su PIN la salida sin cobrar, cuánto faltaba y cuándo (00465). */
+    salidaAutorizadaPor: text(),
+    salidaSinCobrar: numeric({ precision: 12, scale: 2 }),
+    salidaAutorizadaAt: timestamp({ withTimezone: true }),
   },
 
   (t) => [
@@ -526,6 +530,8 @@ export const cuttingOrders = pgTable(
      * Cero significa "todavía no se midió", no "sale gratis".
      */
     pasadas: integer().notNull().default(0),
+    /** Las de antes de que el taller las corrigiera al terminar: «Deshacer» las devuelve (00466). */
+    pasadasPrevias: integer(),
     /**
      * Qué tapacanto lleva el trabajo: color y espesor ("blanco 0,45 mm").
      *

@@ -41,6 +41,7 @@ export function AccionesPedido({
   firmar = null,
   remitoAFirmar = null,
   sinAvance = false,
+  fleteSinCotizar = false,
 }: {
   id: string;
   estado: string;
@@ -106,6 +107,12 @@ export function AccionesPedido({
    * «Preparar remito»): el encabezado deja solo el cobro.
    */
   sinAvance?: boolean;
+  /**
+   * Un envío a una zona «a cotizar» sin flete (M4-077): despachar pregunta
+   * antes, con el chip a la vista. Con la regla en «frena», Go no lo deja
+   * salir.
+   */
+  fleteSinCotizar?: boolean;
 }) {
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
@@ -181,7 +188,8 @@ export function AccionesPedido({
   // entregar sin firma queda al lado (el diálogo venía vacío). Sin remito
   // pendiente, se confirma en el lugar.
   const firmaDelCamion = estado === "en-camino" && !porLlevar && firmar ? firmar : null;
-  const preguntar = debe || entregaUnRetiro || firmaDelCamion != null;
+  const avisaFlete = despacha && fleteSinCotizar;
+  const preguntar = debe || entregaUnRetiro || firmaDelCamion != null || avisaFlete;
   const numero = pedido?.numero ?? sinCobrar?.numero ?? cobro?.numero;
   // El documento entero se revisa antes de cobrar o entregar, como Go
   // (entregas.RevisarDocumento): uno mal escrito se avisaba recién después
@@ -271,6 +279,8 @@ export function AccionesPedido({
                   </>
                 ) : entregaUnRetiro ? (
                   "Quién retira"
+                ) : despacha ? (
+                  <>Despachar {numero && <span className="tabular whitespace-nowrap">{numero}</span>}</>
                 ) : (
                   <>Entregar {numero && <span className="tabular whitespace-nowrap">{numero}</span>}</>
                 )}
@@ -368,11 +378,16 @@ export function AccionesPedido({
                     )}
                   </div>
                 )}
+                {avisaFlete && (
+                  <span className="estado-problema inline-block rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)]">
+                    Flete sin cotizar
+                  </span>
+                )}
                 <div className="flex flex-wrap justify-end gap-2 pt-2">
                   {/* Quien no cobra (el depósito) tiene dos caminos con peso:
                       no soltar la mercadería, que es lo que queda a mano, o
                       soltarla con el PIN de un admin. */}
-                  {debe && !cobro && (
+                  {((debe && !cobro) || (avisaFlete && !debe)) && (
                     <button
                       type="button"
                       autoFocus={!entregaUnRetiro}
@@ -408,7 +423,7 @@ export function AccionesPedido({
                       className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-50"
                     >
                       {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}
-                      Entregar y firmar
+                      {despacha ? "Despachar" : "Entregar y firmar"}
                     </button>
                   )}
                   {/* Cobrar ahí mismo, con recibo. Quien no cobra no ve el

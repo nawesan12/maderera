@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/precios"
 	"mjbj/internal/reglas"
 	"mjbj/internal/sqlc"
 )
@@ -439,6 +441,14 @@ func validarLinea(desc, cantidad, precio, alicuota valor) (string, float64, floa
 	var e esquema
 	d, _ := e.cadena("descripcion", desc, false, 1, "", 240)
 	c, ok1 := positivo(cantidad, 100000)
+	// El precio se escribe como en la calle: «12.000» son doce mil, no doce
+	// (recorrido: la factura manual salía por $ 12). Igual que el resto de
+	// los campos de plata, con ParsearImporte.
+	if !precio.nada && !precio.nulo {
+		if x := precios.ParsearImporte(precio.s); !math.IsNaN(x) {
+			precio = texto(strconv.FormatFloat(x, 'f', -1, 64))
+		}
+	}
 	p, ok2 := positivo(precio, 100_000_000)
 	if alicuota.nada || alicuota.nulo || alicuota.s == "" {
 		alicuota = texto("21")

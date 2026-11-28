@@ -409,12 +409,13 @@ func TestRubrosSugeridosImagenesYCandidatos(t *testing.T) {
 	_, b = pedir(t, ven, "GET", u+"productos-candidatos", nil)
 	cands.Candidatos = nil
 	_ = json.Unmarshal([]byte(b), &cands)
+	// Comprado dentro del umbral, tampoco lleva el chip «Nunca se vendió»
+	// (M4-015): queda solo lo que de verdad le falta.
 	if len(cands.Candidatos) != 1 || cands.Candidatos[0].ID != ids[1] ||
-		strings.Join(cands.Candidatos[0].Motivos, "|") != "Nunca se vendió|Sin stock en ninguna sucursal" {
+		strings.Join(cands.Candidatos[0].Motivos, "|") != "Sin stock en ninguna sucursal" {
 		t.Errorf("con compra reciente y a pedido: %s", b)
 	}
-	// El chip «Nunca se vendió» va adelante aunque no sea el motivo, pero el
-	// motivo de las ventas no cuenta: se lo saca el stock.
+	// El motivo de las ventas no cuenta: se lo saca el stock.
 	_, _ = e.pool.Exec(ctx, `update inventory set qty = 5 where variant_id = $1`, variante)
 	_, _ = e.pool.Exec(ctx, `insert into inventory (variant_id, branch_id, qty) values ($1, $2, 5) on conflict do nothing`, variante, sucursal)
 	_, b = pedir(t, ven, "GET", u+"productos-candidatos", nil)

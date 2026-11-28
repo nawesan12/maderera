@@ -114,9 +114,13 @@ export default async function ProveedorPage({
             </div>
             {/* Al inactivo se le paga solo lo que se le debe, como en Pagos. */}
             {(!inactivo || proveedor.saldo > 0.005) && (
+              // Sin deuda, el pago (un anticipo) queda como secundario: el
+              // naranja al lado de «$ 0» pedía pagar lo que no se debe (M4-045).
               <Link
                 href={`/admin/compras/pagos?proveedor=${proveedor.id}`}
-                className="boton-accion inline-flex h-12 items-center rounded-xl px-6 text-base font-semibold"
+                className={`inline-flex h-12 items-center rounded-xl px-6 text-base font-semibold ${
+                  proveedor.saldo > 0.005 ? "boton-accion" : "tarjeta-hundida font-medium"
+                }`}
               >
                 Pagar
               </Link>
@@ -125,10 +129,13 @@ export default async function ProveedorPage({
         </header>
       </div>
 
-      {(proveedor.contacto || proveedor.telefono || proveedor.cbu || proveedor.aliasCbu) && (
+      {(proveedor.contacto || proveedor.telefono || proveedor.email || proveedor.direccion || proveedor.cbu || proveedor.aliasCbu) && (
         <section className="tarjeta grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
           <Dato titulo="Contacto" valor={proveedor.contacto} />
           <Dato titulo="Teléfono" valor={proveedor.telefono} />
+          {/* El correo es al que sale la orden «Por correo» (M4-008). */}
+          {proveedor.email && <Dato titulo="Correo" valor={proveedor.email} />}
+          {proveedor.direccion && <Dato titulo="Dirección" valor={proveedor.direccion} />}
           {/* Cada dato con su nombre: el alias salía bajo «CBU». */}
           {proveedor.cbu && <Dato titulo="CBU" valor={proveedor.cbu} mono />}
           {proveedor.aliasCbu && <Dato titulo="Alias" valor={proveedor.aliasCbu} mono />}
@@ -198,8 +205,8 @@ export default async function ProveedorPage({
         supplierId={proveedor.id}
         movimientos={proveedor.movimientos}
         facturas={pendientes
-          .filter((f) => !f.tipo.startsWith("nota_credito") && f.tipo !== "cheque_rechazado" && f.tipo !== "ajuste")
-          .map((f) => ({ id: f.id, numero: f.numero, saldo: f.saldo }))}
+          .filter((f) => !f.tipo.startsWith("nota_credito") && f.tipo !== "cheque_rechazado")
+          .map((f) => ({ id: f.id, numero: f.numero, saldo: f.saldo, ajuste: f.tipo === "ajuste" }))}
       />
 
       {/* Lo pagado en el acto (un flete, la luz): no pasa por la cuenta, pero
@@ -293,9 +300,9 @@ function Dato({
   mono?: boolean;
 }) {
   return (
-    <div>
+    <div className="min-w-0">
       <p className="text-sm text-muted-foreground">{titulo}</p>
-      <p className={`text-base ${mono ? "tabular" : ""}`}>{valor ?? "—"}</p>
+      <p className={`text-base [overflow-wrap:anywhere] ${mono ? "tabular" : ""}`}>{valor ?? "—"}</p>
     </div>
   );
 }

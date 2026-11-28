@@ -560,6 +560,24 @@ paths:
       responses:
         "204": { description: Hecho }
         "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/documentos/{id}/archivo:
+    post:
+      operationId: ArchivoNuevoDeDocumento
+      description: Le pone o le cambia el archivo a un documento que ya está.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                archivo: { type: string, format: binary }
+      responses:
+        "204": { description: Hecho }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/documentos/{id}/destinos:
     put:
       operationId: DestinosDeDocumento

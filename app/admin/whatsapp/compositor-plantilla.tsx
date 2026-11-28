@@ -87,8 +87,10 @@ export function CompositorPlantilla({
   const [editados, setEditados] = useState<Record<string, string>>({});
   const [documento, setDocumento] = useState("");
 
-  // Elegido el PDF, ya se sabe cómo nombrarlo en el texto.
-  const descripcion = documentos.find((d) => `${d.tipo}:${d.id}` === documento)?.descripcion;
+  // Elegido el PDF, ya se sabe cómo nombrarlo en el texto, y lo que trae
+  // (el número, el total y el vencimiento del presupuesto: M4-027).
+  const elegidoDoc = documentos.find((d) => `${d.tipo}:${d.id}` === documento);
+  const descripcion = elegidoDoc?.descripcion;
   // Los datos de una plantilla en particular («cheque_rechazado:importe»):
   // el último cheque rechazado de la ficha, sin pisar el importe de otras.
   const propios = Object.fromEntries(
@@ -96,7 +98,12 @@ export function CompositorPlantilla({
       .filter(([k]) => k.startsWith(`${elegida}:`))
       .map(([k, v]) => [k.slice(elegida.length + 1), v]),
   );
-  const conDocumento = { ...sugeridos, ...propios, ...(descripcion ? { documento: descripcion } : {}) };
+  const conDocumento = {
+    ...sugeridos,
+    ...propios,
+    ...(elegidoDoc?.datos ?? {}),
+    ...(descripcion ? { documento: descripcion } : {}),
+  };
   const valores = plantilla ? { ...sugerirValores(plantilla, conDocumento), ...editados } : {};
   const faltan = plantilla ? camposFaltantes(plantilla, valores) : [];
   const faltaDocumento = plantilla?.encabezadoMedia === "document" && !documento;
@@ -178,7 +185,11 @@ export function CompositorPlantilla({
               <span className="text-sm text-muted-foreground">Documento que va pegado</span>
               <select
                 value={documento}
-                onChange={(e) => setDocumento(e.target.value)}
+                onChange={(e) => {
+                  setDocumento(e.target.value);
+                  // Los datos del PDF nuevo mandan sobre lo tipeado para el anterior.
+                  setEditados({});
+                }}
                 className="mt-0.5 h-10 w-full rounded-lg border bg-background px-2.5 text-base"
               >
                 <option value="">{pdfs.length ? "Elegí el PDF" : "La conversación no tiene ficha: no hay documentos"}</option>
@@ -197,12 +208,21 @@ export function CompositorPlantilla({
                 .filter((c) => c.marcador !== "media")
                 .map((c) => {
                   const etiqueta = ETIQUETAS[c.marcador] ?? (c.donde === "boton" ? "Enlace del botón" : `Dato ${c.marcador}`);
+                  // Las fechas, con su campo: el texto libre salía «13122026»
+                  // en el mensaje (M4-027). Al cliente le llega 13/12/2026.
+                  const esFecha = c.marcador === "vence" || c.marcador === "fecha";
                   return (
                     <label key={c.clave} className="block">
                       <span className="text-sm text-muted-foreground">{etiqueta}</span>
                       <input
-                        value={valores[c.clave] ?? ""}
-                        onChange={(e) => setEditados((previos) => ({ ...previos, [c.clave]: e.target.value }))}
+                        type={esFecha ? "date" : "text"}
+                        value={esFecha ? fechaISO(valores[c.clave] ?? "") : (valores[c.clave] ?? "")}
+                        onChange={(e) =>
+                          setEditados((previos) => ({
+                            ...previos,
+                            [c.clave]: esFecha ? fechaArgentina(e.target.value) : e.target.value,
+                          }))
+                        }
                         placeholder={c.ejemplo ?? ""}
                         maxLength={200}
                         className={`mt-0.5 h-10 w-full rounded-lg border bg-background px-2.5 text-base ${
@@ -265,4 +285,16 @@ export function CompositorPlantilla({
       )}
     </form>
   );
+}
+
+/** «13/12/2026» → «2026-12-13», para el campo de fecha. */
+function fechaISO(argentina: string): string {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(argentina.trim());
+  return m ? `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` : "";
+}
+
+/** «2026-12-13» → «13/12/2026», como lo lee el cliente. */
+function fechaArgentina(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
 }

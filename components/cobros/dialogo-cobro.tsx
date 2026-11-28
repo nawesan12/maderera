@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Wallet } from "lucide-react";
@@ -15,6 +16,7 @@ import { CobroMultimedio } from "@/components/cobros/cobro-multimedio";
 import { formatearMonto, importeParaElCampo, parsearImporte } from "@/lib/formato";
 import {
   cajaDelCobro,
+  chequesInformadosDe,
   cobrarPedido,
   registrarCobroDeCliente,
   type EstadoCobro,
@@ -127,6 +129,9 @@ export function DialogoCobro({
     }
   }
   const pedidoId = pedido?.id ?? orderId ?? null;
+  // Lo que el cliente informó desde el portal y espera que lo acepten: a la
+  // vista antes de cobrar la misma deuda por otro lado (M4-065).
+  const [informados, setInformados] = useState<{ cantidad: number; total: number } | null>(null);
   useEffect(() => {
     if (!abierto) return;
     let vigente = true;
@@ -134,10 +139,16 @@ export function DialogoCobro({
       (r) => vigente && setPrevia(r),
       () => undefined,
     );
+    if (customerId) {
+      chequesInformadosDe(customerId).then(
+        (r) => vigente && setInformados(r.cantidad > 0 ? r : null),
+        () => undefined,
+      );
+    }
     return () => {
       vigente = false;
     };
-  }, [abierto, clave, pedidoId]);
+  }, [abierto, clave, pedidoId, customerId]);
 
   function cambiar(a: boolean) {
     setAbiertoAdentro(a);
@@ -245,6 +256,16 @@ export function DialogoCobro({
               </>
             )}
           </DialogTitle>
+          {/* Un chip que lleva a aceptarlos o descartarlos en Cheques. */}
+          {informados && (
+            <Link
+              href="/admin/cheques"
+              className="estado-espera mt-1 inline-flex w-fit items-center rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)] hover:underline"
+            >
+              {informados.cantidad === 1 ? "1 cheque informado" : `${informados.cantidad} cheques informados`} ·{" "}
+              <span className="tabular ml-1">{formatearMonto(informados.total)}</span>
+            </Link>
+          )}
         </DialogHeader>
 
         <form ref={formulario} action={accion} className="space-y-4">

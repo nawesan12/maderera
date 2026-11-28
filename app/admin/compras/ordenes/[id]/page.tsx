@@ -6,7 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import { requireStaffRole } from "@/lib/dal/session";
 import { obtenerOrdenDeCompra } from "@/lib/dal/admin/ordenes-compra";
 import { obtenerProveedor } from "@/lib/dal/admin/proveedores";
-import { enlaceDeWhatsapp, fechaCorta, formatearMonto } from "@/lib/formato";
+import { diasHasta, enlaceDeWhatsapp, fechaCorta, formatearMonto } from "@/lib/formato";
 import { AccionesDeOrden } from "./acciones";
 
 export const metadata: Metadata = { title: "Orden de compra" };
@@ -37,14 +37,22 @@ function Falta({
   pendiente,
   cantidad,
   corto,
+  atrasada,
 }: {
   estado: string;
   pendiente: number;
   cantidad: (n: number) => string;
   corto?: boolean;
+  /** Pasó la fecha prometida, o se cerró sin que llegue: recién ahí va en rojo (M4-013, M4-049). */
+  atrasada: boolean;
 }) {
   if (estado === "anulada") return <span className="text-muted-foreground">—</span>;
-  if (pendiente > 0) return <span className="font-semibold text-saldo-debe">{corto ? `falta ${cantidad(pendiente)}` : cantidad(pendiente)}</span>;
+  if (pendiente > 0)
+    return (
+      <span className={atrasada ? "font-semibold text-saldo-debe" : "font-medium"}>
+        {corto ? `falta ${cantidad(pendiente)}` : cantidad(pendiente)}
+      </span>
+    );
   if (pendiente < 0) return <span className="font-semibold text-acento-sobre-claro">+{cantidad(-pendiente)}</span>;
   return <span className="text-saldo-favor">completo</span>;
 }
@@ -73,6 +81,8 @@ export default async function OrdenPage({
   const llegoAlgo = orden.items.some((i) => Number(i.cantidadRecibida) > 0);
   // Completa con renglones que no llegaron: se cerró con faltante (M2S3-013).
   const conFaltante = orden.estado === "completa" && falta;
+  const vencida = (diasHasta(orden.fechaPrometida) ?? 0) < 0;
+  const atrasada = conFaltante || ((orden.estado === "enviada" || orden.estado === "parcial") && vencida);
   const recepciones = orden.recepciones ?? [];
   // Al cerrarla, Go suma «Cerrada con faltante: motivo» a las notas: con la
   // chapa del estado se leía dos veces (mes 23). Queda el motivo.
@@ -88,16 +98,18 @@ export default async function OrdenPage({
    * cuándo. Es lo que después sirve para reclamar diferencias.
    */
   const cantidad = (n: number) => n.toLocaleString("es-AR", { maximumFractionDigits: 2 });
+  // Al que no discrimina IVA (factura C) no se le pide «+ IVA» (M4-003).
+  const masIva = proveedor?.condicionIva && proveedor.condicionIva !== "responsable_inscripto" ? "" : " + IVA";
   const mensaje = [
     `Orden de compra ${orden.numero}`,
     orden.sucursal ? `Entregar en ${orden.sucursal}` : null,
     orden.fechaPrometida ? `Para el ${fechaCorta.format(orden.fechaPrometida)}` : null,
     "",
     ...orden.items.map(
-      (i) => `${cantidad(Number(i.cantidad))} × ${i.descripcion} a ${formatearMonto(Number(i.costoUnitario))} + IVA`,
+      (i) => `${cantidad(Number(i.cantidad))} × ${i.descripcion} a ${formatearMonto(Number(i.costoUnitario))}${masIva}`,
     ),
     "",
-    `Neto ${formatearMonto(neto)} + IVA`,
+    masIva ? `Neto ${formatearMonto(neto)}${masIva}` : `Total ${formatearMonto(neto)}`,
     orden.notas ? `\n${orden.notas}` : null,
   ]
     .filter((l) => l !== null)
@@ -168,7 +180,7 @@ export default async function OrdenPage({
                   <td className="tabular px-4 py-2.5 text-right">{cantidad(pedido)}</td>
                   <td className="tabular px-4 py-2.5 text-right text-muted-foreground">{cantidad(recibido)}</td>
                   <td className="tabular px-4 py-2.5 text-right">
-                    <Falta estado={orden.estado} pendiente={pendiente} cantidad={cantidad} />
+                    <Falta estado={orden.estado} pendiente={pendiente} cantidad={cantidad} atrasada={atrasada} />
                   </td>
                   <td className="tabular px-4 py-2.5 text-right">
                     {formatearMonto(Number(i.costoUnitario))}
@@ -199,7 +211,7 @@ export default async function OrdenPage({
                 <p className="flex items-baseline justify-between gap-3">
                   <span className="text-base font-medium">{i.descripcion}</span>
                   <span className="tabular shrink-0 text-base">
-                    <Falta estado={orden.estado} pendiente={pedido - recibido} cantidad={cantidad} corto />
+                    <Falta estado={orden.estado} pendiente={pedido - recibido} cantidad={cantidad} corto atrasada={atrasada} />
                   </span>
                 </p>
                 <p className="tabular flex items-baseline justify-between gap-3 text-base">

@@ -61,6 +61,9 @@ async function Contenido({
 
   const params = await searchParams;
   const pedido = leerPedidoDeEtiquetas(params.m);
+  // Sin medidas no hay hoja: al armador, que es de donde se llega (M4-086:
+  // quedaba una hoja vacía sin cómo volver).
+  if (pedido.length === 0) redirect("/admin/stock/etiquetas");
   const formato = formatoDeEtiqueta(params.formato);
   const medidas = FORMATOS_DE_ETIQUETA[formato];
   const datos = pedido.length > 0

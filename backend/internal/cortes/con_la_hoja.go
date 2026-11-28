@@ -29,9 +29,14 @@ const MotorPasadasDeLaHoja = 4
 // pasadas de más, y entraba en el retal de la placa vendida).
 const MotorRelleno = 5
 
+// MotorHojaPrimero es el motor desde el que, entre dos acomodos con las
+// mismas placas, gana el que la hoja corta con menos pasadas (recorrido
+// M4-088: CRT-11 cobraba 14 pasadas en lugar de 12 y dejaba tres tiras).
+const MotorHojaPrimero = 6
+
 // MotorActual es con el que nacen los trabajos nuevos (las tres altas y el
 // cambio de disco).
-const MotorActual = MotorRelleno
+const MotorActual = MotorHojaPrimero
 
 // PlanoConLaHoja es el plano de algo que se va a cobrar ahora: el del motor,
 // contado y dibujado como lo corta la hoja.

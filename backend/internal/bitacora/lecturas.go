@@ -58,7 +58,12 @@ func Listar(ctx context.Context, pool *pgxpool.Pool, f Filtro, ahora time.Time) 
 	if f.Accion != "" {
 		cond = append(cond, "accion::text = "+arg(f.Accion))
 	}
-	if f.UsuarioID != "" {
+	// «rol:vendedor» es todo el puesto: lo que hizo Ventas en el día, en el
+	// mismo desplegable de «Quién» (recorrido, M4-060). El puesto es el que
+	// tenía al hacerlo, no el de hoy.
+	if rol, ok := strings.CutPrefix(f.UsuarioID, "rol:"); ok {
+		cond = append(cond, "usuario_rol = "+arg(rol))
+	} else if f.UsuarioID != "" {
 		cond = append(cond, "usuario_id = "+arg(f.UsuarioID))
 	}
 	if f.Dias > 0 {

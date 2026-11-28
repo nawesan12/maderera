@@ -7,6 +7,7 @@ import {
   Eye,
   Loader2,
   MessageSquareQuote,
+  Pencil,
   Star,
   Trash2,
 } from "lucide-react";
@@ -48,6 +49,8 @@ export interface ResenaEditable {
   texto: string;
   /** «15/03/26», para mostrar. */
   fecha: string;
+  /** aaaa-mm-dd, para editarla. */
+  fechaIso: string;
   origen: "manual" | "google";
   publicada: boolean;
 }
@@ -99,53 +102,7 @@ export function EditorDeResenas({
 
       <form key={estado.vuelta} {...sinReiniciar(guardar)} className="space-y-4">
         <Hoja>
-          <Seccion titulo="Cargar una reseña" icono={MessageSquareQuote}>
-            <label className="block">
-              <span className="text-base font-medium">Quién la escribió</span>
-              <input
-                name="autor"
-                required
-                className="mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
-              />
-            </label>
-            <label className="block">
-              <span className="text-base font-medium">Cuándo</span>
-              <CampoFecha
-                name="fecha"
-                className="tabular mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
-              />
-            </label>
-            <div className="md:col-span-2">
-              <p className="text-base font-medium">Estrellas</p>
-              <div className="mt-1">
-                <Opciones
-                  nombre="estrellas"
-                  defecto="5"
-                  opciones={[5, 4, 3, 2, 1].map((n) => ({
-                    valor: String(n),
-                    texto: String(n),
-                    icono: Star,
-                  }))}
-                />
-              </div>
-            </div>
-            <label className="block md:col-span-2">
-              <span className="text-base font-medium">La reseña</span>
-              <textarea
-                name="texto"
-                required
-                rows={3}
-                className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-base"
-              />
-            </label>
-            <div className="md:col-span-2">
-              <Interruptor
-                nombre="publicada"
-                etiqueta="Mostrarla en el sitio"
-                icono={Eye}
-              />
-            </div>
-          </Seccion>
+          <CamposDeResena titulo="Cargar una reseña" />
         </Hoja>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -174,6 +131,7 @@ function Fila({ resena }: { resena: ResenaEditable }) {
   const [trabajando, empezar] = useTransition();
   const [aviso, setAviso] = useState<string | null>(null);
   const [confirmarBorrado, setConfirmarBorrado] = useState(false);
+  const [editando, setEditando] = useState(false);
 
   return (
     <li className="tarjeta p-4">
@@ -214,6 +172,20 @@ function Fila({ resena }: { resena: ResenaEditable }) {
             {resena.publicada ? "Sacar del sitio" : "Publicar"}
           </button>
 
+          {/* Las de Google se traen como están: corregirlas sería cambiar lo
+              que escribió otro. */}
+          {resena.origen === "manual" && (
+            <button
+              type="button"
+              disabled={trabajando}
+              onClick={() => setEditando((v) => !v)}
+              aria-label={`Corregir la reseña de ${resena.autor}`}
+              aria-expanded={editando}
+              className="flex h-10 w-10 items-center justify-center rounded-lg border border-linea text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+          )}
           <button
             type="button"
             disabled={trabajando}
@@ -241,7 +213,104 @@ function Fila({ resena }: { resena: ResenaEditable }) {
         </div>
       </div>
 
+      {editando && <EditarResena resena={resena} alTerminar={() => setEditando(false)} />}
       {aviso && <p className="mt-2 text-sm text-destructive">{aviso}</p>}
     </li>
+  );
+}
+
+/**
+ * Los campos de una reseña: vacíos para cargar una, o con lo de la que se
+ * corrige. Corregir una letra era borrarla y cargarla de nuevo (M4-054).
+ */
+function CamposDeResena({ titulo, resena }: { titulo: string; resena?: ResenaEditable }) {
+  return (
+    <Seccion titulo={titulo} icono={MessageSquareQuote}>
+      <label className="block">
+        <span className="text-base font-medium">Quién la escribió</span>
+        <input
+          name="autor"
+          required
+          defaultValue={resena?.autor}
+          className="mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
+        />
+      </label>
+      <label className="block">
+        <span className="text-base font-medium">Cuándo</span>
+        <CampoFecha
+          name="fecha"
+          defaultValue={resena?.fechaIso}
+          className="tabular mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
+        />
+      </label>
+      <div className="md:col-span-2">
+        <p className="text-base font-medium">Estrellas</p>
+        <div className="mt-1">
+          <Opciones
+            nombre="estrellas"
+            defecto={String(resena?.estrellas ?? 5)}
+            opciones={[5, 4, 3, 2, 1].map((n) => ({
+              valor: String(n),
+              texto: String(n),
+              icono: Star,
+            }))}
+          />
+        </div>
+      </div>
+      <label className="block md:col-span-2">
+        <span className="text-base font-medium">La reseña</span>
+        <textarea
+          name="texto"
+          required
+          rows={3}
+          defaultValue={resena?.texto}
+          className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-base"
+        />
+      </label>
+      <div className="md:col-span-2">
+        <Interruptor
+          nombre="publicada"
+          etiqueta="Mostrarla en el sitio"
+          icono={Eye}
+          defecto={resena?.publicada}
+        />
+      </div>
+    </Seccion>
+  );
+}
+
+/** La corrección de una reseña cargada a mano, en su renglón. */
+function EditarResena({ resena, alTerminar }: { resena: ResenaEditable; alTerminar: () => void }) {
+  const [estado, guardar, guardando] = useActionState(async (previo: EstadoResena, datos: FormData) => {
+    const r = await guardarResenaDelNegocio(previo, datos);
+    if (r.ok) alTerminar();
+    return r;
+  }, {});
+
+  return (
+    <form {...sinReiniciar(guardar)} className="mt-4 space-y-4">
+      <input type="hidden" name="id" value={resena.id} />
+      <Hoja plana>
+        <CamposDeResena titulo="Corregir la reseña" resena={resena} />
+      </Hoja>
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="submit"
+          disabled={guardando}
+          className="inline-flex h-10 items-center gap-2 rounded-lg bg-accion px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
+        >
+          {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
+          Guardar
+        </button>
+        <button
+          type="button"
+          onClick={alTerminar}
+          className="h-10 rounded-lg border border-linea px-3.5 text-base font-medium transition-colors hover:bg-hundida"
+        >
+          Cancelar
+        </button>
+        {estado.error && <span className="text-base text-destructive">{estado.error}</span>}
+      </div>
+    </form>
   );
 }

@@ -144,8 +144,39 @@ self.addEventListener("fetch", (evento) => {
   // La pantalla del mostrador y el ticket local.
   if (pedido.mode === "navigate" && esDelMostrador(url.pathname)) {
     evento.respondWith(primeroLaRed(evento, pedido));
+    return;
+  }
+
+  /*
+   * Mi cuenta: siempre de la red, nada se guarda (un saldo viejo es peor que
+   * ninguno). Sin conexión, en vez de la página de error del navegador, un
+   * aviso propio con «Probar de nuevo» (M4-069).
+   */
+  if (pedido.mode === "navigate" && url.pathname.startsWith("/mi-cuenta")) {
+    evento.respondWith(portalSinRed(evento, pedido));
   }
 });
+
+async function portalSinRed(evento, pedido) {
+  try {
+    const preload = await evento.preloadResponse;
+    return preload || (await fetch(pedido));
+  } catch {
+    return new Response(
+      `<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sin conexión</title>
+<style>
+:root{color-scheme:light dark;--fondo:#f6f3ee;--tinta:#1d1a16;--suave:#6b645b;--accion:#e8650e}
+@media (prefers-color-scheme:dark){:root{--fondo:#171512;--tinta:#f2eee8;--suave:#a39b90}}
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--fondo);color:var(--tinta);font:16px/1.5 system-ui,sans-serif;padding:16px;box-sizing:border-box}
+main{text-align:center;max-width:22rem}h1{font-size:1.5rem;margin:0 0 .25rem}p{color:var(--suave);margin:0 0 1.25rem}
+button{height:48px;padding:0 1.25rem;border:0;border-radius:.75rem;background:var(--accion);color:#fff;font:600 1rem system-ui,sans-serif}
+</style>
+<main><h1>Sin conexión</h1><p>Cuando vuelva internet, se abre tu cuenta.</p><button onclick="location.reload()">Probar de nuevo</button></main></html>`,
+      { status: 503, headers: { "Content-Type": "text/html; charset=utf-8" } },
+    );
+  }
+}
 
 function esDelMostrador(ruta) {
   return ruta === "/mostrador" || ruta.startsWith("/ticket/local");

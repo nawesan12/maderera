@@ -30,6 +30,9 @@ var rubros = map[string]bool{
 	// Barrio Parque».
 	"muebleria": true, "obra": true, "barraca": true, "pintureria": true, "vivero": true,
 	"techos": true, "estructuras": true, "arquitectura": true, "viviendas": true, "desarrollos": true,
+	// Del recorrido (M4-106): «Hola Sim» a «Sim Club Náutico Sur Asociación
+	// Civil» y a «Sim Escuela Técnica 5».
+	"club": true, "asociacion": true, "fundacion": true, "escuela": true, "colegio": true, "instituto": true,
 }
 
 func sinTildes(s string) string {
@@ -61,7 +64,9 @@ func NombreDeSaludoCon(nombre string, primera func(string) string) string {
 	}
 	corte := len(palabras)
 	for i, p := range palabras {
-		if i > 0 && formasSocietarias[clavePalabra(p)] {
+		// «Asociación Civil» cierra la razón social como una sociedad.
+		civil := clavePalabra(p) == "asociacion" && i+1 < len(palabras) && clavePalabra(palabras[i+1]) == "civil"
+		if i > 0 && (formasSocietarias[clavePalabra(p)] || civil) {
 			corte = i
 			break
 		}

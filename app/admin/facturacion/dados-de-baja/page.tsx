@@ -78,10 +78,16 @@ export default async function DadosDeBajaPage() {
                 >
                   <span className="codigo font-medium">{numeroFormateado(b.puntoVenta, b.numero)}</span>
                   <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-label="lo usa" />
-                  <span className="min-w-0">
+                  <span className="min-w-0 flex-1">
                     {b.reuso.receptorNombre}
                     {b.reuso.pedido && <span className="codigo ml-2 text-muted-foreground">{b.reuso.pedido}</span>}
+                    {/* La hora y el importe del que lo usa: con dos del mismo
+                        número en la lista, dicen cuál es cuál (M4-122). */}
+                    {b.reuso.fecha && (
+                      <span className="tabular ml-2 text-sm text-muted-foreground">{fechaHora.format(new Date(b.reuso.fecha))}</span>
+                    )}
                   </span>
+                  <span className="tabular shrink-0 font-medium">{moneda.format(b.reuso.total)}</span>
                 </Link>
               )}
               {b.renumerados.length > 0 && (

@@ -117,6 +117,8 @@ func TestElRechazoSaleDeAnticipos(t *testing.T) {
 func TestElChequeDelReciboBVaPorElB(t *testing.T) {
 	e := armar(t)
 	cli := e.id(t, `insert into customers (nombre) values ('Herrería') returning id`)
+	// Lo que paga: una venta sin factura a la cuenta corriente.
+	e.exec(t, `insert into account_movements (customer_id, tipo, monto, referencia, created_at) values ($1, 'compra', 68800, 'PED-1090', '2026-11-10T15:00:00Z')`, cli)
 	r, rep := e.reciboDe(t, &cli, nil, "REC-0096", "2026-11-11T15:00:00Z", [2]any{"cheque", 68800.0})
 	if rep.B != 68800 {
 		t.Fatalf("sin nada facturado va al B: %+v", rep)
@@ -149,6 +151,7 @@ func TestElChequeDelReciboBVaPorElB(t *testing.T) {
 func TestElRechazoDelChequeDelBVaPorElB(t *testing.T) {
 	e := armar(t)
 	cli := e.id(t, `insert into customers (nombre) values ('Constructora del Sur') returning id`)
+	e.exec(t, `insert into account_movements (customer_id, tipo, monto, referencia, created_at) values ($1, 'compra', 300000, 'PED-1091', '2026-11-10T15:00:00Z')`, cli)
 	r, rep := e.reciboDe(t, &cli, nil, "REC-0005", "2026-11-11T15:00:00Z", [2]any{"echeq", 300000.0})
 	if rep.B != 300000 {
 		t.Fatalf("sin nada facturado va al B: %+v", rep)

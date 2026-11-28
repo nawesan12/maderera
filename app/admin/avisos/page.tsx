@@ -123,10 +123,17 @@ export default async function AvisosPage() {
         ) : (
           <ul className="divide-y">
             {enviados.map((aviso) => {
-              const estado = ESTADOS[aviso.estado] ?? {
-                texto: aviso.estado,
-                clase: "text-muted-foreground",
-              };
+              // El manual lo manda una persona desde su WhatsApp: el sistema
+              // sabe que tocó «Avisar», no que salió. «Enviado» al lado de
+              // los correos simulados hacía creer que había salido solo
+              // (recorrido, M4-056).
+              const estado =
+                aviso.canal === "whatsapp_manual" && aviso.estado === "enviada"
+                  ? { texto: "A mano", clase: "text-muted-foreground" }
+                  : (ESTADOS[aviso.estado] ?? {
+                      texto: aviso.estado,
+                      clase: "text-muted-foreground",
+                    });
 
               return (
                 <li

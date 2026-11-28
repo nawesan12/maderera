@@ -172,12 +172,41 @@ func TestEntregadoEsperaLaFirma(t *testing.T) {
 	if err := e.s.CambioDeEstado(ctx, id, "entregado"); err != nil || e.correos() != antes {
 		t.Fatalf("con el remito sin firmar salió el aviso: %v", err)
 	}
+	// Firmado, el correo es la constancia de entrega (RemitoFirmado): «Tu
+	// pedido fue entregado» no se suma (recorrido, M4-087).
 	e.uno(t, `update deliveries set estado = 'entregada', firmado_at = now() where id = $1 returning 'ok'`, remito)
-	if err := e.s.CambioDeEstado(ctx, id, "entregado"); err != nil || e.correos() != antes+1 {
-		t.Fatalf("firmado, no salió: %v", err)
+	if err := e.s.CambioDeEstado(ctx, id, "entregado"); err != nil || e.correos() != antes {
+		t.Fatalf("firmado, salió además de la constancia: %v", err)
 	}
-	if err := e.s.CambioDeEstado(ctx, id, "entregado"); err != nil || e.correos() != antes+1 {
+	// Sin remito (lo entregó a mano el panel), sale una vez.
+	otro := e.pedido(t, "PED-000211", "ana@prueba.test", "retiro")
+	if err := e.s.CambioDeEstado(ctx, otro, "entregado"); err != nil || e.correos() != antes+1 {
+		t.Fatalf("sin remito, no salió: %v", err)
+	}
+	if err := e.s.CambioDeEstado(ctx, otro, "entregado"); err != nil || e.correos() != antes+1 {
 		t.Fatalf("salió dos veces: %v", err)
+	}
+}
+
+// El aviso de un paso que el pedido ya dejó atrás no sale: el depósito que
+// lo lleva de una a entregado mandaba cuatro correos (recorrido, M4-087).
+func TestElAvisoDeUnPasoQueYaPaso(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	id := e.pedido(t, "PED-000220", "juan@prueba.test", "retiro")
+	e.uno(t, `update orders set estado = 'entregado' where id = $1 returning 'ok'`, id)
+	antes := e.correos()
+	for _, paso := range []string{"preparando", "listo"} {
+		if err := e.s.CambioDeEstado(ctx, id, paso); err != nil || e.correos() != antes {
+			t.Errorf("%s con el pedido entregado: %v, %d correos", paso, err, e.correos()-antes)
+		}
+	}
+	e.uno(t, `update orders set estado = 'listo' where id = $1 returning 'ok'`, id)
+	if err := e.s.CambioDeEstado(ctx, id, "listo"); err != nil || e.correos() != antes+1 {
+		t.Errorf("el listo del pedido listo: %v", err)
+	}
+	if !PasoDe("entregado", "preparando") || PasoDe("listo", "listo") || PasoDe("pendiente", "listo") {
+		t.Error("PasoDe")
 	}
 }
 

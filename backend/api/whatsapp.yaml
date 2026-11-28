@@ -634,6 +634,10 @@ components:
         detalle: { type: string }
         descripcion: { type: string }
         fecha: { type: string, format: date-time, nullable: true }
+        datos:
+          type: object
+          additionalProperties: { type: string }
+          description: "los datos de la plantilla que se completan solos al elegirlo (número, total, vencimiento)"
     DetalleConversacion:
       type: object
       required: [id, waJid, displayName, customerId, orderId, estado, notas, ultimoEntranteAt, noLeidos, asignadoAUserId, bajaAt, bajaDetalle,

@@ -12,6 +12,7 @@ import (
 
 	"mjbj/internal/api/comprasapi"
 	"mjbj/internal/auth"
+	"mjbj/internal/bitacora"
 	"mjbj/internal/documentos"
 	"mjbj/internal/fiscal"
 	"mjbj/internal/pdf"
@@ -697,7 +698,8 @@ func (a *API) LibroIvaCompras(ctx context.Context, r comprasapi.LibroIvaComprasR
 }
 
 func (a *API) LibroIvaComprasCsv(ctx context.Context, r comprasapi.LibroIvaComprasCsvRequestObject) (comprasapi.LibroIvaComprasCsvResponseObject, error) {
-	if _, err := admin(ctx, "/admin/arca"); err != nil {
+	ses, err := admin(ctx, "/admin/arca")
+	if err != nil {
 		return nil, err
 	}
 	p := LeerPeriodoMensual(deTexto(r.Params.Periodo), time.Now())
@@ -705,6 +707,9 @@ func (a *API) LibroIvaComprasCsv(ctx context.Context, r comprasapi.LibroIvaCompr
 	if err != nil {
 		return nil, err
 	}
+	// Lo que sale para el estudio queda en la bitácora, como el de ventas
+	// (recorrido, M4-107).
+	bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaExportar, "libro_iva", "", "Exportó el libro IVA compras de "+p.Clave, nil)
 	return respuesta{csv: CsvLibroIva(filas, totales), nombre: "libro-iva-compras-" + p.Clave + ".csv"}, nil
 }
 
@@ -809,7 +814,8 @@ func (a *API) AnularPagoAProveedor(ctx context.Context, r comprasapi.AnularPagoA
 }
 
 func (a *API) RetencionesPracticadasCsv(ctx context.Context, r comprasapi.RetencionesPracticadasCsvRequestObject) (comprasapi.RetencionesPracticadasCsvResponseObject, error) {
-	if _, err := compras(ctx); err != nil {
+	ses, err := compras(ctx)
+	if err != nil {
 		return nil, err
 	}
 	// El mes y las fechas, en hora argentina: un pago del 26 a las 22 salía
@@ -825,12 +831,14 @@ func (a *API) RetencionesPracticadasCsv(ctx context.Context, r comprasapi.Retenc
 		if err != nil {
 			return nil, err
 		}
+		bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaExportar, "retencion", "", "Exportó el TXT de SICORE de "+p.Clave, nil)
 		return respuesta{csv: TxtSicore(filas), nombre: "retenciones-sicore-" + p.Clave + ".txt"}, nil
 	}
 	filas, err := a.s.RetencionesDelPeriodo(ctx, desde, hasta.Add(-time.Microsecond))
 	if err != nil {
 		return nil, err
 	}
+	bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaExportar, "retencion", "", "Exportó las retenciones practicadas de "+p.Clave, nil)
 	return respuesta{csv: CsvRetenciones(filas), nombre: "retenciones-practicadas-" + p.Clave + ".csv"}, nil
 }
 
@@ -950,7 +958,12 @@ func (a *API) GastosPorCategoria(ctx context.Context, r comprasapi.GastosPorCate
 	if _, err := compras(ctx); err != nil {
 		return nil, err
 	}
-	v, err := a.s.GastosPorCategoria(ctx, r.Params.Desde, r.Params.Hasta)
+	circuito := ""
+	if r.Params.Circuito != nil {
+		circuito = string(*r.Params.Circuito)
+	}
+	porSucursal := r.Params.Por != nil && string(*r.Params.Por) == "sucursal"
+	v, err := a.s.GastosPorCategoria(ctx, r.Params.Desde, r.Params.Hasta, circuito, porSucursal)
 	return ok(v), err
 }
 

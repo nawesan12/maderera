@@ -14,7 +14,8 @@ import {
   fechaSolaCorta,
   formatearCuit,
   formatearMontoContable,
-  unitarioQueCierra,
+  decimalesDeLaColumna,
+  unitarioConDecimales,
 } from "@/lib/formato";
 import type { EmisorFiscal } from "@/lib/dal/admin/facturacion";
 import { LogoEmisor } from "@/components/impresion/logo-emisor";
@@ -30,6 +31,17 @@ const fechaArgentina = new Intl.DateTimeFormat("es-AR", {
   year: "2-digit",
   timeZone: "America/Argentina/Buenos_Aires",
 });
+
+/**
+ * El medio en la condición de venta; la tarjeta de la caja con su marca y
+ * sus cuotas, en el mismo renglón: «Tarjeta de crédito · Naranja · 6 cuotas»
+ * (M4-020). Gemelo de facturacion.MedioConCuotas en Go.
+ */
+function medioImpreso(c: { medio: string; tarjeta?: string | null; cuotas?: number }): string | undefined {
+  const nombre = MEDIOS[c.medio];
+  if (!nombre || !nombre.startsWith("Tarjeta")) return nombre;
+  return [nombre, c.tarjeta || null, (c.cuotas ?? 1) > 1 ? `${c.cuotas} cuotas` : null].filter(Boolean).join(" · ");
+}
 
 const MEDIOS: Record<string, string> = {
   efectivo: "Efectivo",
@@ -86,7 +98,7 @@ interface ComprobanteImprimible {
   asociado?: string | null;
   /** Los cobros, para el medio de pago. */
   cobros?: { medio: string }[];
-  cobrosDelPedido?: { medio: string }[];
+  cobrosDelPedido?: { medio: string; tarjeta?: string | null; cuotas?: number }[];
   items: {
     id: string;
     descripcion: string;
@@ -125,6 +137,9 @@ export async function ComprobanteImpreso({
 }) {
   const letra = letraDe(comprobante.tipo);
   const discrimina = discriminaIva(comprobante.tipo);
+  const decimalesDelUnitario = decimalesDeLaColumna(
+    comprobante.items.map((i) => ({ subtotal: Number(discrimina ? i.neto : i.subtotal), cantidad: Number(i.cantidad) })),
+  );
   const anulada = comprobante.estado === "anulada";
   const esFactura = comprobante.tipo.startsWith("factura");
   // El IVA contenido de la B (Régimen de Transparencia Fiscal al
@@ -135,7 +150,7 @@ export async function ComprobanteImpreso({
   const medios = [
     ...new Set(
       [...(comprobante.cobros ?? []), ...(comprobante.cobrosDelPedido ?? [])]
-        .map((c) => MEDIOS[c.medio])
+        .map((c) => medioImpreso(c))
         .filter(Boolean),
     ),
   ];
@@ -289,12 +304,15 @@ export async function ComprobanteImpreso({
                   {/* data-label: en el teléfono la tabla se apila (globals.css). La
                       unidad suelta no se escribe. */}
                   <td className="der mono" data-label="Cant.">
-                    {cantidadConUnidad(cantidad, item.unidad === "unidad" ? null : item.unidad, item.descripcion)}
+                    {/* Por unidad dice «u.», como la laca o la bisagra: el
+                        perfil salía «30» a secas (M4-019). */}
+                    {cantidadConUnidad(cantidad, item.unidad || "unidad", item.descripcion)}
                   </td>
                   <td className="der mono" data-label="P. unitario">
                     {/* Con los decimales que hagan falta para que cantidad ×
-                        unitario dé el subtotal (M3S2-063). */}
-                    {unitarioQueCierra(Number(discrimina ? item.neto : item.subtotal), cantidad)}
+                        unitario dé el subtotal (M3S2-063), los mismos en toda
+                        la columna (M4-018, M4-031). */}
+                    {unitarioConDecimales(Number(discrimina ? item.neto : item.subtotal), cantidad, decimalesDelUnitario)}
                   </td>
                   {discrimina && (
                     <td className="der mono" data-label="IVA">{Number(item.alicuotaIva)}%</td>

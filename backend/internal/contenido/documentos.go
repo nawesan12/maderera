@@ -58,13 +58,10 @@ func (s *Servicio) SubirDocumento(ctx context.Context, ses *auth.Sesion, f FormD
 		return plataforma.Invalido(map[string]string{"descripcion": "La descripción es muy larga."})
 	case largo(f.Categoria) < 2 || largo(f.Categoria) > 60:
 		return plataforma.Invalido(map[string]string{"categoria": "Revisá la categoría."})
-	case f.Archivo == nil || len(f.Archivo.Datos) == 0:
-		return plataforma.Invalido(map[string]string{"archivo": "Adjuntá el archivo."})
 	}
-	tipo := strings.ToLower(strings.TrimSpace(strings.SplitN(f.Archivo.Tipo, ";", 2)[0]))
-	t, ok := tiposDeDocumento[tipo]
-	if !ok || (t.firma != nil && !bytes.HasPrefix(f.Archivo.Datos, t.firma)) {
-		return plataforma.Invalido(map[string]string{"archivo": "Subí un PDF, una planilla o una imagen."})
+	tipo, formato, err := tipoDeDocumento(f.Archivo)
+	if err != nil {
+		return err
 	}
 	// En la carpeta privada, aunque sea para todos: la visibilidad se cambia
 	// después sin mover el archivo, y lo entrega ArchivoDeDocumento mirando
@@ -80,7 +77,7 @@ func (s *Servicio) SubirDocumento(ctx context.Context, ses *auth.Sesion, f FormD
 	}
 	tam := int32(len(f.Archivo.Datos))
 	id, err := s.q.CrearDocumento(ctx, sqlc.CrearDocumentoParams{
-		Titulo: f.Titulo, Descripcion: desc, Categoria: f.Categoria, Url: url, Formato: t.formato,
+		Titulo: f.Titulo, Descripcion: desc, Categoria: f.Categoria, Url: url, Formato: formato,
 		TamanoBytes: &tam, SoloProfesionales: f.SoloProfesionales,
 	})
 	if err != nil {
@@ -88,6 +85,52 @@ func (s *Servicio) SubirDocumento(ctx context.Context, ses *auth.Sesion, f FormD
 		return err
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "documento", id, "Publicó el documento «"+f.Titulo+"»", nil)
+	return nil
+}
+
+// tipoDeDocumento es el formato del archivo, o el error para el campo.
+func tipoDeDocumento(a *Archivo) (tipo, formato string, err error) {
+	if a == nil || len(a.Datos) == 0 {
+		return "", "", plataforma.Invalido(map[string]string{"archivo": "Adjuntá el archivo."})
+	}
+	tipo = strings.ToLower(strings.TrimSpace(strings.SplitN(a.Tipo, ";", 2)[0]))
+	t, ok := tiposDeDocumento[tipo]
+	if !ok || (t.firma != nil && !bytes.HasPrefix(a.Datos, t.firma)) {
+		return "", "", plataforma.Invalido(map[string]string{"archivo": "Subí un PDF, una planilla o una imagen."})
+	}
+	return tipo, t.formato, nil
+}
+
+// ArchivoNuevoDeDocumento le pone o le cambia el archivo a un documento que
+// ya está: los que se cargaron sin archivo figuraban públicos y el sitio no
+// los mostraba, y no había cómo completarlos (recorrido, M4-052). El de
+// antes se borra del disco después de guardar el nuevo.
+func (s *Servicio) ArchivoNuevoDeDocumento(ctx context.Context, ses *auth.Sesion, id string, a *Archivo) error {
+	tipo, formato, err := tipoDeDocumento(a)
+	if err != nil {
+		return err
+	}
+	var titulo, previo string
+	err = s.pool.QueryRow(ctx, `SELECT titulo, url FROM technical_documents WHERE id = $1`, id).Scan(&titulo, &previo)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return plataforma.NuevoProblema(404, "No encontramos ese documento. Recargá la pantalla y probá de nuevo.")
+	}
+	if err != nil {
+		return err
+	}
+	url, err := s.disco.GuardarPrivado(a.Datos, tipo, "tecnica")
+	if err != nil {
+		return subidaInvalida("archivo", err)
+	}
+	if _, err := s.pool.Exec(ctx, `UPDATE technical_documents SET url = $2, formato = $3, tamano_bytes = $4, updated_at = now()
+		WHERE id = $1`, id, url, formato, int32(len(a.Datos))); err != nil {
+		_ = s.disco.Borrar(url)
+		return err
+	}
+	if previo != "" && previo != url {
+		_ = s.disco.Borrar(previo)
+	}
+	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "documento", id, "Subió el archivo de «"+titulo+"»", nil)
 	return nil
 }
 

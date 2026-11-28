@@ -28,7 +28,10 @@ export function AccionesCorte({
   soloMaquina = false,
   pedidoId = null,
   sinCargo = false,
+  secundario = false,
 }: {
+  /** El avance con borde, sin el naranja lleno (los de la cola después del primero). */
+  secundario?: boolean;
   /**
    * El pedido del corte: terminado, se entrega desde el pedido, con quién
    * retira y el remito, y el pedido queda entregado. «Marcar retirado» acá
@@ -281,13 +284,15 @@ export function AccionesCorte({
       {etiqueta && (
         <button
           onClick={() => {
-            if (estado === "en-proceso" && pasadas > 0) {
+            // Sin cargo no se cobra nada: se termina de una (M4-032; la
+            // tarjeta del tablero ya mandaba cero, la ficha no).
+            if (estado === "en-proceso" && pasadas > 0 && !sinCargo) {
               setCuantas(pasadas);
               setConfirmando(true);
             } else avanzar();
           }}
           disabled={pendiente}
-          className={`boton-accion inline-flex ${alto} items-center justify-center gap-1.5 rounded-lg px-3 text-base font-medium transition-colors disabled:opacity-50 ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
+          className={`${secundario ? "border bg-card hover:bg-muted" : "boton-accion"} inline-flex ${alto} items-center justify-center gap-1.5 rounded-lg px-3 text-base font-medium transition-colors disabled:opacity-50 ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
         >
           {pendiente ? (
             <Loader2 className="h-5 w-5 animate-spin" />

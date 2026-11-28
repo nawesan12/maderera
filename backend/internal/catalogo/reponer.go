@@ -17,7 +17,14 @@ package catalogo
 // con la misma regla.
 
 // ReponerEnFila es la condición sobre una fila de inventory con alias `i`.
-const ReponerEnFila = `((i.min_qty > 0 AND i.qty - i.reservado <= i.min_qty) OR i.qty - i.reservado < 0)`
+//
+// Con la regla reponer_por_sucursal en «las_que_la_manejan», el mínimo de
+// una sucursal que nunca tuvo esa medida no la pide (M4-079: 38 de 40
+// medidas para reponer por mínimos en el Aserradero, que no vende laca).
+const ReponerEnFila = `((i.min_qty > 0 AND i.qty - i.reservado <= i.min_qty AND (` + laManeja + `)) OR i.qty - i.reservado < 0)`
+
+const laManeja = `coalesce((SELECT r.valor FROM site_settings r WHERE r.clave = 'reponer_por_sucursal'), 'con_minimo') <> 'las_que_la_manejan'
+	OR i.qty > 0 OR EXISTS (SELECT 1 FROM inventory_movements im WHERE im.variant_id = i.variant_id AND im.branch_id = i.branch_id)`
 
 // MedidaParaReponer es la condición sobre una medida con alias `v`.
 const MedidaParaReponer = `EXISTS (SELECT 1 FROM inventory i JOIN branches b ON b.id = i.branch_id AND b.active

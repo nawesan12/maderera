@@ -377,6 +377,16 @@ func TestGrillaPaginadaYSucursalesDeLaBase(t *testing.T) {
 	if r := leer("?estado=sin-stock&busqueda=fenol"); r.Total != 12 || r.Conteos.Todas != 13 {
 		t.Errorf("sin stock con búsqueda: %d de %d", r.Total, r.Conteos.Todas)
 	}
+	// Lo vendido de más: a donde lleva el pendiente urgente del inicio a
+	// quien no entra a Reposición (recorrido, M4-017). En Puerto, no en todas.
+	_, _ = e.pool.Exec(ctx, `insert into inventory (variant_id, branch_id, qty) select id, $1, -4 from product_variants where sku = 'FENXA'`, puerto)
+	if r := leer("?estado=negativo"); r.Total != 1 || len(r.Filas) != 1 || r.Conteos.Negativo != 1 || r.Filas[0].SKU != "FENXA" {
+		t.Errorf("en negativo: %+v", r)
+	}
+	if r := leer("?estado=negativo&sucursal=casa-central"); r.Total != 0 || r.Conteos.Negativo != 0 {
+		t.Errorf("en negativo en otra sucursal: %+v", r.Conteos)
+	}
+	_, _ = e.pool.Exec(ctx, `delete from inventory where branch_id = $1 and qty < 0`, puerto)
 	// Marca y proveedor.
 	_, _ = e.pool.Exec(ctx, `update products set brand = 'Faplac' where id = $1`, prod)
 	if r := leer("?marca=faplac"); r.Total != 13 {

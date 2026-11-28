@@ -91,6 +91,45 @@ func UnitarioQueCierra(subtotal, cantidad float64) string {
 	return monedaConDecimales(jsmath.Round(float64(exacto*1e6))/1e6, 6)
 }
 
+// DecimalesQueCierran son los decimales (de dos a seis) que necesita el
+// unitario de un renglón para que cantidad × unitario dé el subtotal.
+func DecimalesQueCierran(subtotal, cantidad float64) int {
+	if !(cantidad > 0) || math.IsNaN(subtotal) || math.IsInf(subtotal, 0) {
+		return 2
+	}
+	objetivo := jsmath.Round(float64(subtotal * 100))
+	exacto := subtotal / cantidad
+	for d := 2; d <= 6; d++ {
+		f := math.Pow(10, float64(d))
+		if jsmath.Round(float64(jsmath.Round(float64(exacto*f))/f*cantidad*100)) == objetivo {
+			return d
+		}
+	}
+	return 6
+}
+
+// UnitarioConDecimales es el unitario del renglón con exactamente d
+// decimales: la columna del comprobante va con la misma precisión en todos
+// los renglones, la que pide el que más necesita (recorrido M4-018 y
+// M4-031: «$ 58.857,02», «$ 36.033,058» y «$ 23.884,2975» en el mismo papel
+// fiscal).
+func UnitarioConDecimales(subtotal, cantidad float64, d int) string {
+	if !(cantidad > 0) {
+		return Moneda2(subtotal)
+	}
+	f := math.Pow(10, float64(d))
+	u := jsmath.Round(float64(subtotal/cantidad*f)) / f
+	if d <= 2 {
+		return Moneda2(u)
+	}
+	signo := ""
+	if u < 0 {
+		signo, u = "-", -u
+	}
+	entero, dec, _ := strings.Cut(strconv.FormatFloat(u, 'f', d, 64), ".")
+	return signo + "$\u00a0" + formato.Miles(entero) + "," + dec
+}
+
 // monedaConDecimales escribe un importe con d decimales, sin los ceros de
 // más a la derecha pasados los dos primeros.
 func monedaConDecimales(v float64, d int) string {

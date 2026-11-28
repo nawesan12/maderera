@@ -31,7 +31,7 @@ func TestLaDeudaDeUnaASinCaeNoVaAlB(t *testing.T) {
 			fila = l
 		}
 	}
-	if !strings.HasSuffix(strings.TrimSpace(fila), ";0,00;183655,00;0,00") {
+	if !strings.HasSuffix(strings.TrimSpace(fila), ";0,00;183655,00;0,00;0,00") {
 		t.Errorf("deudores: %q", fila)
 	}
 }
@@ -57,7 +57,7 @@ func TestLaDeudaDeUnaASinCaeCobradaAntesNoVaAlB(t *testing.T) {
 			fila = l
 		}
 	}
-	if !strings.HasSuffix(strings.TrimSpace(fila), ";0,00;183655,00;0,00") {
+	if !strings.HasSuffix(strings.TrimSpace(fila), ";0,00;183655,00;0,00;0,00") {
 		t.Errorf("deudores: %q", fila)
 	}
 }

@@ -66,8 +66,16 @@ func TestLaCajaDelMesSimulado(t *testing.T) {
 	if tc.Puesto == nil || *tc.Puesto != "CAJA2" {
 		t.Errorf("puesto: %v", tc.Puesto)
 	}
-	if z := fmt.Sprint(tc.Cierre); !strings.Contains(z, "{transferencia 1 800000 false <nil> true false <nil>}") || !strings.Contains(z, "{cheque 1 400000 false <nil> true false <nil>}") {
-		t.Errorf("el cobro de cuenta no está en el Z: %s", z)
+	// Cada cobro con su recibo, también los propios (M4-023).
+	cobros := 0
+	for _, r := range tc.Cierre {
+		if r.Cobranza && !r.DePedido && r.Cantidad == 1 && r.Pedidos != nil && *r.Pedidos == "REC-0006" &&
+			((r.MedioPago == "transferencia" && r.Total == 800000) || (r.MedioPago == "cheque" && r.Total == 400000)) {
+			cobros++
+		}
+	}
+	if cobros != 2 {
+		t.Errorf("el cobro de cuenta no está en el Z: %+v", tc.Cierre)
 	}
 	if strings.Contains(fmt.Sprint(tc.Cierre), "efectivo 1 300000") {
 		t.Errorf("el recibo del panel no es del turno: %+v", tc.Cierre)

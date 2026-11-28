@@ -17,7 +17,7 @@ paths:
       parameters:
         - { name: busqueda, in: query, schema: { type: string, maxLength: 200 } }
         - { name: categoria, in: query, schema: { type: string } }
-        - { name: estado, in: query, schema: { type: string, enum: [todas, sin-stock, reponer, con-stock] } }
+        - { name: estado, in: query, schema: { type: string, enum: [todas, sin-stock, reponer, con-stock, negativo] } }
         - { name: marca, in: query, schema: { type: string, maxLength: 120 } }
         - { name: proveedor, in: query, schema: { type: string } }
         - { name: sucursal, in: query, schema: { type: string, maxLength: 80 }, description: El slug de una sucursal; los grupos miran solo esa }
@@ -36,12 +36,13 @@ paths:
                   total: { type: integer }
                   conteos:
                     type: object
-                    required: [todas, sinStock, reponer, conStock]
+                    required: [todas, sinStock, reponer, conStock, negativo]
                     properties:
                       todas: { type: integer }
                       sinStock: { type: integer }
                       reponer: { type: integer }
                       conStock: { type: integer }
+                      negativo: { type: integer, description: Lo vendido de más; cae también en reponer }
                   sucursales: { type: array, items: { $ref: "#/components/schemas/Sucursal" } }
   /api/v1/admin/stock/alertas:
     get:

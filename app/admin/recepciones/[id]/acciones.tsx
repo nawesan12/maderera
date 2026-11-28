@@ -161,7 +161,17 @@ export function BorradorDeRecepcion({
         {seguro ? (
           <div className="space-y-3">
             <p className="text-base">
-              Entra el stock, se mezcla el costo promedio y sube la deuda. <strong>El costo no se puede revertir.</strong>
+              {/* Al depósito, que no ve precios, no se le habla de costo ni
+                  de deuda (M4-083). */}
+              {veCostos ? (
+                <>
+                  Entra el stock, se mezcla el costo promedio y sube la deuda. <strong>El costo no se puede revertir.</strong>
+                </>
+              ) : (
+                <>
+                  Entra al stock. <strong>No se puede deshacer.</strong>
+                </>
+              )}
               {enCero > 0 && (
                 <strong className="estado-problema mt-1 block">
                   {enCero === 1 ? "1 renglón a $0" : `${enCero} renglones a $0`}

@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import {
   Banknote,
+  BellRing,
   Boxes,
   ClipboardList,
   FileText,
@@ -158,7 +159,11 @@ export default async function ResumenPage({
                     p.vencido ? "text-[var(--estado-tinta)]" : ""
                   }`}
                 >
-                  {p.cantidad}
+                  {p.clave === "avisos" ? (
+                    <BellRing className="h-8 w-8 text-acento-texto sm:h-11 sm:w-11" aria-hidden="true" />
+                  ) : (
+                    p.cantidad
+                  )}
                 </span>
                 <span className="text-[15px] font-semibold leading-tight group-hover:underline sm:text-base">
                   {p.texto}

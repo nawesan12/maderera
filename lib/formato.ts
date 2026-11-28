@@ -72,6 +72,42 @@ export function unitarioQueCierra(subtotal: number, cantidad: number): string {
   return conDecimales(Math.round(exacto * 1e6) / 1e6, 6);
 }
 
+/** Los decimales (de dos a seis) que necesita el unitario para cerrar. */
+export function decimalesQueCierran(subtotal: number, cantidad: number): number {
+  if (!(cantidad > 0) || !Number.isFinite(subtotal)) return 2;
+  const objetivo = Math.round(subtotal * 100);
+  const exacto = subtotal / cantidad;
+  for (let d = 2; d <= 6; d++) {
+    const f = 10 ** d;
+    if (Math.round((Math.round(exacto * f) / f) * cantidad * 100) === objetivo) return d;
+  }
+  return 6;
+}
+
+/**
+ * Los decimales de la columna del unitario de un comprobante: los del
+ * renglón que más necesita, así todos van con la misma precisión. Antes cada
+ * renglón llevaba los suyos y el papel fiscal decía «$ 58.857,02»,
+ * «$ 36.033,058» y «$ 23.884,2975» (recorrido M4-018 y M4-031). Gemelo de
+ * pdf.decimalesDeLaColumna en Go.
+ */
+export function decimalesDeLaColumna(renglones: { subtotal: number; cantidad: number }[]): number {
+  return renglones.reduce((d, r) => Math.max(d, decimalesQueCierran(r.subtotal, r.cantidad)), 2);
+}
+
+/** El unitario con exactamente `decimales` decimales (UnitarioConDecimales en Go). */
+export function unitarioConDecimales(subtotal: number, cantidad: number, decimales: number): string {
+  if (!(cantidad > 0) || !Number.isFinite(subtotal)) return formatearMontoContable(subtotal);
+  const f = 10 ** decimales;
+  const u = Math.round((subtotal / cantidad) * f) / f;
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    minimumFractionDigits: decimales,
+    maximumFractionDigits: decimales,
+  }).format(u);
+}
+
 function conDecimales(valor: number, decimales: number): string {
   return new Intl.NumberFormat("es-AR", {
     style: "currency",

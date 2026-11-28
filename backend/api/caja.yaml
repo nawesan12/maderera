@@ -290,6 +290,7 @@ components:
         fondo: { type: number, format: double }
         ventas: { type: number, format: double, description: Ventas en efectivo hasta el arqueo }
         otrosIngresos: { type: number, format: double }
+        cobros: { type: number, format: double, description: "el efectivo de los recibos, aparte de otros ingresos" }
         retiros: { type: number, format: double, description: En negativo }
         devoluciones: { type: number, format: double, description: En negativo }
         gastos: { type: number, format: double, description: En negativo }

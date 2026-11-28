@@ -86,8 +86,10 @@ type Problema struct {
 
 // ListarBitacoraParams defines parameters for ListarBitacora.
 type ListarBitacoraParams struct {
-	Entidad        *string `form:"entidad,omitempty" json:"entidad,omitempty"`
-	Accion         *string `form:"accion,omitempty" json:"accion,omitempty"`
+	Entidad *string `form:"entidad,omitempty" json:"entidad,omitempty"`
+	Accion  *string `form:"accion,omitempty" json:"accion,omitempty"`
+
+	// Usuario El id de una persona
 	Usuario        *string `form:"usuario,omitempty" json:"usuario,omitempty"`
 	Dias           *int    `form:"dias,omitempty" json:"dias,omitempty"`
 	Buscar         *string `form:"buscar,omitempty" json:"buscar,omitempty"`
@@ -539,21 +541,22 @@ func (sh *strictHandler) OpcionesDeBitacora(w http.ResponseWriter, r *http.Reque
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"rFbNbttGEH6VwbaHBGUt2k5SlD3VaQs0cNs01zgIhtyRPMFyd70/RhRDD+NjnqD36sWKXdISKVGJUuQ2",
-	"1M588/+N7kRjWms06eBFdScceWu0p/zx0plaUYtJbowOpEMS0VrFDQY2emY7le/eeaPTm2+ue4NvHc1F",
-	"Jb6ZbR3Mulc/2wCvVqtCSPKNY5vwRCV+dc44ePTqt+fw45OnPzwWSaU3TLiXrAl/oQsO2BiXXVlnLLnA",
-	"XdTYNNwFQzq2onotGkfoRCFIcugExS3rLDbY1ozuLfmA0qQfTO3yC+qossCtNa43fN+LbwoRlpZEJXxw",
-	"rBdiVWQ3geTPuUhz41oMohISA30fuCUxYdKn/hDwxHtApSi96agU1kkOLtIEFunAEuUkTv/2uzwKiadB",
-	"oo/o2BwJ0mv/adra0afwXhl1BOCqEI5uIjuSqaUsxTCgXXcj8OJhJLY1GlZk3IVtzYcN3bbb1O+oCSn8",
-	"4XaMJzAhsJpuRJruTgul5DTzqF6OrPds9jz7gCEOdVkHWpDLyhzUVLl36tepbaD280sGrOemy2e4oH9H",
-	"Xn/UcM0fDNzE9UcgDaTAoiZVwBKauL7X0sAjhRCwVggYJYe3yiwen8ClgYxWk77SCj10vSEPkqBBiSBN",
-	"y5rNT4DN+h68UQY8gSI6gecR1U1kcmDJeaMRJKkrnV2fXKXm9emLP15cvIB//4ELDuv7zBOFuCXnuxRO",
-	"U6WMJY2WRSXOT8qTc1EIi+E6l3WGlme3pzOULetZPaCaBeXtTv3KBJiWQVyyD+g2jJSAHLYUyHlRvb4T",
-	"nHzeRHJLUQiNbQpwO4lbytxr2bTpZpq/2LJfiv9jKhn9yK7F99wmfj1/9rQsROpZ/iyLvak8hFlH36Db",
-	"Rb0kvQjXojory+LY6BKfBxohSZpjVEFUz8piG+xZOYz19PhYJXmr8AO2TDqYaU+fK8ObYnxfz8ryE6d1",
-	"/6SOWWbOqruIHKj1nzu5u2dzyyvoHC7ztwmoplhlhzs6xw/609QxpoxLA+363oOOdGvAOm7JmQIak5kj",
-	"40DaGbC4yHd5VYgn5emhnDZFHP2RWBUH9nZmbEcxBxf4r15hUJ+v2qp+2WncrkNEv2lIT3JjqzHy6CZ/",
-	"8Q3eaezhezp1/8bR7kBtMx6kcdSooIeNMSwhnYgHALiJBGjRUUO66CZGGQ9zVsEZn4dgtfpvAA==",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -344,6 +344,11 @@ export interface components {
             otrosIngresos: number;
             /**
              * Format: double
+             * @description el efectivo de los recibos, aparte de otros ingresos
+             */
+            cobros?: number;
+            /**
+             * Format: double
              * @description En negativo
              */
             retiros: number;

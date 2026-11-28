@@ -119,7 +119,9 @@ export function BuscadorGlobal({
         onBlur={() => setTimeout(() => setCerrado(true), 150)}
         placeholder={queBusca}
         aria-label="Buscar en el panel"
-        className="h-10 w-full rounded-lg border border-linea bg-card pl-10 pr-14 text-[15px] outline-none transition-colors placeholder:text-texto-3 focus:border-accion/50"
+        // El lugar del ⌘K solo donde se ve: en el teléfono «Buscar corte o
+        // pedido…» se cortaba en «Buscar corte» (M4-092).
+        className="h-10 w-full rounded-lg border border-linea bg-card pl-10 pr-3 text-[15px] sm:pr-14 outline-none transition-colors placeholder:text-texto-3 focus:border-accion/50"
       />
       <kbd className="tabular pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 rounded-[5px] border border-linea px-1.5 py-0.5 text-xs text-texto-2 sm:block">
         ⌘K

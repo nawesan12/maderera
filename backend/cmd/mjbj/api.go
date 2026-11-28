@@ -280,6 +280,23 @@ func correrAPI() error {
 					avisosDeSesion.Despachar(ctx, avisos.Despacho{Evento: "invitacion_portal", Para: correo,
 						Correo: avisos.Correo{Asunto: "Tu cuenta en la maderera", HTML: html, Texto: texto}})
 				}()
+			}).
+			// El alta del personal sin contraseña (recorrido, M4-006): el link
+			// para que la elija la persona, que nadie más la conozca.
+			ConClaveDelPersonal(func(ctx context.Context, correo, nombre, url string) {
+				html, texto := email.Envolver(cfg.Campanas.URLDelSitio(), email.Opciones{
+					Titulo:   "Elegí tu contraseña",
+					Adelanto: "Tu usuario del panel de la maderera.",
+					Saludo:   nombre,
+					Parrafos: []string{"Te dieron de alta en el panel de la maderera. Tocá el botón y elegí tu contraseña; el link sirve una vez y vence en 3 días."},
+					CTA:      &email.Enlace{Texto: "Elegir mi contraseña", URL: url},
+				})
+				go func() {
+					ctx, cancelar := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+					defer cancelar()
+					avisosDeSesion.Despachar(ctx, avisos.Despacho{Evento: "clave_personal", Para: correo,
+						Correo: avisos.Correo{Asunto: "Elegí tu contraseña", HTML: html, Texto: texto}})
+				}()
 			}),
 			[]cuentasapi.StrictMiddlewareFunc{plataforma.ConPedido[cuentasapi.StrictHandlerFunc]},
 			cuentasapi.StrictHTTPServerOptions{

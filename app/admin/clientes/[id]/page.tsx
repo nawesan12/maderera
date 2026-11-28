@@ -33,6 +33,7 @@ import { requireStaff } from "@/lib/dal/session";
 import { DialogoCliente } from "../dialogo-cliente";
 import { listarListasParaClientes } from "@/lib/dal/admin/clientes";
 import { vendedoresActivos } from "@/lib/dal/admin/vendedores";
+import { nombreDeSaludo } from "@/lib/whatsapp/saludo";
 
 const ETAPA_DE_GESTION: Record<string, string> = {
   pendiente: "Para hacer",
@@ -110,7 +111,7 @@ export default async function FichaClientePage({
   const whatsapp = cliente.telefono
     ? enlaceDeWhatsapp(
         cliente.telefono,
-        `Hola ${cliente.nombre}, te escribimos de Maderera Juan B. Justo.`,
+        `Hola ${nombreDeSaludo(cliente.nombre)}, te escribimos de Maderera Juan B. Justo.`,
       )
     : null;
 

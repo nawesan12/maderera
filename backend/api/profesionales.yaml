@@ -259,10 +259,12 @@ components:
         clienteExistente:
           type: object
           nullable: true
-          required: [id, nombre]
+          required: [id, nombre, condicionIva, limiteCredito]
           properties:
             id: { type: string }
             nombre: { type: string }
+            condicionIva: { type: string, nullable: true, description: La de la ficha; va con el CUIT }
+            limiteCredito: { type: number, description: El límite de cuenta corriente de la ficha; se propone al habilitar }
         createdAt: { type: string, format: date-time }
         resueltoAt: { type: string, format: date-time, nullable: true }
     ListaAsignable:

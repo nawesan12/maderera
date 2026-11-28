@@ -9,6 +9,9 @@ import type { RolStaff } from "@/lib/roles";
 export interface EstadoPersonal {
   error?: string;
   ok?: string;
+  /** El link con que elige su contraseña (también le llega por correo). */
+  enlace?: string;
+  nombre?: string;
 }
 
 function revalidar() {
@@ -23,12 +26,11 @@ export async function darDeAlta(_previo: EstadoPersonal, formData: FormData): Pr
       nombre: (formData.get("nombre") as string | null) ?? "",
       correo: (formData.get("correo") as string | null) ?? "",
       rol: ((formData.get("rol") as string | null) ?? "vendedor") as RolStaff,
-      clave: (formData.get("clave") as string | null) ?? "",
     },
   });
   if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "Revisá los datos.") };
   revalidar();
-  return { ok: r.data.ok };
+  return { ok: r.data.ok, enlace: r.data.enlace, nombre: r.data.nombre };
 }
 
 export async function cambiarPuesto(id: string, rol: RolStaff): Promise<EstadoPersonal> {

@@ -430,6 +430,16 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 		}
 		sinPIN = !hay
 	}
+	// Sin ningún dispositivo de un admin suscrito, los PIN, las ventas web y
+	// el parte del día no le llegan a nadie (recorrido, M4-119): se dice en
+	// «Para hoy», no solo con el botón de este dispositivo.
+	sinAvisos := false
+	if rol == sqlc.StaffRoleAdmin {
+		if err := s.pool.QueryRow(ctx, `SELECT NOT EXISTS (SELECT 1 FROM push_subscriptions ps
+			JOIN profiles p ON p.user_id = ps.user_id WHERE p.role = 'staff' AND p.staff_role = 'admin')`).Scan(&sinAvisos); err != nil {
+			return nil, err
+		}
+	}
 	f := []Pendiente{}
 	agregar := func(n int, p Pendiente) {
 		if n > 0 {
@@ -441,6 +451,9 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 	// es lo primero de la mañana (H067). La pantalla lo dibuja con su botón.
 	if sinPIN {
 		agregar(1, Pendiente{Clave: "pin", Texto: "Cargar tu PIN de autorización", Href: "/admin", Urgente: true})
+	}
+	if sinAvisos {
+		agregar(1, Pendiente{Clave: "avisos", Texto: "Activar los avisos en tu teléfono", Href: "/admin/avisos", Urgente: true})
 	}
 	agregar(c.seguimientos, Pendiente{Clave: "seguimiento", Texto: uno(c.seguimientos, "cliente para llamar hoy", "clientes para llamar hoy"),
 		Detalle: detalle("Seguimientos con la fecha cumplida"), Href: "/admin/clientes/seguimiento", Urgente: true})
@@ -510,7 +523,9 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 		Detalle: detalle("Llegó al mínimo o se vendió de más"), Href: "/admin/stock?estado=reponer"})
 	// El stock en negativo (se vendió lo que no había): aparte y urgente,
 	// porque el número de Stock está mal hasta que se cuente o se reciba
-	// (mes simulado, M2S4-001). Lleva a la reposición, donde va arriba.
+	// (mes simulado, M2S4-001). Lleva a la reposición, donde va arriba; a
+	// quien no entra ahí (ventas), a Stock filtrado por lo negativo: el link
+	// lo devolvía al inicio (recorrido, M4-017 y M4-028).
 	if ve("/admin/stock") {
 		var negativos int
 		if err := s.pool.QueryRow(ctx, `SELECT count(DISTINCT i.variant_id)::int FROM inventory i
@@ -518,8 +533,12 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 			WHERE p.active AND v.active AND i.qty - coalesce(i.reservado, 0) < 0`).Scan(&negativos); err != nil {
 			return nil, err
 		}
+		hrefNegativo := "/admin/reportes/reposicion"
+		if !ve(hrefNegativo) {
+			hrefNegativo = "/admin/stock?estado=negativo"
+		}
 		agregar(negativos, Pendiente{Clave: "stock-negativo", Texto: uno(negativos, "medida con stock en negativo", "medidas con stock en negativo"),
-			Href: "/admin/reportes/reposicion", Urgente: true, Vencido: true})
+			Href: hrefNegativo, Urgente: true, Vencido: true})
 	}
 	// El precio de lista bajo el costo: cada venta pierde plata (H139).
 	agregar(c.bajoCosto, Pendiente{Clave: "bajo-costo", Texto: uno(c.bajoCosto, "medida con el precio bajo el costo", "medidas con el precio bajo el costo"),

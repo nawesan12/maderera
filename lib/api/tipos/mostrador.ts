@@ -552,6 +552,11 @@ export interface components {
             ventasEnEfectivo: number;
             /** Format: double */
             otrosIngresos: number;
+            /**
+             * Format: double
+             * @description el efectivo de los recibos, aparte de otros ingresos
+             */
+            cobros?: number;
             /** Format: double */
             retiros: number;
             /**
@@ -665,6 +670,11 @@ export interface components {
             ventas: number;
             /** Format: double */
             otrosIngresos: number;
+            /**
+             * Format: double
+             * @description el efectivo de los recibos, aparte de otros ingresos
+             */
+            cobros?: number;
             /** Format: double */
             retiros: number;
             /** Format: double */

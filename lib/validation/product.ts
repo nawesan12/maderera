@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { admiteDecimales } from "@/lib/unidades";
+import { parsearImporte } from "@/lib/formato";
 
 /**
  * Validación de productos y variantes.
@@ -53,7 +54,8 @@ const cantidadOpcional = z
 const precio = z
   .string()
   .trim()
-  .transform((v) => (v === "" ? "0" : v.replace(",", ".")))
+  // Como cualquier campo de plata: «55.000» son cincuenta y cinco mil (M4-001).
+  .transform((v) => (v === "" ? "0" : String(parsearImporte(v))))
   .refine((v) => Number.isFinite(Number(v)) && Number(v) >= 0, {
     message: "Revisá el precio.",
   });

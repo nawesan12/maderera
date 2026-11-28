@@ -105,6 +105,8 @@ export const receipts = pgTable(
     motivoAnulacion: text(),
     anuladoAt: timestamp({ withTimezone: true }),
     anuladoPorUserId: text().references(() => user.id),
+    /** El admin que firmó con su PIN la anulación de otro (00465). */
+    anulacionAutorizadaPor: text().references(() => user.id),
     createdByUserId: text().references(() => user.id),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */

@@ -736,6 +736,7 @@ components:
         fondoBase: { type: number, format: double }
         ventasEnEfectivo: { type: number, format: double }
         otrosIngresos: { type: number, format: double }
+        cobros: { type: number, format: double, description: "el efectivo de los recibos, aparte de otros ingresos" }
         retiros: { type: number, format: double }
         devoluciones: { type: number, format: double, description: "anulaciones y devoluciones en efectivo (en negativo)" }
         gastos: { type: number, format: double, description: "gastos en efectivo cargados desde el panel (en negativo)" }
@@ -813,6 +814,7 @@ components:
         fondo: { type: number, format: double }
         ventas: { type: number, format: double }
         otrosIngresos: { type: number, format: double }
+        cobros: { type: number, format: double, description: "el efectivo de los recibos, aparte de otros ingresos" }
         retiros: { type: number, format: double }
         devoluciones: { type: number, format: double }
         gastos: { type: number, format: double }

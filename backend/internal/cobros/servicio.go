@@ -305,6 +305,7 @@ func (s *Servicio) AnularConPIN(ctx context.Context, ses *auth.Sesion, recibo, m
 	if traba != nil {
 		return "", comoProblema(errCobro(MotivoDelChequeQueTraba(*traba)))
 	}
+	var firma *autorizacion.Firma
 	if !ses.Tiene(sqlc.StaffRoleAdmin) {
 		var total float64
 		err := s.pool.QueryRow(ctx, `SELECT total::float8 FROM receipts WHERE id::text = $1`, recibo).Scan(&total)
@@ -314,7 +315,7 @@ func (s *Servicio) AnularConPIN(ctx context.Context, ses *auth.Sesion, recibo, m
 		if err != nil {
 			return "", err
 		}
-		if _, err := s.aut.Exigir(ctx, ses, autorizacion.Pedido{Motivo: autorizacion.Anular, Monto: total, Clave: recibo, PIN: pin}); err != nil {
+		if firma, err = s.aut.Exigir(ctx, ses, autorizacion.Pedido{Motivo: autorizacion.Anular, Monto: total, Clave: recibo, PIN: pin}); err != nil {
 			var falta *autorizacion.Falta
 			if errors.As(err, &falta) {
 				e := map[string]string{"pin": falta.Mensaje(), "pinMonto": jsmath.Fijo2(falta.Monto)}
@@ -349,12 +350,23 @@ func (s *Servicio) AnularConPIN(ctx context.Context, ses *auth.Sesion, recibo, m
 			return errCobro("Este cobro entró por Mercado Pago: devolvelo desde Mercado Pago y el recibo se anula solo cuando llega el aviso.")
 		}
 		numero, _, err = AnularRecibo(ctx, tx, recibo, limpio, &ses.UserID)
+		if err != nil {
+			return err
+		}
+		// Quién firmó con su PIN (M4-114): la bitácora no lo nombraba.
+		if firma != nil && firma.UserID != "" && firma.UserID != ses.UserID {
+			_, err = tx.Exec(ctx, `UPDATE receipts SET anulacion_autorizada_por = $2 WHERE id::text = $1`, recibo, firma.UserID)
+		}
 		return err
 	})
 	if err != nil {
 		return "", comoProblema(err)
 	}
-	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaAnular, "recibo", recibo, "Anuló el recibo "+numero+": "+limpio, nil)
+	desc := "Anuló el recibo " + numero + ": " + limpio
+	if firma != nil && firma.UserID != ses.UserID {
+		desc += " · autorizó " + firma.Nombre
+	}
+	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaAnular, "recibo", recibo, desc, nil)
 	return "Recibo " + numero + " anulado. La deuda volvió a la cuenta.", nil
 }
 

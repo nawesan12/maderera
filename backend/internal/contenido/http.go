@@ -92,10 +92,13 @@ func (o respuesta) VisitVisibilidadDocumentoResponse(w http.ResponseWriter) erro
 	return o.escribir(w)
 }
 func (o respuesta) VisitActivarDocumentoResponse(w http.ResponseWriter) error { return o.escribir(w) }
-func (o respuesta) VisitSucursalesResponse(w http.ResponseWriter) error       { return o.escribir(w) }
-func (o respuesta) VisitZonasDeEnvioResponse(w http.ResponseWriter) error     { return o.escribir(w) }
-func (o respuesta) VisitEscalasDePagoResponse(w http.ResponseWriter) error    { return o.escribir(w) }
-func (o respuesta) VisitDocumentosResponse(w http.ResponseWriter) error       { return o.escribir(w) }
+func (o respuesta) VisitArchivoNuevoDeDocumentoResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitSucursalesResponse(w http.ResponseWriter) error    { return o.escribir(w) }
+func (o respuesta) VisitZonasDeEnvioResponse(w http.ResponseWriter) error  { return o.escribir(w) }
+func (o respuesta) VisitEscalasDePagoResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitDocumentosResponse(w http.ResponseWriter) error    { return o.escribir(w) }
 func (o respuesta) VisitDocumentosReservadosResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -712,6 +715,18 @@ func (a *API) SubirDocumento(ctx context.Context, r contenidoapi.SubirDocumentoR
 		Titulo: c["titulo"], Descripcion: c["descripcion"], Categoria: c["categoria"],
 		SoloProfesionales: marcado(c["soloProfesionales"]), Archivo: archivo,
 	})
+}
+
+func (a *API) ArchivoNuevoDeDocumento(ctx context.Context, r contenidoapi.ArchivoNuevoDeDocumentoRequestObject) (contenidoapi.ArchivoNuevoDeDocumentoResponseObject, error) {
+	ses, err := panelDocumentos(ctx)
+	if err != nil {
+		return nil, err
+	}
+	_, archivo, err := leerFormulario(r.Body, conDocumento)
+	if err != nil {
+		return nil, err
+	}
+	return listo(), a.s.ArchivoNuevoDeDocumento(ctx, ses, r.Id.String(), archivo)
 }
 
 func (a *API) VisibilidadDocumento(ctx context.Context, r contenidoapi.VisibilidadDocumentoRequestObject) (contenidoapi.VisibilidadDocumentoResponseObject, error) {

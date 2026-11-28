@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import Link from "next/link";
-import { CheckCircle2, Loader2, MessageCircle, Send, X } from "lucide-react";
+import { useActionState, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Loader2, MessageCircle, Send, X } from "lucide-react";
 import { enviarDocumentoAlCliente, type EstadoWhatsapp } from "./actions";
 import { ConfirmarTope } from "./confirmar-tope";
 
@@ -33,6 +34,20 @@ export function MandarPorWhatsapp({
   const [abierto, setAbierto] = useState(false);
   const [estado, accion, pendiente] = useActionState(enviarDocumentoAlCliente, inicial);
   const alto = compacto ? "h-9" : "h-10";
+  const router = useRouter();
+  // Mandado, el formulario se cierra: la constancia queda en el aviso y en
+  // el papel (M4-034: seguían el campo, «Mandar» y la cruz, y la constancia
+  // dos veces).
+  const [vista, setVista] = useState(estado);
+  if (vista !== estado) {
+    setVista(estado);
+    if (estado.ok) setAbierto(false);
+  }
+  useEffect(() => {
+    if (!estado.ok) return;
+    const chat = estado.conversacionId;
+    toast.success(estado.ok, chat ? { action: { label: "Ver la conversación", onClick: () => router.push(`/admin/whatsapp?chat=${chat}`) } } : undefined);
+  }, [estado, router]);
 
   if (!abierto) {
     return (
@@ -92,17 +107,6 @@ export function MandarPorWhatsapp({
         <div className="w-full">
           <ConfirmarTope />
         </div>
-      )}
-      {estado.ok && (
-        <p role="status" className="flex w-full items-center gap-1.5 text-base text-saldo-favor">
-          <CheckCircle2 className="h-4 w-4" />
-          {estado.ok}
-          {estado.conversacionId && (
-            <Link href={`/admin/whatsapp?chat=${estado.conversacionId}`} className="font-medium underline">
-              Ver la conversación
-            </Link>
-          )}
-        </p>
       )}
     </form>
   );

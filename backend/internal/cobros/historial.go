@@ -306,7 +306,13 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 			break
 		}
 		x := MovimientoDelCliente{ID: m.ID, Fecha: m.CreatedAt, Clase: m.Tipo, Detalle: m.Detalle, Importe: f64(m.Monto)}
-		if t, ok := tituloDelLibro[m.Tipo]; ok {
+		// La rebaja de un pedido corregido es una compra en negativo: se ve
+		// como el ajuste que es, en «Notas y ajustes» (M4-067: «Compra a
+		// cuenta −$ 57.800»).
+		if m.Tipo == "compra" && x.Importe != nil && *x.Importe < 0 {
+			x.Clase = "ajuste"
+		}
+		if t, ok := tituloDelLibro[x.Clase]; ok {
 			x.Titulo = t
 		} else {
 			x.Titulo = m.Tipo

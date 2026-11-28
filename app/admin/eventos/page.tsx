@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CalendarDays, MapPin, Users } from "lucide-react";
+import { CalendarDays, ExternalLink, MapPin, Users } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { fechaLarga, hora, moneda } from "@/lib/formato";
@@ -107,20 +107,22 @@ export default async function EventosAdminPage() {
                   )}
                 </div>
 
-                <div className="flex flex-col items-end gap-2">
+                {/* Una sola fila que se parte, a todo el ancho en el teléfono:
+                    eran tres filas a la derecha, cada botón con su ancho, y
+                    «Ver en el sitio» suelto en naranja (recorrido, M4-075). */}
+                <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:max-w-[28rem] sm:justify-end">
                   <AccionesEvento id={evento.id} titulo={evento.titulo} estado={evento.estado} anotados={evento.inscriptos} />
-                  <div className="flex flex-wrap justify-end gap-2">
-                    {evento.estado === "publicado" && (
-                      <RecordarEvento id={evento.id} titulo={evento.titulo} porRecordar={evento.porRecordar} />
-                    )}
-                    <CrearEvento evento={evento} />
-                  </div>
+                  {evento.estado === "publicado" && (
+                    <RecordarEvento id={evento.id} titulo={evento.titulo} porRecordar={evento.porRecordar} />
+                  )}
+                  <CrearEvento evento={evento} />
                   {evento.estado === "publicado" && (
                     <Link
                       href={`/eventos/${evento.slug}`}
                       target="_blank"
-                      className="text-base font-medium text-brand-orange-dark hover:underline"
+                      className="inline-flex h-10 items-center gap-2 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
                     >
+                      <ExternalLink className="h-4 w-4" aria-hidden />
                       Ver en el sitio
                     </Link>
                   )}

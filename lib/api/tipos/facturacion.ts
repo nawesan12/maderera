@@ -654,6 +654,10 @@ export interface components {
                 invoiceId: string;
                 receptorNombre: string;
                 pedido: string | null;
+                /** Format: double */
+                total: number;
+                /** Format: date-time */
+                fecha: string | null;
             } | null;
         };
         RenglonesADevolver: {
@@ -914,6 +918,19 @@ export interface components {
                 fecha: string;
                 recibo: string | null;
                 reciboId: string | null;
+                /** @description La marca del pago con tarjeta de la caja */
+                tarjeta: string | null;
+                /** @description Las cuotas del pago con tarjeta de la caja (1 si no) */
+                cuotas: number;
+            }[];
+            /** @description Las notas de crédito que acreditaron la factura (en Cobros, al lado del recibo) */
+            notasDeCredito: {
+                id: string;
+                etiqueta: string;
+                /** Format: double */
+                total: number;
+                /** Format: date-time */
+                fecha: string;
             }[];
             /** @description El enlace de verificación de ARCA (solo con CAE) */
             qrUrl: string | null;

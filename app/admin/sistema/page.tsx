@@ -86,9 +86,24 @@ export default async function SistemaPage() {
             <li key={t.tarea} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3">
               <span className="min-w-0 text-base font-semibold">{nombreDeLaTarea(t.tarea)}</span>
               <span
-                className={`tabular text-sm ${t.estado === "error" ? "estado-problema font-semibold text-[var(--estado-tinta)]" : "text-texto-2"}`}
+                className={`tabular text-sm ${
+                  t.estado === "error"
+                    ? "estado-problema font-semibold text-[var(--estado-tinta)]"
+                    : t.estado === "aviso"
+                      ? "estado-espera font-semibold text-[var(--estado-tinta)]"
+                      : "text-texto-2"
+                }`}
               >
-                {t.estado === "error" ? "Error" : t.estado === "corriendo" ? "Corriendo" : "Bien"} · {t.periodo}
+                {/* «Aviso»: corrió, pero no pudo hacer lo suyo (las reseñas
+                    sin la clave de Google decían «Bien», M4-121). */}
+                {t.estado === "error"
+                  ? "Error"
+                  : t.estado === "aviso"
+                    ? "Sin hacer"
+                    : t.estado === "corriendo"
+                      ? "Corriendo"
+                      : "Bien"}{" "}
+                · {t.periodo}
               </span>
               {t.error && <p className="w-full break-words text-sm text-texto-2 [overflow-wrap:anywhere]">{t.error}</p>}
             </li>

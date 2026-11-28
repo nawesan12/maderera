@@ -96,7 +96,9 @@ type ResultadoVenta struct {
 	// Lo que queda escrito con la venta.
 	DejadoDeCobrar float64 `json:"-"`
 	AutorizadoPor  string  `json:"-"`
-	BajoLista      bool    `json:"-"`
+	// Firma es cómo autorizó (PIN, contraseña o la sesión de un admin).
+	Firma     *autorizacion.Firma `json:"-"`
+	BajoLista bool                `json:"-"`
 	// CreditoSinAutorizar: lo que una venta sin conexión cargó a cuenta
 	// pasado el límite, sin PIN.
 	CreditoSinAutorizar float64 `json:"-"`
@@ -589,7 +591,7 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 	}
 	r.DejadoDeCobrar, r.BajoLista, r.CreditoSinAutorizar = desvio.Total, bajoListaSinAutorizar, creditoSinAutorizar
 	if firma != nil && (pidePrecio || pideCredito || pideCosto) {
-		r.AutorizadoPor = firma.Nombre
+		r.AutorizadoPor, r.Firma = firma.Nombre, firma
 	}
 	return r, nil
 }

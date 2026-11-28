@@ -94,6 +94,14 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
           { valor: "saldo_inicial", texto: "Al estudio, contra Saldos iniciales" },
         ],
       },
+      {
+        clave: "deposito_de_efectivo",
+        pregunta: "El efectivo que va al banco sale de",
+        opciones: [
+          { valor: "estudio", texto: "La Caja del estudio" },
+          { valor: "lo_que_hay", texto: "La del estudio hasta lo que tiene; el resto, del circuito sin factura" },
+        ],
+      },
     ],
   },
   {
@@ -139,14 +147,6 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
         ],
       },
       {
-        clave: "descuento_al_flete",
-        pregunta: "El descuento por medio de pago, ¿alcanza al flete?",
-        opciones: [
-          { valor: "no", texto: "No" },
-          { valor: "si", texto: "Sí" },
-        ],
-      },
-      {
         clave: "descuento_con_escala",
         pregunta: "Un descuento tipeado y el de la forma de pago",
         opciones: [
@@ -179,6 +179,30 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
         ],
       },
       {
+        clave: "despacho_contra_entrega",
+        pregunta: "El envío que se cobra en efectivo en la puerta",
+        opciones: [
+          { valor: "con_pin", texto: "Sale con el PIN de un admin" },
+          { valor: "sin_pin", texto: "Sale sin PIN y queda a cobrar" },
+        ],
+      },
+      {
+        clave: "presupuesto_del_pedido_cancelado",
+        pregunta: "El presupuesto de un pedido cancelado",
+        opciones: [
+          { valor: "queda_aceptado", texto: "Queda aceptado, para pasarlo de nuevo" },
+          { valor: "se_rechaza", texto: "Se cierra con el motivo" },
+        ],
+      },
+      {
+        clave: "flete_sin_cotizar",
+        pregunta: "El envío con el flete sin cotizar",
+        opciones: [
+          { valor: "avisa", texto: "Sale, avisando antes" },
+          { valor: "frena", texto: "No sale hasta cotizarlo o marcarlo sin cargo" },
+        ],
+      },
+      {
         clave: "retencion_en_el_cobro",
         pregunta: "La retención que trae el cliente con el pago, ¿quién la carga en el cobro?",
         opciones: [
@@ -197,6 +221,8 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
     ],
   },
   {
+    // La del flete estaba también en «Mostrador», y las dos copias no se
+    // enteraban de lo que guardaba la otra (recorrido, M4-051).
     titulo: "Descuento por medio de pago",
     reglas: [
       {
@@ -266,6 +292,14 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
         ],
       },
       {
+        clave: "reponer_por_sucursal",
+        pregunta: "«Para reponer» cuenta las sucursales",
+        opciones: [
+          { valor: "con_minimo", texto: "Con mínimo puesto" },
+          { valor: "las_que_la_manejan", texto: "Con mínimo, que tienen o movieron esa medida" },
+        ],
+      },
+      {
         clave: "redondeo_lista_proveedor",
         pregunta: "El precio que propone la lista del proveedor",
         opciones: [
@@ -315,6 +349,14 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
         opciones: [
           { valor: "neto", texto: "El neto, como Ganancias" },
           { valor: "total", texto: "El total con IVA" },
+        ],
+      },
+      {
+        clave: "retenciones_al_pagar",
+        pregunta: "Al pagarle a un proveedor, arrancan tildadas",
+        opciones: [
+          { valor: "con_base", texto: "Las que ya le retuvieron este mes" },
+          { valor: "las_que_corresponden", texto: "Las que le corresponden" },
         ],
       },
       {

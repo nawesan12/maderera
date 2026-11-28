@@ -49,6 +49,8 @@ const OPCIONES_IMPUESTO = [
  * papel**. Si la cuenta del cliente no cierra con su certificado, el problema
  * es de él con el fisco, no nuestro.
  */
+const EJEMPLO_DE_REGIMEN: Record<string, string> = { ganancias: "78", iibb: "IIBB-BA", iva: "", suss: "" };
+
 export function CargarSufrida() {
   const router = useRouter();
   const [estado, setEstado] = useState<EstadoSufrida>({});
@@ -172,7 +174,8 @@ export function CargarSufrida() {
           <input
             value={codigoRegimen}
             onChange={(e) => setCodigo(e.target.value)}
-            placeholder="78"
+            // El ejemplo según el impuesto: «78» es de Ganancias (M4-047).
+            placeholder={EJEMPLO_DE_REGIMEN[impuesto]}
             maxLength={20}
             className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
           />

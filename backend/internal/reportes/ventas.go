@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math"
 	"strings"
 	"time"
 
@@ -272,6 +273,12 @@ type TotalesDelReporte struct {
 	// simulado, M2S4-030 y M3S1-028): la diferencia va en su propio renglón,
 	// «Envíos y descuentos».
 	Renglones float64 `json:"renglones"`
+	// Manuales es lo facturado a mano, sin pedido (un servicio, un flete
+	// suelto), sin IVA: no tiene renglones ni producto, pero es venta, y el
+	// Cierre lo cuenta en su «Vendido sin IVA». Sin esto Reportes daba
+	// $ 15.305,79 menos que el Cierre del mismo mes sin decir por qué
+	// (recorrido M4-099). Solo sin filtros de rubro ni sucursal.
+	Manuales float64 `json:"manuales"`
 }
 
 // MargenDelTotal es NetoCosteado − Costo; nil si nada tiene costo.
@@ -341,12 +348,35 @@ func (s *Servicio) ReporteDeVentas(ctx context.Context, corte string, p Periodo,
 	if err != nil {
 		return ReporteDeVentas{}, err
 	}
+	// La fila que dio cero (lo vendido y devuelto entero en el período) no
+	// es una venta: ocupaba un renglón en $ 0 (recorrido M4-043).
+	vivas := filas[:0]
+	for _, x := range filas {
+		if math.Abs(x.Total) >= 0.005 || math.Abs(x.Cantidad) >= 0.0005 {
+			vivas = append(vivas, x)
+		}
+	}
+	filas = vivas
 	t, err := s.totalesDelReporte(ctx, corte, where, args)
 	if err != nil {
 		return ReporteDeVentas{}, err
 	}
 	if t.Filas < len(filas) {
 		t.Filas = len(filas)
+	}
+	if (f.Rubro == "" || f.Rubro == "todos") && (f.Sucursal == "" || f.Sucursal == "todas") {
+		desde, hasta := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC)
+		if p.Desde != nil {
+			desde = *p.Desde
+		}
+		if p.Hasta != nil {
+			hasta = *p.Hasta
+		}
+		m, err := s.facturasManuales(ctx, desde, hasta)
+		if err != nil {
+			return ReporteDeVentas{}, err
+		}
+		t.Manuales = jsmath.Redondear2(m.conCae.Total + m.sinCae.Total)
 	}
 	return ReporteDeVentas{Filas: filas, Totales: t}, nil
 }

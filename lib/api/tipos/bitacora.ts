@@ -86,6 +86,7 @@ export interface operations {
             query?: {
                 entidad?: string;
                 accion?: string;
+                /** @description El id de una persona */
                 usuario?: string;
                 dias?: number;
                 buscar?: string;

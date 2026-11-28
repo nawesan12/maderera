@@ -199,6 +199,9 @@ func LineasDeConstancia(pendientes []Renglon) []LineaAEntregar {
 
 // FormRemito es lo que prepararRemito leía del formulario.
 type FormRemito struct {
+	// notaSalida es lo que suma CrearEntrega a la nota del historial: quién
+	// autorizó la salida sin cobrar y si el flete salió sin cotizar.
+	notaSalida        string
 	OrderID           string           `json:"orderId"`
 	Tipo              string           `json:"tipo"`
 	ReceptorNombre    *string          `json:"receptorNombre"`

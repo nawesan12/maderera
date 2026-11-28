@@ -178,9 +178,7 @@ func (a *API) AnularVentaDeMostrador(ctx context.Context, r mostradorapi.AnularV
 	if !pedido.VolvioLaMercaderia {
 		desc += ". La mercadería no volvió"
 	}
-	if res.AutorizadoPor != "" {
-		desc += " · autorizó " + res.AutorizadoPor + " con PIN"
-	}
+	desc += leyendaDeFirma(res.Firma, res.AutorizadoPor)
 	var detalle any
 	if res.AutorizadoPor != "" || !pedido.VolvioLaMercaderia {
 		detalle = map[string]any{"autorizadoPor": res.AutorizadoPor, "volvioLaMercaderia": pedido.VolvioLaMercaderia, "total": res.Total}
@@ -760,10 +758,16 @@ func DescripcionDeLaVenta(r ResultadoVenta) string {
 	if r.DejadoDeCobrar > 0.005 {
 		desc += " · descuento de " + formato.Importe(r.DejadoDeCobrar)
 	}
-	if r.AutorizadoPor != "" {
-		desc += " · autorizó " + r.AutorizadoPor + " con PIN"
+	return desc + leyendaDeFirma(r.Firma, r.AutorizadoPor)
+}
+
+// leyendaDeFirma es cómo se firmó, para la bitácora; sin la firma (una venta
+// armada a mano en una prueba), con PIN como antes.
+func leyendaDeFirma(f *autorizacion.Firma, nombre string) string {
+	if f == nil {
+		f = &autorizacion.Firma{Nombre: nombre, Como: autorizacion.FirmaPIN}
 	}
-	return desc
+	return f.Leyenda()
 }
 
 // controlDeLaVenta es el detalle de la bitácora: lo dejado de cobrar y quién

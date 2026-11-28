@@ -2578,6 +2578,13 @@ export interface operations {
                         devuelto: number;
                         /** Format: double */
                         costoUnitario: number;
+                        /**
+                         * Format: double
+                         * @description El costo del remito
+                         */
+                        costoFacturado: number;
+                        /** @description La factura viva que cubre la recepción */
+                        facturaId: string | null;
                     }[];
                 };
             };
@@ -2880,6 +2887,10 @@ export interface operations {
             query: {
                 desde: string;
                 hasta: string;
+                /** @description Solo los de ese circuito */
+                circuito?: "blanco" | "negro";
+                /** @description Agrupar por categoría (la de siempre) o por sucursal */
+                por?: "categoria" | "sucursal";
             };
             header?: never;
             path?: never;
@@ -2887,7 +2898,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Cuánto se gastó en cada categoría (lo más gastado primero) */
+            /** @description Cuánto se gastó en cada categoría o sucursal (lo más gastado primero) */
             200: {
                 headers: {
                     [name: string]: unknown;

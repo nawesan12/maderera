@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { startTransition, useActionState, useState } from "react";
+import { Check, ChevronDown, ChevronRight, UserMinus } from "lucide-react";
+import { Confirmar } from "@/components/admin/confirmar";
 import { marcarAsistencia, type EstadoEvento } from "./actions";
 import { fechaCorta, telefonoLegible } from "@/lib/formato";
 import type { Asistente } from "@/lib/dal/admin/eventos";
@@ -37,6 +38,9 @@ const ESTADOS: Record<string, { texto: string; clase: string }> = {
 export function Asistentes({ asistentes, empezo }: { asistentes: Asistente[]; empezo: boolean }) {
   const [abierto, setAbierto] = useState(false);
   const [resultado, marcar] = useActionState(marcarAsistencia, inicial);
+  // Quitar a alguien libera su lugar, y un evento de prueba con un anotado
+  // quedaba en borrador para siempre: sin nadie, se borra (M4-059).
+  const [quitando, setQuitando] = useState<Asistente | null>(null);
 
   if (asistentes.length === 0) {
     return (
@@ -99,13 +103,16 @@ export function Asistentes({ asistentes, empezo }: { asistentes: Asistente[]; em
                       <form key={valor} action={marcar}>
                         <input type="hidden" name="id" value={a.id} />
                         <input type="hidden" name="estado" value={valor} />
+                        {/* La elegida en el color de acción y con tilde: con
+                            un relieve apenas más claro no se leía (M4-075). */}
                         <button
                           type="submit"
                           aria-pressed={a.estado === valor}
-                          className={`inline-flex h-9 items-center rounded-md px-3 text-base font-medium transition-colors ${
-                            a.estado === valor ? "bg-card text-foreground shadow-sm" : "text-texto-2 hover:text-foreground"
+                          className={`inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-base font-medium transition-colors ${
+                            a.estado === valor ? "bg-accion text-white shadow-sm" : "text-texto-2 hover:text-foreground"
                           }`}
                         >
+                          {a.estado === valor && <Check className="h-4 w-4" aria-hidden />}
                           {texto}
                         </button>
                       </form>
@@ -118,11 +125,38 @@ export function Asistentes({ asistentes, empezo }: { asistentes: Asistente[]; em
                     </span>
                   )
                 )}
+                {a.estado !== "cancelada" && (
+                  <button
+                    type="button"
+                    onClick={() => setQuitando(a)}
+                    aria-label={`Quitar a ${a.nombre}`}
+                    className="flex h-10 w-10 items-center justify-center rounded-lg border border-linea text-muted-foreground transition-colors hover:text-destructive"
+                  >
+                    <UserMinus className="h-4 w-4" />
+                  </button>
+                )}
               </li>
             );
           })}
         </ul>
       )}
+      <Confirmar
+        abierto={quitando !== null}
+        alCerrar={() => setQuitando(null)}
+        titulo={quitando ? `Quitar a ${quitando.nombre}` : "Quitar"}
+        detalle="Libera su lugar. Si pagó, la devolución va aparte."
+        confirmar="Quitar"
+        peligro
+        alConfirmar={() => {
+          const a = quitando;
+          setQuitando(null);
+          if (!a) return;
+          const datos = new FormData();
+          datos.set("id", a.id);
+          datos.set("estado", "cancelada");
+          startTransition(() => marcar(datos));
+        }}
+      />
       {resultado.error && (
         <p role="alert" className="px-5 pb-3 text-base text-destructive">
           {resultado.error}

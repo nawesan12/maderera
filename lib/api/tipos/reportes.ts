@@ -417,6 +417,11 @@ export interface components {
         ReporteTotales: {
             /**
              * Format: double
+             * @description Lo facturado a mano, sin pedido, sin IVA (solo sin filtros de rubro ni sucursal): es venta sin renglones
+             */
+            manuales: number;
+            /**
+             * Format: double
              * @description Con IVA
              */
             total: number;
@@ -574,6 +579,7 @@ export interface components {
         CierreResumen: {
             cerrado: components["schemas"]["MesCerrado"];
             ventas: components["schemas"]["CierreTotalesConIva"];
+            ventasSinCae: components["schemas"]["CierreTotalesConIva"];
             vendido: components["schemas"]["CierreVendido"];
             compras: components["schemas"]["CierreTotalesConIva"];
             gastos: components["schemas"]["CierreTotales"];
@@ -852,7 +858,7 @@ export interface components {
             efectivo: number;
             /**
              * Format: double
-             * @description Lo retirado hoy de las cajas a la caja fuerte
+             * @description Lo que hay en las cajas fuertes (como /admin/caja)
              */
             cajaFuerte: number;
             /**

@@ -171,6 +171,10 @@ type ConteosDeStock struct {
 	SinStock int `json:"sinStock"`
 	Reponer  int `json:"reponer"`
 	ConStock int `json:"conStock"`
+	// Negativo es lo vendido de más (disponible bajo cero en alguna sucursal,
+	// o en la elegida). No es un grupo aparte: cae también en «reponer». Es
+	// a donde lleva el pendiente urgente del inicio (M4-017, M4-028).
+	Negativo int `json:"negativo"`
 }
 
 // GrillaDeStock es una página de la grilla, con el total del filtro y las
@@ -212,7 +216,12 @@ var estadosDeStock = map[string]string{
 	"reponer":   CondicionReponer,
 	"sin-stock": CondicionSinStock,
 	"con-stock": `NOT ` + catalogo.MedidaParaReponer + ` AND ` + catalogo.MedidaConDisponible,
+	"negativo":  CondicionNegativo,
 }
+
+// CondicionNegativo es la medida que tiene, en alguna sucursal, menos
+// disponible que cero: la cuenta del pendiente «stock en negativo» del inicio.
+const CondicionNegativo = `EXISTS (SELECT 1 FROM inventory i WHERE i.variant_id = v.id AND i.qty - coalesce(i.reservado, 0) < 0)`
 
 // columnasDeBusqueda son las de la grilla y de los movimientos: nombre,
 // código, medida, material, color y categoría.
@@ -254,6 +263,7 @@ func estadosEnSucursal(arg string) map[string]string {
 		"reponer":   reponer,
 		"sin-stock": `NOT ` + reponer + ` AND NOT ` + con,
 		"con-stock": `NOT ` + reponer + ` AND ` + con,
+		"negativo":  `EXISTS (SELECT 1 FROM inventory i WHERE ` + en + ` AND i.qty - coalesce(i.reservado, 0) < 0)`,
 	}
 }
 
@@ -277,11 +287,12 @@ func (s *Servicio) ListarEn(ctx context.Context, f listado.Filtros, sucursal str
 	}
 	k := &out.Conteos
 	if err := s.pool.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE `+estados["sin-stock"]+`),
-		count(*) FILTER (WHERE `+estados["reponer"]+`), count(*) FILTER (WHERE `+estados["con-stock"]+`)`+desde+c.Donde(),
-		c.Args()...).Scan(&k.Todas, &k.SinStock, &k.Reponer, &k.ConStock); err != nil {
+		count(*) FILTER (WHERE `+estados["reponer"]+`), count(*) FILTER (WHERE `+estados["con-stock"]+`),
+		count(*) FILTER (WHERE `+estados["negativo"]+`)`+desde+c.Donde(),
+		c.Args()...).Scan(&k.Todas, &k.SinStock, &k.Reponer, &k.ConStock, &k.Negativo); err != nil {
 		return out, err
 	}
-	out.Total = map[string]int{"sin-stock": k.SinStock, "reponer": k.Reponer, "con-stock": k.ConStock}[f.Estado]
+	out.Total = map[string]int{"sin-stock": k.SinStock, "reponer": k.Reponer, "con-stock": k.ConStock, "negativo": k.Negativo}[f.Estado]
 	if cond, ok := estados[f.Estado]; ok {
 		c.Y(cond)
 	} else {
@@ -551,6 +562,13 @@ func ConceptoDe(tipo, nota, documento string) (concepto, referencia string) {
 		return "Recepción corregida", ""
 	case documento == "devolucion":
 		return "Devolución", ref
+	case documento == "devolucion_proveedor":
+		// Lo que vuelve al proveedor con su nota de crédito: decía «Egreso»
+		// sin ninguna referencia (M4-041).
+		if tipo == "egreso" {
+			return "Devolución", strings.TrimPrefix(nota, "Devolución al proveedor · ")
+		}
+		return "Anulación de la devolución", ""
 	case tipo == "venta" && strings.HasPrefix(nota, "Remito "):
 		// El retiro de lo vendido (un acopio, un envío): sale con su remito.
 		return "Entrega", strings.TrimPrefix(nota, "Remito ")

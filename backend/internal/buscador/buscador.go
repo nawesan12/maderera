@@ -519,10 +519,18 @@ func productos(ctx context.Context, pool Consultor, texto string) ([]Resultado, 
 	for _, p := range largos {
 		a = append(a, "%"+p+"%")
 		n := fmt.Sprintf("$%d", len(a))
+		// Lo que se escribe con guion es un código, y un código se busca por
+		// sus tramos: «OC-1» no es un pedazo de MOL-ZOC-100 (recorrido,
+		// M4-025). Va desde el principio o desde un guion.
+		sku := `f_unaccent(coalesce(w.sku, '')) ILIKE f_unaccent(` + n + `)`
+		if strings.Contains(p, "-") {
+			a = append(a, p+"%", "%-"+p+"%")
+			sku = fmt.Sprintf(`(f_unaccent(coalesce(w.sku, '')) ILIKE f_unaccent($%d) OR f_unaccent(coalesce(w.sku, '')) ILIKE f_unaccent($%d))`, len(a)-1, len(a))
+		}
 		cond = append(cond, `(f_unaccent(p.name) ILIKE f_unaccent(`+n+`) OR f_unaccent(coalesce(p.brand, '')) ILIKE f_unaccent(`+n+`)
 		  OR f_unaccent(coalesce(c.name, '')) ILIKE f_unaccent(`+n+`)
 		  OR EXISTS (SELECT 1 FROM product_variants w WHERE w.product_id = p.id AND w.active
-		    AND (f_unaccent(w.label) ILIKE f_unaccent(`+n+`) OR f_unaccent(coalesce(w.sku, '')) ILIKE f_unaccent(`+n+`))))`)
+		    AND (f_unaccent(w.label) ILIKE f_unaccent(`+n+`) OR `+sku+`)))`)
 	}
 	for _, p := range cortos {
 		a = append(a, `(^|[^0-9])`+p+`([^0-9]|$)`)

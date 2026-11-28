@@ -154,6 +154,8 @@ func TestMovimientosDelFiltroYConSuNombre(t *testing.T) {
 func TestConceptoDe(t *testing.T) {
 	casos := []struct{ tipo, nota, doc, concepto, ref string }{
 		{"egreso", "Rotura desde Stock (10 → 8)", "", "Rotura", ""},
+		{"egreso", "Devolución al proveedor · NC 0003-00000121", "devolucion_proveedor", "Devolución", "NC 0003-00000121"},
+		{"ajuste", "Anulación de la nota de crédito: error", "devolucion_proveedor", "Anulación de la devolución", ""},
 		{"egreso", "Ajuste rápido desde Stock (3 → 2)", "", "Ajuste", ""},
 		{"ingreso", "Devolución de cliente desde Stock (1 → 2)", "", "Devolución", ""},
 		{"egreso", "Consumo del taller desde Stock (69 → 67,5)", "", "Consumo del taller", ""},

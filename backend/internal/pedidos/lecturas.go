@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -51,6 +52,14 @@ func (a *argumentos) coincide(texto string, columnas ...string) string {
 	}
 	return "(" + strings.Join(porTermino, " AND ") + ")"
 }
+
+// telefonoEscrito es una búsqueda que es solo un teléfono con sus espacios,
+// guiones, paréntesis o el «+» (diez dígitos o más: un número de
+// presupuesto como «2026-0069» no pasa).
+var (
+	telefonoEscrito = regexp.MustCompile(`^\s*\+?[\d\s().-]+$`)
+	noDigitos       = regexp.MustCompile(`\D`)
+)
 
 func donde(condiciones []string) string {
 	if len(condiciones) == 0 {
@@ -151,7 +160,17 @@ func (s *Servicio) ListarPresupuestos(ctx context.Context, f Filtros, limite, de
 		cond = append(cond, "b.slug = "+a.poner(f.Sucursal))
 	}
 	if f.Busqueda != "" {
-		if c := a.coincide(f.Busqueda, "q.numero", "q.contacto_nombre", "c.razon_social"); c != "" {
+		// También por el correo y el teléfono, que es lo que el vendedor
+		// tiene a mano cuando el cliente escribe desde otro lado (M4-074).
+		// Un teléfono se escribe como se ve en la ficha («223 555-0102»):
+		// junto, para que coincida con los dígitos de la columna (recorrido).
+		busqueda := f.Busqueda
+		if digitos := noDigitos.ReplaceAllString(busqueda, ""); len(digitos) >= 10 && telefonoEscrito.MatchString(busqueda) {
+			busqueda = digitos
+		}
+		if c := a.coincide(busqueda, "q.numero", "q.contacto_nombre", "c.razon_social", "q.contacto_email", "c.email",
+			`regexp_replace(coalesce(q.contacto_telefono, ''), '[^0-9]', '', 'g')`,
+			`regexp_replace(coalesce(c.telefono, ''), '[^0-9]', '', 'g')`); c != "" {
 			cond = append(cond, c)
 		}
 	}
@@ -1181,10 +1200,21 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 		if err := filas.Err(); err != nil {
 			return nil, err
 		}
+		// El neto de cada renglón con su parte del descuento del pedido
+		// (M4-096: PED-1010, −10 % por transferencia, daba $ 68.000 netos y
+		// 35,6 % cuando su factura dice $ 61.200).
+		netos, err := netosDeLosRenglones(ctx, s.pool, id)
+		if err != nil {
+			return nil, err
+		}
 		lineas := make([]LineaConCosto, len(p.Items))
 		for i, it := range p.Items {
 			d := devueltos[it.ID]
-			lineas[i] = LineaConCosto{Subtotal: it.Subtotal, Cantidad: it.Cantidad, AlicuotaIva: it.AlicuotaIva, CostoUnitario: it.CostoUnitario,
+			sub := it.Subtotal
+			if n, ok := netos[it.ID]; ok {
+				sub = jsmath.Fijo2(n)
+			}
+			lineas[i] = LineaConCosto{Subtotal: sub, Cantidad: it.Cantidad, AlicuotaIva: it.AlicuotaIva, CostoUnitario: it.CostoUnitario,
 				DevueltoCantidad: d.cantidad, DevueltoImporte: d.importe}
 		}
 		p.Margen = MargenDelPedido(lineas)

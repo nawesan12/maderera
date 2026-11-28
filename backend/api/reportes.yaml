@@ -356,8 +356,9 @@ components:
     ReporteTotales:
       type: object
       description: El período entero con los mismos filtros, sin el tope de filas del corte
-      required: [total, cantidad, netoVenta, netoCosteado, costo, lineasSinCosto, filas, envios, renglones]
+      required: [total, cantidad, netoVenta, netoCosteado, costo, lineasSinCosto, filas, envios, renglones, manuales]
       properties:
+        manuales: { type: number, format: double, description: "Lo facturado a mano, sin pedido, sin IVA (solo sin filtros de rubro ni sucursal): es venta sin renglones" }
         total: { type: number, format: double, description: Con IVA, el total de los pedidos (con envío y descuento), el mismo en todos los cortes }
         renglones: { type: number, format: double, description: Lo que suman con IVA las filas del corte; en los cortes por renglón, total − renglones son los envíos y descuentos }
         cantidad: { type: number, format: double, description: Unidades o operaciones, según el corte }
@@ -485,10 +486,12 @@ components:
         por: { type: string, nullable: true }
     CierreResumen:
       type: object
-      required: [ventas, vendido, compras, gastos, gastosB, retencionesPracticadas, retencionesSufridas, percepcionesIibb, posicionIva, iva, resultado, cerrado, primerMes, tarjetasSinLiquidar]
+      required: [ventas, ventasSinCae, vendido, compras, gastos, gastosB, retencionesPracticadas, retencionesSufridas, percepcionesIibb, posicionIva, iva, resultado, cerrado, primerMes, tarjetasSinLiquidar]
       properties:
         cerrado: { $ref: "#/components/schemas/MesCerrado" }
         ventas: { $ref: "#/components/schemas/CierreTotalesConIva" }
+        # Los comprobantes del mes que esperan el CAE: su IVA todavía no es débito fiscal.
+        ventasSinCae: { $ref: "#/components/schemas/CierreTotalesConIva" }
         # Lo vendido en el mes sin IVA (el «Vendido sin IVA» del resultado) partido según su factura. No entra
         # en los asientos ni en ningún archivo.
         vendido: { $ref: "#/components/schemas/CierreVendido" }
@@ -732,7 +735,7 @@ components:
               esperado: { type: number, format: double, description: Lo que tendría que haber, o lo contado si la caja de hoy ya se cerró }
               cerrada: { type: boolean }
         efectivo: { type: number, format: double }
-        cajaFuerte: { type: number, format: double, description: Lo retirado hoy de las cajas a la caja fuerte }
+        cajaFuerte: { type: number, format: double, description: Lo que hay en las cajas fuertes (como /admin/caja) }
         banco: { type: number, format: double, description: Lo que se movió hoy en el banco, entradas menos salidas }
         bancoEntro: { type: number, format: double }
         bancoSalio: { type: number, format: double }

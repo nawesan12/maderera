@@ -253,7 +253,7 @@ func TestSolicitudYAprobacion(t *testing.T) {
 	}
 
 	// Ya compra en el mostrador con ese CUIT (con guiones).
-	ficha := e.uno(t, `insert into customers (nombre, cuit, email) values ('Carpintería Pérez', '20-12345678-6', 'viejo@prueba.test') returning id`)
+	ficha := e.uno(t, `insert into customers (nombre, cuit, email, condicion_iva) values ('Carpintería Pérez', '20-12345678-6', 'viejo@prueba.test', 'monotributista') returning id`)
 
 	// El panel: el depósito no entra (el TS lo dejaba); el vendedor sí.
 	if st, _ := pedir(t, dep, "GET", e.srv.URL+"/api/v1/admin/profesionales/solicitudes", nil); st != http.StatusForbidden {
@@ -263,6 +263,10 @@ func TestSolicitudYAprobacion(t *testing.T) {
 	s0 := l["_lista"].([]any)[0].(map[string]any)
 	if s0["clienteExistente"].(map[string]any)["id"] != ficha {
 		t.Fatalf("no encontró la ficha por CUIT: %v", s0)
+	}
+	// La condición de la ficha, para proponerla al habilitar (M4-073).
+	if s0["clienteExistente"].(map[string]any)["condicionIva"] != "monotributista" {
+		t.Errorf("la condición de la ficha: %v", s0["clienteExistente"])
 	}
 	if _, r := pedir(t, ven, "GET", e.srv.URL+"/api/v1/admin/profesionales/resumen", nil); r["pendientes"] != 1.0 {
 		t.Fatalf("resumen: %v", r)
@@ -486,6 +490,18 @@ func TestBorrarYRecordarUnEvento(t *testing.T) {
 	}
 	if n, _ := e.s.RecordarEvento(ctx, conGente); n != 0 {
 		t.Fatalf("se repitió: %d", n)
+	}
+	// Recorrido M4-059: quitado el único anotado, el borrador se borra.
+	prueba := e.uno(t, `insert into events (slug, titulo, inicia, cupo, estado) values ('p', 'P', now() + interval '9 days', 3, 'borrador') returning id`)
+	anotado := e.uno(t, `insert into event_registrations (event_id, nombre, email, estado) values ($1, 'Ana', 'ana@x.test', 'confirmada') returning id`, prueba)
+	if err := e.s.BorrarEvento(ctx, prueba); err == nil {
+		t.Fatal("borró un borrador con un anotado")
+	}
+	if err := e.s.MarcarAsistencia(ctx, anotado, "cancelada"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.s.BorrarEvento(ctx, prueba); err != nil {
+		t.Fatalf("sin anotados no se borra: %v", err)
 	}
 }
 

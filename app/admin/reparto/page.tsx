@@ -152,6 +152,13 @@ function FilaDeReparto({ pedido: p, cobra }: { pedido: PedidoListado; cobra: boo
         <span className="codigo">{p.numero}</span>
         {p.sucursal && <span>Sale de {p.sucursal}</span>}
         <EtiquetaEstado estado={p.estado} contexto="pedido" />
+        {/* Sin día comprometido: el depósito no puede ponérselo y no se
+            distinguía de uno con día (M4-080). */}
+        {!p.entregarEl && (
+          <span className="estado-espera rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)]">
+            Sin día
+          </span>
+        )}
         {/* La zona «a cotizar» sin flete: se despachaba sin cotizarlo. */}
         {p.fleteACotizar && (
           <span className="estado-problema rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)]">
@@ -219,6 +226,7 @@ function FilaDeReparto({ pedido: p, cobra }: { pedido: PedidoListado; cobra: boo
           sinCobrar={p.sinCobrar != null ? { numero: p.numero, monto: p.sinCobrar } : null}
           cortesSinTerminar={p.cortesSinTerminar}
           porLlevar={p.porEntregar.length > 0}
+          fleteSinCotizar={p.fleteACotizar}
           firmar={
             enElCamion[0]?.firmaToken
               ? `/firmar/${enElCamion[0].firmaToken}?volver=${encodeURIComponent("/admin/reparto")}`

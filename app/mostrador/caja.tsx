@@ -15,6 +15,20 @@ import { NOMBRE_DEL_MEDIO } from "./medios";
 import type { Sucursal, Turno, Movimiento, TurnoCerradoDelMostrador, VentaDeHoy } from "./tipos";
 import { VentasDeHoy, type DatosParaRehacer } from "./ventas-de-hoy";
 
+/**
+ * Abrir, cerrar y mover la caja van en línea. Si la red se corta entre un
+ * latido y el clic (todavía figura «en línea»), la acción del servidor tira
+ * y el mostrador entero caía en «Se nos rompió algo» (recorrido, M4-035):
+ * se dice acá, y se prueba de nuevo cuando vuelve.
+ */
+async function enLaRed<T>(f: () => Promise<T>): Promise<T | { error: string; ok?: undefined }> {
+  try {
+    return await f();
+  } catch {
+    return { error: "Se cortó la conexión. Probá de nuevo cuando vuelva." };
+  }
+}
+
 
 type Destino = "banco" | "caja_fuerte" | "otro";
 
@@ -65,7 +79,7 @@ const PAGOS: [string, string][] = [
 
 /** El turno cerrado, como se imprime: el recién cerrado o el último de hoy. */
 interface TurnoCerrado {
-  turno: Pick<Turno, "sucursal" | "abiertaPor" | "abiertaAt" | "fondoInicial" | "ventasEnEfectivo" | "otrosIngresos" | "retiros" | "devoluciones" | "gastos" | "esperado">;
+  turno: Pick<Turno, "sucursal" | "abiertaPor" | "abiertaAt" | "fondoInicial" | "ventasEnEfectivo" | "otrosIngresos" | "cobros" | "retiros" | "devoluciones" | "gastos" | "esperado">;
   cierre: RenglonDelCierre[];
   movimientos: Movimiento[];
   contado: number;
@@ -84,6 +98,7 @@ function papelDelUltimo(u: TurnoCerradoDelMostrador): TurnoCerrado {
       fondoInicial: u.fondo,
       ventasEnEfectivo: u.ventas,
       otrosIngresos: u.otrosIngresos,
+      cobros: u.cobros,
       retiros: u.retiros,
       devoluciones: u.devoluciones,
       gastos: u.gastos,
@@ -184,7 +199,7 @@ export function PanelDeCaja({
   function abrir() {
     if (!puedeAbrir || fondoTipeado === null) return;
     empezar(async () => {
-      const r = await abrirCaja(sucursal.id, fondoTipeado, { motivo: motivoApertura, cajaId, corregir: entreTurnos !== 0 && contoMal });
+      const r = await enLaRed(() => abrirCaja(sucursal.id, fondoTipeado, { motivo: motivoApertura, cajaId, corregir: entreTurnos !== 0 && contoMal }));
       setAviso(r.error ?? r.ok ?? null);
       if (!r.error) {
         setFondo("");
@@ -243,7 +258,7 @@ export function PanelDeCaja({
         onEncolado();
         return;
       }
-      const r = await registrarMovimientoDeCaja(turnoAbierto.id, t, importeDelMovimiento, motivo, destino, categoria);
+      const r = await enLaRed(() => registrarMovimientoDeCaja(turnoAbierto.id, t, importeDelMovimiento, motivo, destino, categoria));
       setAviso(r.error ?? r.ok ?? null);
       if (!r.error) {
         setMonto("");
@@ -394,7 +409,11 @@ export function PanelDeCaja({
               {!enLinea && (
                 // Las ventas sin conexión entran al turno cuando vuelve.
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Sin conexión no se puede abrir la caja; sí se puede seguir vendiendo.
+                  {/* Sin vincular, tampoco se vende sin conexión: un solo
+                      mensaje, el que dice qué hacer (M4-035). */}
+                  {cajaId
+                    ? "Sin conexión no se puede abrir la caja; sí se puede seguir vendiendo."
+                    : "Conectate para vincular esta PC a una caja."}
                 </p>
               )}
             </div>
@@ -588,7 +607,7 @@ export function PanelDeCaja({
                   onClick={() =>
                     empezar(async () => {
                       if (efectivoContado === null) return;
-                      const r = await cerrarCaja(turno.id, efectivoContado, notas);
+                      const r = await enLaRed(() => cerrarCaja(turno.id, efectivoContado, notas));
                       setAviso(r.error ?? null);
                       if (!r.error) {
                         setCerrado({
@@ -682,12 +701,14 @@ export function CuentaDelTurno({
   turno,
   contado,
 }: {
-  turno: Pick<Turno, "fondoInicial" | "ventasEnEfectivo" | "otrosIngresos" | "retiros" | "devoluciones" | "gastos" | "esperado">;
+  turno: Pick<Turno, "fondoInicial" | "ventasEnEfectivo" | "otrosIngresos" | "cobros" | "retiros" | "devoluciones" | "gastos" | "esperado">;
   contado?: number;
 }) {
+  // Los cobros de recibos, aparte de lo que se ingresó a mano (M4-023).
   const recuadros: [string, number][] = [
     ["Fondo inicial", turno.fondoInicial],
     ["Ventas en efectivo", turno.ventasEnEfectivo],
+    ...(turno.cobros ? ([["Cobros", turno.cobros]] as [string, number][]) : []),
     ["Otros ingresos", turno.otrosIngresos],
     ["Retiros", turno.retiros],
   ];
@@ -817,6 +838,7 @@ function ResumenDelCierre({ cerrado }: { cerrado: TurnoCerrado }) {
               [
                 ["Fondo inicial", turno.fondoInicial],
                 ["Ventas en efectivo", turno.ventasEnEfectivo],
+                ["Cobros", turno.cobros ?? 0],
                 ["Otros ingresos", turno.otrosIngresos],
                 ["Retiros", turno.retiros],
                 ["Devoluciones", turno.devoluciones],

@@ -257,8 +257,15 @@ func (a *API) AsientosDelPeriodo(ctx context.Context, r reportesapi.AsientosDelP
 	return ok(DelCircuito(v, texto(r.Params.Circuito))), err
 }
 
+// exportado anota en la bitácora un archivo que sale para el estudio: solo
+// quedaban los libros IVA y no lo demás (recorrido, M4-107).
+func (a *API) exportado(ctx context.Context, ses *auth.Sesion, entidad, que string) {
+	bitacora.Anotar(ctx, sqlc.New(a.s.pool), a.s.log, ses, sqlc.AccionAuditoriaExportar, entidad, "", "Exportó "+que, nil)
+}
+
 func (a *API) AsientosCsv(ctx context.Context, r reportesapi.AsientosCsvRequestObject) (reportesapi.AsientosCsvResponseObject, error) {
-	if _, err := pantalla(ctx, "/admin/cierre"); err != nil {
+	ses, err := pantalla(ctx, "/admin/cierre")
+	if err != nil {
 		return nil, err
 	}
 	p := a.mes(r.Params.Periodo)
@@ -269,8 +276,10 @@ func (a *API) AsientosCsv(ctx context.Context, r reportesapi.AsientosCsvRequestO
 	// El del circuito B es otro archivo, con la B en el nombre: que nadie
 	// le mande al estudio el equivocado.
 	if circuito := texto(r.Params.Circuito); circuito == CircuitoNegro {
+		a.exportado(ctx, ses, "cierre", "los asientos B de "+p.Clave)
 		return csv("asientos-B-"+p.Clave+".csv", CsvAsientos(v, CircuitoNegro)), nil
 	}
+	a.exportado(ctx, ses, "cierre", "los asientos de "+p.Clave)
 	return csv("asientos-"+p.Clave+".csv", CsvAsientos(v, "blanco")), nil
 }
 
@@ -486,7 +495,8 @@ func ArchivoDelDia(prefijo string, ahora time.Time) string {
 
 // DeudoresCsv y CuentasAPagarCsv: los listados del contador. Solo el admin.
 func (a *API) DeudoresCsv(ctx context.Context, _ reportesapi.DeudoresCsvRequestObject) (reportesapi.DeudoresCsvResponseObject, error) {
-	if err := numerosDelNegocio(ctx); err != nil {
+	ses, err := auth.Exigir(ctx, sqlc.StaffRoleAdmin)
+	if err != nil {
 		return nil, err
 	}
 	ahora := a.s.ahora()
@@ -494,11 +504,13 @@ func (a *API) DeudoresCsv(ctx context.Context, _ reportesapi.DeudoresCsvRequestO
 	if err != nil {
 		return nil, err
 	}
+	a.exportado(ctx, ses, "cierre", "los deudores")
 	return csv(ArchivoDelDia("deudores", ahora), v), nil
 }
 
 func (a *API) CuentasAPagarCsv(ctx context.Context, _ reportesapi.CuentasAPagarCsvRequestObject) (reportesapi.CuentasAPagarCsvResponseObject, error) {
-	if err := numerosDelNegocio(ctx); err != nil {
+	ses, err := auth.Exigir(ctx, sqlc.StaffRoleAdmin)
+	if err != nil {
 		return nil, err
 	}
 	ahora := a.s.ahora()
@@ -506,6 +518,7 @@ func (a *API) CuentasAPagarCsv(ctx context.Context, _ reportesapi.CuentasAPagarC
 	if err != nil {
 		return nil, err
 	}
+	a.exportado(ctx, ses, "cierre", "las cuentas a pagar")
 	return csv(ArchivoDelDia("cuentas-a-pagar", ahora), v), nil
 }
 

@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useId, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Check, Copy, Loader2, MessageCircle } from "lucide-react";
 import { Confirmar } from "@/components/admin/confirmar";
 import { ETIQUETA_ROL, type RolStaff } from "@/lib/roles";
 import { cambiarPuesto, darDeAlta, darDeBaja, type EstadoPersonal } from "./actions";
@@ -118,10 +118,13 @@ export function FilaDePersona({ persona, esVos }: { persona: Persona; esVos: boo
 
 const inicial: EstadoPersonal = {};
 
-/** El alta: nombre, correo, puesto y la contraseña con la que entra la primera vez. */
+/**
+ * El alta: nombre, correo y puesto. La contraseña la elige la persona con un
+ * link que le llega al correo y queda acá para mandarlo por WhatsApp: la
+ * dueña no la inventa ni la conoce (recorrido, M4-006).
+ */
 export function FormularioDeAlta() {
   const [estado, enviar, enviando] = useActionState(darDeAlta, inicial);
-  const [verClave, setVerClave] = useState(false);
   const formulario = useRef<HTMLFormElement>(null);
   const id = useId();
 
@@ -133,7 +136,7 @@ export function FormularioDeAlta() {
   }, [estado]);
 
   return (
-    <form ref={formulario} action={enviar} className="tarjeta grid gap-4 p-4 sm:grid-cols-2 sm:p-5">
+    <form ref={formulario} action={enviar} className="tarjeta grid gap-4 p-4 sm:grid-cols-3 sm:p-5">
       <div>
         <label htmlFor={`${id}-nombre`} className="block text-base font-medium">
           Nombre
@@ -166,38 +169,13 @@ export function FormularioDeAlta() {
           ))}
         </select>
       </div>
-      <div>
-        <label htmlFor={`${id}-clave`} className="block text-base font-medium">
-          Contraseña inicial
-        </label>
-        <div className="relative">
-          <input
-            id={`${id}-clave`}
-            name="clave"
-            type={verClave ? "text" : "password"}
-            required
-            minLength={8}
-            autoComplete="new-password"
-            spellCheck={false}
-            className={`${CAMPO} pr-12`}
-          />
-          <button
-            type="button"
-            onClick={() => setVerClave((v) => !v)}
-            aria-label={verClave ? "Ocultar la contraseña" : "Mostrar la contraseña"}
-            aria-pressed={verClave}
-            className="absolute right-1 top-1 flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground"
-          >
-            {verClave ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-          </button>
-        </div>
-      </div>
       {estado.error && (
-        <p role="alert" className="estado-problema text-base font-medium sm:col-span-2">
+        <p role="alert" className="estado-problema text-base font-medium sm:col-span-3">
           {estado.error}
         </p>
       )}
-      <div className="sm:col-span-2">
+      {estado.enlace && <LinkDeClave key={estado.enlace} url={estado.enlace} nombre={estado.nombre ?? ""} />}
+      <div className="sm:col-span-3">
         <button
           type="submit"
           disabled={enviando}
@@ -208,5 +186,35 @@ export function FormularioDeAlta() {
         </button>
       </div>
     </form>
+  );
+}
+
+/** El link del alta, para copiarlo o mandarlo por WhatsApp. */
+function LinkDeClave({ url, nombre }: { url: string; nombre: string }) {
+  const [copiado, setCopiado] = useState(false);
+  const mensaje = `Hola ${nombre.split(" ")[0]}! Ya tenés tu usuario en el panel de la maderera. Elegí tu contraseña con este link (sirve una vez): ${url}`;
+  return (
+    <div className="flex flex-wrap gap-2 sm:col-span-3">
+      <button
+        type="button"
+        onClick={() => {
+          void navigator.clipboard.writeText(url);
+          setCopiado(true);
+        }}
+        className="inline-flex h-11 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+      >
+        {copiado ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+        {copiado ? "Copiado" : "Copiar link"}
+      </button>
+      <a
+        href={`https://wa.me/?text=${encodeURIComponent(mensaje)}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex h-11 items-center gap-2 rounded-lg bg-verde-whatsapp px-3.5 text-base font-medium text-white"
+      >
+        <MessageCircle className="h-4 w-4" />
+        Mandar por WhatsApp
+      </a>
+    </div>
   );
 }

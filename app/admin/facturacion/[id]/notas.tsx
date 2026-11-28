@@ -86,12 +86,6 @@ export function NotasSobreElComprobante({
   if (modo === null) {
     return (
       <div className="space-y-2">
-        {acreditado > 0.005 && (
-          <p className="text-sm text-muted-foreground">
-            Ya se acreditaron {formatearMonto(acreditado)} de{" "}
-            {formatearMonto(total)}. Quedan {formatearMonto(disponible)}.
-          </p>
-        )}
         <div className="flex flex-wrap gap-2">
           {disponible > 0.005 && (
             <button

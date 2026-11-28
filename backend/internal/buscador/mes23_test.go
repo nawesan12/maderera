@@ -116,6 +116,16 @@ func TestBuscarLoQueFaltaba(t *testing.T) {
 	if r := primero(buscar(ven, "bisagra 18"), "Producto"); r != nil {
 		t.Errorf("18 no es 35: %+v", r)
 	}
+	// Un código se busca por sus tramos: «EL-BLA» no es un pedazo de
+	// PLA-MEL-BLA-18, «MEL-BLA» y «PLA-MEL» sí lo son (recorrido, M4-025).
+	if r := primero(buscar(ven, "EL-BLA"), "Producto"); r != nil {
+		t.Errorf("un pedazo de un tramo: %+v", r)
+	}
+	for _, q := range []string{"MEL-BLA", "PLA-MEL", "BLA-18"} {
+		if r := primero(buscar(ven, q), "Producto"); r == nil || r.Titulo != "Melamina Blanca" {
+			t.Errorf("%s: %+v", q, r)
+		}
+	}
 }
 
 // El recibo que cobra una factura (invoice_payments) no pasa por el libro ni

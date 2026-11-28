@@ -52,10 +52,13 @@ export default async function GastosPage({
   const { periodo: crudo, circuito = "todos" } = await searchParams;
   const periodo = leerPeriodoMensual(crudo, new Date());
 
-  const [todos, porCategoria, porCircuito, sucursales, proveedores] =
+  // El total y los repartos siguen al filtro, como la lista (M4-044).
+  const delCircuito = circuito === "blanco" || circuito === "negro" ? circuito : undefined;
+  const [todos, porCategoria, porSucursal, porCircuito, sucursales, proveedores] =
     await Promise.all([
       listarGastos({ desde: periodo.desde, hasta: periodo.hasta }),
-      gastosPorCategoria(periodo.desde, periodo.hasta),
+      gastosPorCategoria(periodo.desde, periodo.hasta, { circuito: delCircuito }),
+      gastosPorCategoria(periodo.desde, periodo.hasta, { circuito: delCircuito, por: "sucursal" }),
       gastosPorCircuito(periodo.desde, periodo.hasta),
       sucursalesParaGasto(),
       proveedoresParaElegir(),
@@ -116,39 +119,19 @@ export default async function GastosPage({
       )}
 
       {porCategoria.length > 0 && (
-        <section className="tarjeta overflow-hidden">
-          <header className="border-b border-linea px-5 py-3.5">
-            <h2 className="text-base font-semibold">
-              Por categoría · {etiqueta}
-            </h2>
-          </header>
-          <ul className="divide-y divide-linea">
-            {porCategoria.map((c) => (
-              <li
-                key={c.categoria}
-                className="flex items-center gap-3 px-5 py-2.5"
-              >
-                <span className="min-w-0 flex-1">
-                  {CATEGORIAS[c.categoria] ?? c.categoria}
-                  <span className="ml-2 text-sm text-muted-foreground">
-                    ({c.cantidad})
-                  </span>
-                </span>
-                {/* La barra vale más que el porcentaje solo: el ojo encuentra
-                    la categoría que se lleva la mitad sin leer números. */}
-                <span className="hidden h-1.5 w-32 overflow-hidden rounded-full bg-hundida sm:block">
-                  <span
-                    className="block h-full rounded-full bg-accion"
-                    style={{ width: `${(Number(c.total) / total) * 100}%` }}
-                  />
-                </span>
-                <span className="tabular shrink-0 font-semibold">
-                  {formatearMonto(Number(c.total))}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
+        <Reparto
+          titulo={`Por categoría · ${etiqueta}`}
+          filas={porCategoria.map((c) => ({ ...c, nombre: CATEGORIAS[c.categoria] ?? c.categoria }))}
+          total={total}
+        />
+      )}
+      {/* El corte por sucursal, cuando el gasto se reparte entre más de una. */}
+      {porSucursal.length > 1 && (
+        <Reparto
+          titulo={`Por sucursal · ${etiqueta}`}
+          filas={porSucursal.map((c) => ({ ...c, nombre: c.categoria || "Sin sucursal" }))}
+          total={total}
+        />
       )}
 
       <CargarGasto
@@ -248,6 +231,44 @@ const MEDIOS: Record<string, string> = {
   credito: "Crédito",
   cheque: "Cheque",
 };
+
+/** Un reparto del total del mes: por categoría o por sucursal. */
+function Reparto({
+  titulo,
+  filas,
+  total,
+}: {
+  titulo: string;
+  filas: { categoria: string; nombre: string; cantidad: number; total: string }[];
+  total: number;
+}) {
+  return (
+    <section className="tarjeta overflow-hidden">
+      <header className="border-b border-linea px-5 py-3.5">
+        <h2 className="text-base font-semibold">{titulo}</h2>
+      </header>
+      <ul className="divide-y divide-linea">
+        {filas.map((c) => (
+          <li key={c.categoria} className="flex items-center gap-3 px-5 py-2.5">
+            <span className="min-w-0 flex-1">
+              {c.nombre}
+              <span className="ml-2 text-sm text-muted-foreground">({c.cantidad})</span>
+            </span>
+            {/* La barra vale más que el porcentaje solo: el ojo encuentra
+                la categoría que se lleva la mitad sin leer números. */}
+            <span className="hidden h-1.5 w-32 overflow-hidden rounded-full bg-hundida sm:block">
+              <span
+                className="block h-full rounded-full bg-accion"
+                style={{ width: `${total > 0 ? (Number(c.total) / total) * 100 : 0}%` }}
+              />
+            </span>
+            <span className="tabular shrink-0 font-semibold">{formatearMonto(Number(c.total))}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 /** A quién se le pagó y en qué sucursal: el gasto suele ser la punta del ovillo. */
 function DeQuien({ g }: { g: Gasto }) {

@@ -8,6 +8,7 @@ import {
   type EstadoProfesionales,
 } from "./actions";
 import type { ListaAsignable } from "@/lib/dal/admin/profesionales";
+import { importeParaElCampo } from "@/lib/formato";
 
 const inicial: EstadoProfesionales = {};
 
@@ -36,7 +37,7 @@ export function ResolverSolicitud({
   id: string;
   nombre: string;
   listas: ListaAsignable[];
-  clienteExistente: { id: string; nombre: string } | null;
+  clienteExistente: { id: string; nombre: string; condicionIva?: string | null; limiteCredito?: number } | null;
   /** El CUIT de la solicitud: decide qué condición frente al IVA se propone. */
   cuit?: string | null;
 }) {
@@ -60,9 +61,15 @@ export function ResolverSolicitud({
   // 24, 27) puede ser monotributista o inscripto y no se supone; sin CUIT,
   // consumidor final.
   const digitos = (cuit ?? "").replace(/\D/g, "");
+  // Si ya hay ficha con ese CUIT, la suya: la condición va con el CUIT
+  // (recorrido, M4-073).
+  const deLaFicha = CONDICIONES.find((c) => c.valor === clienteExistente?.condicionIva)?.valor;
   const condicionPropuesta =
-    digitos.length !== 11 ? "consumidor_final" : /^3[034]/.test(digitos) ? "responsable_inscripto" : "";
-  const [limite, setLimite] = useState("0");
+    deLaFicha ??
+    (digitos.length !== 11 ? "consumidor_final" : /^3[034]/.test(digitos) ? "responsable_inscripto" : "");
+  // Y el límite de la ficha: con «0» la aprobación le sacaba la cuenta
+  // corriente a quien ya la tenía (recorrido, M4-073).
+  const [limite, setLimite] = useState(importeParaElCampo(clienteExistente?.limiteCredito ?? 0) || "0");
 
   if (modo === "cerrado") {
     return (
@@ -157,7 +164,9 @@ export function ResolverSolicitud({
               name="condicionIva"
               required
               defaultValue={condicionPropuesta}
-              className="mt-1 h-10 w-full rounded-lg border bg-background px-3 text-base"
+              // Sin elegir, el Confirmar solo sacaba el globo del navegador,
+              // que a 375 casi no se ve: queda en rojo (M4-073).
+              className="mt-1 h-10 w-full rounded-lg border bg-background px-3 text-base user-invalid:border-destructive user-invalid:ring-2 user-invalid:ring-destructive/30"
             >
               <option value="" disabled>
                 Elegí una

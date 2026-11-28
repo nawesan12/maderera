@@ -133,6 +133,33 @@ type Firma struct {
 	Nombre string
 	// Ficha sirve para reenviar la misma operación sin volver a pedir el PIN.
 	Ficha string
+	// Como firmó: FirmaSesion (la sesión de un admin, sin PIN), FirmaPIN o
+	// FirmaClave (la contraseña, sin ningún PIN cargado). La bitácora decía
+	// «autorizó con PIN» en lo que hizo la dueña sin tipear nada (M4-102).
+	Como string
+}
+
+// Las formas de firmar.
+const (
+	FirmaSesion = "sesion"
+	FirmaPIN    = "pin"
+	FirmaClave  = "clave"
+)
+
+// Leyenda es cómo se dice la firma en la bitácora: « · autorizó Ana con
+// PIN», « · autorizó Ana con su contraseña» o « (administración)» si la hizo
+// un admin con su sesión.
+func (f *Firma) Leyenda() string {
+	if f == nil || f.Nombre == "" {
+		return ""
+	}
+	switch f.Como {
+	case FirmaSesion:
+		return " (administración)"
+	case FirmaClave:
+		return " · autorizó " + f.Nombre + " con su contraseña"
+	}
+	return " · autorizó " + f.Nombre + " con PIN"
 }
 
 // Falta es lo que contesta cuando no alcanza: la pantalla muestra el campo
@@ -228,7 +255,7 @@ func (s *Servicio) ConReloj(f func() time.Time) *Servicio {
 // de la base: la operación no sigue.
 func (s *Servicio) Exigir(ctx context.Context, ses *auth.Sesion, p Pedido) (*Firma, error) {
 	if ses.Tiene(sqlc.StaffRoleAdmin) {
-		return &Firma{UserID: ses.UserID, Nombre: ses.Nombre}, nil
+		return &Firma{UserID: ses.UserID, Nombre: ses.Nombre, Como: FirmaSesion}, nil
 	}
 	falta := &Falta{Motivo: p.Motivo, Monto: p.Monto, Credito: p.Credito}
 	if p.Ficha != "" {
@@ -351,7 +378,10 @@ func (s *Servicio) Exigir(ctx context.Context, ses *auth.Sesion, p Pedido) (*Fir
 		claveGlobal, vDia); err != nil {
 		return nil, err
 	}
-	f := &Firma{UserID: ids[0], Nombre: strings.Join(nombres, " y ")}
+	f := &Firma{UserID: ids[0], Nombre: strings.Join(nombres, " y "), Como: FirmaPIN}
+	if porClave {
+		f.Como = FirmaClave
+	}
 	f.Ficha = s.ficha(p, f.UserID, ahora.Add(vigenciaDeFicha))
 	s.avisarFirma(ctx, ses, p, f.Nombre, porClave)
 	return f, nil
@@ -563,5 +593,5 @@ func (s *Servicio) leerFicha(ctx context.Context, p Pedido) (*Firma, bool, error
 	if err != nil {
 		return nil, false, err
 	}
-	return &Firma{UserID: string(usuario), Nombre: nombre, Ficha: p.Ficha}, true, nil
+	return &Firma{UserID: string(usuario), Nombre: nombre, Ficha: p.Ficha, Como: FirmaPIN}, true, nil
 }

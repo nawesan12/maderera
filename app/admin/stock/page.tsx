@@ -140,6 +140,11 @@ export default async function AdminStockPage({
           { valor: "reponer", texto: "Para reponer", cantidad: conteos.reponer, atencion: true },
           { valor: "sin-stock", texto: "Sin stock", cantidad: conteos.sinStock },
           { valor: "con-stock", texto: "Bien", cantidad: conteos.conStock },
+          // Lo vendido de más, solo si hay: es a donde lleva el pendiente
+          // urgente del inicio (M4-017, M4-028).
+          ...(conteos.negativo > 0 || estado === "negativo"
+            ? [{ valor: "negativo", texto: "En negativo", cantidad: conteos.negativo, atencion: true }]
+            : []),
         ]}
       />
 

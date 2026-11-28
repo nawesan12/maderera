@@ -235,6 +235,14 @@ func (s *Servicio) ControlesDelPersonal(ctx context.Context, ahora time.Time) (C
 		                WHERE h.order_id = o.id AND h.estado = 'cancelado' ORDER BY h.created_at DESC LIMIT 1) a ON true
 		  WHERE o.anulacion_autorizada_por IS NOT NULL AND o.anulacion_autorizada_por IS DISTINCT FROM a.created_by_user_id
 		    AND a.created_at >= $1 AND a.created_at < $2
+		  UNION ALL
+		  -- La mercadería que salió sin cobrar con su PIN y los recibos que
+		  -- se anularon con su firma (M4-114: no figuraban).
+		  SELECT o.salida_autorizada_por, coalesce(o.salida_sin_cobrar, 0) FROM orders o
+		  WHERE o.salida_autorizada_por IS NOT NULL AND o.salida_autorizada_at >= $1 AND o.salida_autorizada_at < $2
+		  UNION ALL
+		  SELECT r.anulacion_autorizada_por, r.total FROM receipts r
+		  WHERE r.anulacion_autorizada_por IS NOT NULL AND r.anulado_at >= $1 AND r.anulado_at < $2
 		) f LEFT JOIN "user" u ON u.id = f.quien
 		GROUP BY 1, 2`, desde, hasta)
 	if err != nil {

@@ -74,6 +74,10 @@ type Resultado struct {
 // entregó con algo sin cobrar.
 const NotaEntregadoSinCobrar = fragmentos.NotaEntregadoSinCobrar
 
+// NotaSalioSinCobrar encabeza la del envío que sale sin cobrar con el PIN
+// de un admin.
+const NotaSalioSinCobrar = "Salió sin cobrar"
+
 // OrdenDelPedido es el recorrido, fijo y de una sola dirección.
 var OrdenDelPedido = []string{"pendiente", "preparando", "listo", "en-camino", "entregado"}
 
@@ -151,7 +155,9 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 	var p *filaDePedido
 	var siguiente string
 	var remito *entregas.EntregaCreada
+	var autorizoFuera string
 	err := s.enTransaccion(ctx, func(tx pgx.Tx) error {
+		autorizoFuera = ""
 		// La serie de remitos antes que la fila del pedido: el mismo orden
 		// que preparar un remito, por si este avance tiene que emitir uno.
 		if err := numeracion.BloquearRemitos(ctx, tx); err != nil {
@@ -225,6 +231,15 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 		// al despachar (acompaña al camión y lo firma quien recibe); en un
 		// retiro, al entregar. Antes el envío salía sin papel y el remito
 		// nacía al marcarlo entregado.
+		// El envío con el flete sin cotizar (M4-077): con la regla en
+		// «frena» no sale; si sale, el historial lo dice.
+		var fleteSinCotizar bool
+		var autorizo string
+		if p.tipoEntrega == "envio" && (siguiente == "en-camino" || siguiente == "entregado") {
+			if fleteSinCotizar, err = entregas.FleteSinCotizar(ctx, tx, id); err != nil {
+				return err
+			}
+		}
 		if siguiente == "entregado" || (siguiente == "en-camino" && p.tipoEntrega == "envio") {
 			var sucursal *string
 			if err := tx.QueryRow(ctx, `SELECT branch_id FROM orders WHERE id = $1`, id).Scan(&sucursal); err != nil {
@@ -242,7 +257,7 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 						return plataforma.Invalido(map[string]string{campo: msj})
 					}
 				}
-				if _, err := entregas.AutorizarSinCobrar(ctx, tx, s.aut, ses, id, quien.SinCobrar); err != nil {
+				if autorizo, err = entregas.AutorizarSinCobrar(ctx, tx, s.aut, ses, id, quien.SinCobrar); err != nil {
 					return err
 				}
 			}
@@ -271,16 +286,33 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 		// deja firma: la pantalla pregunta y el historial guarda cuánto
 		// faltaba y quién soltó la mercadería. Si no, «Entregar igual» se
 		// toca sin leer y nadie sabe después quién entregó.
-		var nota *string
-		if siguiente == "entregado" {
+		// El envío que sale sin cobrar lo dice al despachar, con quien lo
+		// autorizó (M4-114: el historial no nombraba a nadie).
+		var partes []string
+		if siguiente == "entregado" || (siguiente == "en-camino" && autorizo != "") {
 			var falta *float64
 			if err := tx.QueryRow(ctx, `SELECT `+fragmentos.SinCobrarDelPedido+`::float8 FROM orders o WHERE o.id = $1`, id).Scan(&falta); err != nil {
 				return err
 			}
 			if falta != nil && *falta > 0.009 {
-				n := NotaEntregadoSinCobrar + " · " + formato.Importe(*falta)
-				nota = &n
+				cabeza := NotaEntregadoSinCobrar
+				if siguiente == "en-camino" {
+					cabeza = NotaSalioSinCobrar
+				}
+				partes = append(partes, cabeza+" · "+formato.Importe(*falta))
 			}
+		}
+		if autorizo != "" {
+			partes = append(partes, "autorizó "+autorizo)
+			autorizoFuera = autorizo
+		}
+		if fleteSinCotizar {
+			partes = append(partes, entregas.NotaFleteSinCotizar)
+		}
+		var nota *string
+		if len(partes) > 0 {
+			n := strings.Join(partes, " · ")
+			nota = &n
 		}
 		if _, err := tx.Exec(ctx, `UPDATE orders SET estado = $2, updated_at = now() WHERE id = $1`, id, siguiente); err != nil {
 			return err
@@ -294,13 +326,18 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 				return err
 			}
 		}
-		_, err = cola.Encolar(ctx, sqlc.New(tx), TrabajoCambioDeEstado, map[string]string{"orderId": id, "estado": siguiente}, time.Time{})
+		_, err = cola.Encolar(ctx, sqlc.New(tx), TrabajoCambioDeEstado, map[string]string{"orderId": id, "estado": siguiente},
+			entregas.CuandoAvisar(siguiente, time.Now()))
 		return err
 	})
 	if err != nil {
 		return nil, err
 	}
-	s.anotar(ctx, ses, sqlc.AccionAuditoriaCambiarEstado, "pedido", id, p.numero+": "+p.estado+" → "+siguiente, nil)
+	desc := p.numero + ": " + p.estado + " → " + siguiente
+	if autorizoFuera != "" {
+		desc += " · sin cobrar, autorizó " + autorizoFuera
+	}
+	s.anotar(ctx, ses, sqlc.AccionAuditoriaCambiarEstado, "pedido", id, desc, nil)
 	texto := textoDelEstado[siguiente]
 	if siguiente == "listo" && p.tipoEntrega == "envio" {
 		texto = "listo para despachar"
@@ -425,6 +462,16 @@ func (s *Servicio) Cancelar(ctx context.Context, ses *auth.Sesion, id string, mo
 		if _, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, 'cancelado', $2, $3)`,
 			id, motivo, ses.UserID); err != nil {
 			return err
+		}
+		// El presupuesto del pedido cancelado (M4-030): con la regla en
+		// «se_rechaza» se cierra con el mismo motivo; si no (lo de siempre),
+		// vuelve a «aceptado sin pedido» para pasarlo de nuevo.
+		if reglas.Es(ctx, tx, reglas.PresupuestoDelPedidoCancelado, "se_rechaza") {
+			if _, err := tx.Exec(ctx, `UPDATE quotes q SET estado = 'rechazado', motivo_rechazo = coalesce(nullif(trim($2), ''), 'Se canceló el pedido'), updated_at = now()
+				FROM orders o WHERE o.id = $1 AND q.id = o.quote_id AND q.estado = 'aceptado'
+				  AND NOT EXISTS (SELECT 1 FROM orders x WHERE x.quote_id = q.id AND x.id <> o.id AND x.estado <> 'cancelado')`, id, motivo); err != nil {
+				return err
+			}
 		}
 		return reservas.LiberarReservas(ctx, tx, id)
 	})
@@ -980,7 +1027,11 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 			                    estado, origen, subtotal, total, notas, seller_id, created_by_user_id,
 			                    tipo_entrega, direccion_entrega, zona_envio, costo_envio, medio_pago, entregar_el,
 			                    dejado_de_cobrar, autorizado_por, a_cuenta, flete_sin_cargo)
-			VALUES ($1, $2, $3, $4, $5, $6,
+			VALUES ($1, $2, $3, $4,
+			        -- Sin contacto propio, el de la ficha (M4-026: el presupuesto
+			        -- del mostrador no avisaba por correo en ningún estado).
+			        coalesce(nullif(trim($5), ''), (SELECT nullif(trim(email), '') FROM customers WHERE id = $2::uuid)),
+			        coalesce(nullif(trim($6), ''), (SELECT nullif(trim(telefono), '') FROM customers WHERE id = $2::uuid)),
 			        CASE WHEN $13::tipo_entrega = 'retiro'
 			             THEN coalesce($7::uuid, (SELECT id FROM branches WHERE active ORDER BY sort_order LIMIT 1))
 			             ELSE $7::uuid END,

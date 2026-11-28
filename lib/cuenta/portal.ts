@@ -234,3 +234,13 @@ export function unaPorProducto<T extends { productId: string; yaResenado: boolea
   }
   return out;
 }
+
+/**
+ * El encabezado de «Mis pedidos»: cuántos y cuánto, de lo mismo. Los
+ * cancelados no suman a ninguno de los dos (M4-066: «5 pedidos · $ 990.550»
+ * contaba el cancelado y no lo sumaba).
+ */
+export function resumenDeMisPedidos(pedidos: { estado: string; total: number }[]): { cantidad: number; total: number } {
+  const comprados = pedidos.filter((p) => p.estado !== "cancelado");
+  return { cantidad: comprados.length, total: comprados.reduce((s, p) => s + p.total, 0) };
+}

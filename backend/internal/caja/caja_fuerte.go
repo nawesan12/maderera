@@ -36,6 +36,10 @@ const AlaCajaFuerte = `(m.tipo = 'retiro' AND coalesce(m.destino = 'caja_fuerte'
 // lo dice el ingreso).
 const DeLaCajaFuerte = `(m.tipo = 'ingreso' AND m.destino = 'caja_fuerte')`
 
+// SaldoDeCajaFuerteSQL es, en SQL, el saldo de la caja fuerte de la sucursal
+// `b` (lo usa también «Plata hoy» del inicio).
+const SaldoDeCajaFuerteSQL = saldoDeCajaFuerte
+
 // saldoDeCajaFuerte es el saldo de la sucursal `b`.
 const saldoDeCajaFuerte = `
 	  coalesce((SELECT -sum(m.monto) FROM cash_movements m JOIN cash_sessions s ON s.id = m.session_id

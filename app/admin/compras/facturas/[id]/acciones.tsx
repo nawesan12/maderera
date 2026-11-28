@@ -74,7 +74,15 @@ export function AccionesDeFactura({
   );
 }
 
-/** Aplicar la nota de crédito a favor a una factura con saldo del mismo proveedor. */
+/**
+ * Aplicar la nota de crédito a favor a una factura con saldo del mismo
+ * proveedor.
+ *
+ * Un renglón por factura, el número y lo que le queda en dos líneas: en el
+ * desplegable, a 375 px se cortaba en «0003-00005501 · quedan». Con más de
+ * una no viene ninguna elegida: arrancaba en la más vieja y un toque en
+ * Aplicar la metía en la factura equivocada (M4-039).
+ */
 export function AplicarNota({
   nota,
   supplierId,
@@ -85,23 +93,35 @@ export function AplicarNota({
   facturas: { id: string; numero: string; saldo: number }[];
 }) {
   const router = useRouter();
-  const [factura, setFactura] = useState(facturas[0]?.id ?? "");
+  const [factura, setFactura] = useState(facturas.length === 1 ? facturas[0].id : "");
   const [error, setError] = useState("");
   const [enCurso, empezar] = useTransition();
   return (
-    <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-      <select
-        value={factura}
-        onChange={(e) => setFactura(e.target.value)}
-        aria-label="Factura a la que se aplica"
-        className="h-11 min-w-0 flex-1 rounded-lg border border-linea bg-card px-3 text-base sm:flex-none"
-      >
+    <div className="w-full space-y-2 sm:w-80">
+      <ul role="radiogroup" aria-label="Factura a la que se aplica" className="space-y-1.5">
         {facturas.map((f) => (
-          <option key={f.id} value={f.id}>
-            {f.numero} · quedan {formatearMonto(f.saldo)}
-          </option>
+          <li key={f.id}>
+            <label
+              className={`flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 ${
+                factura === f.id ? "tarjeta-hundida ring-2 ring-[var(--accion)]" : "tarjeta-hundida"
+              }`}
+            >
+              <input
+                type="radio"
+                name="aplicar-a"
+                value={f.id}
+                checked={factura === f.id}
+                onChange={() => setFactura(f.id)}
+                className="h-5 w-5 shrink-0 accent-[var(--accion)]"
+              />
+              <span className="min-w-0">
+                <span className="tabular block whitespace-nowrap text-base font-medium">{f.numero}</span>
+                <span className="tabular block text-sm text-muted-foreground">quedan {formatearMonto(f.saldo)}</span>
+              </span>
+            </label>
+          </li>
         ))}
-      </select>
+      </ul>
       <button
         type="button"
         disabled={enCurso || !factura}
@@ -112,7 +132,7 @@ export function AplicarNota({
             if (r.ok) router.refresh();
           })
         }
-        className="boton-accion inline-flex h-11 items-center gap-2 rounded-xl px-5 text-base font-semibold disabled:opacity-50"
+        className="boton-accion inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl px-5 text-base font-semibold disabled:opacity-50"
       >
         {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}
         Aplicar

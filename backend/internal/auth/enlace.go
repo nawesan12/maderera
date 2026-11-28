@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -31,10 +32,17 @@ import (
 const (
 	EnlaceActivacion = "activacion"
 	EnlaceIngreso    = "ingreso"
+	// EnlaceClavePersonal es el del alta del personal (recorrido, M4-006): la
+	// persona elige su contraseña y nadie más la conoce. No abre sesión: el
+	// personal entra solo con clave, y con este link solo se pone una.
+	EnlaceClavePersonal = "clave_personal"
 
 	VenceActivacion = 7 * 24 * time.Hour
 	VenceIngreso    = 15 * time.Minute
 	VencePonerClave = 30 * time.Minute
+	// VenceClavePersonal: tres días, lo que tarda en llegarle a quien entra
+	// a trabajar el lunes.
+	VenceClavePersonal = 72 * time.Hour
 )
 
 // habilitaClave es la fila que permite, a la sesión que entró con un link,
@@ -104,8 +112,9 @@ func CrearCuentaSinClave(ctx context.Context, q *sqlc.Queries, nombre, correo st
 func (s *Servicio) UsarEnlace(ctx context.Context, w http.ResponseWriter, token, ip, agente string) (*Sesion, string, error) {
 	var valor string
 	var vigente bool
-	err := s.pool.QueryRow(ctx, `DELETE FROM verification WHERE identifier = $1
-		RETURNING value, expires_at > (now() at time zone 'utc')`, hashDeEnlace(token)).Scan(&valor, &vigente)
+	// El de la clave del personal no abre sesión, y probarlo acá no lo gasta.
+	err := s.pool.QueryRow(ctx, `DELETE FROM verification WHERE identifier = $1 AND value NOT LIKE $2
+		RETURNING value, expires_at > (now() at time zone 'utc')`, hashDeEnlace(token), EnlaceClavePersonal+":%").Scan(&valor, &vigente)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, "", ErrEnlaceInvalido
 	}
@@ -172,4 +181,61 @@ func (s *Servicio) EnlaceDeIngreso(ctx context.Context, correo string) (nombre, 
 	}
 	token, err = NuevoEnlace(ctx, s.pool, userID, EnlaceIngreso, VenceIngreso, s.ahora())
 	return nombre, token, err
+}
+
+// ErrClaveCorta es la contraseña de menos de 8 caracteres.
+var ErrClaveCorta = errors.New("la contraseña necesita 8 caracteres o más")
+
+// PonerClaveConEnlace consume el link del alta del personal y le pone la
+// contraseña que eligió la persona. No abre sesión: después entra con su
+// correo y esa clave. Un link de otro tipo no sirve, ni el de alguien que ya
+// no es del personal.
+func (s *Servicio) PonerClaveConEnlace(ctx context.Context, token, clave string) (correo string, err error) {
+	if utf8.RuneCountInString(clave) < 8 {
+		return "", ErrClaveCorta
+	}
+	hash, err := hashearClave(clave)
+	if err != nil {
+		return "", err
+	}
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var valor string
+		var vigente bool
+		err := tx.QueryRow(ctx, `DELETE FROM verification WHERE identifier = $1 AND value LIKE $2
+			RETURNING value, expires_at > (now() at time zone 'utc')`, hashDeEnlace(token), EnlaceClavePersonal+":%").Scan(&valor, &vigente)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrEnlaceInvalido
+		}
+		if err != nil {
+			return err
+		}
+		if !vigente {
+			return ErrEnlaceVencido
+		}
+		userID := strings.TrimPrefix(valor, EnlaceClavePersonal+":")
+		var personal bool
+		if err := tx.QueryRow(ctx, `SELECT u.email, exists(SELECT 1 FROM profiles p WHERE p.user_id = u.id AND p.role = 'staff')
+			FROM "user" u WHERE u.id = $1`, userID).Scan(&correo, &personal); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrEnlaceInvalido
+			}
+			return err
+		}
+		if !personal {
+			return ErrEnlaceInvalido
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM account WHERE user_id = $1 AND provider_id = 'credential'`, userID); err != nil {
+			return err
+		}
+		return sqlc.New(tx).CrearCuentaConClave(ctx, sqlc.CrearCuentaConClaveParams{ID: nuevoID(), AccountID: userID, Password: &hash, CreatedAt: s.ahora()})
+	})
+	if err != nil {
+		// Vencido o inválido, el link ya no está: la transacción volvió atrás
+		// el DELETE, así que se borra aparte (no sirve más).
+		if errors.Is(err, ErrEnlaceVencido) {
+			_, _ = s.pool.Exec(ctx, `DELETE FROM verification WHERE identifier = $1`, hashDeEnlace(token))
+		}
+		return "", err
+	}
+	return correo, nil
 }

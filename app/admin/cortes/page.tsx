@@ -54,7 +54,7 @@ export default async function CortesPage({
         titulo="Cortes"
         resumen={
           pendientes.length > 0
-            ? `${plural(pendientes.length, "trabajo")} por hacer · ${formatearDecimal(superficiePendiente)} m² de placa`
+            ? `${plural(pendientes.length, "trabajo")} por hacer · ${formatearDecimal(superficiePendiente)} m² de piezas`
             : `${plural(cortes.length, "trabajo")} en total`
         }
       >

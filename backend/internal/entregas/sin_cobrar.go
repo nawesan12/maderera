@@ -40,15 +40,17 @@ type SalidaSinCobrar struct {
 
 // AutorizarSinCobrar controla la salida de la mercadería de un pedido con
 // algo sin cobrar. Devuelve el nombre de quien autorizó ("" si no hizo
-// falta) o el 422 con el PIN que falta.
+// falta o firmó quien la suelta) o el 422 con el PIN que falta.
 func AutorizarSinCobrar(ctx context.Context, tx pgx.Tx, aut *autorizacion.Servicio, ses *auth.Sesion, pedido string, a SalidaSinCobrar) (string, error) {
 	if ses == nil {
 		return "", nil
 	}
 	var sinCobrar *float64
 	var cliente, sucursal *string
-	err := tx.QueryRow(ctx, `SELECT `+fragmentos.SinCobrarDelPedido+`::float8, o.customer_id::text, o.branch_id::text
-		FROM orders o WHERE o.id = $1`, pedido).Scan(&sinCobrar, &cliente, &sucursal)
+	var contraEntrega bool
+	err := tx.QueryRow(ctx, `SELECT `+fragmentos.SinCobrarDelPedido+`::float8, o.customer_id::text, o.branch_id::text,
+		coalesce(o.tipo_entrega = 'envio' AND o.medio_pago = 'efectivo', false)
+		FROM orders o WHERE o.id = $1`, pedido).Scan(&sinCobrar, &cliente, &sucursal, &contraEntrega)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", nil
 	}
@@ -59,6 +61,12 @@ func AutorizarSinCobrar(ctx context.Context, tx pgx.Tx, aut *autorizacion.Servic
 		return "", nil
 	}
 	pide := ses.EsStaff() && !ses.Tiene(roles.ManejanPlata...)
+	// El envío en efectivo lo cobra el chofer en la puerta (M4-078): con la
+	// regla en «sin_pin» el depósito lo despacha sin el PIN, y sigue «A
+	// cobrar» en el reparto hasta que se registre el cobro.
+	if pide && contraEntrega && reglas.Es(ctx, tx, reglas.DespachoContraEntrega, "sin_pin") {
+		pide = false
+	}
 	if !pide && reglas.Es(ctx, tx, reglas.EntregarSinCobrar, "fuera_de_la_cuenta") {
 		if cliente == nil {
 			pide = true
@@ -88,6 +96,18 @@ func AutorizarSinCobrar(ctx context.Context, tx pgx.Tx, aut *autorizacion.Servic
 	}
 	if err != nil {
 		return "", err
+	}
+	// Quién firmó queda en el pedido (M4-114): se descartaba, y ni el
+	// historial ni «El personal» sabían quién había soltado la mercadería.
+	// El admin que despacha él mismo no se autoriza a sí mismo.
+	if firma.UserID == ses.UserID {
+		return "", nil
+	}
+	if firma.UserID != "" {
+		if _, err := tx.Exec(ctx, `UPDATE orders SET salida_autorizada_por = $2, salida_sin_cobrar = $3::numeric, salida_autorizada_at = now() WHERE id = $1`,
+			pedido, firma.UserID, fijo2(*sinCobrar)); err != nil {
+			return "", err
+		}
 	}
 	return firma.Nombre, nil
 }

@@ -281,6 +281,27 @@ export function CargarFactura({
   const devoluciones = devolvibles
     .map((r) => ({ itemId: r.id, cantidad: Number((devuelve[r.id] ?? "").replace(",", ".")) }))
     .filter((d) => d.cantidad > 0);
+  // Primero los remitos de la factura que se corrige: eran 17 renglones de
+  // todas las recepciones mezcladas (M4-040).
+  const devolviblesEnOrden = aplicaA
+    ? [...devolvibles.filter((r) => r.facturaId === aplicaA), ...devolvibles.filter((r) => r.facturaId !== aplicaA)]
+    : devolvibles;
+  /** El neto de lo devuelto, al costo que factura el proveedor (sin el flete). */
+  const netoDevuelto = (cantidades: Record<string, string>) =>
+    Math.round(
+      devolvibles.reduce((t, r) => t + (Number((cantidades[r.id] ?? "").replace(",", ".")) || 0) * r.costoFacturado, 0) * 100,
+    ) / 100;
+  // Lo devuelto propone el neto de la nota, como el remito el de la
+  // factura, mientras nadie lo haya escrito a mano: quedaba en $ 0 y el
+  // botón gris sin decir por qué (M4-040).
+  function devolver(id: string, cantidad: string) {
+    const nuevo = { ...devuelve, [id]: cantidad };
+    if (neto === "" || n(neto) === netoDevuelto(devuelve)) {
+      const suma = netoDevuelto(nuevo);
+      cambiarNeto(suma > 0 ? importeParaElCampo(suma) : "");
+    }
+    setDevuelve(nuevo);
+  }
 
   function elegirProveedor(id: string) {
     setSupplierId(id);
@@ -535,48 +556,6 @@ export function CargarFactura({
             </fieldset>
           )}
 
-          {/* Lo que se devuelve: sale del stock y corrige el costo, atado a
-              la nota (M3S2-016). */}
-          {esCredito && devolvibles.length > 0 && (
-            <details className="md:col-span-2" open={devoluciones.length > 0 || undefined}>
-              <summary className="flex min-h-11 cursor-pointer items-center gap-2 text-base font-medium">
-                <PackageMinus className="h-4 w-4" aria-hidden="true" />
-                Devuelve mercadería
-                {devoluciones.length > 0 && (
-                  <span className="tabular text-muted-foreground">· {devoluciones.length}</span>
-                )}
-              </summary>
-              <ul className="mt-2 divide-y divide-linea-tenue">
-                {devolvibles.map((r) => {
-                  const queda = r.recibido - r.devuelto;
-                  const pedido = Number((devuelve[r.id] ?? "").replace(",", "."));
-                  return (
-                    <li key={r.id} className="flex items-center gap-3 py-2">
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-base">{r.descripcion}</span>
-                        <span className="block text-sm text-muted-foreground">
-                          {r.remito && <span className="codigo">{r.remito}</span>}
-                          {r.remito ? " · " : ""}
-                          <span className="tabular">
-                            {cantidadConUnidad(queda, r.unidad, r.descripcion)} · {formatearMonto(r.costoUnitario)}
-                          </span>
-                        </span>
-                      </span>
-                      <input
-                        inputMode="decimal"
-                        value={devuelve[r.id] ?? ""}
-                        aria-label={`Cuánto se devuelve de ${r.descripcion}${r.remito ? ` del remito ${r.remito}` : ""}`}
-                        aria-invalid={pedido > queda + 0.0001 || undefined}
-                        onChange={(e) => setDevuelve((p) => ({ ...p, [r.id]: e.target.value }))}
-                        className="tabular h-11 w-20 shrink-0 rounded-lg border border-linea bg-card px-2 text-right text-base"
-                      />
-                    </li>
-                  );
-                })}
-              </ul>
-            </details>
-          )}
-
           {aCorregir.length > 0 && (
             <label className="block md:col-span-2">
               <span className="text-base font-medium">Factura que corrige</span>
@@ -593,6 +572,48 @@ export function CargarFactura({
                 ))}
               </select>
             </label>
+          )}
+
+          {/* Lo que se devuelve: sale del stock y corrige el costo, atado a
+              la nota (M3S2-016). */}
+          {esCredito && devolvibles.length > 0 && (
+            <details className="md:col-span-2" open={devoluciones.length > 0 || undefined}>
+              <summary className="flex min-h-11 cursor-pointer items-center gap-2 text-base font-medium">
+                <PackageMinus className="h-4 w-4" aria-hidden="true" />
+                Devuelve mercadería
+                {devoluciones.length > 0 && (
+                  <span className="tabular text-muted-foreground">· {devoluciones.length}</span>
+                )}
+              </summary>
+              <ul className="mt-2 divide-y divide-linea-tenue">
+                {devolviblesEnOrden.map((r) => {
+                  const queda = r.recibido - r.devuelto;
+                  const pedido = Number((devuelve[r.id] ?? "").replace(",", "."));
+                  return (
+                    <li key={r.id} className="flex items-center gap-3 py-2">
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-base">{r.descripcion}</span>
+                        <span className="block text-sm text-muted-foreground">
+                          {r.remito && <span className="codigo">{r.remito}</span>}
+                          {r.remito ? " · " : ""}
+                          <span className="tabular">
+                            {cantidadConUnidad(queda, r.unidad, r.descripcion)} · {formatearMonto(r.costoFacturado)}
+                          </span>
+                        </span>
+                      </span>
+                      <input
+                        inputMode="decimal"
+                        value={devuelve[r.id] ?? ""}
+                        aria-label={`Cuánto se devuelve de ${r.descripcion}${r.remito ? ` del remito ${r.remito}` : ""}`}
+                        aria-invalid={pedido > queda + 0.0001 || undefined}
+                        onChange={(e) => devolver(r.id, e.target.value)}
+                        className="tabular h-11 w-20 shrink-0 rounded-lg border border-linea bg-card px-2 text-right text-base"
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+            </details>
           )}
         </Seccion>
 

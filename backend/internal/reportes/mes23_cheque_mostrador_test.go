@@ -42,7 +42,7 @@ func TestElChequeRechazadoDeUnaVentaConFacturaSinCae(t *testing.T) {
 	// Total 668.000 (lo que dice la ficha), todo sin CAE: el rechazo da
 	// vuelta el cobro que esperaba en Anticipos, y la deuda es la de la
 	// factura que espera el CAE (M2S3-005). Antes iba a «Con CAE (1.1.03)».
-	if !strings.Contains(fila, ";668000,00;18;0,00;0,00;668000,00") {
+	if !strings.Contains(fila, ";668000,00;18;0,00;0,00;0,00;668000,00") {
 		t.Errorf("deudores: %q", fila)
 	}
 	nov := DelCircuito(e.asientosDe(t, "2026-11"), "")
@@ -119,7 +119,7 @@ func TestElRechazoAntesDelCaeSaleDeAnticipos(t *testing.T) {
 	if n := cuenta(nov, Cuentas.Deudores); n != 118500 {
 		t.Errorf("Deudores con el CAE: %v", n)
 	}
-	if f := fila(time.Date(2026, 11, 25, 12, 0, 0, 0, Argentina)); !strings.HasSuffix(strings.TrimSpace(f), ";118500,00;0,00;0,00") {
+	if f := fila(time.Date(2026, 11, 25, 12, 0, 0, 0, Argentina)); !strings.HasSuffix(strings.TrimSpace(f), ";118500,00;0,00;0,00;0,00") {
 		t.Errorf("deudores con el CAE: %q", f)
 	}
 }

@@ -174,7 +174,8 @@ export function Interruptor({
 }: {
   nombre?: string;
   etiqueta: string;
-  icono: Icono;
+  /** Sin ícono cuando la sección ya lleva el mismo (M4-062). */
+  icono?: Icono;
   defecto?: boolean;
   valor?: string;
   marcado?: boolean;
@@ -189,9 +190,11 @@ export function Interruptor({
         };
   return (
     <label className="ficha-interruptor flex cursor-pointer items-center gap-3 rounded-xl p-3.5">
-      <span className="ficha-icono flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
-        <IconoInterruptor className="h-5 w-5" />
-      </span>
+      {IconoInterruptor && (
+        <span className="ficha-icono flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
+          <IconoInterruptor className="h-5 w-5" />
+        </span>
+      )}
       <span className="flex-1 text-[15px] font-semibold leading-tight">
         {etiqueta}
       </span>

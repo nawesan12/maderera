@@ -64,7 +64,9 @@ export function PedirPresupuesto({
   }
 
   return (
-    <form action={accion} className="space-y-3 rounded-xl border p-4">
+    // Abierto, el WhatsApp flotante se va en el teléfono: montaba la esquina
+    // de la tarjeta (M4-071; regla `data-sin-flotante-en-celular`).
+    <form action={accion} data-sin-flotante-en-celular className="space-y-3 rounded-xl border p-4">
       <div>
         <p className="font-medium">Pedir el presupuesto</p>
         {!esProfesional && (

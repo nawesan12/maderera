@@ -646,7 +646,7 @@ paths:
                 type: array
                 items:
                   type: object
-                  required: [id, remito, fecha, descripcion, unidad, recibido, devuelto, costoUnitario]
+                  required: [id, remito, fecha, descripcion, unidad, recibido, devuelto, costoUnitario, costoFacturado, facturaId]
                   properties:
                     id: { type: string }
                     remito: { type: string, nullable: true }
@@ -656,6 +656,8 @@ paths:
                     recibido: { type: number, format: double }
                     devuelto: { type: number, format: double }
                     costoUnitario: { type: number, format: double }
+                    costoFacturado: { type: number, format: double, description: El costo del remito, sin el flete, que es el que factura el proveedor }
+                    facturaId: { type: string, nullable: true, description: La factura viva que cubre la recepción }
   /api/v1/admin/compras/pagos/simular:
     post:
       operationId: SimularRetenciones
@@ -852,9 +854,11 @@ paths:
       parameters:
         - { name: desde, in: query, required: true, schema: { type: string, format: date-time } }
         - { name: hasta, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: circuito, in: query, description: Solo los de ese circuito, como la lista filtrada, schema: { type: string, enum: [blanco, negro] } }
+        - { name: por, in: query, description: Agrupar por categoría (la de siempre) o por sucursal, schema: { type: string, enum: [categoria, sucursal] } }
       responses:
         "200":
-          description: Cuánto se gastó en cada categoría (lo más gastado primero)
+          description: Cuánto se gastó en cada categoría o sucursal (lo más gastado primero)
           content:
             application/json:
               schema: { type: array, items: { $ref: "#/components/schemas/TotalDeGastos" } }

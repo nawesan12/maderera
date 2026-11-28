@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useId, useState, useTransition } from "react";
+import { useActionState, useEffect, useId, useState, useTransition, type ReactNode } from "react";
+import { toast } from "sonner";
 import {
   AppWindow,
   CalendarDays,
@@ -48,8 +49,22 @@ export interface BannerEditable {
   activo: boolean;
 }
 
-export function EditorDeBanner({ banner }: { banner: BannerEditable | null }) {
+export function EditorDeBanner({
+  banner,
+  alCrear,
+}: {
+  banner: BannerEditable | null;
+  /** El alta avisa que salió bien: quien la abrió la vacía y la pliega (M4-010). */
+  alCrear?: () => void;
+}) {
   const [estado, guardar, guardando] = useActionState(guardarBanner, inicial);
+
+  useEffect(() => {
+    if (!banner && estado.ok && alCrear) {
+      toast.success(estado.ok);
+      alCrear();
+    }
+  }, [estado, banner, alCrear]);
   const [ubicacion, setUbicacion] = useState(banner?.ubicacion ?? "portada");
   const [borrando, empezarBorrado] = useTransition();
   const [avisoBorrado, setAvisoBorrado] = useState<string | null>(null);
@@ -197,7 +212,7 @@ export function EditorDeBanner({ banner }: { banner: BannerEditable | null }) {
         {estado.error && (
           <p className="text-base text-destructive">{estado.error}</p>
         )}
-        {estado.ok && (
+        {estado.ok && banner && (
           <p className="text-base text-muted-foreground">{estado.ok}</p>
         )}
         {avisoBorrado && (
@@ -240,5 +255,36 @@ function Campo({
         className="mt-1 h-10 w-full rounded-lg border bg-background px-3 text-base"
       />
     </div>
+  );
+}
+
+/**
+ * «Crear un aviso», plegado. Al crear, el formulario vuelve vacío y se cierra:
+ * quedaba lleno con la imagen, listo para un duplicado (M4-010).
+ */
+export function CrearAviso({ titulo, children }: { titulo: string; children?: ReactNode }) {
+  const [abierto, setAbierto] = useState(false);
+  const [vuelta, setVuelta] = useState(0);
+  return (
+    <details
+      open={abierto}
+      onToggle={(e) => setAbierto(e.currentTarget.open)}
+      className="tarjeta group overflow-hidden"
+    >
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-4 text-base font-semibold hover:bg-muted/40">
+        {children}
+        {titulo}
+      </summary>
+      <div className="px-5 pb-5 sm:px-8">
+        <EditorDeBanner
+          key={vuelta}
+          banner={null}
+          alCrear={() => {
+            setAbierto(false);
+            setVuelta((v) => v + 1);
+          }}
+        />
+      </div>
+    </details>
   );
 }

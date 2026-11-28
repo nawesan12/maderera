@@ -25,6 +25,21 @@ import (
 // que la constante se repite acá).
 const TrabajoPedidoEstado = "pedido.estado"
 
+// EsperaDelAviso es cuánto espera el aviso de un paso intermedio (preparando,
+// listo): el depósito que lleva el pedido de una a entregado mandaba cuatro
+// correos en treinta segundos (recorrido, M4-087). Si al salir el pedido ya
+// pasó a otro estado, ese aviso no sale y queda el último.
+const EsperaDelAviso = 2 * time.Minute
+
+// CuandoAvisar es el momento del aviso de un pedido que pasó a `estado`:
+// los intermedios esperan, el resto sale ya (cero).
+func CuandoAvisar(estado string, ahora time.Time) time.Time {
+	if estado == "preparando" || estado == "listo" {
+		return ahora.Add(EsperaDelAviso)
+	}
+	return time.Time{}
+}
+
 // CortesSinTerminar son los números de los cortes del pedido que todavía
 // están en la cola o en la máquina. Un pedido con su corte en cola no está
 // listo: se marcaba «listo» y el depósito lo despachaba sin las piezas.
@@ -129,7 +144,7 @@ func pasarA(ctx context.Context, tx pgx.Tx, pedido, estado, nota string, usuario
 	if !avisar {
 		return nil
 	}
-	_, err := cola.Encolar(ctx, sqlc.New(tx), TrabajoPedidoEstado, map[string]string{"orderId": pedido, "estado": estado}, time.Time{})
+	_, err := cola.Encolar(ctx, sqlc.New(tx), TrabajoPedidoEstado, map[string]string{"orderId": pedido, "estado": estado}, CuandoAvisar(estado, time.Now()))
 	return err
 }
 

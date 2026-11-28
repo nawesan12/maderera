@@ -115,3 +115,14 @@ describe("documentoValido", () => {
     expect(documentoValido("dni", "30712345671")).toBe(false);
   });
 });
+
+describe("motivoDocumentoInvalido (recorrido, M4-072)", () => {
+  it("frena el CUIT con el último número mal en el primer paso, con el texto del servidor", async () => {
+    const { motivoDocumentoInvalido } = await import("@/lib/cuit");
+    expect(motivoDocumentoInvalido("cuit", "27355511035")).toBe("El CUIT no es válido: revisá el último número.");
+    expect(motivoDocumentoInvalido("cuit", "20-12345678-6")).toBeNull();
+    expect(motivoDocumentoInvalido("cuit", "2012345")).toBe("Revisá el número: no coincide con el tipo de documento.");
+    expect(motivoDocumentoInvalido("dni", "12.345.678")).toBeNull();
+    expect(motivoDocumentoInvalido("dni", "  ")).toBe("Dejanos tu DNI o CUIT.");
+  });
+});

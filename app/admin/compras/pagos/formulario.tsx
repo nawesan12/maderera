@@ -73,6 +73,16 @@ function leCorresponde(r: Regimen, p: Proveedor | undefined, hoy: string): boole
   return true;
 }
 
+/**
+ * La alícuota con la que se le retendría: la de no inscripto en Ganancias si
+ * lo es. Un régimen en 0 % para el proveedor no retiene nada y no se ofrece
+ * (M4-004: eran 4 de 6 renglones).
+ */
+function alicuotaPara(r: Regimen, p: Proveedor | undefined): number {
+  if (r.impuesto === "ganancias" && p?.condicionGanancias === "no_inscripto") return r.alicuotaNoInscripto;
+  return r.alicuota;
+}
+
 interface Regimen {
   id: string;
   /** El código («IIBB-MI»): no se muestra, el acumulado del mes viene por él. */
@@ -80,6 +90,7 @@ interface Regimen {
   nombre: string;
   impuesto: string;
   alicuota: number;
+  alicuotaNoInscripto: number;
   minimoNoImponible: number;
 }
 
@@ -176,12 +187,15 @@ export function FormularioPago({
   facturaInicial,
   chequeInicial,
   ivaSobreTotal = false,
+  tildarLasQueCorresponden = false,
 }: {
   proveedores: Proveedor[];
   regimenes: Regimen[];
   sucursales: Sucursal[];
   /** La regla base_retencion_iva: la de IVA sobre el total con IVA. */
   ivaSobreTotal?: boolean;
+  /** La regla retenciones_al_pagar: también arranca tildada la única de cada impuesto que le corresponde. */
+  tildarLasQueCorresponden?: boolean;
   /** Con quién arranca, cuando se llega desde una factura o la ficha del proveedor. */
   proveedorInicial?: string;
   /** Qué factura viene a pagarse: se tilda sola al cargar las del proveedor. */
@@ -238,8 +252,21 @@ export function FormularioPago({
       // arranca prendido: un pago con los dos apagados no retenía y el
       // acumulado quedaba mal para el siguiente (M2S2-013).
       const conBase = new Set(filas.filter((f) => Number(f.base) > 0).map((f) => f.codigoRegimen));
+      // Con la regla en «las_que_corresponden», también la única de cada
+      // impuesto que le corresponde y retiene algo (M4-004). Si hay dos
+      // (bienes y servicios), elegir es de quien paga.
+      const delProveedor = proveedores.find((p) => p.id === supplierId);
+      const hoyAca = hoyEnArgentina();
+      const posibles = regimenes.filter(
+        (r) => leCorresponde(r, delProveedor, hoyAca) && alicuotaPara(r, delProveedor) > 0,
+      );
+      const unicas = tildarLasQueCorresponden
+        ? posibles.filter((r) => posibles.filter((x) => x.impuesto === r.impuesto).length === 1)
+        : [];
       setRetener((prev) => ({
-        ...Object.fromEntries(regimenes.filter((r) => conBase.has(r.codigo)).map((r) => [r.id, true])),
+        ...Object.fromEntries(
+          regimenes.filter((r) => conBase.has(r.codigo) || unicas.includes(r)).map((r) => [r.id, true]),
+        ),
         ...prev,
       }));
     });
@@ -329,7 +356,9 @@ export function FormularioPago({
       : importeDelCampo(basesAMano[r.id]);
   const proveedor = proveedores.find((p) => p.id === supplierId);
   const hoy = hoyEnArgentina();
-  const regimenesDelProveedor = regimenes.filter((r) => leCorresponde(r, proveedor, hoy));
+  const regimenesDelProveedor = regimenes.filter(
+    (r) => leCorresponde(r, proveedor, hoy) && (alicuotaPara(r, proveedor) > 0 || retener[r.id]),
+  );
   const retenciones = regimenesDelProveedor
     .filter((r) => retener[r.id] && !soloReposiciones)
     .map((r) => ({ regimenId: r.id, base: baseDe(r) }))
@@ -472,7 +501,9 @@ export function FormularioPago({
                         tildada ? "tarjeta-hundida" : ""
                       } ${sinLugar ? "ring-2 ring-saldo-debe" : ""}`}
                     >
-                      <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
+                      {/* El número no se parte («0004-» / «00001234» a 375 px):
+                          lo que no entra al lado baja de renglón (M4-014). */}
+                      <label className="flex min-w-fit flex-1 cursor-pointer items-center gap-3">
                         <input
                           type="checkbox"
                           checked={tildada}
@@ -481,7 +512,8 @@ export function FormularioPago({
                         />
                         <span className="min-w-0">
                           <span className="tabular block text-base font-medium">
-                            {nota ? `Nota de crédito ${f.numero}` : f.numero}
+                            {nota && "Nota de crédito "}
+                            <span className="whitespace-nowrap">{f.numero}</span>
                           </span>
                           <span className="block text-sm text-muted-foreground">
                             {esCheque(f) ? (

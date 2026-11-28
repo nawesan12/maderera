@@ -54,12 +54,16 @@ func Brecha(general, profesional float64) *float64 {
 	return &b
 }
 
-var reMiles = regexp.MustCompile(`^-?\d{1,3}\.\d{3}$`)
+var (
+	reMiles  = regexp.MustCompile(`^-?\d{1,3}\.\d{3}$`)
+	reMoneda = regexp.MustCompile(`(?i)\$|\bars\b`)
+)
 
 // ParsearImporte es parsearImporte (lib/formato.ts): entiende «1.234,56»,
-// «1.234» (miles) y «12.34» (decimal). NaN si no es un número.
+// «1.234» (miles) y «12.34» (decimal). El signo y la moneda («$ 420.000»)
+// se sacan antes, como en el TS. NaN si no es un número.
 func ParsearImporte(texto string) float64 {
-	limpio := strings.Join(strings.Fields(texto), "")
+	limpio := strings.Join(strings.Fields(reMoneda.ReplaceAllString(texto, "")), "")
 	if limpio == "" {
 		return math.NaN()
 	}

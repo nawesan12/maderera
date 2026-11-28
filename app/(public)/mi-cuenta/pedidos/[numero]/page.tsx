@@ -205,7 +205,7 @@ export default async function DetallePedidoPage({
             <h1 className="tabular text-2xl font-bold tracking-tight">
               {pedido.numero}
             </h1>
-            <EtiquetaEstado estado={estadoVisible} contexto="pedido" />
+            <EtiquetaEstado estado={estadoVisible} contexto="pedido" retiro={pedido.tipoEntrega === "retiro"} />
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Hecho el {fechaLarga.format(pedido.createdAt)}

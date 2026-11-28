@@ -315,8 +315,10 @@ export function FormularioDeCompra({
                     );
                   })}
                   {/* Una sola vez para todas las zonas a cotizar, no en
-                      cada tarjeta (M2S2-112). */}
-                  {zonas.some((z) => z.aCotizar) && (
+                      cada tarjeta (M2S2-112), y solo con una de ellas
+                      elegida: con la de tarifa fija el resumen ya suma el
+                      envío (M4-055). */}
+                  {zona?.aCotizar && (
                     <p className="px-1 text-[13.5px] text-acento-texto">
                       Te pasamos el costo del flete al confirmar
                     </p>

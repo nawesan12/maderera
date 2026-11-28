@@ -61,15 +61,15 @@ export default async function TarifasDeCortePage() {
 
       <EditorDeSierra anchoSierraMm={sierra} />
 
-      <div className="space-y-4">
+      {/* Una tarjeta con una fila por tarifa: cuatro tarifas eran cuatro
+          pantallas a 375 px (M4-058). */}
+      {tarifas.length > 0 && (
+      <ul className="tarjeta divide-y divide-linea">
         {tarifas.map((tarifa) => (
-          <div key={tarifa.id} className="space-y-2">
+          <li key={tarifa.id} className="space-y-2 px-5 py-4">
             <p className="text-base font-semibold">
               {tarifa.material}
-              <span className="ml-2 font-normal text-muted-foreground">
-                {nombreDeLista(tarifa.priceListId)}
-                {!tarifa.activo && " · no se cobra"}
-              </span>
+              <span className="ml-2 font-normal text-muted-foreground">{nombreDeLista(tarifa.priceListId)}</span>
             </p>
             <EditorDeTarifa
               tarifa={{
@@ -82,9 +82,10 @@ export default async function TarifasDeCortePage() {
               }}
               listas={opciones}
             />
-          </div>
+          </li>
         ))}
-      </div>
+      </ul>
+      )}
 
       <div className="space-y-2">
         <h2 className="text-base font-semibold">Agregar una tarifa</h2>

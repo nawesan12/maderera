@@ -463,7 +463,10 @@ func (a *API) PendientesDelRol(ctx context.Context, r reportesapi.PendientesDelR
 		v, err := a.s.PendientesDelRol(ctx, sqlc.StaffRole(*r.Params.Rol))
 		return ok(v), err
 	}
-	ses, err := pantalla(ctx, "/admin")
+	// Cualquier rol del personal: la campana está en todas las pantallas, y
+	// el aserradero (que no abre /admin) recibía un 403 en cada una (mes 23).
+	// Cada renglón ya se acota a lo que el rol puede abrir.
+	ses, err := auth.ExigirStaff(ctx)
 	if err != nil {
 		return nil, err
 	}

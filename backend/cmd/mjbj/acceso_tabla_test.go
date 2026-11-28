@@ -24,7 +24,7 @@ package main
 //     activa el suyo), el buscador del encabezado (filtra adentro según el
 //     rol), los datos del emisor (van en todo lo que se imprime) y el pedido
 //     para el taller (sin plata: lo abre el aserradero desde
-//     /admin/cortes/nuevo).
+//     /admin/cortes/nuevo) y lo pendiente de la campana (cada rol lo suyo).
 //
 // Cuando una ruta la usan varias pantallas, va la más amplia de ellas.
 var pantallaDeCadaRuta = map[string]string{
@@ -230,7 +230,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"MetricasDelResumen":              "/admin/reportes",               // GET /api/v1/admin/inicio/metricas
 	"DeudoresCsv":                     "/admin/reportes",               // GET /api/v1/admin/contador/deudores-csv
 	"CuentasAPagarCsv":                "/admin/reportes",               // GET /api/v1/admin/contador/cuentas-a-pagar-csv
-	"PendientesDelRol":                "/admin",                        // GET /api/v1/admin/inicio/pendientes
+	"PendientesDelRol":                "personal",                      // GET /api/v1/admin/inicio/pendientes
 	"StockParaReponer":                "/admin/reportes",               // GET /api/v1/admin/inicio/reponer
 	"InicioVentasPorSucursal":         "/admin/reportes",               // GET /api/v1/admin/inicio/ventas-por-sucursal
 	"AnalizarArchivo":                 "/admin/migracion",              // POST /api/v1/admin/migracion/analizar

@@ -9,6 +9,7 @@ import { formatearMonto } from "@/lib/formato";
 import { distintivoDeLista, saludoDelCliente } from "@/lib/cuenta/portal";
 import { NavegacionCuenta } from "./navegacion";
 import { BotonSalir } from "./salir";
+import { AyudanteSinConexion } from "@/components/cuenta/ayudante-sin-conexion";
 
 export const metadata: Metadata = {
   title: { default: "Mi cuenta", template: "%s · Mi cuenta" },
@@ -35,9 +36,12 @@ export const instant = false;
  */
 export default function CuentaLayout({ children }: { children: React.ReactNode }) {
   return (
-    <Suspense fallback={<CargandoCuenta />}>
-      <CuentaConSesion>{children}</CuentaConSesion>
-    </Suspense>
+    <>
+      <AyudanteSinConexion />
+      <Suspense fallback={<CargandoCuenta />}>
+        <CuentaConSesion>{children}</CuentaConSesion>
+      </Suspense>
+    </>
   );
 }
 

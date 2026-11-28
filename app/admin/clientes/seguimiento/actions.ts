@@ -12,6 +12,8 @@ import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
 export interface EstadoGestion {
   error?: string;
   ok?: string;
+  /** El campo del error, para mostrarlo junto a él. */
+  campo?: string;
 }
 
 function refrescar(customerId?: string) {
@@ -30,7 +32,10 @@ export async function crearGestion(_previo: EstadoGestion, formData: FormData): 
       proximaAccion: (formData.get("proximaAccion") as string | null) || undefined,
     },
   });
-  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "Revisá los datos.") };
+  if (!r.data) {
+    const p = r.error as Problema | undefined;
+    return { error: mensajeDe(p, "Revisá los datos."), campo: Object.keys(p?.errores ?? {})[0] };
+  }
   refrescar(customerId);
   return { ok: r.data.ok };
 }

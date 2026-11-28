@@ -248,6 +248,9 @@ type FormFactura struct {
 	ReceiptIDs   []string `json:"-"`
 	AplicaA      *string  `json:"-"`
 	AjustarCosto bool     `json:"-"`
+	// SinRemitos: quien carga ya vio que el proveedor tiene remitos sin
+	// factura y dice que esta no cubre ninguno (recorrido 2).
+	SinRemitos bool `json:"-"`
 
 	// Lo que se sumó en la revisión del 17/11/2026 (fuera del golden de zod:
 	// el TS no lo tenía). El vencimiento, si se cambió a mano (si no, la
@@ -309,6 +312,9 @@ func leerFactura(m map[string]any) (FormFactura, error) {
 	}
 	if v, ok := m["ajustarCosto"].(bool); ok {
 		x.AjustarCosto = v
+	}
+	if v, ok := m["sinRemitos"].(bool); ok {
+		x.SinRemitos = v
 	}
 	_, iva := m["percepcionIva"]
 	_, iibb := m["percepcionIibb"]

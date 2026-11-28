@@ -142,6 +142,10 @@ export function CargarFactura({
    * quincena) y la factura a la que se aplica una nota de crédito.
    */
   const [remitos, setRemitos] = useState<string[]>([]);
+  // Go frena una vez la factura sin remitos de un proveedor que tiene remitos
+  // sin facturar (la deuda quedaba dos veces); la segunda vez va diciendo que
+  // no cubre ninguno (recorrido 2).
+  const [sinRemitosAvisado, setSinRemitosAvisado] = useState(false);
   const [aplicaA, setAplicaA] = useState("");
   const [ajustarCosto, setAjustarCosto] = useState(false);
   const [cae, setCae] = useState(corregir?.cae ?? "");
@@ -305,6 +309,7 @@ export function CargarFactura({
 
   function elegirProveedor(id: string) {
     setSupplierId(id);
+    setSinRemitosAvisado(false);
     setAplicaA("");
     setDevuelve({});
     const segun = tipoSegunCondicion(proveedores.find((p) => p.id === id)?.condicionIva);
@@ -404,6 +409,7 @@ export function CargarFactura({
         receiptIds: esNota ? [] : remitos.slice(1),
         aplicaA: esCredito && aplicaA ? aplicaA : undefined,
         ajustarCosto: ajustarCosto && !porCantidad && Math.abs(contraRecibido) > 0.01,
+        sinRemitos: !esNota && remitos.length === 0 && sinRemitosAvisado,
         ...(esCredito && devoluciones.length > 0 ? { devoluciones } : {}),
       };
       // Una nota de crédito no vence (M2S2-084).
@@ -412,6 +418,9 @@ export function CargarFactura({
         ? await corregirFacturaDeCompra(corregir.id, { ...datos, motivo })
         : await cargarFacturaDeCompra(datos);
       setEstado(resultado);
+      if (!corregir && !esNota && remitos.length === 0 && delProveedor.length > 0 && resultado.error) {
+        setSinRemitosAvisado(true);
+      }
       if (resultado.ok) {
         if (corregir) {
           router.refresh();

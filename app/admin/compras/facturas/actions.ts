@@ -42,6 +42,8 @@ export interface DatosFacturaCompra {
   aplicaA?: string;
   /** Si la diferencia con lo recibido pasa al costo de la mercadería. */
   ajustarCosto?: boolean;
+  /** El proveedor tiene remitos sin factura y esta no cubre ninguno (ya se avisó). */
+  sinRemitos?: boolean;
   /** De una nota de crédito, lo que se le devuelve al proveedor (sale del stock). */
   devoluciones?: { itemId: string; cantidad: number }[];
 }

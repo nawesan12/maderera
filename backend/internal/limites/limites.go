@@ -58,6 +58,11 @@ const (
 	// freno por IP le pegaba a la cuarta persona del wifi de un taller en su
 	// primer intento (mes simulado, M3S2-033).
 	ProfesionalPorIP Accion = "profesional-ip"
+	// EventoPorIP: las inscripciones a eventos desde una misma conexión. La
+	// de Evento cuenta por correo: con las dos en cinco por hora, una
+	// profesional del wifi de un taller se frenaba en su primer evento pago
+	// (mes 23, el mismo caso que M3S2-033).
+	EventoPorIP Accion = "evento-ip"
 )
 
 // Los valores de LIMITES en lib/limites/index.ts.
@@ -79,6 +84,7 @@ var limites = map[Accion]Limite{
 	// Un techo alto: la cola del panel no se llena desde un solo lugar, y una
 	// oficina con varias personas pide sin chocar.
 	ProfesionalPorIP: {20, 24 * time.Hour},
+	EventoPorIP:      {30, time.Hour},
 }
 
 // porIP es el tope de los intentos que se cuentan por IP cuando no es el de

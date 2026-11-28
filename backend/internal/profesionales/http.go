@@ -330,7 +330,12 @@ func (a *API) AnotarseAEvento(ctx context.Context, r profesionalesapi.AnotarseAE
 	// El evento con precio crea una preferencia real en Mercado Pago por
 	// inscripción: esto impide las mil con mil correos desde el mismo lado.
 	ip := plataforma.IPDelCliente(plataforma.PedidoDe(ctx))
-	if v := a.lim.PorAmbos(ctx, limites.Evento, ip, "correo", f.Email); !v.Permitido {
+	// Por correo el de siempre; por conexión, un techo alto: el wifi de un
+	// taller lo comparten varias personas (mes 23).
+	if v := a.lim.Permitido(ctx, limites.EventoPorIP, "ip:"+ip); !v.Permitido {
+		return nil, espera(v)
+	}
+	if v := a.lim.Permitido(ctx, limites.Evento, "correo:"+strings.ToLower(f.Email)); !v.Permitido {
 		return nil, espera(v)
 	}
 	ses := auth.DeContexto(ctx)

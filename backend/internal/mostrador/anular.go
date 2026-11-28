@@ -32,8 +32,10 @@ type ResultadoAnulacion struct {
 	Numero        string
 	// Autorizacion: hace falta el PIN de un admin.
 	Autorizacion *Autorizacion
-	// AutorizadoPor: el admin que la autorizó (con su PIN o su sesión).
+	// AutorizadoPor: el admin que la autorizó (con su PIN o su sesión), y
+	// Firma, cómo.
 	AutorizadoPor string
+	Firma         *autorizacion.Firma
 	Total         float64
 	// Cortes son los que quedaron en la cola sin venta (Rehacer).
 	Cortes []string
@@ -114,7 +116,7 @@ func (s *Servicio) Anular(ctx context.Context, ses *auth.Sesion, pedido string, 
 		return r, nil
 	}
 	if firma != nil {
-		r.AutorizadoPor = firma.Nombre
+		r.AutorizadoPor, r.Firma = firma.Nombre, firma
 	}
 	return r, err
 }
@@ -160,7 +162,7 @@ func (s *Servicio) firmaParaAnular(ctx context.Context, ses *auth.Sesion, pedido
 		return nil, nil, err
 	}
 	if ses.Tiene(sqlc.StaffRoleAdmin) {
-		return &autorizacion.Firma{UserID: ses.UserID, Nombre: ses.Nombre}, nil, nil
+		return &autorizacion.Firma{UserID: ses.UserID, Nombre: ses.Nombre, Como: autorizacion.FirmaSesion}, nil, nil
 	}
 	if p.noSeAnula {
 		return nil, nil, nil

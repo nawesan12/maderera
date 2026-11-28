@@ -4,10 +4,12 @@ import (
 	"context"
 	"mjbj/internal/formato"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
 	"mjbj/internal/auth"
+	"mjbj/internal/autorizacion"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/precios"
 	"mjbj/internal/sqlc"
@@ -495,6 +497,16 @@ func TestLaVentaDiceQuienAutorizo(t *testing.T) {
 		t.Error(d)
 	}
 	if d := DescripcionDeLaVenta(ResultadoVenta{Numero: "PED-1", Total: 100}); d != "Venta de mostrador PED-1 por "+formato.Importe(100) {
+		t.Error(d)
+	}
+	// La dueña con su sesión no tipeó ningún PIN (recorrido, M4-102); sin
+	// ningún PIN cargado firma la contraseña.
+	r.Firma = &autorizacion.Firma{Nombre: "Sim Dueña", Como: autorizacion.FirmaSesion}
+	if d := DescripcionDeLaVenta(r); !strings.HasSuffix(d, formato.Importe(118070.5)+" (administración)") {
+		t.Error(d)
+	}
+	r.Firma.Como = autorizacion.FirmaClave
+	if d := DescripcionDeLaVenta(r); !strings.HasSuffix(d, " · autorizó Sim Dueña con su contraseña") {
 		t.Error(d)
 	}
 }

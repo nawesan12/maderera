@@ -118,6 +118,11 @@ const (
 	// en el mes); «las_que_corresponden» también la única de cada impuesto
 	// que le corresponde y retiene algo.
 	RetencionesAlPagar = "retenciones_al_pagar"
+	// Recorrido (00464, M4-079): qué sucursales cuentan para «Para reponer».
+	// «con_minimo» es lo de siempre (cualquiera con mínimo puesto, aunque no
+	// tenga ni haya tenido esa medida); «las_que_la_manejan», solo las que la
+	// tienen o tuvieron movimientos de ella. La lee catalogo.ReponerEnFila.
+	ReponerPorSucursal = "reponer_por_sucursal"
 )
 
 // Opciones son los valores posibles de cada regla, el de arranque primero.
@@ -153,6 +158,7 @@ var Opciones = map[string][]string{
 	RedondeoListaProveedor:      {"centavos", "peso", "decena", "centena"},
 	DepositoDeEfectivo:          {"estudio", "lo_que_hay"},
 	RetencionesAlPagar:          {"con_base", "las_que_corresponden"},
+	ReponerPorSucursal:          {"con_minimo", "las_que_la_manejan"},
 }
 
 // Arranque es el valor de una regla cuando la fila no está o tiene algo que

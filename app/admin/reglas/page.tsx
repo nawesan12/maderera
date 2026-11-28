@@ -274,6 +274,14 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
         ],
       },
       {
+        clave: "reponer_por_sucursal",
+        pregunta: "«Para reponer» cuenta las sucursales",
+        opciones: [
+          { valor: "con_minimo", texto: "Con mínimo puesto" },
+          { valor: "las_que_la_manejan", texto: "Con mínimo, que tienen o movieron esa medida" },
+        ],
+      },
+      {
         clave: "redondeo_lista_proveedor",
         pregunta: "El precio que propone la lista del proveedor",
         opciones: [

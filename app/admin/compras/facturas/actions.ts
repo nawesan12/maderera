@@ -13,6 +13,8 @@ export interface EstadoFacturaCompra {
   error?: string;
   ok?: string;
   id?: string;
+  /** El campo del error («receiptIds»: el proveedor tiene remitos sin factura). */
+  campo?: string;
 }
 
 export interface DatosFacturaCompra {
@@ -64,7 +66,10 @@ function refrescar(supplierId: string, id?: string) {
 
 export async function cargarFacturaDeCompra(datos: DatosFacturaCompra): Promise<EstadoFacturaCompra> {
   const r = await (await api()).POST("/api/v1/admin/compras/facturas", { body: { ...datos } });
-  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "Revisá los datos.") };
+  if (!r.data) {
+    const p = r.error as Problema | undefined;
+    return { error: mensajeDe(p, "Revisá los datos."), campo: Object.keys(p?.errores ?? {})[0] };
+  }
   refrescar(r.data.supplierId ?? datos.supplierId, r.data.id);
   return { ok: r.data.ok, id: r.data.id };
 }

@@ -422,7 +422,7 @@ export function CargarFactura({
         ? await corregirFacturaDeCompra(corregir.id, { ...datos, motivo })
         : await cargarFacturaDeCompra(datos);
       setEstado(resultado);
-      if (!corregir && !esNota && remitos.length === 0 && delProveedor.length > 0 && resultado.error) {
+      if (!corregir && resultado.campo === "receiptIds" && remitos.length === 0) {
         setSinRemitosAvisado(true);
       }
       if (resultado.ok) {

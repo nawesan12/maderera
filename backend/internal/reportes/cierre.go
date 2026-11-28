@@ -593,14 +593,23 @@ func (s *Servicio) CargarLiquidacion(ctx context.Context, l Liquidacion, usuario
 }
 
 // TarjetasSinLiquidar es lo cobrado con tarjeta hasta `hasta` que todavía no
-// liquidó (lo de los dos circuitos).
+// liquidó (lo de los dos circuitos): el saldo de Tarjetas a acreditar
+// (1.1.13). La venta del mostrador guarda el pago como «debito» o
+// «credito», no «tarjeta»: la tarjeta del cierre decía $ 0,00 con 169.000
+// en el mayor y, al liquidar, −$ 160.000 (M2S1-058). Lo que se devolvió de
+// un cobro con tarjeta sale de la cuenta como en el mayor.
 func (s *Servicio) TarjetasSinLiquidar(ctx context.Context, hasta time.Time) (float64, error) {
 	var v float64
 	err := s.lectura.QueryRow(ctx, `SELECT (
 		  coalesce((SELECT sum(x.importe) FROM receipt_parts x JOIN receipts r ON r.id = x.receipt_id
-		            WHERE x.medio IN ('tarjeta_debito', 'tarjeta_credito') AND r.anulado_at IS NULL AND r.created_at <= $1), 0)
-		+ coalesce((SELECT sum(p.monto) FROM payments p WHERE p.medio = 'tarjeta' AND p.estado = 'aprobado' AND p.created_at <= $1
-		            AND NOT EXISTS (SELECT 1 FROM receipt_parts x WHERE x.payment_id = p.id)), 0)
+		            WHERE x.medio IN ('tarjeta_debito', 'tarjeta_credito') AND r.created_at <= $1
+		              AND (r.anulado_at IS NULL OR r.anulado_at > $1)), 0)
+		+ coalesce((SELECT sum(CASE WHEN p.estado = 'reintegrado' AND p.updated_at <= $1 THEN 0
+		                            ELSE p.monto - coalesce((SELECT sum(x.importe) FROM payment_refunds x
+		                                                     WHERE x.payment_id = p.id AND x.created_at <= $1), 0) END)
+		            FROM payments p WHERE p.medio IN ('tarjeta', 'debito', 'credito', 'tarjeta_debito', 'tarjeta_credito')
+		              AND p.estado IN ('aprobado', 'reintegrado') AND p.created_at <= $1
+		              AND NOT EXISTS (SELECT 1 FROM receipt_parts x WHERE x.payment_id = p.id)), 0)
 		- coalesce((SELECT sum(bruto) FROM liquidaciones_tarjeta WHERE anulada_at IS NULL AND fecha <= $1), 0))::float8`, hasta).Scan(&v)
 	return jsmath.Redondear2(v), err
 }

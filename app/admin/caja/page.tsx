@@ -279,13 +279,12 @@ export default async function CajaPage({
                                 : "text-saldo-favor"
                         }`}
                       >
+                        {/* Siempre un importe: «cierra» en la columna de
+                            números se leía como un dato roto. El gris ya dice
+                            que cuadra (recorrido 2). */}
                         {diferencia === null
                           ? "—"
-                          : Math.abs(diferencia) < 0.005
-                            ? "cierra"
-                            : cuadra
-                              ? `cierra · ${formatearImporte(diferencia)}`
-                              : formatearImporte(diferencia)}
+                          : formatearImporte(Math.abs(diferencia) < 0.005 ? 0 : diferencia)}
                       </span>
                       <ChevronDown className="hidden h-4 w-4 self-center text-muted-foreground transition-transform group-open:rotate-180 sm:block" aria-hidden="true" />
                       {/* Lo que llegó de la cola después del arqueo y las

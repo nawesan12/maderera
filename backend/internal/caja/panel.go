@@ -127,10 +127,10 @@ type TurnoCerrado struct {
 	Ventas        float64 `json:"ventas"`
 	OtrosIngresos float64 `json:"otrosIngresos"`
 	// Cobros: el efectivo de los recibos, aparte del ingreso a mano (M4-023).
-	Cobros        float64 `json:"cobros"`
-	Retiros       float64 `json:"retiros"`
-	Devoluciones  float64 `json:"devoluciones"`
-	Gastos        float64 `json:"gastos"`
+	Cobros       float64 `json:"cobros"`
+	Retiros      float64 `json:"retiros"`
+	Devoluciones float64 `json:"devoluciones"`
+	Gastos       float64 `json:"gastos"`
 	// Puesto es el código de la caja física desde la que se abrió (nil si
 	// la PC no tenía una, o en los turnos de antes de la 00210).
 	Puesto *string `json:"puesto"`

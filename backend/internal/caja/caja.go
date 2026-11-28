@@ -85,8 +85,8 @@ type TurnoAbierto struct {
 	// Cobros: el efectivo de los recibos que entró al turno (cuenta y
 	// pedidos). Iba dentro de «Otros ingresos» junto al ingreso a mano
 	// (M4-023: $ 606.947,50 eran $ 601.947,50 de cobros y $ 5.000 a mano).
-	Cobros           float64   `json:"cobros"`
-	Retiros          float64   `json:"retiros"`
+	Cobros  float64 `json:"cobros"`
+	Retiros float64 `json:"retiros"`
 	// Devoluciones (anulaciones y devoluciones parciales en efectivo) y
 	// Gastos (los que se cargan en efectivo desde el panel) también salen del
 	// cajón: sin ellos los recuadros no sumaban «Debería haber» y la plata

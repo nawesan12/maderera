@@ -39,9 +39,20 @@ export async function GET(
     pie: "Mar del Plata",
     foto,
     placa: {
-      rubro: producto.subcategory ?? producto.categoryName,
+      rubro: rubroDeLaPlaca(producto.name, [producto.subcategory, producto.categoryName]),
       categoria: producto.categorySlug,
       marca: producto.brand,
     },
   });
+}
+
+/**
+ * Lo que va estampado en la placa: el rubro, salvo que sea el mismo nombre
+ * del producto. El MDF decía «MDF» en las dos mitades (recorrido, M4-076):
+ * entonces va la categoría, «Placas».
+ */
+function rubroDeLaPlaca(nombre: string, candidatos: (string | null | undefined)[]): string {
+  const igual = (a: string) => a.trim().toLowerCase() === nombre.trim().toLowerCase();
+  const validos = candidatos.filter((c): c is string => Boolean(c?.trim()));
+  return validos.find((c) => !igual(c)) ?? validos[validos.length - 1] ?? nombre;
 }

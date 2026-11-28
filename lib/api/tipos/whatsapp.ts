@@ -661,6 +661,10 @@ export interface components {
             descripcion: string;
             /** Format: date-time */
             fecha: string | null;
+            /** @description los datos de la plantilla que se completan solos al elegirlo (número, total, vencimiento) */
+            datos?: {
+                [key: string]: string;
+            };
         };
         DetalleConversacion: {
             id: string;

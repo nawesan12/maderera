@@ -158,7 +158,7 @@ const PLANTILLAS: Base[] = [
       ENCABEZADO_PDF,
       cuerpo(
         "Hola {{nombre}}, te mandamos el presupuesto {{presupuesto}} por {{total}} que nos pediste. Vale hasta el {{vence}}. Para confirmarlo o cambiar algo, respondé este mensaje.",
-        { nombre: "Marta", presupuesto: "PRE-0388", total: "$ 412.500", vence: "24/10/2026" },
+        { nombre: "Marta", presupuesto: "P-2026-0388", total: "$ 412.500", vence: "24/10/2026" },
       ),
       PIE,
     ],

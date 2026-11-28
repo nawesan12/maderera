@@ -172,6 +172,10 @@ type DocumentoListado struct {
 	Detalle     string     `json:"detalle"`
 	Descripcion string     `json:"descripcion"`
 	Fecha       *time.Time `json:"fecha"`
+	// Datos son los de la plantilla que se completan solos al elegirlo
+	// (M4-027: el presupuesto dejaba vacíos el número, el total y el
+	// vencimiento, y había que tipearlos).
+	Datos map[string]string `json:"datos,omitempty"`
 }
 
 // DetalleConversacion es una conversación con sus mensajes y el cliente.
@@ -415,15 +419,21 @@ func (s *Servicio) DocumentosDelCliente(ctx context.Context, customerID string) 
 		sql   string
 		armar func(pgx.Rows) (DocumentoListado, error)
 	}{
-		{`select id, numero, total::float8, created_at from quotes where customer_id = $1
+		{`select id, numero, total::float8, created_at, to_char(valido_hasta AT TIME ZONE 'America/Argentina/Buenos_Aires', 'DD/MM/YYYY')
+			from quotes where customer_id = $1
 			and estado not in ('rechazado', 'vencido') order by created_at desc limit 5`,
 			func(r pgx.Rows) (DocumentoListado, error) {
 				var d DocumentoListado
 				var numero string
 				var total float64
 				var f time.Time
-				err := r.Scan(&d.ID, &numero, &total, &f)
+				var vence *string
+				err := r.Scan(&d.ID, &numero, &total, &f, &vence)
 				d.Tipo, d.Titulo, d.Descripcion, d.Detalle, d.Fecha = "presupuesto", "Presupuesto "+numero, "el presupuesto "+numero, formato.Importe(total), &f
+				d.Datos = map[string]string{"presupuesto": numero, "total": formato.Importe(total)}
+				if vence != nil {
+					d.Datos["vence"] = *vence
+				}
 				return d, err
 			}},
 		{`select id, tipo::text, punto_venta, numero, total::float8, created_at from invoices where customer_id = $1 and estado <> 'borrador'

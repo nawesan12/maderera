@@ -462,6 +462,16 @@ func (s *Servicio) Cancelar(ctx context.Context, ses *auth.Sesion, id string, mo
 			id, motivo, ses.UserID); err != nil {
 			return err
 		}
+		// El presupuesto del pedido cancelado (M4-030): con la regla en
+		// «se_rechaza» se cierra con el mismo motivo; si no (lo de siempre),
+		// vuelve a «aceptado sin pedido» para pasarlo de nuevo.
+		if reglas.Es(ctx, tx, reglas.PresupuestoDelPedidoCancelado, "se_rechaza") {
+			if _, err := tx.Exec(ctx, `UPDATE quotes q SET estado = 'rechazado', motivo_rechazo = coalesce(nullif(trim($2), ''), 'Se canceló el pedido'), updated_at = now()
+				FROM orders o WHERE o.id = $1 AND q.id = o.quote_id AND q.estado = 'aceptado'
+				  AND NOT EXISTS (SELECT 1 FROM orders x WHERE x.quote_id = q.id AND x.id <> o.id AND x.estado <> 'cancelado')`, id, motivo); err != nil {
+				return err
+			}
+		}
 		return reservas.LiberarReservas(ctx, tx, id)
 	})
 	if err != nil {

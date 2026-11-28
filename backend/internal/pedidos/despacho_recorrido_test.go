@@ -121,3 +121,32 @@ func TestPedidoTomaElContactoDeLaFicha(t *testing.T) {
 		t.Errorf("contacto: %q", c)
 	}
 }
+
+// M4-030: con la regla en «se_rechaza», cancelar el pedido cierra su
+// presupuesto con el motivo; con la de siempre vuelve a «aceptado».
+func TestPresupuestoDelPedidoCancelado(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	_, ven := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	motivo := "la obra se posterga"
+	cancelar := func() string {
+		q := e.presupuesto(t, ven, 1)
+		r, err := e.s.ConvertirEnPedido(ctx, ven, q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := e.s.Cancelar(ctx, ven, r.ID, &motivo); err != nil {
+			t.Fatal(err)
+		}
+		return e.texto(t, `select estado::text || ' ' || coalesce(motivo_rechazo, '') from quotes where id = $1`, q)
+	}
+	if q := cancelar(); q != "aceptado " {
+		t.Errorf("de siempre: %q", q)
+	}
+	if err := reglas.Fijar(ctx, e.pool, reglas.PresupuestoDelPedidoCancelado, "se_rechaza"); err != nil {
+		t.Fatal(err)
+	}
+	if q := cancelar(); q != "rechazado "+motivo {
+		t.Errorf("se rechaza: %q", q)
+	}
+}

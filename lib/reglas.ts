@@ -40,6 +40,7 @@ export const OPCIONES_DE_REGLAS = {
   reponer_por_sucursal: ["con_minimo", "las_que_la_manejan"],
   flete_sin_cotizar: ["avisa", "frena"],
   despacho_contra_entrega: ["con_pin", "sin_pin"],
+  presupuesto_del_pedido_cancelado: ["queda_aceptado", "se_rechaza"],
 } as const;
 
 

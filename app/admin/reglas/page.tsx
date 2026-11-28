@@ -195,6 +195,14 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
         ],
       },
       {
+        clave: "presupuesto_del_pedido_cancelado",
+        pregunta: "El presupuesto de un pedido cancelado",
+        opciones: [
+          { valor: "queda_aceptado", texto: "Queda aceptado, para pasarlo de nuevo" },
+          { valor: "se_rechaza", texto: "Se cierra con el motivo" },
+        ],
+      },
+      {
         clave: "flete_sin_cotizar",
         pregunta: "El envío con el flete sin cotizar",
         opciones: [

@@ -14,13 +14,14 @@ export function EditorDeSierra({ anchoSierraMm }: { anchoSierraMm: number }) {
   const inicialTexto = String(anchoSierraMm).replace(".", ",");
   const [valor, setValor] = useState(inicialTexto);
   const [base, setBase] = useState(inicialTexto);
+  // Lo guardado pasa a ser la base (al renderizar, cuando llega la respuesta).
+  const [vista, setVista] = useState(estado);
+  if (vista !== estado) {
+    setVista(estado);
+    if (estado.ok) setBase(valor);
+  }
   useEffect(() => {
-    if (estado.ok) {
-      toast.success(estado.ok);
-      setBase(valor);
-    }
-    // Solo cuando llega la respuesta.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (estado.ok) toast.success(estado.ok);
   }, [estado]);
 
   return (

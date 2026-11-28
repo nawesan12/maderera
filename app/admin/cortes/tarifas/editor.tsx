@@ -48,14 +48,15 @@ function FilaDeTarifa({ tarifa }: { tarifa: TarifaEditable }) {
   const [canto, setCanto] = useState(tarifa.precioPorMetroCanto);
   const [activo, setActivo] = useState(tarifa.activo);
   // Lo guardado pasa a ser la base: el botón se va hasta el próximo cambio.
+  // (Se ajusta al renderizar, cuando llega otra respuesta, y no en un efecto.)
   const [base, setBase] = useState(tarifa);
+  const [vista, setVista] = useState(estado);
+  if (vista !== estado) {
+    setVista(estado);
+    if (estado.ok) setBase({ ...base, precioPorPasada: pasada, precioPorMetroCanto: canto, activo });
+  }
   useEffect(() => {
-    if (estado.ok) {
-      toast.success(estado.ok);
-      setBase((b) => ({ ...b, precioPorPasada: pasada, precioPorMetroCanto: canto, activo }));
-    }
-    // Solo cuando llega la respuesta.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (estado.ok) toast.success(estado.ok);
   }, [estado]);
   const cambio = pasada !== base.precioPorPasada || canto !== base.precioPorMetroCanto || activo !== base.activo;
   const id = useId();

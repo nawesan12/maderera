@@ -88,7 +88,7 @@ func TestParaHoyDelMesSimulado(t *testing.T) {
 	por, lista := pendientesDelInicio(t, adm, e.u+"inicio/pendientes")
 	quiere := map[string]int{"entregar": 1, "reponer": 1, "cheques-rechazados": 1, "cheques-por-recibir": 1, "transferencias": 1,
 		"ordenes-atrasadas": 1, "ordenes-por-llegar": 1, "recepciones-sin-factura": 1, "sin-cae": 1, "presupuestos-enviados": 1,
-		"presupuestos-aceptados": 1, "whatsapp-sin-asignar": 1, "cortes": 1, "cortes-hoy": 1, "pin": 1}
+		"presupuestos-aceptados": 1, "whatsapp-sin-asignar": 1, "cortes": 1, "cortes-hoy": 1, "pin": 1, "avisos": 1}
 	for clave, n := range quiere {
 		if por[clave].Cantidad != n {
 			t.Errorf("%s: quiere %d, hay %+v", clave, n, por[clave])
@@ -120,7 +120,7 @@ func TestParaHoyDelMesSimulado(t *testing.T) {
 	if por["cheques-rechazados"].Href != "/admin/clientes/seguimiento" {
 		t.Errorf("rechazado del vendedor: %+v", por["cheques-rechazados"])
 	}
-	for _, no := range []string{"pin", "ordenes-atrasadas", "transferencias", "sin-cae"} {
+	for _, no := range []string{"pin", "avisos", "ordenes-atrasadas", "transferencias", "sin-cae"} {
 		if _, hay := por[no]; hay {
 			t.Errorf("el vendedor no ve %s", no)
 		}
@@ -135,5 +135,11 @@ func TestParaHoyDelMesSimulado(t *testing.T) {
 	e.exec(t, `update "user" set pin_autorizacion = 'x' where email = 'admin@prueba.test'`)
 	if por, _ = pendientesDelInicio(t, adm, e.u+"inicio/pendientes"); por["pin"].Cantidad != 0 {
 		t.Errorf("con PIN: %+v", por["pin"])
+	}
+	// Con un dispositivo de un admin suscrito, el de los avisos también
+	// (recorrido, M4-119).
+	e.exec(t, `insert into push_subscriptions (user_id, endpoint, p256dh, auth) select id, 'https://push.test/1', 'k', 'a' from "user" where email = 'admin@prueba.test'`)
+	if por, _ = pendientesDelInicio(t, adm, e.u+"inicio/pendientes"); por["avisos"].Cantidad != 0 {
+		t.Errorf("con un dispositivo: %+v", por["avisos"])
 	}
 }

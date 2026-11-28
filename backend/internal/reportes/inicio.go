@@ -430,6 +430,16 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 		}
 		sinPIN = !hay
 	}
+	// Sin ningún dispositivo de un admin suscrito, los PIN, las ventas web y
+	// el parte del día no le llegan a nadie (recorrido, M4-119): se dice en
+	// «Para hoy», no solo con el botón de este dispositivo.
+	sinAvisos := false
+	if rol == sqlc.StaffRoleAdmin {
+		if err := s.pool.QueryRow(ctx, `SELECT NOT EXISTS (SELECT 1 FROM push_subscriptions ps
+			JOIN profiles p ON p.user_id = ps.user_id WHERE p.role = 'staff' AND p.staff_role = 'admin')`).Scan(&sinAvisos); err != nil {
+			return nil, err
+		}
+	}
 	f := []Pendiente{}
 	agregar := func(n int, p Pendiente) {
 		if n > 0 {
@@ -441,6 +451,9 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 	// es lo primero de la mañana (H067). La pantalla lo dibuja con su botón.
 	if sinPIN {
 		agregar(1, Pendiente{Clave: "pin", Texto: "Cargar tu PIN de autorización", Href: "/admin", Urgente: true})
+	}
+	if sinAvisos {
+		agregar(1, Pendiente{Clave: "avisos", Texto: "Activar los avisos en tu teléfono", Href: "/admin/avisos", Urgente: true})
 	}
 	agregar(c.seguimientos, Pendiente{Clave: "seguimiento", Texto: uno(c.seguimientos, "cliente para llamar hoy", "clientes para llamar hoy"),
 		Detalle: detalle("Seguimientos con la fecha cumplida"), Href: "/admin/clientes/seguimiento", Urgente: true})

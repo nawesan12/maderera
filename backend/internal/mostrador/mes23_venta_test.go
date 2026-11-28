@@ -47,8 +47,10 @@ func TestMes23RehacerConservaClienteYCheque(t *testing.T) {
 	}
 }
 
-// M2S3-047: rehacer una venta con corte deja el corte en la cola, sin
-// venta, y la venta rehecha lo ata en vez de crear otro.
+// M2S3-047: rehacer una venta con corte deja el corte sin venta, y la venta
+// rehecha lo ata en vez de crear otro. Mes 23 (CRT-12, CRT-15): mientras
+// tanto queda cancelado, así un rehacer abandonado no se corta sin cobrar;
+// atarlo lo vuelve a la cola.
 func TestMes23RehacerConCorteNoCreaOtro(t *testing.T) {
 	e := armar(t)
 	ctx := context.Background()
@@ -70,7 +72,7 @@ func TestMes23RehacerConCorteNoCreaOtro(t *testing.T) {
 	if len(cortes) != 1 || cortes[0] != corte {
 		t.Fatalf("el corte para rehacer: %s", b)
 	}
-	if est := e.txt(t, `select estado::text || ':' || coalesce(order_id::text, '-') from cutting_orders where id = $1`, corte); est != "en-cola:-" {
+	if est := e.txt(t, `select estado::text || ':' || coalesce(order_id::text, '-') from cutting_orders where id = $1`, corte); est != "cancelado:-" {
 		t.Errorf("el corte quedó %s", est)
 	}
 	k["existente"] = corte
@@ -84,6 +86,24 @@ func TestMes23RehacerConCorteNoCreaOtro(t *testing.T) {
 	if n := e.num(t, `select count(*)::float8 from cutting_orders`); n != 1 {
 		t.Errorf("hay %v cortes", n)
 	}
+	if est := e.txt(t, `select estado::text || ':' || (rehacer_de is null)::text from cutting_orders where id = $1`, corte); est != "en-cola:true" {
+		t.Errorf("atado a la rehecha, el corte quedó %s", est)
+	}
+	// Un corte cancelado que no salió de un rehacer no se revive.
+	otro := e.txt(t, `insert into cutting_orders (numero, customer_id, contacto_nombre, branch_id, variant_id, material_descripcion,
+		  placa_largo_mm, placa_ancho_mm, mitad, placas, pasadas, canto_descripcion, ancho_sierra_mm, estado, motor_plano)
+		select 'CRT-9999', customer_id, contacto_nombre, branch_id, variant_id, material_descripcion,
+		  placa_largo_mm, placa_ancho_mm, mitad, placas, pasadas, canto_descripcion, ancho_sierra_mm, 'cancelado', motor_plano
+		from cutting_orders where id = $1 returning id::text`, corte)
+	e.exec(t, `insert into cutting_items (cutting_order_id, largo_mm, ancho_mm, cantidad, respeta_veta, orden)
+		select $2, largo_mm, ancho_mm, cantidad, respeta_veta, orden from cutting_items where cutting_order_id = $1`, corte, otro)
+	k["existente"] = otro
+	v = e.venta("transferencia", e.renglonesDelCorte(t, 0, k, 0)...)
+	v["cortes"] = []any{k}
+	if _, m4, b := pedir(t, adm, "POST", e.u+"/api/v1/mostrador/ventas", v); m4["ok"] == true || !strings.Contains(b, "se canceló") {
+		t.Errorf("se ató un corte cancelado: %s", b)
+	}
+	delete(k, "existente")
 
 	// Sin rehacer, el corte se cae como siempre.
 	v = e.venta("transferencia", e.renglonesDelCorte(t, 0, e.corteDePrueba(piezaDeCorte(1100, 800, 2)), 0)...)

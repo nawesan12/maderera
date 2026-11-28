@@ -417,10 +417,15 @@ func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario str
 	}
 
 	// El trabajo de corte que todavía no se cortó se cae con la venta; si se
-	// rehace, queda en la cola sin venta para atarlo a la nueva.
+	// rehace, queda sin venta para atarlo a la nueva. El que no empezó queda
+	// cancelado con la venta de la que salió (rehacer_de): atarlo lo vuelve a
+	// la cola, y si el rehacer se abandona (Esc en el corte, el carrito
+	// vaciado) el taller no lo corta sin cobrar (mes 23, CRT-12 y CRT-15).
+	// El que ya está en la máquina sigue: se está cortando.
 	var cortesSueltos []string
 	if rehacer {
-		filas, err := tx.Query(ctx, `UPDATE cutting_orders SET order_id = NULL, updated_at = now()
+		filas, err := tx.Query(ctx, `UPDATE cutting_orders SET order_id = NULL, rehacer_de = $1,
+			estado = CASE WHEN estado = 'en-cola' THEN 'cancelado'::estado_corte ELSE estado END, updated_at = now()
 			WHERE order_id = $1 AND estado IN ('en-cola', 'en-proceso') RETURNING id::text`, id)
 		if err != nil {
 			return ResultadoAnulacion{}, err

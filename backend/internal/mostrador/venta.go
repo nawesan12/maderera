@@ -1250,8 +1250,10 @@ func insertarCorte(ctx context.Context, tx pgx.Tx, v VentaPedida, k *CorteDeMost
 	// El que ya estaba en la cola sin venta se ata a esta: sus piezas son
 	// las de su ficha (con ellas se armó lo que se cobra).
 	if k.Existente != nil {
-		tag, err := tx.Exec(ctx, `UPDATE cutting_orders SET order_id = $2, customer_id = coalesce(customer_id, $3), updated_at = now()
-			WHERE id = $1 AND order_id IS NULL AND estado <> 'cancelado'`, *k.Existente, pedido, v.CustomerID)
+		// El de una venta rehecha vuelve a la cola al atarse (ver anular.go).
+		tag, err := tx.Exec(ctx, `UPDATE cutting_orders SET order_id = $2, customer_id = coalesce(customer_id, $3), updated_at = now(),
+			  estado = CASE WHEN estado = 'cancelado' THEN 'en-cola'::estado_corte ELSE estado END, rehacer_de = NULL
+			WHERE id = $1 AND order_id IS NULL AND (estado <> 'cancelado' OR rehacer_de IS NOT NULL)`, *k.Existente, pedido, v.CustomerID)
 		if err != nil {
 			return err
 		}

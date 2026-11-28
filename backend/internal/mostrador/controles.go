@@ -329,7 +329,7 @@ func pasadasConfirmadas(ctx context.Context, db precios.Consultador, k CorteDeMo
 	var crudo []byte
 	if err := db.QueryRow(ctx, `SELECT co.pasadas::int, coalesce((SELECT json_agg(json_build_object('largoMm', ci.largo_mm, 'anchoMm', ci.ancho_mm,
 		  'cantidad', ci.cantidad, 'respetaVeta', ci.respeta_veta) ORDER BY ci.orden, ci.id) FROM cutting_items ci WHERE ci.cutting_order_id = co.id), '[]')
-		FROM cutting_orders co WHERE co.id = $1 AND co.order_id IS NULL AND co.estado <> 'cancelado'`, *k.Existente).Scan(&pasadas, &crudo); err != nil {
+		FROM cutting_orders co WHERE co.id = $1 AND co.order_id IS NULL AND (co.estado <> 'cancelado' OR co.rehacer_de IS NOT NULL)`, *k.Existente).Scan(&pasadas, &crudo); err != nil {
 		return 0
 	}
 	if json.Unmarshal(crudo, &piezas) != nil || !mismoDespiece(piezas, k.Piezas) {

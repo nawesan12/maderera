@@ -442,9 +442,12 @@ export async function anularVenta(
  * pantalla para volver a abrirlo con su despiece (M2S3-047). Es lo mismo que
  * arma la página con `?corte=`.
  */
-export async function corteParaCobrar(id: string) {
+export async function corteParaCobrar(id: string, deUnRehacer = false) {
   const ficha = await fichaDeCorte(id);
-  if (!ficha || ficha.corte.orderId || ficha.corte.estado === "cancelado" || !ficha.corte.variantId) return null;
+  // El de una venta rehecha está cancelado hasta que se ata a la nueva (Go
+  // lo revive solo si salió de un rehacer): así, si se abandona, el taller
+  // no lo corta sin cobrar (mes 23).
+  if (!ficha || ficha.corte.orderId || (ficha.corte.estado === "cancelado" && !deUnRehacer) || !ficha.corte.variantId) return null;
   return aCorteACobrar(ficha);
 }
 

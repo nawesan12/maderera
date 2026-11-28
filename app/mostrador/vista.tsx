@@ -1167,7 +1167,7 @@ export function VistaMostrador({
     }
     const corte = datos?.cortes[0];
     if (corte) {
-      const c = await corteParaCobrar(corte);
+      const c = await corteParaCobrar(corte, true);
       if (c) {
         traerCorte(c);
         return;

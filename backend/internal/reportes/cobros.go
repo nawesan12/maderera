@@ -408,7 +408,7 @@ func (s *Servicio) asientosDeCobroEn(ctx context.Context, idesde, ihasta time.Ti
 			asientos = append(asientos, AsientoDeReintegro(c))
 			continue
 		}
-		asientos = append(asientos, AsientosDeTramo(c, cobros.TramoPorCircuito(rep, importe.F()))...)
+		asientos = append(asientos, AsientosDeTramo(c, cobros.TramoPorCircuito(ConPase(rep, reparto.PasadoAl(recibo, fecha)), importe.F()))...)
 	}
 	rs.Close()
 	if err := rs.Err(); err != nil {
@@ -457,7 +457,7 @@ func (s *Servicio) asientosDeCobroEn(ctx context.Context, idesde, ihasta time.Ti
 			asientos = append(asientos, AsientoDeReintegro(c))
 			continue
 		}
-		asientos = append(asientos, AsientosDeTramo(c, cobros.TramoPorCircuito(rep, importe.F()))...)
+		asientos = append(asientos, AsientosDeTramo(c, cobros.TramoPorCircuito(ConPase(rep, reparto.PasadoAl(recibo, fecha)), importe.F()))...)
 	}
 	rs.Close()
 	if err := rs.Err(); err != nil {

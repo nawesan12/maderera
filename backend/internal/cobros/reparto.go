@@ -378,6 +378,35 @@ func TramoPorCircuito(rep Reparto, tramo float64) Reparto {
 	return Reparto{Deudores: d, Anticipo: a, B: jsmath.Redondear2(tramo - d - a)}
 }
 
+// conLoPasado es el reparto de un recibo con lo que pasó del B a Anticipos
+// (o volvió al B, en negativo) hasta ese momento: un reintegro después de
+// que el pedido se entregó sin factura sale del B, adonde fue el cobro, y no
+// de unos Anticipos que ya no lo tienen (recorrido M4-112).
+func conLoPasado(rep Reparto, pasado float64) Reparto {
+	if pasado > 0.005 || pasado < -0.005 {
+		rep.Anticipo, rep.B = jsmath.Redondear2(rep.Anticipo+pasado), jsmath.Redondear2(rep.B-pasado)
+	}
+	return rep
+}
+
+// PasadoAl es lo que pasó del recibo del B a Anticipos (o volvió, en
+// negativo) hasta `fecha`, en el orden del motor: el pase del mismo instante
+// va antes que el tramo y la vuelta, después.
+func (r ResultadoDelReparto) PasadoAl(recibo string, fecha time.Time) float64 {
+	total := 0.0
+	for _, p := range r.Pases {
+		if p.Recibo != recibo || p.Fecha.After(fecha) || (p.AlB && !p.Fecha.Before(fecha)) {
+			continue
+		}
+		if p.AlB {
+			total = jsmath.Redondear2(total - p.Importe)
+		} else {
+			total = jsmath.Redondear2(total + p.Importe)
+		}
+	}
+	return total
+}
+
 // RepartirCobros recorre cada cuenta en orden de fecha. Pura: la usan la
 // emisión del recibo (para fijar el suyo) y el cierre (para las
 // aplicaciones de anticipo y los recibos de antes).
@@ -519,7 +548,7 @@ func RepartirCobros(eventos []EventoDeCuenta) ResultadoDelReparto {
 			deudores = r2(deudores + e.Monto)
 		case EventoTramo:
 			if rep, ok := res.Recibos[e.ID]; ok {
-				t := TramoPorCircuito(rep, e.Monto)
+				t := TramoPorCircuito(conLoPasado(rep, res.Pasado[e.ID]), e.Monto)
 				deudores, anticipo = r2(deudores+t.Deudores), r2(anticipo-t.Anticipo)
 				// Lo que vuelve sale primero del saldo a favor y después de la seña.
 				falta := t.Anticipo

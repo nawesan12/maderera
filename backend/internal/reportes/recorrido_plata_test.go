@@ -3,6 +3,7 @@ package reportes
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 // Recorrido M4-094: un cliente sin deuda trae un cheque de $ 40.000 a
@@ -95,5 +96,43 @@ func TestElChequeInformadoYNoAceptadoNoSeAsienta(t *testing.T) {
 		if x.Clave == "a-imputar" && x.Cantidad != 1 {
 			t.Errorf("a imputar cuenta solo el aceptado: %+v", x)
 		}
+	}
+}
+
+// Recorrido M4-112: la seña de un pedido que se entregó sin factura pasó al
+// B como venta sin factura. Lo que una devolución le reintegra después sigue
+// al cobro: sale del B (Ventas sin factura contra Caja) y no del archivo del
+// estudio, donde dejaba Anticipos de la clienta en −62.010 y la Caja blanca
+// en negativo.
+func TestLaDevolucionDeUnaVentaQuePasoAlBVaPorElB(t *testing.T) {
+	e := armar(t)
+	e.staff(t, "admin@prueba.test", "admin")
+	usuario := e.id(t, `select id from "user" limit 1`)
+	lucia := e.id(t, `insert into customers (nombre) values ('Lucía') returning id`)
+	pedido := e.pedido(t, "PED-1004", e.central, "pendiente", "mostrador", time.Date(2026, 11, 2, 12, 0, 0, 0, Argentina), &lucia)
+	e.exec(t, `update orders set total = 220572 where id = $1`, pedido)
+	r, rep := e.reciboDe(t, &lucia, &pedido, "REC-0002", "2026-11-02T15:00:00Z", [2]any{"efectivo", 220572.0})
+	if rep.Anticipo != 220572 {
+		t.Fatalf("la seña del pedido abierto: %+v", rep)
+	}
+	e.exec(t, `update orders set estado = 'entregado' where id = $1`, pedido)
+	e.exec(t, `insert into order_status_history (order_id, estado, created_at) values ($1, 'entregado', '2026-11-03T15:00:00Z')`, pedido)
+	dev := e.id(t, `insert into devoluciones (clave, order_id, importe, destino, motivo, created_by_user_id, created_at)
+		values ('d-1004', $1, 62010, 'caja', 'sobró una bisagra', $2, '2026-11-05T15:00:00Z') returning id`, pedido, usuario)
+	e.exec(t, `insert into receipt_refunds (receipt_id, devolucion_id, medio, importe, created_at) values ($1, $2, 'efectivo', 62010, '2026-11-05T15:00:00Z')`, r, dev)
+
+	nov := e.asientosDe(t, "2026-11")
+	blanco, b := DelCircuito(nov, ""), DelCircuito(nov, CircuitoNegro)
+	if n := cuenta(blanco, Cuentas.AnticiposDeClientes); n != 0 {
+		t.Errorf("Anticipos del estudio: %v", n)
+	}
+	if n := cuenta(blanco, Cuentas.Caja); n != 0 {
+		t.Errorf("Caja del estudio: %v", n)
+	}
+	if n := cuenta(b, Cuentas.VentasSinFactura); n != -158562 {
+		t.Errorf("Ventas sin factura del B (220.572 − 62.010): %v", n)
+	}
+	if n := cuenta(b, Cuentas.Caja); n != 158562 {
+		t.Errorf("Caja del B: %v", n)
 	}
 }

@@ -427,6 +427,7 @@ func (s *Servicio) asientosAImputar(ctx context.Context, idesde, ihasta time.Tim
 		FROM cheques c
 		WHERE c.sentido = 'recibido' AND c.order_payment_id IS NULL AND `+cobros.ReciboDelCheque("c")+` IS NULL
 		  AND c.created_at >= $1 AND c.created_at <= $2 AND c.estado::text NOT IN ('informado', 'anulado')
+		  AND NOT `+cobros.ChequeNoAceptado("c")+`
 		ORDER BY c.created_at`, idesde, ihasta)
 	if err != nil {
 		return nil, err
@@ -1064,6 +1065,7 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 		  UNION ALL
 		  SELECT c.importe FROM cheques c WHERE c.sentido = 'recibido' AND c.order_payment_id IS NULL AND `+cobros.ReciboDelCheque("c")+` IS NULL
 		    AND c.created_at >= $1 AND c.created_at <= $2 AND c.estado::text NOT IN ('informado', 'anulado')
+		  AND NOT `+cobros.ChequeNoAceptado("c")+`
 		  UNION ALL
 		  SELECT t.importe FROM receipt_refunds t JOIN devoluciones d ON d.id = t.devolucion_id
 		  WHERE d.destino = 'afuera' AND t.created_at >= $1 AND t.created_at <= $2) x`, idesde, ihasta).Scan(&aImputar, &montoAImputar); err != nil {

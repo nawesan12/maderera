@@ -465,6 +465,11 @@ func TestCierreAsientaLosCobrosDesdeLosRecibos(t *testing.T) {
 	// Cobro de cuenta corriente desde la ficha, partido en cuatro medios.
 	recibo("REC-0001", "panel", 1000, "2026-10-10T15:00:00Z", nil,
 		[2]any{"efectivo", 300}, [2]any{"cheque", 500}, [2]any{"retencion", 50}, [2]any{"transferencia", 150})
+	// Lo que debía sin factura (en la cuenta corriente) y pagan los recibos
+	// que van al B: sin deuda, lo bancarizado sería un saldo a favor
+	// (SaldoAFavorBancarizado).
+	e.exec(t, `insert into account_movements (customer_id, tipo, monto, referencia, created_at) values
+		($1, 'compra', 200, 'PED-B1', '2026-09-19T15:00:00Z'), ($1, 'compra', 90, 'PED-B2', '2026-10-13T15:00:00Z')`, cliente)
 	// Emitido en septiembre y anulado en octubre: solo el contraasiento.
 	anulado := "2026-10-12T15:00:00Z"
 	recibo("REC-0002", "mercado_pago", 200, "2026-09-20T15:00:00Z", &anulado, [2]any{"mercado_pago", 200})

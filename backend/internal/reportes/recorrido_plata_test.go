@@ -1,0 +1,99 @@
+package reportes
+
+import (
+	"context"
+	"testing"
+)
+
+// Recorrido M4-094: un cliente sin deuda trae un cheque de $ 40.000 a
+// cuenta. No paga ninguna venta, ni blanca ni sin factura: es un anticipo,
+// va al archivo del estudio y se aplica a la factura que viene. Antes se
+// asentaba en el B contra Ventas sin factura, el cheque quedaba marcado B y
+// la venta blanca de después lo volvía a consumir: ingreso dos veces.
+func TestElChequeACuentaDeUnClienteSinDeudaEsAnticipo(t *testing.T) {
+	e := armar(t)
+	wood := e.id(t, `insert into customers (nombre) values ('Wood Frame Costa') returning id`)
+	r, rep := e.reciboDe(t, &wood, nil, "REC-0020", "2026-11-03T15:00:00Z", [2]any{"cheque", 40000.0})
+	if rep.Anticipo != 40000 || rep.B != 0 || rep.Deudores != 0 {
+		t.Fatalf("el cheque a cuenta sin deuda es anticipo: %+v", rep)
+	}
+	ch := e.id(t, `insert into cheques (sentido, numero, banco, fecha_pago, importe, estado, customer_id, receipt_id)
+		values ('recibido', '66600001', 'Nación', '2026-11-04', 40000, 'cartera', $1, $2) returning id`, wood, r)
+	e.exec(t, `update receipt_parts set cheque_id = $1 where receipt_id = $2`, ch, r)
+	e.refijar(t, r)
+	var marca string
+	if err := e.pool.QueryRow(context.Background(), `select coalesce(circuito_reparto, '') from cheques where id = $1`, ch).Scan(&marca); err != nil || marca != "blanco" {
+		t.Fatalf("el cheque es del archivo del estudio: %q %v", marca, err)
+	}
+	// La venta con Factura A a cuenta corriente, días después.
+	e.exec(t, `insert into account_movements (customer_id, tipo, monto, referencia, created_at) values ($1, 'compra', 22932, 'PED-1038', '2026-11-10T15:00:00Z')`, wood)
+	e.facturaConCae(t, &wood, 9, 22932, "2026-11-10T15:00:00Z", nil)
+
+	nov := e.asientosDe(t, "2026-11")
+	if n := cuenta(DelCircuito(nov, CircuitoNegro), Cuentas.VentasSinFactura); n != 0 {
+		t.Errorf("Ventas sin factura del B: %v", n)
+	}
+	if n := len(DelCircuito(nov, CircuitoNegro)); n != 0 {
+		t.Errorf("el B no tiene nada: %d asientos", n)
+	}
+	blanco := DelCircuito(nov, "")
+	if n := cuenta(blanco, Cuentas.ValoresADepositar); n != 40000 {
+		t.Errorf("Valores a depositar: %v", n)
+	}
+	if n := cuenta(blanco, Cuentas.AnticiposDeClientes); n != -17068 {
+		t.Errorf("Anticipos queda con el saldo a favor (−17.068): %v", n)
+	}
+	if n := cuenta(blanco, Cuentas.Deudores); n != 0 {
+		t.Errorf("la factura se cancela con el anticipo: %v", n)
+	}
+}
+
+// El efectivo que sobra de un cobro a cuenta sigue la regla
+// «excedente_cuenta_corriente» (de arranque, al B); lo bancarizado que sobra
+// por encima de lo que debía en la cuenta no.
+func TestElEfectivoQueSobraSigueLaRegla(t *testing.T) {
+	e := armar(t)
+	cli := e.id(t, `insert into customers (nombre) values ('Rosa Moldava') returning id`)
+	e.exec(t, `insert into account_movements (customer_id, tipo, monto, referencia, created_at) values ($1, 'compra', 10000, 'PED-1001', '2026-11-01T15:00:00Z')`, cli)
+	_, rep := e.reciboDe(t, &cli, nil, "REC-0021", "2026-11-03T15:00:00Z", [2]any{"efectivo", 15000.0}, [2]any{"transferencia", 30000.0})
+	// Debía 10.000 sin factura: paga eso y sobran 35.000. De la sobra, los
+	// 30.000 de la transferencia son anticipo; el efectivo que sobra (5.000)
+	// y lo que pagó la deuda B (10.000) van al B.
+	if rep.Anticipo != 30000 || rep.B != 15000 {
+		t.Errorf("reparto: %+v", rep)
+	}
+}
+
+// Recorrido M4-093 y M4-111: el cheque que un cliente informó desde el
+// portal y se rechazó sin aceptarlo nunca entró a la cartera. No va a
+// Valores a depositar ni a Movimientos a imputar, y el cierre no pide
+// resolverlo. Uno aceptado y cargado sin cobro sí.
+func TestElChequeInformadoYNoAceptadoNoSeAsienta(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	obra := e.id(t, `insert into customers (nombre) values ('Obra Barrio Parque') returning id`)
+	no := e.id(t, `insert into cheques (sentido, numero, banco, fecha_pago, importe, estado, customer_id, created_at)
+		values ('recibido', '00440201', 'Galicia', '2026-11-20', 30000, 'informado', $1, '2026-11-10T15:00:00Z') returning id`, obra)
+	e.exec(t, `update cheques set estado = 'rechazado' where id = $1`, no)
+	si := e.id(t, `insert into cheques (sentido, numero, banco, fecha_pago, importe, estado, customer_id, created_at)
+		values ('recibido', '00440202', 'Galicia', '2026-11-20', 12000, 'informado', $1, '2026-11-10T15:00:00Z') returning id`, obra)
+	e.exec(t, `update cheques set estado = 'cartera' where id = $1`, si)
+
+	nov := DelCircuito(e.asientosDe(t, "2026-11"), "")
+	if n := cuenta(nov, Cuentas.ValoresADepositar); n != 12000 {
+		t.Errorf("Valores a depositar es la cartera (12.000): %v", n)
+	}
+	if a := buscarAsiento(nov, "Cheque N° 00440201"); a != nil {
+		t.Errorf("el no aceptado no tiene asiento: %+v", a)
+	}
+	p := PeriodoDelCierre("2026-11", ahoraDePrueba)
+	lista, err := e.s.PendientesDelCierre(ctx, p.Desde, p.Hasta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range lista {
+		if x.Clave == "a-imputar" && x.Cantidad != 1 {
+			t.Errorf("a imputar cuenta solo el aceptado: %+v", x)
+		}
+	}
+}

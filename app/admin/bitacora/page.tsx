@@ -8,6 +8,7 @@ import {
 } from "@/lib/dal/admin/rutas-entidad";
 import { etiquetaDeRol } from "@/lib/roles";
 import { fechaHora, haceCuanto } from "@/lib/formato";
+import { renglonesDelDetalle } from "@/lib/bitacora-detalle";
 import {
   listarBitacora,
   opcionesDeBitacora,
@@ -208,6 +209,7 @@ export default async function BitacoraPage({
             <li key={fila.id} className="flex flex-wrap items-start gap-x-4 gap-y-1 px-4 py-3">
               <div className="min-w-[16rem] flex-1">
                 <p className="text-base">{sinCentavosCero(fila.descripcion)}</p>
+                <DetalleDeLaFila detalle={fila.detalle} />
                 <p className="mt-0.5 text-sm text-muted-foreground">
                   {fila.usuarioNombre}
                   {fila.usuarioRol ? ` · ${etiquetaDeRol(fila.usuarioRol)}` : ""} ·{" "}
@@ -319,5 +321,30 @@ function Selector({
         ))}
       </select>
     </div>
+  );
+}
+
+/**
+ * El «antes → después» de la entrada (los precios de la lista del
+ * proveedor, el texto de un aviso), plegado si son muchos.
+ */
+function DetalleDeLaFila({ detalle }: { detalle: string | null }) {
+  const renglones = renglonesDelDetalle(detalle);
+  if (renglones.length === 0) return null;
+  const lista = (
+    <ul className="tabular mt-1 space-y-0.5 text-sm text-muted-foreground">
+      {renglones.map((r, i) => (
+        <li key={i} className="break-words">{r}</li>
+      ))}
+    </ul>
+  );
+  if (renglones.length <= 3) return lista;
+  return (
+    <details className="mt-1">
+      <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
+        {renglones.length} cambios
+      </summary>
+      {lista}
+    </details>
   );
 }

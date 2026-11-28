@@ -3273,3 +3273,396 @@ después). Las dos salidas de cada una tienen prueba. Lo que falta construido:
 
 Cambiar una regla con un PUT directo a Go no invalida la caché de ajustes de
 Next: las pruebas de pantalla la cambian desde `/admin/reglas`.
+
+## 27/11/2026: el segundo y el tercer mes simulado, mostrador y caja (rama `mes23-mostrador-caja`)
+
+Migraciones **00350** (`devoluciones.origen`, el destino del ingreso,
+`cash_sessions.contado_corregido`, `orders.efectivo_recibido`,
+`quotes.clave_mostrador` y `caja_fuerte_movimientos`) y **00351** (las reglas
+`descuento_con_escala` y `redondeo_efectivo`, con el comportamiento de antes).
+Espejo drizzle al día (`caja_fuerte_movimientos` es solo de Go).
+
+- **Caja**: el Z dice el medio real y el pedido de cada devolución
+  (`caja.MedioDeLaDevolucion`) y no suma las que hizo otra persona desde el
+  panel a la cuenta; el cobro de un pedido y el que tomó otra persona van con
+  su recibo y quién (`DePedido`, `Pedidos`, `Movimiento.OtroPuesto`); el
+  gasto anulado deja de contar dos veces (`caja.DevuelveUnGasto`); «se contó
+  mal» al abrir corrige el arqueo anterior (`AbrirCaja(…, corregir)`), sin
+  retiro ni caja fuerte; el ingreso dice de dónde viene; el retiro «otro» con
+  categoría es un gasto en efectivo, y el ingreso y el retiro «otro» sin
+  cuenta van contra Movimientos a imputar (`asientosAImputar`, al integrar
+  con el cierre); la caja fuerte
+  tiene saldo y depósito (`caja.CajasFuertes`, `DepositarDeLaCajaFuerte`); el
+  recibo fuera de caja se asigna a un turno (`AsignarReciboAlTurno`); lo
+  emitido pagina con los totales del mes; dentro del peso el cierre dice los
+  centavos. `TestMes23*` en `internal/mostrador/mes23_caja_test.go`.
+- **Venta**: Rehacer devuelve el cliente, el papel, la tarjeta, el cheque y
+  el corte que no se cortó (queda en la cola sin venta: `PedidoDeAnulacion.Rehacer`);
+  el corte de la cola trae a su cliente o el contacto anotado
+  (`clienteDelCorte`); la venta igual al mismo cliente de recién se pregunta
+  (`repetida`/`repetidaOk`); con cuánto pagó queda en la venta; «laca» no
+  trae placas (`coincidePalabra`, y en la copia local `coincidePorPalabra`);
+  lo vendido de más dice para quién está apartado; el presupuesto tiene clave
+  por intento; la cola sin conexión sube en el orden en que se cobró. La venta
+  sin factura se devuelve por una parte desde el mostrador
+  (`pedidos.DevolverSinFacturaPor`, `/api/v1/mostrador/ventas/{id}/devolucion-sin-factura`).
+  `TestMes23*` en `internal/mostrador/mes23_venta_test.go`.
+
+### Decisiones a confirmar
+
+- [ ] **El ingreso y el retiro «otro» sin categoría** van contra Movimientos
+      a imputar (2.1.13), como el cheque sin cobro, hasta que el contador
+      diga la cuenta (la rama del cierre ya los mandaba ahí).
+- [ ] **«Se contó mal»** corrige solo el último turno cerrado y si su mes no
+      está cerrado; lo contado de entonces queda a la vista.
+- [ ] **El gasto pagado del cajón** nace en el circuito de arranque de los
+      gastos (blanco), como el que se carga en Compras sin factura.
+- [ ] **Las reglas nuevas** arrancan como antes: el descuento tipeado
+      reemplaza al de la forma de pago, y el efectivo va con centavos.
+
+## 27/11/2026: el mes simulado, facturación, ARCA y libro IVA (rama `mes23-facturacion`)
+
+Migraciones 00360–00363. Cada arreglo con su prueba.
+
+- **El saldo de cada factura a cuenta es su parte de la deuda**
+  (`deudaQueLeTocaALaFactura`): los recibos cancelan primero lo más viejo,
+  así que una factura debe el saldo de la cuenta menos los cargos
+  posteriores al suyo, sin pasar su total menos lo acreditado. La columna
+  sumaba el saldo de la cuenta una vez por factura. La manual emitida a
+  cuenta corriente ya se lee «en cuenta» (no ofrece pasarla otra vez).
+- **El cobro de una factura guarda el depósito, el e-Cheq y la retención**
+  con su nombre (00360) y trae el número de su recibo.
+- **Retenciones**: los regímenes como los decidió la clienta (00361: IIBB
+  Misiones y Buenos Aires; los nacionales en cero si nadie los cambió desde
+  la pantalla), alta de un régimen nuevo (el mismo POST sin `id`), anular el
+  certificado desde la lista (su recibo, con el PIN) y la carga propone la
+  factura con saldo. `pruebas.Base` borra los regímenes sembrados, como las
+  sucursales.
+- **La baja** avisa al cliente del comprobante dado de baja
+  (`factura.baja`), le reenvía al del corrido su comprobante con el número
+  nuevo (`factura.renumerada`) y Dados de baja dice quién usa hoy el número.
+  Las notas de crédito y de débito salen por correo como las facturas.
+- **Anular una venta en el mostrador da de baja su factura sin CAE**
+  (`BajaDeLaVentaAnulada`); la que quede viva no suma en lo facturado.
+- **El comprobante**: el unitario con los decimales que hagan falta para
+  cerrar con el subtotal (`pdf.UnitarioQueCierra`, `unitarioQueCierra` en
+  TS), la media placa por medias, y la nota dice qué factura corrige
+  (`Completo.Asociado`) y cómo salió la plata de su devolución
+  (`Completo.Devolucion`). El golden del comprobante pasa a ser el de Go.
+- **ARCA**: sin N° de IIBB ni inicio de actividades no se pide el CAE
+  (`faltaDelEmisor`). El emitido sin CAE corrige los datos del cliente con
+  el mismo número. El Libro IVA Digital no lleva archivos vacíos y dice en
+  OMITIDOS.txt cuántas ventas sin CAE no informa.
+- **Compras**: un CAE que ya está en otro comprobante no entra; el gasto con
+  factura lleva su CAE; la regla `cae_en_compras` (00362, arranca en
+  «opcional») decide si la A sin CAE entra.
+- **Tiempo real**: canal `ventas` (00363, por sentencia en invoices,
+  receipts y el estado de orders); Facturación, Cobranzas y Pedidos se
+  refrescan solos. Cobranzas lista las devoluciones que sacaron plata.
+## 27/11/2026: el mes 23, cierre, asientos y reportes (rama `mes23-cierre-reportes`)
+
+Lo que encontró el mes simulado en el cierre, los archivos A y B, Deudores,
+Cuentas a pagar, Reportes, Reposición y la Bitácora. Migraciones 00370
+(`cheques.circuito_reparto`), 00371 (regla `deuda_sin_comprobante`) y 00372
+(`liquidaciones_tarjeta`). Lo aprendido:
+
+- **Cada cobro va al archivo de su venta.** El cobro del mostrador de una
+  factura que espera el CAE entra a Caja o Banco del estudio contra
+  Anticipos (o 2.1.12 con «transitoria») y se imputa con el CAE: la regla
+  `asiento_sin_cae` decide solo contra qué espera. Lo que un recibo cobra de
+  una factura sin CAE (atado por `invoice_payments`, por eso
+  `cobrarConRecibo` vuelve a fijar el reparto) va entero a sus Anticipos
+  (`RepartoDeRecibo(..., reservado)`).
+- **El pase y la vuelta** (`cobros.EventoPase`, `EventoVuelta`): lo que un
+  recibo o un cobro de la conciliación mandó al B pasa a Anticipos el día que
+  se emite la factura de su pedido (por la cuenta corriente, hasta lo que la
+  cuenta dice pagado); la seña de un pedido que se entrega sin factura
+  vuelve al B. `ResultadoDelReparto.Pases` y `Pasado` los llevan; la
+  anulación los devuelve (`ConPase`).
+- **El cheque de un recibo va por el archivo por el que entró**
+  (`ChequesBlanco`, `Rechazos`): se acredita y rebota partido por su
+  reparto, y el rechazo sale de Anticipos si el cobro seguía ahí.
+  `circuito_reparto` lo guarda para el endoso.
+- **El costo espera el CAE** como la venta (`asientosDeCosto`).
+- **Deudores para el estudio es el saldo de la ficha** (cuenta + facturas
+  fuera de la cuenta + entregado sin cobrar), partido en con CAE (el mayor
+  de 1.1.03), sin CAE y B, con los saldos a favor. Sustituye la decisión M7.
+- Cuentas nuevas: 1.1.13 Tarjetas a acreditar, 2.1.13 Movimientos de fondos
+  a imputar (retiro «otro», cheque sin cobro, devolución por otro medio) y
+  3.1.01 Saldos iniciales y ajustes (ajustes del libro de proveedores; la
+  deuda a mano de clientes con la regla en «saldo_inicial»).
+- El diario se ordena por día (`OrdenarAsientos`). Los avisos del cierre
+  traen sus casos (`PendienteDelCierre.Casos`).
+- Reposición por sucursal (`PorSucursal`): primero traer de la otra, después
+  comprar; por encima del mínimo; lo negativo arriba.
+- Reportes: el total con IVA es el de los pedidos en todos los cortes
+  (`TotalesDelReporte.Renglones` para el renglón de envíos y descuentos).
+## 27/11/2026: el mes simulado 2, pedidos y entregas (rama `mes23-pedidos-entregas`)
+
+Migraciones 00380 (regla `entregar_sin_cobrar`) y 00381 (el canal en vivo
+de pedidos avisa todo pedido nuevo y cada cambio de estado, con `origen` y
+`nuevo`; el aviso «Entró un pedido web» queda para la tienda).
+
+- **Soltar lo que no se cobró** (`entregas.AutorizarSinCobrar`): el remito,
+  «Marcar entregado» y «Despachar» de un pedido que debe algo fuera de la
+  cuenta piden el PIN de un admin (`autorizacion.SinCobrar`) al depósito; con
+  la regla en `fuera_de_la_cuenta`, también a quien vende si no hay cuenta
+  corriente o pasa el límite.
+- **El remito no saca lo que no hay** (`alcanzaElGalpon`, la cuenta de
+  «Marcar listo»); `galponEnStock` dice el galpón en placas de una media.
+- **El corte va en un solo remito** (`cortesDelRemito`): el que se hizo
+  después de que el corte salió de la máquina, y ninguno anterior vivo lo
+  llevó. El papel firmado no cambia; las medias placas se dicen en medias
+  (`pdf.UnidadDeVenta` y `unidadDeVenta`: «media_placa»).
+- **Remito R**: razón social, CUIT, condición de IVA y el domicilio de la
+  ficha; `final` («Remito de entrega final»); el documento de quien retira se
+  valida (`RevisarDocumento`, fuera del golden de `LeerRemito`). Golden del
+  remito rehechos (`PDF_ACTUALIZAR=remito`).
+- **El pedido del corte** (`entregas.RemitoDelCorte`): sale con un remito de
+  las piezas para firmar; retirar el corte entrega el pedido que solo lo
+  cobró; volver el corte a la máquina deja el pedido en preparando.
+- **Devolución de lo ya cobrado** (`facturacion.PrepararPlata` y `Mover`):
+  sin factura o desde el pedido facturado, por la caja o por afuera, con los
+  topes y los tramos de `DevolucionParcial`. La ficha lista devoluciones y
+  comprobantes (para quien no entra a Facturación).
+- **El cobro cierra el pedido** (`cobros.CerrarElPedidoCobrado`): pagado y con
+  la forma de pago del cobro, también desde la factura (que ya no deja saldo
+  a favor en la cuenta: `FueraDeLaCuenta`).
+- **El presupuesto pasado a pedido** lleva el descuento por forma de pago.
+- **La factura sin CAE no sale sola por correo**: sale con el CAE.
+- **Corregir** suma renglones y cambia retiro por envío; un pedido entregado
+  no se corrige.
+
+Quedó para decidir: el pedido web cobrado en línea no lleva recibo (el pago
+es la constancia; un recibo encima lo contaría dos veces en el cierre), y un
+retiro pasa a «entregado» al generar el remito, con la firma enseguida.
+### Mes simulado 2–3: cortes y taller (`mes23-cortes-taller`, 00390 y 00391)
+
+- **Motor 5** (`MotorRelleno`, `cortes/relleno.go`): después del acomodo, la
+  pieza de una placa que se cobra por pasadas se prueba en una que se vende
+  entera; se queda si no vende menos placas, no usa más y cobra menos
+  pasadas. En el banco de 200 despieces, 70 cobran menos (1031 → 542
+  pasadas cobrables). Los trabajos de antes siguen con su motor; el golden
+  del TS corre sin relleno (`Relleno: false`).
+- **`corte_chico_stock`** (00391, «no_mueve» de arranque): con «descuenta»,
+  la placa de la casa de un corte que no pasa la media placa sale del stock
+  al terminarlo y vuelve si se devuelve a la máquina
+  (`cortes.StockDeLaPlacaChica`, documento «corte»).
+- **`cutting_orders.total_tomado`** (00390): el total con que se tomó el
+  corte suelto; la ficha lo muestra tachado si la tarifa cambió.
+- La placa sin variante es la que trae el cliente (`ConPlacaDelCliente`): no
+  vende placa, cobra todas las pasadas con la tarifa «Placa del cliente» o la
+  de «Placas», y lo que sobra es suyo.
+- El agente del taller: `MJBJ_SUCURSAL` (`/api/cortes/pendientes?sucursal=`),
+  `enLaMaquina`, la subcarpeta `fuera-de-cola` y reescribe solo si cambió el
+  contenido.
+- Las pasadas a cobrar las cambia `ManejanPlata`; bajarlas del plano, solo
+  un admin.
+## 27/11/2026: el mes simulado 23, compras y pagos (rama `mes23-compras-pagos`)
+
+Migraciones 00400–00404. Lo que cambió de comportamiento:
+
+- **El costo promedio pondera contra el stock que hay** (`inventory`, todas
+  las sucursales), no contra `variant_costs.cantidad_base`, que solo crecía:
+  sin stock, el costo nuevo es el que se pagó.
+- **La lista del proveedor**: sin margen escrito mantiene el de cada
+  producto (el precio se mueve como el costo); escribe `price_history`
+  (`importacion`, «Lista de …») y guarda el costo neto en
+  `supplier_variant_codes.costo_neto` (00400), que `BuscarMercaderia` con
+  `proveedor=` propone en la orden.
+- **Pagos**: `POST /compras/pagos/simular` (la cuenta del certificado antes
+  de pagar); un pago sin el interruptor suma su base al acumulado de los
+  regímenes en que el proveedor ya tiene base ese mes; la base de una
+  factura con nota de crédito sale de los netos de las dos
+  (`netoProporcional`); anular avisa qué certificados posteriores lo
+  contaron. Los ajustes que suben la deuda se pagan
+  (`supplier_payment_ajustes`), los que la bajan se aplican a una factura
+  (`supplier_movements.aplica_a_id`, entran en `AplicadoA`) y tienen asiento
+  (5.1.13, a definir); lo que cubría un pago anulado queda en
+  `supplier_payment_anulado_items` (00401).
+- **Reglas** (00402): `exportar_sicore` (el TXT de ancho fijo, de arranque
+  «no») y `base_retencion_iva` (neto o total, de arranque «neto»).
+- **Órdenes**: una de la que llegó algo no se anula, se cierra con faltante
+  (`/ordenes/{id}/cerrar`); la fecha prometida se corrige enviada
+  (`/ordenes/{id}/fecha`).
+- **Devolución al proveedor** con la nota de crédito
+  (`purchase_return_items`, 00403): sale del stock donde entró y corrige el
+  costo; anulada la nota, vuelve. Una diferencia que es justo lo que no
+  llegó de la orden no se pasa al costo.
+- **Cheques**: `CircuitoDelCheque` manda al B el de un recibo con el reparto
+  entero en el B y vuelve blanco el de una factura que espera el CAE si
+  `asiento_sin_cae` es «transitoria» (`ChequeEsperaCAE` para la pantalla).
+  Un recibido sin origen no se asienta y el cierre lo marca. Desde la
+  cartera, «rechazado» es devolverlo al cliente.
+- **En vivo** (00404): canales `cobros` (payments) y `estado_pedidos`.
+- El CSV de retenciones toma el mes y la fecha argentinos.
+## 27/11/2026: el segundo mes simulado, ventas, clientes y WhatsApp (rama `mes23-ventas-clientes`)
+
+Migraciones 00410 (`bot_devuelto_at`, la derivación corta y
+`consultas_corte.whatsapp_conversacion_id`) y 00411 (regla
+`retencion_en_el_cobro`). Lo que cambió:
+
+- **Bot** (`whatsapp/bot_entender.go`, sin tocar el motor del asistente, que
+  tiene que entender lo mismo que el TS): el «gracias» del principio no calla
+  la pregunta; «persona» en cualquier parte, un reclamo o algo de la cuenta
+  (cheque, deuda) derivan; el catálogo se ordena por las palabras del nombre
+  (`rankearProductos`) y el stock es el de la medida pedida
+  (`ProductoListado.StockPorMedida`, sin JSON); un pedido de precio de varios
+  rubros pasa a una persona con los renglones; el enlace `/corte/c/<token>`
+  se reconoce y se ata a la conversación; Batán (un lugar fuera de las zonas)
+  deriva; el día y la sucursal nombrados se contestan primero; el segundo «no
+  lo encontré» deriva; la baja dentro de una frase (`PideLaBaja`; la golden
+  sigue siendo `EsPedidoDeBaja`); el tope del mes deriva y avisa.
+- **Derivación corta**: `/api/whatsapp/hablar/<token>` redirige al número
+  humano con todo lo que el cliente escribió en la última hora.
+- **«Devolver al bot»** (`bot_devuelto_at`): lo que escribió una persona antes
+  ya no lo calla 12 horas.
+- **Consultas de corte**: `GET /admin/cortes/consulta/{token}/contacto` trae
+  cliente y teléfono al alta; el corte que corrige a otro se lleva la
+  consulta.
+- **Cuenta del cliente**: la línea de tiempo en hora argentina; «Otro
+  movimiento» con fecha (hasta un año atrás; el mes cerrado lo frena la
+  base); el cheque de la cartera sin vencer se «devuelve al cliente»
+  (`cobros.SinVencer`, la nota de débito lo dice); el rechazo con nota de
+  débito es un renglón; anular un recibo con un cheque fuera de la cartera se
+  frena antes del PIN; la retención sufrida entra en el mismo recibo del
+  cobro (regla `retencion_en_el_cobro`, arranca en `admin`); el aviso del
+  último recibo es el del último cobro de plata.
+- **Fichas**: el teléfono se guarda «223 555-0483» (`formato.Telefono`); la
+  ficha creada desde el chat lleva a quien la creó de vendedora si está en
+  `sellers` con su nombre; invitar al portal
+  (`POST /admin/clientes/{id}/invitacion`, cuenta sin clave y link de 7
+  días); la ficha apagada no sale en el buscador ni ofrece vincular; el
+  portal dice «Cuenta corriente pausada» (`Resumen.cuentaPausada`).
+- **Profesionales**: aprobar pasa el CUIT a la ficha que no tenía, la
+  condición frente al IVA la elige quien aprueba y el plazo va con el límite
+  (fuera del esquema de zod: `condicionIva` y `diasCredito` del cuerpo libre).
+- **Presupuestos**: `disponible` por sucursal en cada renglón y
+  `Entrega.Sucursal` para pasar a pedido desde otra; el correo lleva el PDF;
+  «Por correo» de uno ya enviado manda solo el correo
+  (`presupuesto.correo`, motivo `por_correo`); rechazar un aceptado sin pedido
+  vivo; `pedidosCancelados` y `emailFicha` en la ficha; unir a una ficha con
+  cuenta web solo lo armado en el panel (mostrador, teléfono), y unirlo pasa
+  el nombre y el teléfono de la ficha; la línea «WhatsApp con el PDF» en la
+  historia del aviso.
+- **Precios**: ofertas (`POST /admin/precios/oferta` y `/oferta/fin`, la
+  tarea `vencer-ofertas` cada hora; un precio a mano termina la oferta); la
+  lista del proveedor anota `price_history` (origen `importacion`, motivo
+  «Lista del proveedor …»); el aumento por porcentaje alcanza a los
+  productos apagados; el profesional en cero de la planilla es «sin precio».
+## 27/11/2026: mes simulado, tanda 23, stock (rama `mes23-stock`)
+
+- **El traslado se recibe contando** (`RecibirTraslado` con
+  `RecepcionDeTraslado`; migración 00420): cada renglón guarda `recibido`;
+  lo que no llegó vuelve al origen o, con `faltante = perdido`, vuelve y
+  sale como «Faltante desde Stock» con su costo. Una medida que llegó y no
+  figuraba entra con `cantidad` 0 y sale del origen al recibir, contra lo
+  disponible. Sin cuerpo, llega todo (como antes).
+- **`POST /admin/stock/traslados/{id}/anular`**: en camino, todo vuelve al
+  origen; estado `anulado`.
+- **Movimientos** con `usuario`, `antes` y `despues` (del «(28 → 27)» que
+  escribe el ajuste). El total de una medida suma solo lo disponible
+  positivo; lo vendido de más va en `faltante`. La grilla acepta
+  `sucursal` (slug): los grupos miran solo esa (`estadosEnSucursal`).
+- **`PrimeroPalabrasEnteras`** suma también la coincidencia sin otra cifra
+  pegada: «MDF 18» ya no pone primero el «1830 × 2600 — 3 mm».
+- **Asientos de inventario** (`asientosDeInventario`): el ajuste congela
+  `variant_costs.costo_promedio` en `inventory_movements.costo_unitario`
+  (00420, con el relleno de los meses abiertos) y asienta contra
+  Mercaderías y 5.1.14 Diferencias de inventario; la reposición sin cargo,
+  contra 5.2.01.
+## 27/11/2026: tanda 23, el portal y el sitio público (rama `mes23-portal-publico`)
+
+Migraciones 00430 (regla `escala_con_lista`) y 00431 (Deck Grandis por
+tabla). Lo que cambió en Go:
+
+- **Imputación del portal** (`portal.pendientesDeLaCuenta`): el pago con
+  destino (recibo del pedido, cobro de su factura o el que lo nombra) va
+  primero a ese pedido; su anulación vuelve sobre él.
+- **Documentos técnicos**: sin archivo subido (`tamano_bytes` nulo) no se
+  listan ni cuentan; la descarga se llama como el documento
+  (`subidas.EntregarComo`); la ficha manda los ids de los reservados.
+- **Registro**: `novedades` en el alta; sin tildar, la dirección arranca en
+  `bajas_de_correo`.
+- **Tienda**: `checkout.Servicio.PagoOnline` y `HayDatosParaTransferir`
+  frenan Mercado Pago apagado y la transferencia sin CBU;
+  `CuentasDeLaCompraCon` aplica `descuento_al_flete` y `escala_con_lista`, y
+  guarda `descuento_motivo`. `/pagos/estado` y el cobro del pedido dicen
+  `disponible`.
+- **Remitos**: el portal recibe el `firmaToken` del preparado; el aviso
+  «entregado» de un retiro espera la firma (`notificaciones.CambioDeEstado`,
+  `RegistrarFirma` lo vuelve a encolar) y sale una vez; la venta del
+  mostrador a cuenta que se lleva sale con `entregas.ConstanciaParaFirmar`
+  (sin stock; la anulación de la venta lo anula).
+- **Historial del cliente**: el recibo anulado y su ajuste en un renglón,
+  sin el motivo interno; `cheque_no_tomado`; las devoluciones de contado
+  (`DevolucionesFueraDeLaCuenta`); el detalle del pedido trae `devuelto` y
+  `devoluciones`.
+- **Presupuestos**: el rechazo desde Mi cuenta guarda el motivo
+  (`portal.MotivosDelCliente`); la lista dice `conPedido`.
+- **Profesionales**: el freno de la solicitud cuenta por documento y, con
+  techo de 20, por conexión (`limites.ProfesionalPorIP`); el CUIT con el
+  verificador mal tiene su mensaje; sin el plazo de 24 horas.
+- **Eventos**: un evento pago no se anota sin cobro en línea
+  (`profesionales.Servicio.PagoOnline`); la asistencia desde que empieza;
+  `BorrarEvento` (borrador sin anotados) y `RecordarEvento`; el recordatorio
+  llega también a los marcados «vino»; `eventos-visibles` solo los que no
+  pasaron.
+## 27/11/2026: mes simulado 2 y 3, la configuración del panel (rama `mes23-configuracion`)
+
+- **Migraciones 00440–00442.** 00440: el «Hasta» de un banner vale el día
+  entero (23:59:59, como la promo). 00441: salen `aviso_barra_superior` y
+  `envio_gratis_leyenda`, que nadie leía. 00442: CUIT con guiones en
+  clientes y proveedores migrados.
+- **`fragmentos.HechosDeVenta`**: los hechos de venta de Reportes pasan a
+  `internal/ventas/fragmentos` para que «Vendido hoy» de Sucursales cuente con
+  la misma regla `venta_reconocida`.
+- **Migración**: la vista previa mira la base (`Servicio.Previsualizar`,
+  `previa_base.go`) y dice qué fila pisa una ficha y qué le cambia; el rubro
+  del cliente (campo nuevo, o del tipo cuando nombra el oficio) y el vendedor
+  (`sellers` por nombre) llegan a la ficha; el informe cuenta solo lo del
+  archivo. Los golden se regeneraron con `MIGRACION_ACTUALIZAR=1` (ahora
+  también `controles.json.gz`).
+- **Candidatos a baja**: la referencia es la última venta, la última compra
+  recibida o el alta; los productos a pedido no entran por stock ni precio.
+- **Textos del sitio** (`AdminAjustes`): los ajustes con pantalla propia
+  (`enOtraPantalla`) no salen como texto.
+- **Guías**: cabecera `para:` y bloques `<!-- solo: … -->` por puesto
+  (`lib/guias.ts`); búsqueda por palabra.
+- `soloCampos(formData, "id")`: el id de una edición va en la ruta, no como
+  parte del formulario (el validador lo rechazaba).
+
+## 27/11/2026: el mes simulado, segunda vuelta del inicio y lo demás (rama `mes23-inicio-resto`)
+
+Migraciones **00450** (`saldos_de_banco`) y **00451** (trigramas en los
+números de recibos, remitos y cheques).
+
+- **Plata hoy**: lo movido hoy en el banco ya no suma al total; el saldo del
+  banco se carga desde la tarjeta (`POST /admin/inicio/saldo-banco`, admin,
+  bitácora) y Go lo lleva con lo que entra y sale (`movimientosDelBanco`).
+  Debo separa los remitos sin factura de los saldos y ajustes; la ganancia
+  muestra los envíos que suma.
+- **Para hoy**: las recepciones de una factura de varios remitos no cuentan
+  (`compras.FacturaDeLaRecepcion`), el cheque informado que no se aceptó no
+  es un rechazo, cada número abre su lista filtrada (`?estado=por-preparar`,
+  `listo`, `sin-pedido`, `sin-factura`, `filtro=derivadas`), y quien vende ve
+  gestiones, presupuestos por responder y rechazos, con su campana.
+- **Depósito**: «Para entregar» suma los cortes terminados
+  (`CorteListado.cobrado`), la fila se toca entera y lo sin cobrar se marca.
+- **Buscador**: recibos, remitos, cheques y (para quien no ve Facturación)
+  comprobantes por número; los productos los busca Go por nombre, medida,
+  código y rubro, antes que los cortes; estados en palabras.
+- **Seguimiento público**: `PedidoSeguido` suma `descuento`, `sinCobrar`,
+  `entregadoAt` y `conCuenta`; el 404 de un enlace malo lo decide `proxy.ts`
+  (reescribe a `/pedido/0`). `CobroDelPedido.online` dice si hay pago en
+  línea. El rechazo de una transferencia se avisa (`pago_rechazado`).
+- **Correos**: el listo y el remito de un envío no dicen «retiro»
+  (`Despacho.AsuntoPropio`), el remito firmado no se pide firmar, el segundo
+  «salió para la entrega» no sale, y el demo registra los enlaces.
+- **Sistema** (`/admin/sistema`, admin): los trabajos con error, la última
+  corrida de cada tarea y «Reintentar». La tarea horaria anota lo que
+  recupera después de una caída (`PeriodoAnterior`).
+- **Agente del taller**: `/api/cortes/pendientes` suma `enProceso`; el agente
+  mueve a `hechos/` lo que ya no está ni en la cola ni en la máquina.
+- PDF: presupuesto con el vendedor que lo armó, sin repetir la empresa ni el
+  código vacío y la lata por unidad; lista sin «Lista Lista» ni «$0».

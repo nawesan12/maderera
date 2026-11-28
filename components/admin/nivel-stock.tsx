@@ -4,7 +4,9 @@ import { unidadEnPlural } from "@/lib/formato";
 
 /** El color del número y del estado, el mismo en la fila corta y en el detalle. */
 export const TINTA_DEL_ESTADO: Record<EstadoEnSucursal, string> = {
-  faltante: "text-destructive",
+  // El rojo de la deuda: el de `--destructive` en oscuro no llegaba a leerse
+  // sobre el fondo del diálogo (M3S1-057).
+  faltante: "text-saldo-debe",
   "sin-stock": "text-brand-orange-dark dark:text-acento-texto",
   reponer: "text-brand-orange-dark dark:text-acento-texto",
   "va-bajando": "",

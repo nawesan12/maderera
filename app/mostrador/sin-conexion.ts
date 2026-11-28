@@ -7,9 +7,12 @@
  */
 
 import { useCallback, useEffect, useRef } from "react";
+import { formatearMonto } from "@/lib/formato";
 import {
   revisarVenta,
+  totalDeLaVenta,
   type LineaDeVenta,
+
   type MedioDeMostrador,
   type PagoDeVenta,
 } from "@/lib/mostrador/importes";
@@ -63,7 +66,7 @@ export function useColaDelMostrador(branchId: string) {
    * para mostrar cuántas faltan, que es lo que quien atiende necesita ver antes
    * de cerrar el turno.
    */
-  const cola = useCola(conexion.enLinea);
+  const cola = useCola(conexion.enLinea, branchId);
 
   useEffect(() => {
     informeRef.current = {
@@ -98,6 +101,13 @@ export interface VentaSinConexion {
   pagosDeLaVenta: () => PagoDeVenta[] | undefined;
   acopio: boolean;
   cuit: string;
+  /**
+   * Factura o comprobante: la factura elegida se emite al subir. Se fijaba en
+   * «interno» y la venta a un RI quedaba sin factura y sin aviso (M3S2-008).
+   */
+  comprobante: "interno" | "fiscal";
+  /** Con cuánto pagó en efectivo (el vuelto del ticket). */
+  recibido: number | null;
   /** El descuento total, el que figura en el ticket. */
   descuento: number;
   motivoDelDescuento: string;
@@ -117,14 +127,21 @@ export interface AlCobrarSinConexion {
   limpiar: () => void;
   /** Lo vendido, para que el buscador lo descuente mientras espera en la cola. */
   apartar: (lineas: LineaDeVenta[]) => void;
+  /**
+   * Vuelve a leer la cola. Sin esto, el chip y «N ventas sin enviar» se
+   * enteraban de la venta en el ciclo siguiente, cada 20 s, y quedaban una
+   * venta atrasados (mes 23, M2S1-086).
+   */
+  refrescarCola: () => Promise<void>;
 }
 
 /**
  * El cobro cuando no hay servidor.
  *
  * Toma el número de la caja, arma el ticket con lo que hay en pantalla y
- * guarda las dos cosas en la misma transacción local. No hay comprobante
- * fiscal: eso necesita ARCA en línea, y la pantalla ya lo deshabilitó.
+ * guarda las dos cosas en la misma transacción local. La factura necesita
+ * ARCA en línea: si se eligió, viaja con la venta y se emite al subir (el
+ * drenaje, app/api/mostrador/ventas); el papel de ahora es el provisorio.
  */
 export async function cobrarSinConexion(
   {
@@ -139,6 +156,8 @@ export async function cobrarSinConexion(
     pagosDeLaVenta,
     acopio,
     cuit,
+    comprobante,
+    recibido,
     descuento,
     motivoDelDescuento,
     descuentoManual,
@@ -148,7 +167,7 @@ export async function cobrarSinConexion(
     avanzarContador,
     contextoDelTicket,
   }: VentaSinConexion,
-  { setAviso, setUltima, limpiar, apartar }: AlCobrarSinConexion,
+  { setAviso, setUltima, limpiar, apartar, refrescarCola }: AlCobrarSinConexion,
 ) {
   const problema = revisarVenta(lineas, medio, cliente?.id ?? null);
 
@@ -189,6 +208,14 @@ export async function cobrarSinConexion(
     const pagos = pagosDeLaVenta();
     // Cada renglón del corte atado a su despiece, como con conexión.
     const conLosCortes = paraCobrar(lineas, cortes);
+    // Lo que entra al cajón, para que el chip de la caja lo cuente mientras
+    // la venta espera (M2S1-086).
+    const total = Math.round((totalDeLaVenta(lineas) - descuento) * 100) / 100;
+    const efectivo = pagos
+      ? pagos.filter((p) => p.medio === "efectivo").reduce((s, p) => s + p.importe, 0)
+      : medio === "efectivo"
+        ? total
+        : 0;
 
     const ticket = documentoDeVenta(
       {
@@ -202,6 +229,7 @@ export async function cobrarSinConexion(
         descuento,
         descuentoMotivo: motivoDelDescuento || null,
         lineas,
+        recibido: medio === "efectivo" && !pagos ? recibido : null,
       },
       contextoDelTicket,
     );
@@ -217,15 +245,18 @@ export async function cobrarSinConexion(
         medioPago: medio,
         pagos,
         acopio,
-        comprobante: "interno",
+        comprobante,
         cuit: cuit || null,
         descuento: descuentoManual,
         descuentoMotivo: motivoDesc || null,
         usuarioId,
         cobradaAt,
+        efectivo,
+        ...(recibido !== null && medio === "efectivo" && !pagos ? { efectivoRecibido: recibido } : {}),
       },
       ticket,
     );
+    await refrescarCola();
 
     await avanzarContador();
 
@@ -233,7 +264,10 @@ export async function cobrarSinConexion(
     setUltima({ numero, orderId: null, invoiceId: undefined, clave });
     setAviso({
       tipo: "ok",
-      texto: `${numero} cobrada sin conexión. Se sube sola cuando vuelva internet.`,
+      texto:
+        recibido !== null && medio === "efectivo" && !pagos && recibido > total
+          ? `${numero} cobrada sin conexión. Vuelto ${formatearMonto(Math.round((recibido - total) * 100) / 100)}.`
+          : `${numero} cobrada sin conexión. Se sube sola cuando vuelva internet.`,
     });
     limpiar();
   } catch {

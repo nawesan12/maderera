@@ -398,6 +398,8 @@ export interface components {
             anchoMm: number | null;
             espesorMm: number | null;
             precio: string | null;
+            /** @description en oferta: el precio de antes */
+            precioAnterior: string | null;
             stock: components["schemas"]["StockDeSucursal"][];
             stockCentral: components["schemas"]["NivelStock"];
             stockAserradero: components["schemas"]["NivelStock"];
@@ -429,6 +431,8 @@ export interface components {
             cuidados: string | null;
             documentos: components["schemas"]["DocumentoDeFicha"][];
             documentosReservados: number;
+            /** @description Los ids de los reservados */
+            reservados?: string[];
         };
         DocumentoDeFicha: {
             id: string;

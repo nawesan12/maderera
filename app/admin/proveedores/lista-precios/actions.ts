@@ -19,6 +19,11 @@ export interface FilaPrevia {
   variantId: string | null;
   nuestro: string | null;
   precioActual: number | null;
+  /** El costo de la planilla sin IVA, y el último que se conocía. */
+  costoNeto: number;
+  costoAnterior: number | null;
+  /** sube, baja, igual, nuevo, sin_sugerido; vacío si no se apareó. */
+  cambio: string;
 }
 
 export interface VistaPreviaProveedor {
@@ -27,6 +32,7 @@ export interface VistaPreviaProveedor {
   /** Cuántas se van a actualizar y cuántas quedan sin aparear. */
   apareadas: number;
   sinAparear: number;
+  sinCambios?: number;
   /** Los encabezados que trae el archivo, para poder armar el perfil. */
   columnas: string[];
   error?: string;

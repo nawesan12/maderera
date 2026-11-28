@@ -5,11 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
+	"time"
 
 	"mjbj/internal/api/reportesapi"
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/documentos"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/pdf"
 	"mjbj/internal/plataforma"
@@ -224,7 +227,7 @@ func (a *API) ReporteDeReposicionArchivo(ctx context.Context, r reportesapi.Repo
 	}
 	nombre := "reposicion-" + jsmath.Texto(o.DiasDelPeriodo) + "dias"
 	if texto(q.Formato) != "pdf" {
-		return csv(nombre+".csv", CsvReposicion(rep)), nil
+		return csv(nombre+".csv", CsvReposicionPorSucursal(rep)), nil
 	}
 	d := pdf.ReporteDeReposicion{DiasDelPeriodo: rep.DiasDelPeriodo, CoberturaObjetivo: rep.CoberturaObjetivo,
 		Filas: make([]pdf.FilaDeReposicion, len(rep.Filas))}
@@ -314,15 +317,28 @@ func (a *API) CerrarElMes(ctx context.Context, r reportesapi.CerrarElMesRequestO
 	if err != nil {
 		return nil, err
 	}
+	// Reabrir un mes cambia lo que el estudio ya tiene: pide por qué (mes
+	// simulado, M2S1-056), y queda en la bitácora.
+	motivo := ""
+	if r.Body.Motivo != nil {
+		motivo = strings.TrimSpace(*r.Body.Motivo)
+	}
+	if !r.Body.Cerrado && motivo == "" {
+		return nil, plataforma.Invalido(map[string]string{"motivo": "Escribí por qué se reabre el mes."})
+	}
 	v, err := a.s.CerrarElMes(ctx, r.Body.Periodo, r.Body.Cerrado, ses.UserID, ses.Nombre)
 	if err != nil {
 		return nil, err
 	}
-	accion := "Reabrió "
-	if r.Body.Cerrado {
-		accion = "Cerró "
+	texto := "Cerró " + plataforma.NombreDelMes(r.Body.Periodo)
+	if !r.Body.Cerrado {
+		texto = "Reabrió " + plataforma.NombreDelMes(r.Body.Periodo) + ": " + motivo
 	}
-	bitacora.Anotar(ctx, sqlc.New(a.s.pool), a.s.log, ses, sqlc.AccionAuditoriaEditar, "cierre", "", accion+"el mes "+r.Body.Periodo, nil)
+	var detalle map[string]any
+	if motivo != "" {
+		detalle = map[string]any{"motivo": motivo}
+	}
+	bitacora.Anotar(ctx, sqlc.New(a.s.pool), a.s.log, ses, sqlc.AccionAuditoriaEditar, "cierre", r.Body.Periodo, texto, detalle)
 	return ok(v), nil
 }
 
@@ -350,6 +366,66 @@ func (a *API) NumerosDelDueno(ctx context.Context, _ reportesapi.NumerosDelDueno
 	}
 	v, err := a.s.NumerosDelDueno(ctx)
 	return ok(v), err
+}
+
+func (o respuesta) VisitCargarSaldoDelBancoResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+
+// CargarSaldoDelBanco: lo que dice el banco ahora, desde la tarjeta «Plata
+// hoy» del inicio (mes simulado, M2S1-027). Solo el admin; queda en la
+// bitácora con el saldo que el sistema llevaba hasta ese momento.
+func (a *API) CargarSaldoDelBanco(ctx context.Context, r reportesapi.CargarSaldoDelBancoRequestObject) (reportesapi.CargarSaldoDelBancoResponseObject, error) {
+	ses, err := auth.Exigir(ctx, sqlc.StaffRoleAdmin)
+	if err != nil {
+		return nil, err
+	}
+	antes, err := a.s.PlataHoy(ctx, a.s.ahora())
+	if err != nil {
+		return nil, err
+	}
+	v, err := a.s.CargarSaldoDelBanco(ctx, r.Body.Monto, ses.UserID)
+	if err != nil {
+		return nil, err
+	}
+	detalle := map[string]any{"despues": jsmath.Redondear2(r.Body.Monto)}
+	if antes.BancoSaldo != nil {
+		detalle["antes"] = *antes.BancoSaldo
+	}
+	bitacora.Anotar(ctx, sqlc.New(a.s.pool), a.s.log, ses, sqlc.AccionAuditoriaEditar, "banco", "",
+		"Cargó el saldo del banco: "+formato.Importe(r.Body.Monto), detalle)
+	return ok(v), nil
+}
+
+func (o respuesta) VisitEstadoDelSistemaResponse(w http.ResponseWriter) error  { return o.escribir(w) }
+func (o respuesta) VisitReintentarTrabajoResponse(w http.ResponseWriter) error { return o.escribir(w) }
+
+// EstadoDelSistema: /admin/sistema, a donde lleva el aviso de un trabajo
+// fallido (M2S2-061).
+func (a *API) EstadoDelSistema(ctx context.Context, _ reportesapi.EstadoDelSistemaRequestObject) (reportesapi.EstadoDelSistemaResponseObject, error) {
+	if _, err := pantalla(ctx, "/admin/sistema"); err != nil {
+		return nil, err
+	}
+	v, err := a.s.Sistema(ctx)
+	return ok(v), err
+}
+
+// ReintentarTrabajo vuelve a poner en la cola un trabajo fallido; queda en
+// la bitácora.
+func (a *API) ReintentarTrabajo(ctx context.Context, r reportesapi.ReintentarTrabajoRequestObject) (reportesapi.ReintentarTrabajoResponseObject, error) {
+	ses, err := pantalla(ctx, "/admin/sistema")
+	if err != nil {
+		return nil, err
+	}
+	hecho, err := a.s.ReintentarTrabajo(ctx, r.Id.String())
+	if err != nil {
+		return nil, err
+	}
+	if !hecho {
+		return nil, plataforma.NuevoProblema(http.StatusNotFound, "Ese trabajo ya no está fallido.")
+	}
+	bitacora.Anotar(ctx, sqlc.New(a.s.pool), a.s.log, ses, sqlc.AccionAuditoriaEditar, "trabajo", r.Id.String(), "Volvió a intentar un trabajo automático", nil)
+	return ok(map[string]string{"ok": "Vuelve a la cola."}), nil
 }
 
 func (a *API) InicioVentasPorSucursal(ctx context.Context, _ reportesapi.InicioVentasPorSucursalRequestObject) (reportesapi.InicioVentasPorSucursalResponseObject, error) {
@@ -387,7 +463,10 @@ func (a *API) PendientesDelRol(ctx context.Context, r reportesapi.PendientesDelR
 		v, err := a.s.PendientesDelRol(ctx, sqlc.StaffRole(*r.Params.Rol))
 		return ok(v), err
 	}
-	ses, err := pantalla(ctx, "/admin")
+	// Cualquier rol del personal: la campana está en todas las pantallas, y
+	// el aserradero (que no abre /admin) recibía un 403 en cada una (mes 23).
+	// Cada renglón ya se acota a lo que el rol puede abrir.
+	ses, err := auth.ExigirStaff(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -396,6 +475,13 @@ func (a *API) PendientesDelRol(ctx context.Context, r reportesapi.PendientesDelR
 	}
 	v, err := a.s.PendientesDelRol(ctx, *ses.RolStaff)
 	return ok(v), err
+}
+
+// ArchivoDelDia es «deudores-2026-11-26.csv» con el día de acá: a las 22:15
+// la fecha UTC ya era la de mañana y el mismo listado salía con otro nombre
+// que el de /admin/cierre (mes simulado, M2S2-103 y M2S3-082).
+func ArchivoDelDia(prefijo string, ahora time.Time) string {
+	return prefijo + "-" + ahora.In(Argentina).Format("2006-01-02") + ".csv"
 }
 
 // DeudoresCsv y CuentasAPagarCsv: los listados del contador. Solo el admin.
@@ -408,7 +494,7 @@ func (a *API) DeudoresCsv(ctx context.Context, _ reportesapi.DeudoresCsvRequestO
 	if err != nil {
 		return nil, err
 	}
-	return csv("deudores-"+ahora.Format("2006-01-02")+".csv", v), nil
+	return csv(ArchivoDelDia("deudores", ahora), v), nil
 }
 
 func (a *API) CuentasAPagarCsv(ctx context.Context, _ reportesapi.CuentasAPagarCsvRequestObject) (reportesapi.CuentasAPagarCsvResponseObject, error) {
@@ -420,5 +506,31 @@ func (a *API) CuentasAPagarCsv(ctx context.Context, _ reportesapi.CuentasAPagarC
 	if err != nil {
 		return nil, err
 	}
-	return csv("cuentas-a-pagar-"+ahora.Format("2006-01-02")+".csv", v), nil
+	return csv(ArchivoDelDia("cuentas-a-pagar", ahora), v), nil
+}
+
+// CargarLiquidacion anota lo que liquidó la tarjeta (M2S1-058): la fecha es
+// el día argentino de la acreditación.
+func (a *API) CargarLiquidacion(ctx context.Context, r reportesapi.CargarLiquidacionRequestObject) (reportesapi.CargarLiquidacionResponseObject, error) {
+	ses, err := pantalla(ctx, "/admin/cierre")
+	if err != nil {
+		return nil, err
+	}
+	dia, err := time.ParseInLocation("2006-01-02", r.Body.Fecha, Argentina)
+	if err != nil {
+		return nil, plataforma.Invalido(map[string]string{"fecha": "Elegí la fecha de la liquidación."})
+	}
+	l := Liquidacion{Fecha: dia.Add(12 * time.Hour), Bruto: r.Body.Bruto, Comision: r.Body.Comision}
+	if r.Body.Referencia != nil {
+		l.Referencia = strings.TrimSpace(*r.Body.Referencia)
+	}
+	if r.Body.Circuito != nil {
+		l.Circuito = string(*r.Body.Circuito)
+	}
+	if err := a.s.CargarLiquidacion(ctx, l, ses.UserID); err != nil {
+		return nil, err
+	}
+	bitacora.Anotar(ctx, sqlc.New(a.s.pool), a.s.log, ses, sqlc.AccionAuditoriaCrear, "cierre", "",
+		"Liquidación de tarjetas del "+dia.Format("02/01/2006")+": "+formato.Importe(l.Bruto)+", comisión "+formato.Importe(l.Comision), nil)
+	return reportesapi.CargarLiquidacion204Response{}, nil
 }

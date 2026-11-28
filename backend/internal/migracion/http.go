@@ -149,7 +149,8 @@ func (a *API) PrevisualizarMigracion(ctx context.Context, r migracionapi.Previsu
 	if err != nil {
 		return nil, err
 	}
-	return ok(Previsualizar(e, Mapeo(r.Body.Mapeo), r.Body.Filas)), nil
+	v, err := a.s.Previsualizar(ctx, e, Mapeo(r.Body.Mapeo), r.Body.Filas)
+	return ok(v), err
 }
 
 func (a *API) IniciarCorrida(ctx context.Context, r migracionapi.IniciarCorridaRequestObject) (migracionapi.IniciarCorridaResponseObject, error) {

@@ -301,7 +301,7 @@ func TestRubrosSugeridosImagenesYCandidatos(t *testing.T) {
 		t.Errorf("rubro repetido: %d %s", c, b)
 	}
 	_, b := pedir(t, ven, "GET", u+"rubros/por-categoria", nil)
-	if !strings.Contains(b, `"productos":0,"sueltos":1`) {
+	if !strings.Contains(b, `"productos":0,"inactivos":0,"sueltos":1`) {
 		t.Errorf("antes de enganchar: %s", b)
 	}
 	var rubro string
@@ -309,9 +309,15 @@ func TestRubrosSugeridosImagenesYCandidatos(t *testing.T) {
 	if _, b := pedir(t, ven, "POST", u+"rubros/"+rubro+"/enganchar", nil); !strings.Contains(b, `1 producto enganchado a \"Fenolicos\".`) {
 		t.Errorf("enganchar: %s", b)
 	}
-	if _, b := pedir(t, ven, "GET", u+"rubros/por-categoria", nil); !strings.Contains(b, `"productos":1,"sueltos":0`) {
+	if _, b := pedir(t, ven, "GET", u+"rubros/por-categoria", nil); !strings.Contains(b, `"productos":1,"inactivos":0,"sueltos":0`) {
 		t.Errorf("después de enganchar: %s", b)
 	}
+	// Apagado, el producto sigue contando en su rubro (M3S2-065).
+	_, _ = e.pool.Exec(ctx, `update products set active = false where id = $1`, ids[0])
+	if _, b := pedir(t, ven, "GET", u+"rubros/por-categoria", nil); !strings.Contains(b, `"productos":0,"inactivos":1,"sueltos":0`) {
+		t.Errorf("con el producto apagado: %s", b)
+	}
+	_, _ = e.pool.Exec(ctx, `update products set active = true where id = $1`, ids[0])
 
 	// Sugeridos.
 	if c, b := pedir(t, ven, "POST", u+"productos/"+ids[0]+"/sugeridos", map[string]string{"relatedProductId": ids[0], "tipo": "similar"}); c != 422 || !strings.Contains(b, "a sí mismo") {
@@ -383,6 +389,48 @@ func TestRubrosSugeridosImagenesYCandidatos(t *testing.T) {
 	if cands.Meses != 6 || len(cands.Candidatos) != 2 || cands.Candidatos[0].ID != ids[1] ||
 		strings.Join(cands.Candidatos[0].Motivos, "|") != "Nunca se vendió|Sin stock en ninguna sucursal" {
 		t.Errorf("candidatos: %s", b)
+	}
+
+	// Lo recibido hace poco no es «Nunca se vendió» (M2S1-124), y un producto
+	// a pedido no entra por no tener stock ni precio (M2S4-033).
+	var proveedor, sucursal, variante string
+	_ = e.pool.QueryRow(ctx, `insert into suppliers (nombre) values ('Proveedor de prueba') returning id`).Scan(&proveedor)
+	_ = e.pool.QueryRow(ctx, `select id from branches limit 1`).Scan(&sucursal)
+	_ = e.pool.QueryRow(ctx, `select id from product_variants where product_id = $1 limit 1`, ids[1]).Scan(&variante)
+	var recepcion string
+	if err := e.pool.QueryRow(ctx, `insert into goods_receipts (supplier_id, branch_id, estado, confirmada_at)
+		values ($1, $2, 'confirmada', now()) returning id`, proveedor, sucursal).Scan(&recepcion); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.pool.Exec(ctx, `insert into goods_receipt_items (receipt_id, variant_id, cantidad, costo_unitario) values ($1, $2, 10, 100)`, recepcion, variante); err != nil {
+		t.Fatal(err)
+	}
+	_, _ = e.pool.Exec(ctx, `update products set a_pedido = true where id = $1`, ids[0])
+	_, b = pedir(t, ven, "GET", u+"productos-candidatos", nil)
+	cands.Candidatos = nil
+	_ = json.Unmarshal([]byte(b), &cands)
+	if len(cands.Candidatos) != 1 || cands.Candidatos[0].ID != ids[1] ||
+		strings.Join(cands.Candidatos[0].Motivos, "|") != "Nunca se vendió|Sin stock en ninguna sucursal" {
+		t.Errorf("con compra reciente y a pedido: %s", b)
+	}
+	// El chip «Nunca se vendió» va adelante aunque no sea el motivo, pero el
+	// motivo de las ventas no cuenta: se lo saca el stock.
+	_, _ = e.pool.Exec(ctx, `update inventory set qty = 5 where variant_id = $1`, variante)
+	_, _ = e.pool.Exec(ctx, `insert into inventory (variant_id, branch_id, qty) values ($1, $2, 5) on conflict do nothing`, variante, sucursal)
+	_, b = pedir(t, ven, "GET", u+"productos-candidatos", nil)
+	cands.Candidatos = nil
+	_ = json.Unmarshal([]byte(b), &cands)
+	if len(cands.Candidatos) != 0 {
+		t.Errorf("recibido esta semana y con stock sigue de candidato: %s", b)
+	}
+	if c, b := pedir(t, adm, "PUT", u+"productos-candidatos", map[string]int{"meses": 1}); c != 200 || !strings.Contains(b, "hace 1 mes.") {
+		t.Errorf("1 mes: %d %s", c, b)
+	}
+	// Con el umbral en 1, el producto a pedido tampoco entra por «Nunca se
+	// vendió» (mes 23), aunque esté cargado hace dos años.
+	_, _ = e.pool.Exec(ctx, `update products set created_at = now() - interval '2 years' where id = $1`, ids[0])
+	if _, b := pedir(t, ven, "GET", u+"productos-candidatos", nil); strings.Contains(b, ids[0]) {
+		t.Errorf("el producto a pedido entra con el umbral en 1: %s", b)
 	}
 	_ = time.Now
 }

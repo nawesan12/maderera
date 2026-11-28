@@ -37,6 +37,7 @@ paths:
                   presupuestosAResponder: { type: integer }
                   saldo: { type: number, format: double }
                   limiteCredito: { type: number, format: double }
+                  cuentaPausada: { type: boolean, description: La cuenta corriente está bloqueada }
   /api/v1/cuenta/pedidos:
     get:
       operationId: MisPedidos
@@ -77,9 +78,10 @@ paths:
                 type: array
                 items:
                   type: object
-                  required: [id, numero, estado, total, items, validoHasta, createdAt, aResponder]
+                  required: [id, numero, estado, total, items, validoHasta, createdAt, aResponder, conPedido]
                   properties:
                     aResponder: { type: boolean }
+                    conPedido: { type: boolean, description: ya se pasó a un pedido que sigue vivo }
                     id: { type: string }
                     numero: { type: string }
                     estado: { type: string }
@@ -114,6 +116,7 @@ paths:
               additionalProperties: false
               properties:
                 respuesta: { type: string }
+                motivo: { type: string, maxLength: 60, description: por qué lo rechaza (uno de portal.MotivosDelCliente) }
       responses:
         "200": { $ref: "#/components/responses/Hecho" }
         "401": { $ref: "#/components/responses/Problema" }
@@ -297,8 +300,13 @@ components:
     PedidoSeguido:
       type: object
       required: [id, numero, publicToken, cliente, telefono, tipoEntrega, direccionEntrega, zonaEnvio, costoEnvio, subtotal, total,
-        medioPago, estadoPago, estado, sucursal, sucursalSlug, createdAt, items]
+        medioPago, estadoPago, estado, sucursal, sucursalSlug, createdAt, items, descuento, descuentoMotivo, sinCobrar, entregadoAt, conCuenta]
       properties:
+        descuento: { type: number, format: double, description: El repartido en los renglones }
+        descuentoMotivo: { type: string, nullable: true }
+        sinCobrar: { type: number, format: double, description: Lo que falta cobrar fuera de la cuenta corriente; 0 si nada o en revisión }
+        entregadoAt: { type: string, format: date-time, nullable: true }
+        conCuenta: { type: boolean, description: El cliente ya tiene usuario en el sitio }
         id: { type: string }
         numero: { type: string }
         publicToken: { type: string }
@@ -320,9 +328,12 @@ components:
     PedidoPropio:
       type: object
       required: [id, numero, estado, estadoPago, medioPago, tipoEntrega, direccionEntrega, zonaEnvio, costoEnvio, subtotal, total, notas,
-        sucursal, sucursalSlug, createdAt, items, historial, descuento, debeEnCuenta, cortes, facturas, recibos, ajustes, enRevision]
+        sucursal, sucursalSlug, createdAt, items, historial, descuento, debeEnCuenta, cortes, facturas, recibos, ajustes, enRevision,
+        devuelto, devoluciones, publicToken]
       properties:
+        publicToken: { type: string, description: El del enlace de seguimiento }
         descuento: { type: number, format: double }
+        descuentoMotivo: { type: string, nullable: true }
         debeEnCuenta: { type: number, format: double, nullable: true }
         cuestaEnCuenta: { type: number, format: double, nullable: true, description: lo que cuesta en la cuenta después de sus notas de crédito }
         enRevision: { type: number, format: double, nullable: true }
@@ -360,6 +371,16 @@ components:
               numero: { type: integer }
               estado: { type: string }
               total: { type: number, format: double }
+        devoluciones: { type: number, format: double, description: el importe de todas las devoluciones del pedido }
+        devuelto:
+          type: array
+          items:
+            type: object
+            required: [orderItemId, cantidad, importe]
+            properties:
+              orderItemId: { type: string }
+              cantidad: { type: number, format: double }
+              importe: { type: number, format: double }
         ajustes:
           type: array
           items:

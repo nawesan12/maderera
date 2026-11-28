@@ -19,6 +19,36 @@ const ESTADOS: Record<string, { texto: string; clase: string }> = {
   anulada: { texto: "Anulada", clase: "estado-problema" },
 };
 
+type Renglon = { costoUnitario: string; costoRecibido?: string | null };
+
+/** El costo con que llegó, si no es el pedido. */
+function costoDistinto(i: Renglon): number | null {
+  if (!i.costoRecibido) return null;
+  const llego = Number(i.costoRecibido);
+  return Math.abs(llego - Number(i.costoUnitario)) > 0.005 ? llego : null;
+}
+
+/**
+ * Lo que falta de un renglón: el número, «completo», o lo que llegó de más
+ * resaltado («+1»): 21 de 20 decía «completo» sin ninguna marca (M2S2-079).
+ */
+function Falta({
+  estado,
+  pendiente,
+  cantidad,
+  corto,
+}: {
+  estado: string;
+  pendiente: number;
+  cantidad: (n: number) => string;
+  corto?: boolean;
+}) {
+  if (estado === "anulada") return <span className="text-muted-foreground">—</span>;
+  if (pendiente > 0) return <span className="font-semibold text-saldo-debe">{corto ? `falta ${cantidad(pendiente)}` : cantidad(pendiente)}</span>;
+  if (pendiente < 0) return <span className="font-semibold text-acento-sobre-claro">+{cantidad(-pendiente)}</span>;
+  return <span className="text-saldo-favor">completo</span>;
+}
+
 export default async function OrdenPage({
   params,
 }: {
@@ -40,6 +70,17 @@ export default async function OrdenPage({
   const falta = orden.items.some(
     (i) => Number(i.cantidadRecibida) < Number(i.cantidad),
   );
+  const llegoAlgo = orden.items.some((i) => Number(i.cantidadRecibida) > 0);
+  // Completa con renglones que no llegaron: se cerró con faltante (M2S3-013).
+  const conFaltante = orden.estado === "completa" && falta;
+  const recepciones = orden.recepciones ?? [];
+  // Al cerrarla, Go suma «Cerrada con faltante: motivo» a las notas: con la
+  // chapa del estado se leía dos veces (mes 23). Queda el motivo.
+  const notas = (orden.notas ?? "")
+    .split(" · ")
+    .map((n) => (conFaltante ? n.replace(/^Cerrada con faltante(: )?/, "") : n))
+    .filter((n) => n.trim() !== "")
+    .join(" · ");
   const proveedor = await obtenerProveedor(orden.supplierId);
   /*
    * La orden como se le manda al proveedor (mes simulado, H197: había que
@@ -96,9 +137,9 @@ export default async function OrdenPage({
           </div>
 
           <span
-            className={`${estado.clase} inline-flex items-center rounded-lg bg-[var(--estado-fondo)] px-3 py-1.5 text-base font-semibold`}
+            className={`${conFaltante ? "estado-espera" : estado.clase} inline-flex items-center rounded-lg bg-[var(--estado-fondo)] px-3 py-1.5 text-base font-semibold`}
           >
-            {estado.texto}
+            {conFaltante ? "Cerrada con faltante" : estado.texto}
           </span>
         </header>
       </div>
@@ -120,21 +161,23 @@ export default async function OrdenPage({
               const pedido = Number(i.cantidad);
               const recibido = Number(i.cantidadRecibida);
               const pendiente = pedido - recibido;
+              const otroCosto = costoDistinto(i);
               return (
                 <tr key={i.id}>
                   <td className="px-4 py-2.5">{i.descripcion}</td>
                   <td className="tabular px-4 py-2.5 text-right">{cantidad(pedido)}</td>
                   <td className="tabular px-4 py-2.5 text-right text-muted-foreground">{cantidad(recibido)}</td>
                   <td className="tabular px-4 py-2.5 text-right">
-                    {orden.estado === "anulada" ? (
-                      <span className="text-muted-foreground">—</span>
-                    ) : pendiente > 0 ? (
-                      <span className="font-semibold">{cantidad(pendiente)}</span>
-                    ) : (
-                      <span className="text-saldo-favor">completo</span>
+                    <Falta estado={orden.estado} pendiente={pendiente} cantidad={cantidad} />
+                  </td>
+                  <td className="tabular px-4 py-2.5 text-right">
+                    {formatearMonto(Number(i.costoUnitario))}
+                    {otroCosto !== null && (
+                      <span className="block text-sm font-semibold text-acento-sobre-claro">
+                        llegó a {formatearMonto(otroCosto)}
+                      </span>
                     )}
                   </td>
-                  <td className="tabular px-4 py-2.5 text-right">{formatearMonto(Number(i.costoUnitario))}</td>
                   <td className="tabular px-4 py-2.5 text-right font-semibold">
                     {formatearMonto(pedido * Number(i.costoUnitario))}
                   </td>
@@ -144,13 +187,21 @@ export default async function OrdenPage({
           </tbody>
         </table>
 
+        {/* En el teléfono, el renglón que no llegó dice cuánto falta: se veía
+            igual que los completos (M2S1-035). */}
         <ul className="divide-y divide-linea @3xl:hidden">
           {orden.items.map((i) => {
             const pedido = Number(i.cantidad);
             const recibido = Number(i.cantidadRecibida);
+            const otroCosto = costoDistinto(i);
             return (
               <li key={i.id} className="space-y-0.5 px-4 py-3">
-                <p className="text-base font-medium">{i.descripcion}</p>
+                <p className="flex items-baseline justify-between gap-3">
+                  <span className="text-base font-medium">{i.descripcion}</span>
+                  <span className="tabular shrink-0 text-base">
+                    <Falta estado={orden.estado} pendiente={pedido - recibido} cantidad={cantidad} corto />
+                  </span>
+                </p>
                 <p className="tabular flex items-baseline justify-between gap-3 text-base">
                   <span className="text-muted-foreground">
                     {cantidad(pedido)} × {formatearMonto(Number(i.costoUnitario))}
@@ -158,6 +209,9 @@ export default async function OrdenPage({
                   </span>
                   <span className="font-semibold">{formatearMonto(pedido * Number(i.costoUnitario))}</span>
                 </p>
+                {otroCosto !== null && (
+                  <p className="tabular text-sm font-semibold text-acento-sobre-claro">llegó a {formatearMonto(otroCosto)}</p>
+                )}
               </li>
             );
           })}
@@ -169,14 +223,36 @@ export default async function OrdenPage({
         </div>
       </section>
 
-      {orden.notas && (
-        <p className="text-base text-muted-foreground">{orden.notas}</p>
+      {/* Los remitos que llegaron contra la orden, con su enlace (M2S1-035). */}
+      {recepciones.length > 0 && (
+        <section className="tarjeta p-5">
+          <h2 className="text-[19px] font-bold tracking-tight">Remitos</h2>
+          <ul className="mt-2 divide-y divide-linea-suave">
+            {recepciones.map((r) => (
+              <li key={r.id}>
+                <Link
+                  href={`/admin/recepciones/${r.id}`}
+                  className={`flex items-baseline justify-between gap-3 py-2.5 hover:underline ${
+                    r.estado === "anulada" ? "text-muted-foreground line-through" : ""
+                  }`}
+                >
+                  <span className="codigo font-medium">{r.numeroRemito ?? "Sin remito"}</span>
+                  <span className="tabular text-muted-foreground">{fechaCorta.format(new Date(r.fecha))}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
+
+      {notas && <p className="text-base text-muted-foreground">{notas}</p>}
 
       <AccionesDeOrden
         id={orden.id}
         estado={orden.estado}
         falta={falta}
+        llegoAlgo={llegoAlgo}
+        fechaPrometida={orden.fechaPrometida ? new Date(orden.fechaPrometida).toISOString().slice(0, 10) : ""}
         whatsapp={whatsapp}
         correo={correo}
         borrador={orden.borradorAbierto}

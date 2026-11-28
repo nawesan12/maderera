@@ -26,17 +26,20 @@ export interface CategoriaDelRail {
 export function RailDeCategorias({
   categorias,
   activa,
+  cantidadMoldava = null,
 }: {
   categorias: CategoriaDelRail[];
   /** Slug de la categoría actual, o "todos". */
   activa: string;
+  /** Los productos de Moldava, como en la columna de pantalla grande (mes 23). */
+  cantidadMoldava?: number | null;
 }) {
   // Moldava, la línea propia, va al lado de Molduras como un rubro más
   // (notas del 9/11/2026), aunque es una marca y lleva a su página.
   const todas: (CategoriaDelRail & { href?: string })[] = [
     { slug: "todos", name: "Todo el catálogo", productCount: 0 },
     ...categorias.flatMap((c) =>
-      c.slug === "molduras" ? [c, { slug: "moldava", name: "Moldava", productCount: 0, href: "/moldava" }] : [c],
+      c.slug === "molduras" ? [c, { slug: "moldava", name: "Moldava", productCount: cantidadMoldava ?? 0, href: "/moldava" }] : [c],
     ),
   ];
 

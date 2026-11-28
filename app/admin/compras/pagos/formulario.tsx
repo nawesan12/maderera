@@ -39,10 +39,12 @@ import {
 import { sucursalPropuesta } from "../sucursal-propuesta";
 import {
   pagarAProveedor,
+  simularRetenciones,
   verAcumulado,
   verChequesEnCartera,
   verFacturasConSaldo,
   type EstadoPago,
+  type RetencionSimulada,
 } from "./actions";
 import { CampoFecha } from "@/components/ui/campo-fecha";
 
@@ -115,6 +117,12 @@ interface ParteUI {
   numero: string;
   banco: string;
   fechaPago: string;
+  /**
+   * El renglón único que abre «Partir»: su importe sigue al neto hasta que
+   * alguien lo toca. Si se partía antes de que llegara la simulación de la
+   * retención, arrancaba en el bruto y quedaba ahí (mes 23).
+   */
+  auto?: boolean;
 }
 
 const MEDIOS = [
@@ -167,10 +175,13 @@ export function FormularioPago({
   proveedorInicial,
   facturaInicial,
   chequeInicial,
+  ivaSobreTotal = false,
 }: {
   proveedores: Proveedor[];
   regimenes: Regimen[];
   sucursales: Sucursal[];
+  /** La regla base_retencion_iva: la de IVA sobre el total con IVA. */
+  ivaSobreTotal?: boolean;
   /** Con quién arranca, cuando se llega desde una factura o la ficha del proveedor. */
   proveedorInicial?: string;
   /** Qué factura viene a pagarse: se tilda sola al cargar las del proveedor. */
@@ -194,6 +205,12 @@ export function FormularioPago({
   const [branchId, setBranchId] = useState(() => sucursalPropuesta(sucursales));
 
   const [facturas, setFacturas] = useState<FacturaConSaldo[]>([]);
+  /**
+   * De qué proveedor son las facturas cargadas. Mientras no son del elegido,
+   * se están trayendo: mostraba «No tiene facturas pendientes» medio segundo
+   * antes de que llegaran (mes 23).
+   */
+  const [facturasDe, setFacturasDe] = useState<string | null>(null);
   /** Las tildadas, con cuánto se paga de cada una. */
   const [aplicado, setAplicado] = useState<Record<string, string>>({});
   /** null: el total es la suma de lo tildado. Si se escribe, manda. */
@@ -202,30 +219,34 @@ export function FormularioPago({
   const [retener, setRetener] = useState<Record<string, boolean>>({});
   const [basesAMano, setBasesAMano] = useState<Record<string, string>>({});
 
-  const [partes, setPartes] = useState<ParteUI[] | null>(null);
+  const [partesGuardadas, setPartes] = useState<ParteUI[] | null>(null);
   const [cartera, setCartera] = useState<ChequeDeCartera[]>([]);
 
-  const [acumulado, setAcumulado] = useState<
-    Record<string, { base: number; retenido: number }>
-  >({});
+  /** La cuenta de cada retención prendida, como la va a hacer el certificado. */
+  const [simuladas, setSimuladas] = useState<Record<string, RetencionSimulada>>({});
+  /** El renglón del cheque al que le falta la fecha, para marcarlo. */
+  const [sinFecha, setSinFecha] = useState<number | null>(null);
 
   useEffect(() => {
     if (!supplierId) return;
     let vivo = true;
+    // El acumulado del mes lo trae la simulación (con el cálculo entero);
+    // acá solo decide qué interruptores arrancan prendidos.
     void verAcumulado(supplierId).then((filas) => {
       if (!vivo) return;
-      setAcumulado(
-        Object.fromEntries(
-          filas.map((f) => [
-            f.codigoRegimen,
-            { base: Number(f.base), retenido: Number(f.retenido) },
-          ]),
-        ),
-      );
+      // Si el proveedor ya tuvo base este mes en un régimen, el interruptor
+      // arranca prendido: un pago con los dos apagados no retenía y el
+      // acumulado quedaba mal para el siguiente (M2S2-013).
+      const conBase = new Set(filas.filter((f) => Number(f.base) > 0).map((f) => f.codigoRegimen));
+      setRetener((prev) => ({
+        ...Object.fromEntries(regimenes.filter((r) => conBase.has(r.codigo)).map((r) => [r.id, true])),
+        ...prev,
+      }));
     });
     void verFacturasConSaldo(supplierId).then((filas) => {
       if (!vivo) return;
       setFacturas(filas);
+      setFacturasDe(supplierId);
       // Si se llegó desde una factura, viene tildada por su saldo entero.
       const objetivo = filas.find((f) => f.id === facturaInicial || f.id === chequeInicial);
       setAplicado(objetivo ? { [objetivo.id]: importeParaElCampo(objetivo.saldo) } : {});
@@ -253,6 +274,8 @@ export function FormularioPago({
 
   const esNota = (f: FacturaConSaldo) => f.tipo.startsWith("nota_credito");
   const esCheque = (f: FacturaConSaldo) => f.tipo === "cheque_rechazado";
+  // Un ajuste que subió la deuda (un saldo inicial): se paga como una factura.
+  const esAjuste = (f: FacturaConSaldo) => f.tipo === "ajuste";
   // Lo que se paga (facturas y cheques a reponer) y las notas que restan.
   const tildadas = facturas.filter((f) => f.id in aplicado && !esNota(f));
   const notas = facturas.filter((f) => f.id in aplicado && esNota(f));
@@ -267,7 +290,7 @@ export function FormularioPago({
   );
   const notasSinLugar: string[] = [];
   for (const nota of notas) {
-    const destino = tildadas.find((f) => !esCheque(f) && imputado[f.id] - nota.saldo > -0.009);
+    const destino = tildadas.find((f) => !esCheque(f) && !esAjuste(f) && imputado[f.id] - nota.saldo > -0.009);
     if (destino) imputado[destino.id] = redondear(imputado[destino.id] - nota.saldo);
     else notasSinLugar.push(nota.id);
   }
@@ -276,9 +299,6 @@ export function FormularioPago({
   );
   const total = totalTocado === null ? sumaAplicada : importeDelCampo(totalTocado);
   const aCuenta = redondear(total - sumaAplicada);
-  const sumaPartes = redondear(
-    (partes ?? []).reduce((s, p) => s + importeDelCampo(p.importe), 0),
-  );
 
   /*
    * La base de las retenciones: el neto de IVA de lo que se paga de cada
@@ -291,17 +311,64 @@ export function FormularioPago({
       return f.total > 0 ? s + (pagado * f.netoSinIva) / f.total : s;
     }, 0),
   );
-  const conFacturas = tildadas.length > 0;
+  const conFacturas = tildadas.some((f) => !esCheque(f) && !esAjuste(f));
+  // Un pago que solo repone un cheque rechazado o cancela un ajuste no es una
+  // compra: no hay base, y el interruptor quedaba prendido con «Base» vacío
+  // (mes 23). Sin nada tildado (a cuenta) la base se escribe a mano.
+  const soloReposiciones = tildadas.length > 0 && !conFacturas;
+  // Con la regla base_retencion_iva en «total», la de IVA va sobre lo que se
+  // paga de las facturas con su IVA (M3S2-027).
+  const totalDeLasFacturas = redondear(
+    tildadas.filter((f) => !esCheque(f) && !esAjuste(f)).reduce((s, f) => s + (imputado[f.id] ?? 0), 0),
+  );
   const baseDe = (r: Regimen) =>
-    conFacturas ? baseDeLasFacturas : importeDelCampo(basesAMano[r.id]);
+    conFacturas
+      ? r.impuesto === "iva" && ivaSobreTotal
+        ? totalDeLasFacturas
+        : baseDeLasFacturas
+      : importeDelCampo(basesAMano[r.id]);
   const proveedor = proveedores.find((p) => p.id === supplierId);
   const hoy = hoyEnArgentina();
   const regimenesDelProveedor = regimenes.filter((r) => leCorresponde(r, proveedor, hoy));
   const retenciones = regimenesDelProveedor
-    .filter((r) => retener[r.id])
+    .filter((r) => retener[r.id] && !soloReposiciones)
     .map((r) => ({ regimenId: r.id, base: baseDe(r) }))
     .filter((r) => r.base > 0);
   const basePasada = retenciones.some((r) => r.base - total > 0.009);
+  // Lo que sale de verdad: el total menos lo que se retiene. El botón dice
+  // esto y no el total (M2S1-026): quien transfería el número del botón le
+  // pagaba de más al proveedor.
+  const retenido = redondear(
+    retenciones.reduce((s, r) => s + (simuladas[r.regimenId]?.retencion ?? 0), 0),
+  );
+  const neto = redondear(total - retenido);
+  const partes =
+    partesGuardadas &&
+    partesGuardadas.map((p) => (p.auto ? { ...p, importe: neto ? importeParaElCampo(neto) : "" } : p));
+  const sumaPartes = redondear(
+    (partes ?? []).reduce((s, p) => s + importeDelCampo(p.importe), 0),
+  );
+  const faltanPartes = redondear(neto - sumaPartes);
+  const claveSimulacion = JSON.stringify([supplierId, fechaPago, retenciones]);
+
+  useEffect(() => {
+    const pedidas = JSON.parse(claveSimulacion)[2] as { regimenId: string; base: number }[];
+    // Sin retenciones prendidas no hay nada que pedir: lo simulado de antes
+    // no cuenta (el retenido suma solo las prendidas).
+    if (pedidas.length === 0) return;
+    let vivo = true;
+    const t = setTimeout(() => {
+      void simularRetenciones(supplierId, fechaPago, pedidas).then((filas) => {
+        if (vivo) setSimuladas(Object.fromEntries(filas.map((f) => [f.regimenId, f])));
+      });
+    }, 250);
+    return () => {
+      vivo = false;
+      clearTimeout(t);
+    };
+    // claveSimulacion resume proveedor, fecha y retenciones pedidas.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [claveSimulacion]);
 
   const hayEfectivo =
     partes === null
@@ -341,7 +408,7 @@ export function FormularioPago({
 
   function actualizarParte(i: number, cambios: Partial<ParteUI>) {
     setPartes((prev) =>
-      prev ? prev.map((p, j) => (j === i ? { ...p, ...cambios } : p)) : prev,
+      prev ? prev.map((p, j) => (j === i ? { ...p, ...cambios, ...("importe" in cambios ? { auto: false } : {}) } : p)) : prev,
     );
   }
 
@@ -382,7 +449,12 @@ export function FormularioPago({
 
         {supplierId && (
           <Seccion titulo="Qué facturas se pagan" icono={ReceiptText} columnas={1}>
-            {facturas.length === 0 ? (
+            {facturasDe !== supplierId ? (
+              <div aria-busy="true" className="space-y-2">
+                <div className="h-16 animate-pulse rounded-xl bg-hundida" />
+                <div className="h-16 animate-pulse rounded-xl bg-hundida" />
+              </div>
+            ) : facturas.length === 0 ? (
               <p className="text-base text-muted-foreground">No tiene facturas pendientes</p>
             ) : (
               <ul className="space-y-2">
@@ -418,7 +490,7 @@ export function FormularioPago({
                               <>del {fechaCorta.format(fecha(f.fechaEmision))}</>
                             )}
                             {vence && dias === 0 ? (
-                              <span className="font-semibold text-brand-orange-dark"> · vence hoy</span>
+                              <span className="font-semibold text-acento-sobre-claro"> · vence hoy</span>
                             ) : vence && (
                               <span className={dias !== null && dias < 0 ? "font-semibold text-saldo-debe" : undefined}>
                                 {" · "}
@@ -504,7 +576,7 @@ export function FormularioPago({
                   setMedio(elegido);
                   // Un cheque necesita sus datos, así que abre el detalle.
                   if ((elegido === "cheque" || elegido === "echeq") && !partes) {
-                    setPartes([{ ...parteVacia(elegido as ParteUI["medio"]), importe: total ? importeParaElCampo(total) : "" }]);
+                    setPartes([{ ...parteVacia(elegido as ParteUI["medio"]), auto: true }]);
                   }
                 }}
               />
@@ -603,15 +675,17 @@ export function FormularioPago({
                     </div>
 
                     {(parte.medio === "cheque" || parte.medio === "echeq") && (
-                      <div className="space-y-2">
+                      <div className="space-y-2" data-sin-fecha={sinFecha === i || undefined}>
                         {/* Endosar uno de la cartera, del mismo tipo y del
                           circuito del pago. Los del otro circuito se ven
                           apagados bajo el nombre de su circuito: así se ve por
                           qué no se pueden elegir. */}
                         {(() => {
-                          const { endosables, delOtroCircuito } = chequesParaEndosar(cartera, parte.medio, circuito);
-                          if (endosables.length + delOtroCircuito.length === 0) return null;
+                          const { endosables, delOtroCircuito, esperanCae } = chequesParaEndosar(cartera, parte.medio, circuito);
+                          if (endosables.length + delOtroCircuito.length + esperanCae.length === 0) return null;
+                          const elegido = cartera.find((c) => c.id === parte.chequeId);
                           return (
+                          <>
                           <select
                             value={parte.chequeId}
                             onChange={(e) => {
@@ -640,32 +714,66 @@ export function FormularioPago({
                                 ))}
                               </optgroup>
                             )}
+                            {esperanCae.length > 0 && (
+                              <optgroup label="Espera CAE">
+                                {esperanCae.map((c) => (
+                                  <option key={c.id} value={c.id} disabled>
+                                    {textoDelEndoso(c)}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
                           </select>
+                          {/* El elegido entero: en el teléfono el selector se
+                              corta y dos cheques con el mismo número se veían
+                              iguales (M2S3-015). */}
+                          {elegido && (
+                            <p className="tabular px-1 text-base">
+                              <span className="font-semibold">{formatearMonto(elegido.importe)}</span>
+                              <span className="text-muted-foreground">
+                                {" · "}N.º {elegido.numero}
+                                {elegido.banco ? ` · ${elegido.banco}` : ""}
+                                {elegido.cliente ? ` · de ${elegido.cliente}` : ""}
+                              </span>
+                            </p>
+                          )}
+                          </>
                           );
                         })()}
 
                         {!parte.chequeId && (
-                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                            <input
-                              value={parte.numero}
-                              onChange={(e) => actualizarParte(i, { numero: e.target.value })}
-                              placeholder="N.º de cheque"
-                              aria-label="Número de cheque"
-                              className="tabular h-11 rounded-lg border border-linea bg-card px-2.5 text-base"
-                            />
-                            <input
-                              value={parte.banco}
-                              onChange={(e) => actualizarParte(i, { banco: e.target.value })}
-                              placeholder="Banco"
-                              aria-label="Banco del cheque"
-                              className="h-11 rounded-lg border border-linea bg-card px-2.5 text-base"
-                            />
-                            <CampoFecha
-                              value={parte.fechaPago}
-                              onChange={(e) => actualizarParte(i, { fechaPago: e.target.value })}
-                              aria-label="Fecha de pago del cheque"
-                              className="tabular col-span-2 h-11 w-full sm:col-span-1 rounded-lg border border-linea bg-card px-2.5 text-base"
-                            />
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_1.4fr_1fr]">
+                            <label className="block">
+                              <span className="text-sm text-muted-foreground">N.º</span>
+                              <input
+                                value={parte.numero}
+                                onChange={(e) => actualizarParte(i, { numero: e.target.value })}
+                                className="tabular mt-0.5 h-11 w-full rounded-lg border border-linea bg-card px-2.5 text-base"
+                              />
+                            </label>
+                            <label className="col-span-2 row-start-2 block sm:col-span-1 sm:row-start-auto">
+                              <span className="text-sm text-muted-foreground">Banco</span>
+                              <input
+                                value={parte.banco}
+                                onChange={(e) => actualizarParte(i, { banco: e.target.value })}
+                                className="mt-0.5 h-11 w-full rounded-lg border border-linea bg-card px-2.5 text-base"
+                              />
+                            </label>
+                            <label className="block">
+                              <span className={`text-sm ${sinFecha === i ? "font-semibold text-saldo-debe" : "text-muted-foreground"}`}>
+                                Fecha de pago
+                              </span>
+                              <CampoFecha
+                                value={parte.fechaPago}
+                                onChange={(e) => {
+                                  if (sinFecha === i) setSinFecha(null);
+                                  actualizarParte(i, { fechaPago: e.target.value });
+                                }}
+                                aria-invalid={sinFecha === i || undefined}
+                                data-foco={`fecha-cheque-${i}`}
+                                className="tabular mt-0.5 h-11 w-full rounded-lg border border-linea bg-card px-2.5 text-base"
+                              />
+                            </label>
                           </div>
                         )}
                       </div>
@@ -677,13 +785,25 @@ export function FormularioPago({
                   {partes.length < 6 && (
                     <button
                       type="button"
-                      onClick={() => setPartes([...partes, parteVacia()])}
+                      onClick={() => setPartes([...partes.map((p) => ({ ...p, auto: false })), parteVacia()])}
                       className="tarjeta-hundida h-11 rounded-xl px-4 text-base font-medium"
                     >
                       + Otro renglón
                     </button>
                   )}
-                  <p className="tabular text-base text-muted-foreground">Suman {formatearMonto(sumaPartes)}</p>
+                  {/* Contra lo que sale: hubo que calcular la retención a
+                      mano para que el e-Cheq cerrara (M2S1-036). */}
+                  <p className="tabular text-base">
+                    <span className="text-muted-foreground">
+                      Suman {formatearMonto(sumaPartes)} de {formatearMonto(neto)}
+                    </span>
+                    {Math.abs(faltanPartes) > 0.009 && (
+                      <span className="font-semibold text-saldo-debe">
+                        {" · "}
+                        {faltanPartes > 0 ? `faltan ${formatearMonto(faltanPartes)}` : `sobran ${formatearMonto(-faltanPartes)}`}
+                      </span>
+                    )}
+                  </p>
                 </div>
               </div>
             )}
@@ -694,7 +814,7 @@ export function FormularioPago({
                 onClick={() =>
                   setPartes(
                     partes === null
-                      ? [{ ...parteVacia(medio as ParteUI["medio"]), importe: total ? importeParaElCampo(total) : "" }]
+                      ? [{ ...parteVacia(medio as ParteUI["medio"]), auto: true }]
                       : null,
                   )
                 }
@@ -728,11 +848,14 @@ export function FormularioPago({
           </Seccion>
         )}
 
-        {supplierId && regimenesDelProveedor.length > 0 && (
+        {supplierId && regimenesDelProveedor.length > 0 && !soloReposiciones && (
           <Seccion titulo="Retenciones" icono={Landmark} columnas={1}>
             <div className="grid gap-4 md:grid-cols-2">
               {regimenesDelProveedor.map((r) => {
-                const mes = acumulado[r.codigo];
+                const sim = simuladas[r.id];
+                // Sin acumulado ni mínimo, «$ X = $ X × 8,68 %» repetía la
+                // base: va directo a la alícuota (mes 23).
+                const conPasos = Boolean(sim && (sim.acumulado - sim.base > 0.009 || sim.minimo > 0));
                 return (
                   <div key={r.id} className="space-y-2">
                     <Interruptor
@@ -742,12 +865,7 @@ export function FormularioPago({
                       alCambiar={(v) => setRetener((prev) => ({ ...prev, [r.id]: v }))}
                     />
                     {retener[r.id] &&
-                      (conFacturas ? (
-                        <p className="tabular px-1 text-base">
-                          Base: <strong>{formatearMonto(baseDeLasFacturas)}</strong>
-                          <span className="text-muted-foreground"> · neto de las facturas elegidas</span>
-                        </p>
-                      ) : (
+                      (conFacturas ? null : (
                         <label className="block">
                           <span className="text-base font-medium">Base</span>
                           <input
@@ -760,10 +878,24 @@ export function FormularioPago({
                           />
                         </label>
                       ))}
-                    {retener[r.id] && mes && (
-                      <p className="tabular px-1 text-sm text-muted-foreground">
-                        Este mes: {formatearMonto(mes.base)} de base, {formatearMonto(mes.retenido)} retenidos
-                      </p>
+                    {/* La misma cuenta que el certificado (M2S1-110): base del
+                        mes − mínimo = sujeto × alícuota − lo ya retenido. */}
+                    {retener[r.id] && sim && (
+                      <div className="tabular px-1">
+                        <p className="text-sm text-muted-foreground">
+                          {conPasos && formatearMonto(sim.base)}
+                          {sim.acumulado - sim.base > 0.009 && ` + ${formatearMonto(sim.acumulado - sim.base)} del mes`}
+                          {sim.minimo > 0 && ` − ${formatearMonto(sim.minimo)} mínimo`}
+                          {`${conPasos ? " = " : ""}${formatearMonto(sim.imponible)} × ${sim.alicuota.toLocaleString("es-AR")} %`}
+                          {sim.retenidoAntes > 0.009 && ` − ${formatearMonto(sim.retenidoAntes)} ya retenido`}
+                        </p>
+                        <p className="text-base">
+                          Retiene <strong>{formatearMonto(sim.retencion)}</strong>
+                          {sim.retencion <= 0 && sim.motivo && (
+                            <span className="text-muted-foreground"> · {sim.motivo}</span>
+                          )}
+                        </p>
+                      </div>
                     )}
                     {retener[r.id] && baseDe(r) - total > 0.009 && (
                       <p className="px-1 text-base text-saldo-debe">La base no puede ser mayor al pago</p>
@@ -819,6 +951,23 @@ export function FormularioPago({
           type="button"
           onClick={() =>
             empezar(async () => {
+              // Un cheque nuevo sin fecha: se marca su campo y se dice cuál.
+              // Antes el error llegaba de la API como «Fecha pago: falta o no
+              // es válido», sin decir de qué renglón (M2S4-036).
+              const falta = (partes ?? []).findIndex(
+                (p) =>
+                  importeDelCampo(p.importe) > 0 &&
+                  !p.chequeId &&
+                  (p.medio === "cheque" || p.medio === "echeq") &&
+                  !p.fechaPago,
+              );
+              if (falta >= 0) {
+                const p = partes![falta];
+                setSinFecha(falta);
+                setEstado({ error: `Falta la fecha del ${p.medio === "echeq" ? "e-Cheq" : "cheque"}${p.numero ? ` ${p.numero}` : ""}.` });
+                document.querySelector<HTMLInputElement>(`[data-foco="fecha-cheque-${falta}"]`)?.focus();
+                return;
+              }
               const r = await pagarAProveedor({
                 supplierId,
                 total,
@@ -829,12 +978,16 @@ export function FormularioPago({
                 referencia: partes === null ? referencia : "",
                 retenciones,
                 imputaciones: tildadas
-                  .filter((f) => !esCheque(f))
+                  .filter((f) => !esCheque(f) && !esAjuste(f))
                   .map((f) => ({ purchaseInvoiceId: f.id, importe: imputado[f.id] }))
                   .filter((x) => x.importe > 0),
                 cheques: tildadas
                   .filter(esCheque)
                   .map((f) => ({ chequeId: f.id, importe: importeDelCampo(aplicado[f.id]) }))
+                  .filter((x) => x.importe > 0),
+                ajustes: tildadas
+                  .filter(esAjuste)
+                  .map((f) => ({ movimientoId: f.id, importe: importeDelCampo(aplicado[f.id]) }))
                   .filter((x) => x.importe > 0),
                 notasDeCredito: notas.map((n) => n.id),
                 partes:
@@ -868,15 +1021,7 @@ export function FormularioPago({
                 setPartes(null);
                 router.refresh();
                 void verFacturasConSaldo(supplierId).then(setFacturas);
-                // El acumulado del mes cambió con este pago, y el cheque que
-                // se entregó ya no está en la cartera.
-                void verAcumulado(supplierId).then((filas) =>
-                  setAcumulado(
-                    Object.fromEntries(
-                      filas.map((f) => [f.codigoRegimen, { base: Number(f.base), retenido: Number(f.retenido) }]),
-                    ),
-                  ),
-                );
+                // El cheque que se entregó ya no está en la cartera.
                 void verChequesEnCartera().then(setCartera);
               }
             })
@@ -896,14 +1041,20 @@ export function FormularioPago({
           className="boton-accion inline-flex h-12 items-center gap-2 rounded-xl px-5 text-base font-semibold disabled:opacity-50"
         >
           {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}
-          {total > 0 ? `Pagar ${formatearMonto(total)}` : "Pagar"}
+          {total > 0
+            ? `${partes === null && medio === "transferencia" ? "Transferir" : "Pagar"} ${formatearMonto(neto)}`
+            : "Pagar"}
         </button>
       </BarraGuardar>
     </div>
   );
 }
 
-/** Cómo se lee un cheque de la cartera en la lista de endosos. */
+/**
+ * Cómo se lee un cheque de la cartera en la lista de endosos: el importe
+ * primero, que es lo que distingue dos cheques con el mismo número cuando el
+ * selector se corta en el teléfono (M2S3-015).
+ */
 function textoDelEndoso(c: ChequeDeCartera): string {
-  return `Endosar ${c.numero}${c.banco ? ` · ${c.banco}` : ""} · ${formatearMonto(c.importe)}${c.cliente ? ` · de ${c.cliente}` : ""}`;
+  return `${formatearMonto(c.importe)} · ${c.numero}${c.banco ? ` · ${c.banco}` : ""}${c.cliente ? ` · de ${c.cliente}` : ""}`;
 }

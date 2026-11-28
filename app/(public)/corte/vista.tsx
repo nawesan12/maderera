@@ -407,7 +407,7 @@ function VistaDeCorte({
       // Un <button> y no `BotonWhatsapp`: antes de abrir WhatsApp guarda el
       // corte. Se ve igual que todos (hallazgo 27): el mismo verde y el alto
       // de `tamano="grande"`.
-      className="inline-flex h-[50px] shrink-0 items-center justify-center gap-2.5 rounded-[10px] bg-whatsapp-boton px-5 text-base font-semibold text-white transition-colors hover:bg-whatsapp-boton-hover disabled:opacity-50"
+      className="inline-flex h-[50px] shrink-0 items-center justify-center gap-2 rounded-[10px] bg-whatsapp-boton px-4 text-base font-semibold text-white transition-colors hover:bg-whatsapp-boton-hover disabled:opacity-50"
     >
       {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
       Pedir por WhatsApp
@@ -419,10 +419,23 @@ function VistaDeCorte({
       {/* La barra del pedido entero: lo que suma todo y el botón para
           mandarlo, siempre a la vista. Antes estaba en una tarjeta al
           costado y, con varias placas, quedaba lejos de lo que se cargaba. */}
-      <header className="superficie flex flex-wrap items-center gap-x-6 gap-y-3 rounded-2xl px-5 py-3.5">
-        <div className="mr-auto">
-          <h1 className="text-[24px] font-bold leading-tight tracking-[-0.02em]">Corte de placas a medida</h1>
-          <p className="text-sm text-texto-2">{dondeSeCortaEn(sucursal)} · {HORARIO_CORTES}</p>
+      {/* A 320 px el título y el horario se salían de la tarjeta: la fila de
+          «Entera · Media a lo largo · Media al ancho» no bajaba y ensanchaba
+          la página entera; ahora los grupos de opciones bajan de fila y el
+          título se achica en el teléfono. */}
+      <header className="superficie flex flex-wrap items-center gap-x-6 gap-y-3 rounded-2xl px-4 py-3.5 sm:px-5">
+        <div className="mr-auto min-w-0">
+          <h1 className="text-[22px] font-bold leading-tight tracking-[-0.02em] sm:text-[24px]">Corte de placas a medida</h1>
+          <p className="text-sm text-texto-2">
+            {/* Cada tramo entero en su renglón: la «h» quedaba sola abajo a
+                375 px (mes simulado, M2S2-144). */}
+            {[dondeSeCortaEn(sucursal), ...HORARIO_CORTES.split(" · ")].map((tramo, i) => (
+              <span key={i} className="whitespace-nowrap">
+                {i > 0 && " · "}
+                {tramo}
+              </span>
+            ))}
+          </p>
         </div>
 
         <dl className="hidden items-center gap-6 sm:flex">
@@ -433,7 +446,7 @@ function VistaDeCorte({
         </dl>
 
         {ofrecidas.length > 1 && (
-          <div className="flex gap-1.5" role="group" aria-label="Sucursal">
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Sucursal">
             {ofrecidas.map((s) => (
               <Chip key={s.slug} activo={sucursal === s.slug} onClick={() => setSucursal(s.slug)}>
                 {s.nombre}
@@ -558,7 +571,7 @@ function VistaDeCorte({
             </p>
           )}
           {planoActual.placas.length > 0 ? (
-            <PlanoSimple plano={planoActual} unaColumna />
+            <PlanoSimple plano={planoActual} unaColumna piezas={actual.piezas} />
           ) : (
             <div className="flex h-full min-h-[220px] items-center justify-center rounded-xl bg-hundida">
               <span className="tabular-nums text-texto-3">
@@ -578,8 +591,8 @@ function VistaDeCorte({
 
       {/* En el teléfono, la cuenta y el botón abajo y fijos: con el teclado
           abierto y veinte medidas, el botón quedaba al final de todo. */}
-      <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 bg-card px-4 py-3 shadow-[0_-8px_24px_-12px_rgb(60_50_40_/_0.35)] lg:hidden">
-        <p className="tabular mr-auto text-[14px] leading-tight text-texto-2">
+      <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-2 bg-card px-4 py-3 min-[360px]:gap-3 shadow-[0_-8px_24px_-12px_rgb(60_50_40_/_0.35)] lg:hidden">
+        <p className="tabular mr-auto min-w-0 text-[14px] leading-tight text-texto-2">
           <strong className="text-base text-foreground">
             {totales.placas} {totales.placas === 1 ? "placa" : "placas"}
           </strong>
@@ -681,7 +694,7 @@ function EditorDeGrupo({
           </select>
         </label>
         {placa?.admiteMedia && (
-          <div className="flex gap-1.5" role="group" aria-label="Placa entera o media">
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Placa entera o media">
             {([null, "largo", "ancho"] as const).map((m) => (
               <Chip key={m ?? "entera"} activo={mitad === m} onClick={() => alCambiar({ mitad: m })}>
                 {m === null ? "Entera" : m === "largo" ? "Media a lo largo" : "Media al ancho"}
@@ -700,7 +713,7 @@ function EditorDeGrupo({
           </button>
         )}
         <div className="flex w-full flex-wrap items-end gap-2">
-          <div className="flex gap-1.5" role="group" aria-label="Qué querés cortar">
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Qué querés cortar">
             <Chip activo={modo === "piezas"} onClick={() => alCambiar({ modo: "piezas" })}>
               Piezas
             </Chip>

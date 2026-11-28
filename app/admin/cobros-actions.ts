@@ -156,6 +156,8 @@ export async function anularReciboDesdeElPanel(receiptId: string, motivo: string
   revalidatePath("/admin/pedidos");
   revalidatePath("/admin/cheques");
   revalidatePath("/admin/caja");
+  // La retención sufrida se anula con su recibo, desde su lista (M3S1-027).
+  revalidatePath("/admin/arca/retenciones");
   return { ok: r.data.ok };
 }
 
@@ -176,7 +178,7 @@ export async function rechazarChequeDesdeLaFicha(chequeId: string, motivo: strin
       return {
         error: e.pin,
         autorizacion: {
-          motivo: "cheque",
+          motivo: e.pinMotivo === "cheque_devuelto" ? "cheque_devuelto" : "cheque",
           monto: Number(e.pinMonto ?? 0),
           pinIncorrecto: e.pinIncorrecto === "si",
           bloqueadoHasta: e.pinHasta,

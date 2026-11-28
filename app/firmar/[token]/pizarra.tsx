@@ -1,9 +1,11 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { VolverAlPedido } from "./volver";
 import { Check, Eraser, Loader2, TriangleAlert } from "lucide-react";
 import { firmarRemito, type EstadoFirma } from "./actions";
+import { revisarDocumentoDeRetiro } from "@/lib/entregas/documento";
 
 const inicial: EstadoFirma = {};
 
@@ -42,6 +44,42 @@ export function Pizarra({
   const dibujando = useRef(false);
   const [hayTrazo, setHayTrazo] = useState(false);
   const [estado, firmar, enviando] = useActionState(firmarRemito, inicial);
+  const router = useRouter();
+  // El nombre de quien firma: si no es el del mostrador, el DNI enmascarado
+  // es de otra persona y se pide de nuevo (mes simulado 2: la constancia
+  // quedaba a nombre de Hugo con el DNI de Martín).
+  const [nombre, setNombre] = useState(nombreSugerido ?? "");
+  // «Juan» del mostrador y «Juan Pérez» al firmar son la misma persona.
+  const antes = (nombreSugerido ?? "").trim().toLowerCase();
+  const ahora = nombre.trim().toLowerCase();
+  const otraPersona = Boolean(documentoSugerido) && antes !== "" && !ahora.startsWith(antes) && !antes.startsWith(ahora);
+  const dniObligatorio = otraPersona || !envio;
+  // Lo que falta se dice en la página, en el lugar del error: el globo del
+  // navegador salía en inglés («Please fill out this field.», mes 23).
+  const [aviso, setAviso] = useState<{ campo: "receptorNombre" | "receptorDocumento"; texto: string } | null>(null);
+
+  function revisar(e: React.FormEvent<HTMLFormElement>) {
+    const datos = new FormData(e.currentTarget);
+    const n = String(datos.get("receptorNombre") ?? "").trim();
+    const d = String(datos.get("receptorDocumento") ?? "");
+    const hayCampoDni = datos.has("receptorDocumento");
+    let falta: typeof aviso = null;
+    if (!n) falta = { campo: "receptorNombre", texto: envio ? "Falta el nombre de quien recibe." : "Falta el nombre de quien retira." };
+    else if (hayCampoDni && (dniObligatorio || d.trim() !== "")) {
+      const problema = revisarDocumentoDeRetiro(d);
+      if (problema) falta = { campo: "receptorDocumento", texto: envio && !d.trim() ? "Falta el DNI de quien recibe." : problema };
+    }
+    setAviso(falta);
+    if (falta) {
+      e.preventDefault();
+      document.getElementById(falta.campo)?.focus();
+    }
+  }
+
+  // Ya estaba firmado: la página vuelve a leerse y muestra la constancia.
+  useEffect(() => {
+    if (estado.yaFirmado) router.refresh();
+  }, [estado.yaFirmado, router]);
 
   function preparar(canvas: HTMLCanvasElement) {
     const escala = window.devicePixelRatio || 1;
@@ -125,17 +163,19 @@ export function Pizarra({
     formData.set("firma", plano.toDataURL("image/png"));
   }
 
-  if (estado.numero) {
+  if (estado.numero || estado.yaFirmado) {
     return (
       <div className="p-1 text-center">
         <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-brand-green">
           <Check className="h-6 w-6 text-white" strokeWidth={3} />
         </span>
         <p className="text-lg font-semibold">Listo, quedó firmado</p>
-        <p className="mt-1 text-muted-foreground">
-          Guardamos la constancia del remito {estado.numero}. Te la mandamos
-          por correo.
-        </p>
+        {estado.numero && (
+          <p className="mt-1 text-muted-foreground">
+            Guardamos la constancia del remito {estado.numero}. Te la mandamos
+            por correo.
+          </p>
+        )}
         {/* Firmado en la tablet del mostrador, se vuelve al pedido. */}
         <VolverAlPedido />
       </div>
@@ -144,6 +184,8 @@ export function Pizarra({
 
   return (
     <form
+      noValidate
+      onSubmit={revisar}
       action={(formData) => {
         volcarFirma(formData);
         firmar(formData);
@@ -160,9 +202,14 @@ export function Pizarra({
         <input
           id="receptorNombre"
           name="receptorNombre"
-          defaultValue={nombreSugerido ?? ""}
+          value={nombre}
+          onChange={(e) => {
+            setNombre(e.target.value);
+            if (aviso?.campo === "receptorNombre") setAviso(null);
+          }}
           autoComplete="name"
           required
+          aria-invalid={aviso?.campo === "receptorNombre" || undefined}
           className="mt-1 h-12 w-full rounded-lg border bg-background px-3 text-base"
         />
       </div>
@@ -171,16 +218,21 @@ export function Pizarra({
           va por correo. Sin tocarlo se conserva el del mostrador; «Cambiar»
           es para cuando firma otra persona. La frase «escribilo solo si no
           es el tuyo» no se entendía (mes simulado). */}
-      {cambiarDni ? (
+      {cambiarDni || otraPersona ? (
         <div>
           <label htmlFor="receptorDocumento" className="block font-medium">
-            DNI {!documentoSugerido && <span className="font-normal text-muted-foreground">(opcional)</span>}
+            {/* En un retiro el DNI es obligatorio, también en el remito de
+                la reposición, que nace sin quien retira (mes simulado). */}
+            DNI {envio && !documentoSugerido && !otraPersona && <span className="font-normal text-muted-foreground">(opcional)</span>}
           </label>
           <input
             id="receptorDocumento"
             name="receptorDocumento"
             inputMode="numeric"
-            autoFocus={Boolean(documentoSugerido)}
+            required={dniObligatorio}
+            aria-invalid={aviso?.campo === "receptorDocumento" || undefined}
+            onChange={() => aviso?.campo === "receptorDocumento" && setAviso(null)}
+            autoFocus={cambiarDni && Boolean(documentoSugerido)}
             className="tabular mt-1 h-12 w-full rounded-lg border bg-background px-3 text-base"
           />
         </div>
@@ -229,10 +281,10 @@ export function Pizarra({
         )}
       </div>
 
-      {estado.error && (
-        <p className="flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+      {(aviso || estado.error) && (
+        <p role="alert" className="flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-          {estado.error}
+          {aviso?.texto ?? estado.error}
         </p>
       )}
 

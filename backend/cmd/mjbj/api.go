@@ -263,7 +263,24 @@ func correrAPI() error {
 
 	servicioCobros := cobros.Nuevo(pool, log)
 	cuentasapi.HandlerWithOptions(
-		cuentasapi.NewStrictHandlerWithOptions(cuentas.NuevaAPI(pool, clientes.Nuevo(pool, log), servicioCobros, cfg.Interna),
+		cuentasapi.NewStrictHandlerWithOptions(cuentas.NuevaAPI(pool, clientes.Nuevo(pool, log), servicioCobros, cfg.Interna).
+			// La invitación al portal de un cliente del panel (M2S1-097): el link
+			// de activación, por el mismo correo de los avisos.
+			ConInvitacion(cfg.Campanas.URLDelSitio(), func(ctx context.Context, correo, nombre, url string) {
+				html, texto := email.Envolver(cfg.Campanas.URLDelSitio(), email.Opciones{
+					Titulo:   "Tu cuenta en la maderera",
+					Adelanto: "Mirá tus pedidos y tu cuenta corriente desde el sitio.",
+					Saludo:   nombre,
+					Parrafos: []string{"Te abrimos una cuenta para que veas tus pedidos, tus presupuestos y tu cuenta corriente. Tocá el botón para entrar; el link vence en 7 días."},
+					CTA:      &email.Enlace{Texto: "Entrar a mi cuenta", URL: url},
+				})
+				go func() {
+					ctx, cancelar := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+					defer cancelar()
+					avisosDeSesion.Despachar(ctx, avisos.Despacho{Evento: "invitacion_portal", Para: correo,
+						Correo: avisos.Correo{Asunto: "Tu cuenta en la maderera", HTML: html, Texto: texto}})
+				}()
+			}),
 			[]cuentasapi.StrictMiddlewareFunc{plataforma.ConPedido[cuentasapi.StrictHandlerFunc]},
 			cuentasapi.StrictHTTPServerOptions{
 				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
@@ -374,9 +391,10 @@ func correrAPI() error {
 		campanasapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 	// Profesionales y eventos (tanda 10).
+	profSrv := profesionales.Nuevo(pool, avisos.Nuevo(pool, correoT10, cfg.Email.Remitente, log), cfg.Campanas.URLDelSitio(), log)
+	profSrv.PagoOnline = func() bool { return cfg.Pagos.Elegir() != nil }
 	profesionalesapi.HandlerWithOptions(
-		profesionalesapi.NewStrictHandlerWithOptions(profesionales.NuevaAPI(profesionales.Nuevo(pool,
-			avisos.Nuevo(pool, correoT10, cfg.Email.Remitente, log), cfg.Campanas.URLDelSitio(), log), lim, cfg.Interna),
+		profesionalesapi.NewStrictHandlerWithOptions(profesionales.NuevaAPI(profSrv, lim, cfg.Interna),
 			[]profesionalesapi.StrictMiddlewareFunc{plataforma.ConPedido[profesionalesapi.StrictHandlerFunc]},
 			profesionalesapi.StrictHTTPServerOptions{
 				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
@@ -482,8 +500,10 @@ func correrAPI() error {
 
 	// El carrito, la compra y los cobros (tanda 6), con el webhook de
 	// Mercado Pago en su dirección de siempre (POST /api/pagos/webhook).
+	tiendaSrv := checkout.Nuevo(pool, log)
+	tiendaSrv.PagoOnline = func() bool { return cfg.Pagos.Elegir() != nil }
 	checkoutapi.HandlerWithOptions(
-		checkoutapi.NewStrictHandlerWithOptions(checkout.NuevaAPI(checkout.Nuevo(pool, log), cfg.Interna, strings.HasPrefix(cfg.Pagos.URLBase(), "https://")),
+		checkoutapi.NewStrictHandlerWithOptions(checkout.NuevaAPI(tiendaSrv, cfg.Interna, strings.HasPrefix(cfg.Pagos.URLBase(), "https://")),
 			[]checkoutapi.StrictMiddlewareFunc{plataforma.ConPedido[checkoutapi.StrictHandlerFunc]},
 			checkoutapi.StrictHTTPServerOptions{
 				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,

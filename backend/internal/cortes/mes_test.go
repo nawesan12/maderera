@@ -326,9 +326,11 @@ func TestLaFichaSabeDeSuPedido(t *testing.T) {
 	if f["modo"] != "pedido" || cuenta["subtotalPlacas"].(float64) != 0 || cuenta["subtotalCanto"].(float64) <= 0 {
 		t.Errorf("cotiza las placas del pedido otra vez: %v %v", f["modo"], cuenta)
 	}
+	// Usar menos de lo que vende el pedido no es un problema (un acopio,
+	// M3S3-051): no hay aviso, y la ficha tiene con qué decir «1 de 3».
 	faltan, _ := json.Marshal(cuenta["faltan"])
-	if !strings.Contains(string(faltan), "El plano usa 1 placa y el pedido PED-1059 vende 3 placas.") {
-		t.Errorf("sin aviso de la diferencia: %s", faltan)
+	if strings.Contains(string(faltan), "vende 3 placas") || f["pedido"].(map[string]any)["placasDelPedido"].(float64) != 3 {
+		t.Errorf("aviso de una diferencia normal: %s", faltan)
 	}
 	if f["retalesDelCliente"] != true {
 		t.Errorf("los retales de placas pagadas van al stock")
@@ -347,9 +349,8 @@ func TestLaFichaSabeDeSuPedido(t *testing.T) {
 	// operario dice lo mismo que la ficha (los retales son del cliente).
 	otro := alta(t, e, ven, melamina(e, "orderId", pedido, "piezas", []any{pieza(600, 300, 2)}))
 	f = leerFicha(t, e, ven, otro)
-	faltan, _ = json.Marshal(f["cuenta"].(map[string]any)["faltan"])
-	if !strings.Contains(string(faltan), "Los cortes de PED-1059 usan 2 placas y el pedido vende 3 placas.") || f["retalesDelCliente"] != true {
-		t.Errorf("con dos cortes: %s %v", faltan, f["retalesDelCliente"])
+	if f["pedido"].(map[string]any)["placasDeOtrosCortes"].(float64) != 1 || f["retalesDelCliente"] != true {
+		t.Errorf("con dos cortes: %v %v", f["pedido"], f["retalesDelCliente"])
 	}
 	_, hoja := pedir(t, ven, "GET", e.srv.URL+"/api/v1/admin/cortes/"+otro+"/hoja", nil)
 	if strings.Contains(hoja, `"seVendeEntera":false`) {

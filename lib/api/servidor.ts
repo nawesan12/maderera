@@ -3,6 +3,8 @@ import "server-only";
 import createClient from "openapi-fetch";
 import { traducirMensaje } from "@/lib/api/mensajes";
 import { cookies, headers } from "next/headers";
+import { connection } from "next/server";
+import { unstable_rethrow } from "next/navigation";
 import { cache } from "react";
 import type { paths } from "./tipos";
 
@@ -27,15 +29,47 @@ export const API_URL = process.env.API_URL ?? "http://127.0.0.1:8080";
  * la petición, rompe el prerender. Leyendo primero, la página ya es dinámica.
  */
 export async function cabecerasDelPedido(): Promise<Record<string, string>> {
-  const [h, c] = await Promise.all([headers(), cookies()]);
+  const h = await headers();
+  /*
+   * Y se espera también a la petición: leer las cabeceras deja la página en la
+   * etapa «runtime», donde un Date.now() posterior —en la página o en
+   * openapi-fetch— cuenta como prerender. En `next dev` cada página del panel
+   * tiraba «Date.now() while prerendering» y el overlay recargaba en loop con
+   * cada compilación, hasta no dejar iniciar sesión (mes 23). En producción
+   * no cambia nada: estas páginas ya eran dinámicas.
+   */
+  await connection();
   const out: Record<string, string> = {};
-  const cookie = c.toString();
+  const cookie = await cookieDelPedido(h);
   if (cookie) out.cookie = cookie;
   const ip = h.get("x-forwarded-for") ?? h.get("x-real-ip");
   if (ip) out["x-forwarded-for"] = ip;
   const agente = h.get("user-agent");
   if (agente) out["user-agent"] = agente;
   return out;
+}
+
+/**
+ * La cookie para mandarle a Go. Normalmente sale de cookies(), que dentro de
+ * una server action ya ve lo que la acción escribió.
+ *
+ * **Si cookies() falla, se usa la cabecera del pedido.** Pasa en `next dev`
+ * cuando un formulario se manda antes de que la página termine de cargar
+ * (acción «MPA») y la acción no revalida nada, por ejemplo al devolver un
+ * error de validación: Next arma la página entera todavía en la fase de la
+ * acción y cookies() tira «Invariant: Received an underlying cookies object
+ * that does not match». Sin esto, guardar un WhatsApp inválido en Textos del
+ * sitio tiraba el panel entero (mes 23, M2S2-089).
+ */
+async function cookieDelPedido(h: Awaited<ReturnType<typeof headers>>): Promise<string> {
+  try {
+    return (await cookies()).toString();
+  } catch (error) {
+    // Lo que Next usa para controlar el render (el prerender que se corta,
+    // una redirección) tiene que seguir de largo.
+    unstable_rethrow(error);
+    return h.get("cookie") ?? "";
+  }
 }
 
 /**
@@ -71,6 +105,7 @@ export const apiPublica = createClient<paths>({ baseUrl: API_URL, cache: "no-sto
  */
 export const apiPublicaDelVisitante = cache(async () => {
   const h = await headers();
+  await connection();
   const out: Record<string, string> = {};
   const ip = h.get("x-forwarded-for") ?? h.get("x-real-ip");
   if (ip) out["x-forwarded-for"] = ip;
@@ -111,15 +146,7 @@ export function datos<T>(r: { data?: T; error?: unknown; response: Response }): 
  */
 export const comoFormulario = { bodySerializer: (b: unknown) => b as FormData };
 
-/**
- * El formulario sin los campos que agrega Next (`$ACTION_REF_1`, `$ACTION_1:0`):
- * el validador de la API rechaza las partes que el contrato no declara.
- */
-export function soloCampos(formData: FormData): FormData {
-  const limpio = new FormData();
-  for (const [clave, valor] of formData) if (!clave.startsWith("$")) limpio.append(clave, valor);
-  return limpio;
-}
+export { soloCampos } from "./formulario";
 
 /** El problem+json de la API (RFC 9457), con los errores por campo. */
 export interface Problema {

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"mjbj/internal/jsmath"
 	"net/http"
 	"time"
 
@@ -122,7 +123,7 @@ func (a *API) MiListaDePreciosPdf(ctx context.Context, _ documentosapi.MiListaDe
 	}
 	titulo := "Lista de precios"
 	if l.EsDiferenciada && l.Nombre != nil {
-		titulo = "Lista " + *l.Nombre
+		titulo = pdf.TituloDeLista(*l.Nombre)
 	}
 	emisor, err := a.emisor(ctx)
 	if err != nil {
@@ -201,8 +202,20 @@ func (a *API) ExportarPrecios(ctx context.Context, r documentosapi.ExportarPreci
 
 	planillaFilas := make([]planilla.FilaPlanilla, len(filas))
 	for i, f := range filas {
+		// Sin precio profesional, la celda va vacía y no «0»: la misma
+		// planilla tiene que poder volver a importarse (M2S1-044).
+		profesional := f.PrecioProfesional
+		if n := jsmath.Numero(profesional); !(n > 0) {
+			profesional = ""
+		}
+		// Lo mismo con el de lista: «Escalera a medida» no tiene y salía
+		// «0,00», que la importación rechaza (mes 23).
+		general := f.PrecioGeneral
+		if n := jsmath.Numero(general); !(n > 0) {
+			general = ""
+		}
 		planillaFilas[i] = planilla.FilaPlanilla{Sku: f.SKU, Producto: f.Producto, Medida: f.Medida, Categoria: f.Categoria,
-			PrecioGeneral: f.PrecioGeneral, PrecioProfesional: f.PrecioProfesional}
+			PrecioGeneral: general, PrecioProfesional: profesional}
 	}
 	return archivo{
 		tipo:        "text/csv; charset=utf-8",

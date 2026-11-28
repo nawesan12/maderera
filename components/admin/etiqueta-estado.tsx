@@ -50,6 +50,8 @@ const ESTADOS: Record<string, Estilo> = {
   // Pedidos
   preparando: { etiqueta: "Preparando", familia: "espera", abierto: true },
   listo: { etiqueta: "Listo", familia: "ok", abierto: true },
+  // Lo que ve el cliente de un retiro que se llevó y no firmó (lib/cuenta/portal).
+  "por-firmar": { etiqueta: "Para firmar", familia: "espera", abierto: true },
   "en-camino": { etiqueta: "En camino", familia: "info", abierto: true },
   entregado: { etiqueta: "Entregado", familia: "cerrado", abierto: false },
   cancelado: { etiqueta: "Cancelado", familia: "cerrado", abierto: false },
@@ -97,8 +99,15 @@ const ESTADOS: Record<string, Estilo> = {
   aprobado: { etiqueta: "Acreditado", familia: "ok", abierto: false },
   reintegrado: { etiqueta: "Reintegrado", familia: "info", abierto: false },
 
+  // Banners y promociones del sitio: si hoy se ven.
+  al_aire: { etiqueta: "Al aire", familia: "ok", abierto: false },
+  fuera_de_fecha: { etiqueta: "Fuera de fecha", familia: "cerrado", abierto: false },
+  apagado: { etiqueta: "Apagado", familia: "cerrado", abierto: false },
+
   // Reseñas de producto.
   publicada: { etiqueta: "Publicada", familia: "ok", abierto: false },
+  // «rechazada» a secas es la de ARCA.
+  resena_rechazada: { etiqueta: "Rechazada", familia: "cerrado", abierto: false },
 
   // Eventos. «Publicado» salía en gris, como si estuviera cerrado.
   publicado: { etiqueta: "Publicado", familia: "ok", abierto: true },

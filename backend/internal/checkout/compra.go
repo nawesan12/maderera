@@ -21,6 +21,7 @@ import (
 	"mjbj/internal/numeracion"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/profesionales"
+	"mjbj/internal/reglas"
 	"mjbj/internal/reservas"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas"
@@ -151,7 +152,7 @@ func (s *Servicio) PedirPresupuesto(ctx context.Context, q Quien, ip string, m m
 		return nil, err
 	}
 	if express {
-		p.Ok = "Recibimos tu pedido " + p.Numero + ". Como sos cliente profesional, te contestamos dentro de las 24 horas hábiles."
+		p.Ok = "Recibimos tu pedido " + p.Numero + ". Como sos cliente profesional, entra por la cola express."
 	} else {
 		p.Ok = "Recibimos tu pedido " + p.Numero + ". Te contestamos a la brevedad con el presupuesto armado."
 	}
@@ -195,6 +196,21 @@ func (s *Servicio) Confirmar(ctx context.Context, q Quien, ip string, m map[stri
 	d, e := LeerDatosDeCompra(m)
 	if e != nil {
 		return nil, fallo(e.Mensaje)
+	}
+	// Mercado Pago sin con qué cobrar, o transferencia sin los datos para
+	// transferir: la tienda ya no los ofrece, y si llegan igual no se crea un
+	// pedido que no se puede pagar (mes simulado, M2S2-002 y M3S1-016).
+	if d.MedioPago == "mercado_pago" && s.PagoOnline != nil && !s.PagoOnline() {
+		return nil, fallo(MsjSinPagoOnline)
+	}
+	if d.MedioPago == "transferencia" {
+		hay, err := HayDatosParaTransferir(ctx, s.pool)
+		if err != nil {
+			return nil, err
+		}
+		if !hay {
+			return nil, fallo(MsjSinDatosBancarios)
+		}
 	}
 	// El freno, antes de tocar nada: quema numeración y reserva stock.
 	if v := s.lim.PorAmbos(ctx, limites.Comprar, ip, "correo", d.Email); !v.Permitido {
@@ -265,7 +281,11 @@ func (s *Servicio) Confirmar(ctx context.Context, q Quien, ip string, m map[stri
 	if err != nil {
 		return nil, err
 	}
-	cu, msj := CuentasDeLaCompra(items, totalesCortes, zona, d.MedioPago, lista.EsDiferenciada, escalas)
+	pol := Politica{
+		AlFlete:           reglas.Es(ctx, s.pool, reglas.DescuentoAlFlete, "si"),
+		SinEscalaConLista: reglas.Es(ctx, s.pool, reglas.EscalaConLista, "no"),
+	}
+	cu, msj := CuentasDeLaCompraCon(items, totalesCortes, zona, d.MedioPago, lista.EsDiferenciada, escalas, pol)
 	if msj != "" {
 		return nil, fallo(msj)
 	}
@@ -335,13 +355,13 @@ func (s *Servicio) Confirmar(ctx context.Context, q Quien, ip string, m map[stri
 		if err := tx.QueryRow(ctx, `
 			INSERT INTO orders (numero, customer_id, contacto_nombre, contacto_email, contacto_telefono, branch_id, estado, origen,
 			                    tipo_entrega, direccion_entrega, zona_envio, costo_envio, subtotal, descuento, total, medio_pago,
-			                    estado_pago, notas, seller_id, created_by_user_id)
+			                    estado_pago, notas, seller_id, created_by_user_id, descuento_motivo)
 			VALUES ($1, $2, $3, $4, $5, $6, 'pendiente', 'tienda', $7::tipo_entrega, $8, $9, $10::numeric, $11::numeric, $12::numeric,
-			        $13::numeric, $14::medio_pago, 'pendiente', $15, $16, $17)
+			        $13::numeric, $14::medio_pago, 'pendiente', $15, $16, $17, $18)
 			RETURNING id, public_token`,
 			numero, cliente, d.Nombre, d.Email, d.Telefono, d.SucursalID, d.Entrega, d.Direccion, cu.NombreZona,
 			jsmath.Fijo2(cu.CostoEnvio), jsmath.Fijo2(cu.Subtotal), jsmath.Fijo2(cu.Descuento), jsmath.Fijo2(cu.Total), d.MedioPago,
-			d.Notas, vendedor, usuario).Scan(&compra.PedidoID, &compra.Token); err != nil {
+			d.Notas, vendedor, usuario, cu.MotivoDescuento).Scan(&compra.PedidoID, &compra.Token); err != nil {
 			return err
 		}
 		// El costo del momento, congelado, y cuánto stock mueve cada línea.

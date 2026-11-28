@@ -5,7 +5,7 @@ import {
   type AvisoManualListo,
 } from "@/lib/whatsapp/aviso-manual-datos";
 import Link from "next/link";
-import { Banknote } from "lucide-react";
+import { Banknote, ChevronDown } from "lucide-react";
 import { RotuloDelCircuito } from "@/components/admin/circuito";
 import { diasHasta, formatearMonto } from "@/lib/formato";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
@@ -76,9 +76,13 @@ export default async function ChequesPage({
    * pago «en revisión» y la deuda no le baja.
    */
   const porRecibir = vivos.filter((c) => c.estado === "informado");
+  // Lo depositado ya no está «para depositar»: va aparte, en el banco,
+  // esperando que se acredite (M2S2-097, M3S2-041).
   const paraDepositar = vivos.filter(
-    (c) =>
-      c.sentido === "recibido" && ["cartera", "depositado"].includes(c.estado),
+    (c) => c.sentido === "recibido" && c.estado === "cartera",
+  );
+  const enElBanco = vivos.filter(
+    (c) => c.sentido === "recibido" && c.estado === "depositado",
   );
   const paraCubrir = vivos.filter(
     (c) => c.sentido === "entregado" && c.estado === "entregado",
@@ -123,9 +127,11 @@ export default async function ChequesPage({
               cantidad={porRecibir.length}
               destacado
             >
-              {porRecibir.map((c) => (
-                <Tarjeta key={c.id} cheque={c} dias={enDias(c.fechaPago)} />
-              ))}
+              <Grilla>
+                {porRecibir.map((c) => (
+                  <Tarjeta key={c.id} cheque={c} dias={enDias(c.fechaPago)} />
+                ))}
+              </Grilla>
             </GrupoListado>
           )}
 
@@ -147,6 +153,18 @@ export default async function ChequesPage({
             cheques={paraDepositar}
             enDias={enDias}
           />
+          {enElBanco.length > 0 && (
+            <GrupoListado
+              titulo={`En el banco · ${formatearMonto(total(enElBanco))}`}
+              cantidad={enElBanco.length}
+            >
+              <Grilla>
+                {enElBanco.map((c) => (
+                  <Tarjeta key={c.id} cheque={c} dias={enDias(c.fechaPago)} />
+                ))}
+              </Grilla>
+            </GrupoListado>
+          )}
           <Lado titulo="Para cubrir" cheques={paraCubrir} enDias={enDias} />
 
           {endosados.length > 0 && (
@@ -154,34 +172,54 @@ export default async function ChequesPage({
               titulo="Endosados a proveedores"
               cantidad={endosados.length}
             >
-              {endosados.map((c) => (
-                <Tarjeta key={c.id} cheque={c} dias={enDias(c.fechaPago)} />
-              ))}
+              <Grilla>
+                {endosados.map((c) => (
+                  <Tarjeta key={c.id} cheque={c} dias={enDias(c.fechaPago)} />
+                ))}
+              </Grilla>
             </GrupoListado>
           )}
 
-          <GrupoListado
-            titulo="Terminados"
-            cantidad={terminados.total}
-            vacio={
-              <p className="px-1 text-base text-texto-2">Ninguno todavía.</p>
-            }
-          >
-            {terminados.filas.map((c) => (
-              <Tarjeta
-                key={c.id}
-                cheque={c}
-                dias={null}
-                apagado={!avisos[c.id]}
-                aviso={avisos[c.id] ?? null}
-              />
-            ))}
-            <Paginador pagina={pagina} total={terminados.total} params={{}} />
-          </GrupoListado>
+          {/* Los terminados, plegados: abiertos, la página llegaba a 9.000
+              px en el teléfono y 14.000 en la computadora (M2S4-037,
+              M3S4-019). Se abren solos al cambiar de página. */}
+          {terminados.total > 0 && (
+            <details className="group mt-[22px]" open={pagina > 1 || undefined}>
+              <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2.5">
+                <h2 className="text-[17px] font-semibold tracking-[-0.015em] text-texto-2">Terminados</h2>
+                <span className="tabular rounded-full bg-chip px-2.5 py-0.5 text-[13px] font-semibold text-texto-2">
+                  {terminados.total}
+                </span>
+                <ChevronDown className="h-5 w-5 text-texto-2 transition-transform group-open:rotate-180" aria-hidden="true" />
+              </summary>
+              <div className="mt-[11px] space-y-3">
+                <Grilla>
+                  {terminados.filas.map((c) => (
+                    <Tarjeta
+                      key={c.id}
+                      cheque={c}
+                      dias={null}
+                      apagado={!avisos[c.id]}
+                      aviso={avisos[c.id] ?? null}
+                    />
+                  ))}
+                </Grilla>
+                <Paginador pagina={pagina} total={terminados.total} params={{}} />
+              </div>
+            </details>
+          )}
         </>
       )}
     </div>
   );
+}
+
+/**
+ * Las tarjetas en columnas donde entran: a 1280, una por renglón dejaba la
+ * mitad de la pantalla vacía (M3S4-019).
+ */
+function Grilla({ children }: { children: React.ReactNode }) {
+  return <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">{children}</div>;
 }
 
 /** El total de un lado, grande: es el número que se busca al abrir. */
@@ -237,9 +275,11 @@ function Lado({
           cantidad={t.lista.length}
           destacado={t.hasta <= 7}
         >
-          {t.lista.map((c) => (
-            <Tarjeta key={c.id} cheque={c} dias={enDias(c.fechaPago)} />
-          ))}
+          <Grilla>
+            {t.lista.map((c) => (
+              <Tarjeta key={c.id} cheque={c} dias={enDias(c.fechaPago)} />
+            ))}
+          </Grilla>
         </GrupoListado>
       ))}
     </section>
@@ -274,11 +314,41 @@ function yaVencido(c: ChequeListado): string {
  * «Del cliente»: «De tercero» es el que firmó otro (mes simulado: los del
  * cobro, sin librador, salían como de tercero).
  */
-function deQuien(c: { sentido: string; librador: string | null; cliente: string | null }) {
+function deQuien(c: { sentido: string; librador: string | null; cliente: string | null; clienteRazonSocial?: string | null }) {
   if (c.sentido !== "recibido") return "Propio";
-  const igual = (a: string, b: string) => a.trim().toLocaleLowerCase("es-AR") === b.trim().toLocaleLowerCase("es-AR");
-  if (c.cliente && (!c.librador || igual(c.librador, c.cliente))) return "Del cliente";
+  // Contra el nombre de la ficha y contra la razón social: «RF Construcciones
+  // SRL» del cliente Roberto Fernández (RF Construcciones) salía de tercero.
+  const delCliente = (l: string) =>
+    (c.cliente !== null && mismoNombre(l, c.cliente)) || (c.clienteRazonSocial != null && mismoNombre(l, c.clienteRazonSocial));
+  if (c.cliente && (!c.librador || delCliente(c.librador))) return "Del cliente";
   return c.librador ? "De tercero" : "Recibido";
+}
+
+/**
+ * Si dos nombres son la misma persona o empresa: sin tildes, mayúsculas,
+ * puntuación ni la forma societaria. «Sim Wood Frame Mar SRL» librado por
+ * el cliente «Sim Wood Frame Mar» salía «De tercero» (M3S3-043).
+ */
+function mismoNombre(a: string, b: string): boolean {
+  const limpio = (t: string) =>
+    t
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLocaleLowerCase("es-AR")
+      .replace(/[.,]/g, " ")
+      .replace(/\b(s\s*r\s*l|s\s*a\s*s|s\s*a|s\s*a\s*u|s\s*h|s\s*c\s*a)\b/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  const x = limpio(a);
+  const y = limpio(b);
+  return x !== "" && (x === y || x.startsWith(`${y} `) || y.startsWith(`${x} `));
+}
+
+/** Cómo terminó un rechazado: no se aceptó, se devolvió o lo rechazó el banco. */
+function estadoDelCheque(c: ChequeListado): string {
+  if (c.estado === "rechazado" && c.noAceptado) return "No aceptado";
+  if (c.estado === "rechazado" && c.devuelto) return "Devuelto";
+  return ESTADOS[c.estado] ?? c.estado;
 }
 
 function Tarjeta({
@@ -303,10 +373,12 @@ function Tarjeta({
    */
   return (
     <article className={`tarjeta space-y-2 px-4 py-3.5 sm:px-5 ${apagado ? "opacity-75" : ""}`}>
-      <div className="flex items-baseline justify-between gap-3">
+      {/* Si el importe con centavos y «en 13 días» no entran juntos, la fecha
+          baja entera a su renglón: se salía de la tarjeta a 375 px (mes 23). */}
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
         <p className="tabular text-xl font-semibold">{formatearMonto(c.importe)}</p>
         <p
-          className={`tabular text-right text-base ${
+          className={`tabular ml-auto text-right text-base ${
             vencido
               ? "font-semibold text-brand-orange-dark"
               : dias !== null && dias <= 7
@@ -315,8 +387,12 @@ function Tarjeta({
           }`}
         >
           {fechaCorta.format(c.fechaPago)}
-          {dias !== null &&
-            (vencido ? ` · ${yaVencido(c)}` : dias === 0 ? " · hoy" : ` · en ${plural(dias, "día")}`)}
+          {/* «en 23 días» entero: se partía en dos renglones (M2S4-037). */}
+          {dias !== null && (
+            <span className="whitespace-nowrap">
+              {vencido ? ` · ${yaVencido(c)}` : dias === 0 ? " · hoy" : ` · en ${plural(dias, "día")}`}
+            </span>
+          )}
         </p>
       </div>
       {/* El banco y el número juntos: es como se lo encuentra en el banco.
@@ -334,12 +410,22 @@ function Tarjeta({
           {deQuien(c)}
         </span>
         <span className="whitespace-nowrap rounded-full bg-muted px-2.5 py-0.5 text-sm font-medium text-muted-foreground">
-          {ESTADOS[c.estado] ?? c.estado}
+          {estadoDelCheque(c)}
           {c.tipo === "echeq" && " · e-Cheq"}
         </span>
         {/* Solo el circuito B se marca, y como «Circuito B»: una «B» suelta
-            se leía como Factura B (mes simulado, H167/H262). */}
-        {c.circuito === "negro" && (
+            se leía como Factura B (mes simulado, H167/H262). El de una venta
+            con su factura esperando el CAE no es del B: dice eso (M2S1-061,
+            M2S3-035). Con las dos opciones de «asiento_sin_cae» su cobro ya
+            está en el archivo del estudio (Anticipos o la transitoria) y el
+            cheque es blanco: la chapa sale igual, porque la factura sigue sin
+            CAE (mes 23, M2S2-040). */}
+        {c.esperaCae && (
+          <span className="whitespace-nowrap rounded-full bg-chip px-2.5 py-0.5 text-sm font-medium text-texto-2">
+            Espera CAE
+          </span>
+        )}
+        {c.circuito === "negro" && !c.esperaCae && (
           <span className="whitespace-nowrap rounded-full bg-chip px-2.5 py-0.5 text-sm font-medium text-texto-2">
             <RotuloDelCircuito />
           </span>
@@ -417,7 +503,7 @@ function Tarjeta({
         </p>
         {c.estado === "rechazado" && c.motivoRechazo && (
           <p className="estado-problema mt-1 text-sm font-medium">
-            Rechazado: {c.motivoRechazo}
+            {estadoDelCheque(c)}: {c.motivoRechazo}
           </p>
         )}
         {aviso && (
@@ -433,6 +519,8 @@ function Tarjeta({
           estado={c.estado}
           sentido={c.sentido}
           numero={c.numero}
+          banco={c.banco}
+          fechaPago={c.fechaPago}
           importe={c.importe}
           diasParaCobrar={diasHasta(c.fechaPago) ?? 0}
           cliente={c.cliente}

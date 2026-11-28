@@ -15,6 +15,7 @@ import { MenuUsuario } from "@/components/admin/menu-usuario";
 import {
   ActivityBell,
   ActivityBellSkeleton,
+  CampanaDePendientes,
 } from "@/components/admin/activity-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { EnterAvanza } from "@/components/admin/enter-avanza";
@@ -35,6 +36,8 @@ import { ProveedorDelCircuito } from "@/components/admin/circuito";
  */
 export const metadata: Metadata = {
   manifest: "/admin/app.webmanifest",
+  // El ícono propio del Panel también en el iPhone (M3S1-033).
+  icons: { apple: "/panel/apple-touch-180.png" },
   robots: { index: false, follow: false },
 };
 
@@ -161,7 +164,12 @@ async function PanelConSesion({
   // El contador de conversaciones sin leer es un adorno del menú: si falla, el
   // panel tiene que abrirse igual y sin la pelotita.
   const [sinLeer, circuito] = await Promise.all([
-    degradar("las conversaciones sin leer", conversacionesSinLeer, 0),
+    // Solo para quien ve la bandeja: para el resto la API contesta 403 en cada
+    // navegación, y un intento real de entrar sin permiso quedaba perdido
+    // entre cientos iguales en el registro (mes simulado, M3S3-033).
+    puedeEntrar("/admin/whatsapp", usuario.staffRole)
+      ? degradar("las conversaciones sin leer", conversacionesSinLeer, 0)
+      : 0,
     // La palabra del circuito sin factura (H167); si falla, la de arranque.
     degradar("el nombre del circuito", nombreDelCircuito, "b" as const),
   ]);
@@ -187,7 +195,9 @@ async function PanelConSesion({
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         <header className="textura sticky top-0 z-30 flex h-[60px] items-center gap-2 border-b border-linea bg-background/90 px-4 backdrop-blur-lg sm:gap-4 lg:px-7">
           <div className="flex min-w-0 max-w-[420px] flex-1 items-center gap-3 pl-12 lg:pl-0">
-            <BuscadorGlobal />
+            <BuscadorGlobal
+              queBusca={usuario.staffRole === "aserradero" ? "Buscar corte o pedido…" : undefined}
+            />
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3.5">
             {/* El interruptor de tema también acá: el único que había estaba en
@@ -201,9 +211,13 @@ async function PanelConSesion({
             {/* La actividad sale de la bitácora, que es del admin: para los
                 otros roles la API da 403, y como el encabezado está en todas
                 las pantallas, ese 403 tiraba abajo el panel entero. */}
-            {puedeEntrar("/admin/bitacora", usuario.staffRole) && (
+            {puedeEntrar("/admin/bitacora", usuario.staffRole) ? (
               <Suspense fallback={<ActivityBellSkeleton />}>
                 <ActivityBell />
+              </Suspense>
+            ) : (
+              <Suspense fallback={<ActivityBellSkeleton />}>
+                <CampanaDePendientes />
               </Suspense>
             )}
             <div className="border-l border-linea pl-2 sm:pl-3.5">

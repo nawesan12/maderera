@@ -46,8 +46,14 @@ export function ColumnaTablero({
   estado,
   tope = TOPE_VISIBLE,
   secundaria = false,
+  largo = false,
   children,
 }: {
+  /**
+   * Sin scroll propio: la columna crece con la página. En el taller la
+   * columna de terminados cortaba la última tarjeta por la mitad (M2S4-040).
+   */
+  largo?: boolean;
   /**
    * Lo que ya pasó y se mira de reojo (los terminados del taller): con
    * tarjetas, más angosta que las columnas del trabajo. En el taller las tres
@@ -70,7 +76,9 @@ export function ColumnaTablero({
   const [expandida, setExpandida] = useState(false);
 
   const tarjetas = Array.isArray(children) ? children.flat() : [children];
-  const hayDeMas = tarjetas.length > tope;
+  // Plegar una sola tarjeta no ahorra lugar: el botón ocupa casi lo mismo y
+  // esconde un trabajo (mes simulado, M3S1-040).
+  const hayDeMas = tarjetas.length > tope + 1;
   const visibles =
     hayDeMas && !expandida ? tarjetas.slice(0, tope) : tarjetas;
   const ocultas = tarjetas.length - visibles.length;
@@ -132,7 +140,7 @@ export function ColumnaTablero({
         Para lo largo está el pliegue.
       */}
       {cantidad > 0 && (
-        <div className="flex flex-col gap-2.5 px-2.5 pb-2.5 @5xl:max-h-[calc(100vh-300px)] @5xl:overflow-y-auto">
+        <div className={`flex flex-col gap-2.5 px-2.5 pb-2.5 ${largo ? "" : "@5xl:max-h-[calc(100vh-300px)] @5xl:overflow-y-auto"}`}>
           {visibles}
 
           {hayDeMas && !expandida && (

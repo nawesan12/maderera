@@ -16,6 +16,7 @@ import {
 } from "@/lib/dal/admin/pagos";
 import { leerPagina, Paginador, POR_PAGINA } from "@/components/admin/paginador";
 import { AccionesCobro } from "./acciones";
+import { RefrescarEnVivo } from "@/components/vivo/refrescar-en-vivo";
 import { DatosBancarios } from "./banco";
 
 export const metadata: Metadata = { title: "Cobranzas" };
@@ -96,6 +97,10 @@ export default async function PagosPage({
 
   return (
     <div className="space-y-6">
+      {/* Se factura, se cobra o se cancela en otra pantalla, o se acredita
+          un cobro en otra pestaña: esta se refresca sola (canales «ventas» y
+          «cobros», M2S2-099, M3S1-034 y M3S3-045). */}
+      <RefrescarEnVivo canales={["ventas", "cobros"]} />
       {/* El mismo nombre que el menú (mes simulado, H137). */}
       <EncabezadoPanel titulo="Cobranzas" resumen={periodo.etiqueta}>
         <FiltroPeriodo actual={periodo.clave} />
@@ -104,6 +109,13 @@ export default async function PagosPage({
         {(mercadoPago === "apagado" || mercadoPago === "sin_secreto") && (
           <span className="estado-problema inline-flex h-11 items-center rounded-full bg-[var(--estado-fondo)] px-4 text-base font-medium text-[var(--estado-tinta)]">
             Mercado Pago apagado
+          </span>
+        )}
+        {/* Sin CBU ni alias la tienda no ofrece transferencia ni Mi cuenta
+            deja pagar por transferencia (mes simulado, M3S1-016). */}
+        {!banco?.cbu && !banco?.alias && (
+          <span className="estado-problema inline-flex h-11 items-center rounded-full bg-[var(--estado-fondo)] px-4 text-base font-medium text-[var(--estado-tinta)]">
+            Faltan los datos para transferir
           </span>
         )}
         <DatosBancarios datos={banco} />
@@ -271,6 +283,8 @@ function Quien({ c }: { c: Cobranza }) {
 
 /** De dónde vino: un recibo de un pedido puntual no es «Cuenta corriente» (H268). */
 function Origen({ c }: { c: Cobranza }) {
+  // La plata que salió con una devolución (M2S3-046).
+  if (c.tipo === "devolucion") return <>Devolución{c.pedido ? ` · ${c.pedido}` : ""}</>;
   if (c.tipo === "recibo" && c.pedido) return <>Pedido {c.pedido}</>;
   return <>{ORIGENES[c.origen] ?? c.origen}</>;
 }
@@ -287,6 +301,14 @@ function Comprobante({ c }: { c: Cobranza }) {
         >
           Recibo {c.numero}
         </a>
+      ) : c.tipo === "devolucion" ? (
+        c.numero ? (
+          <Link href={`/admin/facturacion/${c.id}`} className="codigo whitespace-nowrap font-medium hover:text-brand-orange hover:underline">
+            NC {c.numero}
+          </Link>
+        ) : (
+          "Devolución"
+        )
       ) : c.orderId ? (
         <Link href={`/admin/pedidos/${c.orderId}`} className="whitespace-nowrap font-medium hover:text-brand-orange hover:underline">
           Pedido en línea

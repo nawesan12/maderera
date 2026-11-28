@@ -55,6 +55,28 @@ export async function marcarOrdenEnviada(id: string): Promise<EstadoOrden> {
   return { ok: r.data.ok };
 }
 
+/** Cierra con lo que llegó la orden de la que el resto no va a llegar. */
+export async function cerrarOrdenConFaltante(id: string, motivo: string): Promise<EstadoOrden> {
+  const r = await (await api()).POST("/api/v1/admin/compras/ordenes/{id}/cerrar", {
+    params: { path: { id } },
+    body: { motivo },
+  });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
+  refrescar(id);
+  return { ok: r.data.ok };
+}
+
+/** La fecha prometida, mientras la orden no llegó entera. */
+export async function cambiarFechaDeOrden(id: string, fechaPrometida: string): Promise<EstadoOrden> {
+  const r = await (await api()).POST("/api/v1/admin/compras/ordenes/{id}/fecha", {
+    params: { path: { id } },
+    body: { fechaPrometida },
+  });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
+  refrescar(id);
+  return { ok: r.data.ok };
+}
+
 export async function anularOrdenDeCompra(id: string, motivo: string): Promise<EstadoOrden> {
   const r = await (await api()).POST("/api/v1/admin/compras/ordenes/{id}/anular", {
     params: { path: { id } },
@@ -77,7 +99,10 @@ export async function recibirDeLaOrden(purchaseOrderId: string, numeroRemito: st
   return { ok: r.data.ok, id: r.data.id };
 }
 
-/** El mismo buscador que usa la carga de recepciones. */
-export async function buscarParaPedir(texto: string) {
-  return buscarParaRecibir(texto);
+/**
+ * El mismo buscador que usa la carga de recepciones; con el proveedor, el
+ * costo que propone es el de su lista.
+ */
+export async function buscarParaPedir(texto: string, proveedor?: string) {
+  return buscarParaRecibir(texto, proveedor);
 }

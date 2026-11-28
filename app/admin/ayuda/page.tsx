@@ -22,14 +22,16 @@ export default async function AyudaPage({
 }: {
   searchParams: Promise<{ q?: string }>;
 }) {
-  await requireStaff();
+  const usuario = await requireStaff();
+  // Cada puesto ve las guías de lo que puede hacer (mes simulado, M2S4-071).
+  const rol = usuario.staffRole ?? null;
 
   const { q } = await searchParams;
   const termino = q?.trim() ?? "";
 
   const [guias, resultados] = await Promise.all([
-    listarGuias(),
-    termino ? buscarEnGuias(termino) : Promise.resolve([]),
+    listarGuias(rol),
+    termino ? buscarEnGuias(termino, rol) : Promise.resolve([]),
   ]);
 
   return (

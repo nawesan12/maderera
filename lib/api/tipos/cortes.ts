@@ -449,6 +449,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/cortes/consulta/{token}/contacto": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Quién mandó la consulta por WhatsApp: el cliente vinculado a la
+         *     conversación, su nombre y su teléfono (M2S3-024). Para el alta del
+         *     corte; quien entra a /admin/cortes/nuevo.
+         */
+        get: operations["ContactoDeLaConsulta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cortes/consulta/{token}": {
         parameters: {
             query?: never;
@@ -480,6 +501,8 @@ export interface components {
         /** Format: double */
         Metros: number;
         CorteListado: {
+            /** @description El pedido del corte no debe nada */
+            cobrado: boolean;
             /** @description Las placas son medias */
             mitad: string | null;
             sinCargo: boolean;
@@ -489,6 +512,8 @@ export interface components {
              * @description Cuándo salió de la máquina
              */
             salioAt: string | null;
+            /** @description El pedido del corte: se entrega desde ahí */
+            orderId?: string | null;
             id: string;
             numero: string;
             cliente: string;
@@ -665,6 +690,8 @@ export interface components {
                 cobrado: number;
                 /** Format: double */
                 placasDelPedido: number;
+                /** Format: double */
+                placasDeOtrosCortes?: number;
                 lineas: {
                     descripcion: string;
                     unidad: string;
@@ -676,6 +703,11 @@ export interface components {
             } | null;
             retalesDelCliente: boolean;
             sinPlata: boolean;
+            /**
+             * Format: double
+             * @description Lo que se le dijo al cliente al tomar el corte suelto
+             */
+            totalTomado?: number | null;
             corte: components["schemas"]["Corte"];
             tarifa: components["schemas"]["TarifaDeCorte"] | null;
             /** Format: double */
@@ -967,6 +999,13 @@ export interface components {
                 pvc: components["schemas"]["MedidaDeTabla"];
             };
         };
+        ContactoDeLaConsulta: {
+            clienteId: string | null;
+            nombre: string | null;
+            telefono: string | null;
+            /** @description La conversación de donde salió */
+            chat: string | null;
+        };
         ConsultaDeCorte: {
             token: string;
             variantId: string | null;
@@ -1031,6 +1070,8 @@ export interface components {
             precioPorPasada: number;
             /** Format: double */
             precioPorMetroCanto: number;
+            /** @description Hay alguna disponible en alguna sucursal */
+            hayStock?: boolean;
         };
         CorteCotizado: {
             variantId: string;
@@ -1377,7 +1418,9 @@ export interface operations {
                 };
                 content?: never;
             };
+            403: components["responses"]["Problema"];
             404: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
         };
     };
     GuardarAcomodo: {
@@ -1640,6 +1683,8 @@ export interface operations {
                     "application/json": {
                         id: string;
                         numero: string;
+                        /** @description las piezas del despiece (el ticket dice «Corte CRT-16 · 6 piezas») */
+                        piezas: number;
                         material: string;
                         estado: string;
                         urgente: number;
@@ -1790,6 +1835,10 @@ export interface operations {
                     busqueda?: boolean;
                     /** @description Solo para el staff */
                     hoja?: boolean;
+                    /** @description Solo para el staff: la placa del catálogo, para devolver el precio de la pasada */
+                    variantId?: string;
+                    /** @description Con variantId */
+                    customerId?: string;
                     presupuesto?: {
                         tarifa?: components["schemas"]["TarifaDeCorte"];
                         /** Format: double */
@@ -1813,6 +1862,11 @@ export interface operations {
                         placasACobrar: number;
                         /** @description Las pasadas del plano que se cobra */
                         pasadasACobrar: number;
+                        /**
+                         * Format: double
+                         * @description Con variantId (staff): la pasada con la tarifa de la placa y la lista del cliente
+                         */
+                        precioPorPasada?: number;
                         /** @description Las placas del plano que se cobra que no pasan la mitad: no se venden, se cobra su corte */
                         placasParciales?: number;
                         cuenta?: components["schemas"]["Presupuesto"];
@@ -1880,6 +1934,30 @@ export interface operations {
             };
             422: components["responses"]["Problema"];
             429: components["responses"]["Problema"];
+        };
+    };
+    ContactoDeLaConsulta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El contacto, o todo nulo si no salió de una conversación */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactoDeLaConsulta"];
+                };
+            };
+            401: components["responses"]["Problema"];
+            403: components["responses"]["Problema"];
         };
     };
     ConsultaDeCorte: {

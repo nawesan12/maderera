@@ -49,7 +49,24 @@ func (s *Servicio) Presupuesto(ctx context.Context, ses *auth.Sesion, p Presupue
 	a := ahora.In(caja.Argentina)
 	valido := time.Date(a.Year(), a.Month(), a.Day()+diasDeValidez, a.Hour(), a.Minute(), a.Second(), a.Nanosecond(), caja.Argentina)
 	var id, numero string
+	repetido := false
 	err := plataforma.EnTransaccion(ctx, s.pool, func(tx pgx.Tx) error {
+		// El segundo toque de «Presupuesto» con la misma clave devuelve el
+		// mismo: salían dos iguales, cada uno con su correo al cliente (mes
+		// simulado, M3S2-050).
+		if p.Clave != nil && *p.Clave != "" {
+			if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('presupuesto:' || $1::text))`, *p.Clave); err != nil {
+				return err
+			}
+			err := tx.QueryRow(ctx, `SELECT id::text, numero FROM quotes WHERE clave_mostrador = $1`, *p.Clave).Scan(&id, &numero)
+			if err == nil {
+				repetido = true
+				return nil
+			}
+			if !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+		}
 		var err error
 		if numero, err = numeracion.Presupuesto(ctx, tx, ahora.In(caja.Argentina)); err != nil {
 			return err
@@ -57,10 +74,10 @@ func (s *Servicio) Presupuesto(ctx context.Context, ses *auth.Sesion, p Presupue
 		asesor := ses.Nombre
 		if err := tx.QueryRow(ctx, `
 			INSERT INTO quotes (numero, customer_id, contacto_nombre, contacto_telefono, branch_id, estado, origen,
-			                    subtotal, total, notas, asesor, seller_id, valido_hasta, created_by_user_id)
-			VALUES ($1, $2, $3, $4, $5, 'enviado', 'mostrador', $6::numeric, $6::numeric, $7, $8, $9, $10, $11) RETURNING id`,
+			                    subtotal, total, notas, asesor, seller_id, valido_hasta, created_by_user_id, clave_mostrador)
+			VALUES ($1, $2, $3, $4, $5, 'enviado', 'mostrador', $6::numeric, $6::numeric, $7, $8, $9, $10, $11, $12) RETURNING id`,
 			numero, p.CustomerID, p.ContactoNombre, p.ContactoTelefono, p.BranchID, jsmath.Fijo2(subtotal), p.Notas,
-			asesor, vendedor, valido, ses.UserID).Scan(&id); err != nil {
+			asesor, vendedor, valido, ses.UserID, p.Clave).Scan(&id); err != nil {
 			return err
 		}
 		// El precio del navegador se guarda como lo que se presupuestó, pero
@@ -91,8 +108,11 @@ func (s *Servicio) Presupuesto(ctx context.Context, ses *auth.Sesion, p Presupue
 	if err != nil {
 		return "", "", err
 	}
-	s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "presupuesto", numero, "Presupuesto "+numero+" emitido desde el mostrador para "+p.ContactoNombre, nil)
+	if !repetido {
+		s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "presupuesto", numero, "Presupuesto "+numero+" emitido desde el mostrador para "+p.ContactoNombre, nil)
+	}
 	return id, numero, nil
+
 }
 
 // ClienteNuevo es lo que devuelve el alta rápida.

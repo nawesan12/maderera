@@ -11,7 +11,9 @@ import (
 
 	"mjbj/internal/auth"
 	"mjbj/internal/cobros"
+	"mjbj/internal/cortes"
 	"mjbj/internal/roles"
+	"mjbj/internal/ventas/fragmentos"
 )
 
 // Seguimiento es la página pública de un pedido (lib/dal/seguimiento.ts):
@@ -41,7 +43,26 @@ type Seguimiento struct {
 	SucursalSlug     *string            `json:"sucursalSlug"`
 	CreatedAt        time.Time          `json:"createdAt"`
 	Items            []RenglonDelPedido `json:"items"`
-	customerID       *string
+	// Lo que la página necesitaba para decir en qué está el pedido (mes
+	// simulado, M2S1-103, M2S2-110, M2S3-010, M3S4-043): decía «Listo,
+	// recibimos tu pedido» y pedía transferir uno entregado y cobrado.
+	//
+	// Descuento: el repartido en los renglones (como Mi cuenta, H209), y su
+	// motivo («10% por transferencia»): la página del pedido no tenía nada
+	// entre el subtotal y el total (M2S4-044).
+	Descuento       float64 `json:"descuento"`
+	DescuentoMotivo *string `json:"descuentoMotivo"`
+	// SinCobrar: lo que falta cobrar fuera de la cuenta corriente, con la
+	// regla de «Me deben» (cobrado en el mostrador o con un recibo no se
+	// vuelve a pedir). Cero si no falta nada o está en revisión.
+	SinCobrar float64 `json:"sinCobrar"`
+	// EntregadoAt: cuándo se entregó o se retiró (el último paso a
+	// «entregado»).
+	EntregadoAt *time.Time `json:"entregadoAt"`
+	// ConCuenta: el cliente ya tiene usuario en el sitio; no se le ofrece
+	// crear una cuenta.
+	ConCuenta  bool `json:"conCuenta"`
+	customerID *string
 }
 
 // RenglonDelPedido es lo que la página muestra de cada renglón: ni el costo
@@ -58,17 +79,30 @@ type RenglonDelPedido struct {
 	Orden          int32   `json:"orden"`
 }
 
+// entregadoConLaFirma es, sobre la fila `h` del historial, cuándo pasó: el
+// «entregado» de la venta del mostrador se escribe al cobrar, y el cliente
+// se la lleva cuando firma el retiro. PED-1125 decía «Entregado 17:00» con
+// el remito firmado a las 17:42 y el pedido en «Para firmar» hasta entonces
+// (mes 23).
+const entregadoConLaFirma = `CASE WHEN h.estado = 'entregado' THEN greatest(h.created_at,
+	  (SELECT max(df.firmado_at) FROM deliveries df WHERE df.order_id = h.order_id AND df.tipo = 'retiro' AND df.estado = 'entregada'))
+	  ELSE h.created_at END`
+
 // Seguir devuelve el pedido si quien pregunta lo puede ver.
 func (s *Servicio) Seguir(ctx context.Context, ses *auth.Sesion, numero, token string) (*Seguimiento, error) {
 	var p Seguimiento
 	err := s.pool.QueryRow(ctx, `
 		SELECT o.id, o.numero, o.public_token::text, o.customer_id::text, o.contacto_nombre, o.contacto_telefono, o.tipo_entrega::text,
 		  o.direccion_entrega, o.zona_envio, o.costo_envio::text, o.subtotal::text, o.total::text, o.medio_pago::text,
-		  o.estado_pago::text, o.estado::text, b.name, b.slug, o.created_at
+		  o.estado_pago::text, `+fragmentos.EstadoParaElCliente+`, b.name, b.slug, o.created_at,
+		  coalesce(o.descuento, 0)::float8, `+fragmentos.MotivoDelDescuento+`, coalesce(`+fragmentos.SinCobrarDelPedido+`, 0)::float8,
+		  CASE WHEN `+fragmentos.EstadoParaElCliente+` = 'entregado' THEN (SELECT max(`+entregadoConLaFirma+`) FROM order_status_history h
+		    WHERE h.order_id = o.id AND h.estado = 'entregado') END,
+		  EXISTS (SELECT 1 FROM customers c WHERE c.id = o.customer_id AND c.user_id IS NOT NULL)
 		FROM orders o LEFT JOIN branches b ON b.id = o.branch_id
 		WHERE o.numero = $1`, numero).Scan(&p.ID, &p.Numero, &p.PublicToken, &p.customerID, &p.Cliente, &p.Telefono, &p.TipoEntrega,
 		&p.DireccionEntrega, &p.ZonaEnvio, &p.CostoEnvio, &p.Subtotal, &p.Total, &p.MedioPago, &p.EstadoPago, &p.Estado,
-		&p.Sucursal, &p.SucursalSlug, &p.CreatedAt)
+		&p.Sucursal, &p.SucursalSlug, &p.CreatedAt, &p.Descuento, &p.DescuentoMotivo, &p.SinCobrar, &p.EntregadoAt, &p.ConCuenta)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoEsta
 	}
@@ -126,6 +160,11 @@ type PedidoPropio struct {
 	// Descuento es el que se repartió en los precios de los renglones: los
 	// renglones ya lo traen, y el subtotal guardado es el de antes (H209).
 	Descuento float64 `json:"descuento"`
+	// DescuentoMotivo: lo que dice el renglón del descuento (M2S2-116).
+	DescuentoMotivo *string `json:"descuentoMotivo"`
+	// PublicToken: el del enlace de seguimiento, para compartirlo con quien
+	// retira o recibe (mes simulado, M2S1-109). Solo lo ve el dueño.
+	PublicToken string `json:"publicToken"`
 	// DebeEnCuenta: ver Pedido.DebeEnCuenta.
 	DebeEnCuenta *float64 `json:"debeEnCuenta"`
 	// CuestaEnCuenta: ver Pedido.CuestaEnCuenta.
@@ -138,7 +177,19 @@ type PedidoPropio struct {
 	// diciendo 120 m² y el cliente no veía la corrección (H302).
 	Ajustes    []AjusteDelPedido `json:"ajustes"`
 	EnRevision *float64          `json:"enRevision"`
-	origen     string
+	// Devuelto es lo devuelto de cada renglón y Devoluciones el importe de
+	// todas: el pedido seguía diciendo «10 u.» y el total de antes de la
+	// devolución (mes simulado, M3S1-046 y M2S3-030).
+	Devuelto     []DevueltoDelRenglon `json:"devuelto"`
+	Devoluciones float64              `json:"devoluciones"`
+	origen       string
+}
+
+// DevueltoDelRenglon es lo devuelto de un renglón del pedido.
+type DevueltoDelRenglon struct {
+	OrderItemID string  `json:"orderItemId"`
+	Cantidad    float64 `json:"cantidad"`
+	Importe     float64 `json:"importe"`
 }
 
 // CorteDelPedido es un trabajo del taller atado al pedido (H210).
@@ -201,13 +252,13 @@ type EstadoDelPedido struct {
 func (s *Servicio) MiPedido(ctx context.Context, c *Cliente, numero string) (*PedidoPropio, error) {
 	var p PedidoPropio
 	err := s.pool.QueryRow(ctx, `
-		SELECT o.id, o.numero, o.estado::text, o.estado_pago::text, o.medio_pago::text, o.tipo_entrega::text, o.direccion_entrega,
+		SELECT o.id, o.numero, `+fragmentos.EstadoParaElCliente+`, o.estado_pago::text, o.medio_pago::text, o.tipo_entrega::text, o.direccion_entrega,
 		  o.zona_envio, o.costo_envio::text, o.subtotal::text, o.total::text, o.notas, b.name, b.slug, o.created_at,
-		  coalesce(o.descuento, 0)::float8, o.origen::text
+		  coalesce(o.descuento, 0)::float8, o.origen::text, `+fragmentos.MotivoDelDescuento+`, o.public_token::text
 		FROM orders o LEFT JOIN branches b ON b.id = o.branch_id
 		WHERE o.numero = $1 AND o.customer_id = $2`, numero, c.ID).
 		Scan(&p.ID, &p.Numero, &p.Estado, &p.EstadoPago, &p.MedioPago, &p.TipoEntrega, &p.DireccionEntrega, &p.ZonaEnvio,
-			&p.CostoEnvio, &p.Subtotal, &p.Total, &p.Notas, &p.Sucursal, &p.SucursalSlug, &p.CreatedAt, &p.Descuento, &p.origen)
+			&p.CostoEnvio, &p.Subtotal, &p.Total, &p.Notas, &p.Sucursal, &p.SucursalSlug, &p.CreatedAt, &p.Descuento, &p.origen, &p.DescuentoMotivo, &p.PublicToken)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoEsta
 	}
@@ -222,13 +273,24 @@ func (s *Servicio) MiPedido(ctx context.Context, c *Cliente, numero string) (*Pe
 	if p.Items, err = pgx.CollectRows(filas, pgx.RowToStructByPos[RenglonDelPedido]); err != nil {
 		return nil, err
 	}
-	filas, err = s.pool.Query(ctx, `SELECT id, estado::text, nota, created_at FROM order_status_history
-		WHERE order_id = $1 ORDER BY created_at DESC`, p.ID)
+	filas, err = s.pool.Query(ctx, `SELECT h.id, h.estado::text, h.nota, `+entregadoConLaFirma+` AS cuando FROM order_status_history h
+		WHERE h.order_id = $1 ORDER BY cuando DESC, h.created_at DESC`, p.ID)
 	if err != nil {
 		return nil, err
 	}
 	if p.Historial, err = pgx.CollectRows(filas, pgx.RowToStructByPos[EstadoDelPedido]); err != nil {
 		return nil, err
+	}
+	// Mientras el retiro espera la firma, «Qué fue pasando» no dice
+	// «Entregado» con el pedido arriba en «Para firmar» (mes 23, M2S1-071).
+	if p.Estado == "listo" || p.Estado == "por-firmar" {
+		h := p.Historial[:0]
+		for _, e := range p.Historial {
+			if e.Estado != "entregado" {
+				h = append(h, e)
+			}
+		}
+		p.Historial = h
 	}
 	paraElCliente(&p)
 
@@ -241,6 +303,10 @@ func (s *Servicio) MiPedido(ctx context.Context, c *Cliente, numero string) (*Pe
 		return nil, err
 	}
 	for i := range p.Cortes {
+		if m := p.Cortes[i].Material; m != nil {
+			o := cortes.MaterialEnOrden(*m, nil, nil)
+			p.Cortes[i].Material = &o
+		}
 		filas, err = s.pool.Query(ctx, `SELECT largo_mm, ancho_mm, cantidad, etiqueta FROM cutting_items
 			WHERE cutting_order_id = $1 ORDER BY orden`, p.Cortes[i].ID)
 		if err != nil {
@@ -276,6 +342,19 @@ func (s *Servicio) MiPedido(ctx context.Context, c *Cliente, numero string) (*Pe
 	}
 	for i := range p.Ajustes {
 		p.Ajustes[i].Detalle = cobros.DetalleParaElCliente(p.Ajustes[i].Detalle)
+	}
+	filas, err = s.pool.Query(ctx, `SELECT di.order_item_id::text, sum(di.cantidad)::float8, sum(di.importe)::float8
+		FROM devolucion_items di JOIN devoluciones d ON d.id = di.devolucion_id
+		WHERE d.order_id = $1 AND di.order_item_id IS NOT NULL GROUP BY di.order_item_id`, p.ID)
+	if err != nil {
+		return nil, err
+	}
+	if p.Devuelto, err = pgx.CollectRows(filas, pgx.RowToStructByPos[DevueltoDelRenglon]); err != nil {
+		return nil, err
+	}
+	if err := s.pool.QueryRow(ctx, `SELECT coalesce(sum(importe), 0)::float8 FROM devoluciones WHERE order_id = $1`, p.ID).
+		Scan(&p.Devoluciones); err != nil {
+		return nil, err
 	}
 	var revision float64
 	if err := s.pool.QueryRow(ctx, `SELECT coalesce(sum(monto), 0)::float8 FROM payments

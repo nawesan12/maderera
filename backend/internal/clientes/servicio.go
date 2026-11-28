@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"mjbj/internal/formato"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"mjbj/internal/auth"
@@ -201,6 +203,12 @@ func (s *Servicio) GuardarConID(ctx context.Context, ses *auth.Sesion, f FormCli
 	if err != nil {
 		return "", "", err
 	}
+	// «2235550483» tipeado de corrido se guarda como las demás fichas:
+	// «223 555-0483» (M3S1-069).
+	if c.Telefono != nil {
+		t := formato.Telefono(*c.Telefono)
+		c.Telefono = &t
+	}
 	if c.Cuit != nil {
 		if doc, e := LeerDocumento(*c.Cuit); e == "" && doc.Tipo != "ninguno" {
 			formas := []string{doc.Digitos}
@@ -216,6 +224,28 @@ func (s *Servicio) GuardarConID(ctx context.Context, ses *auth.Sesion, f FormCli
 		}
 	}
 	id := c.ID
+	// Lo que cambió de la ficha, para la bitácora (mes simulado, M2S2-087):
+	// «Editó a Constructora» no decía que le habían cambiado la lista.
+	var cambios []string
+	if id != "" {
+		var lista, limite, vendedor string
+		if err := s.pool.QueryRow(ctx, `SELECT coalesce((SELECT name FROM price_lists WHERE id = c.price_list_id), 'general'),
+			coalesce(c.limite_credito::text, ''), coalesce((SELECT nombre FROM sellers WHERE id = c.seller_id), '')
+			FROM customers c WHERE c.id = $1`, id).Scan(&lista, &limite, &vendedor); err == nil {
+			var nueva, nuevoVendedor string
+			_ = s.pool.QueryRow(ctx, `SELECT coalesce((SELECT name FROM price_lists WHERE id::text = $1), 'general'),
+				coalesce((SELECT nombre FROM sellers WHERE id::text = $2), '')`, deref(c.PriceListID), deref(c.SellerID)).Scan(&nueva, &nuevoVendedor)
+			if nueva != lista {
+				cambios = append(cambios, "lista de precios: "+lista+" → "+nueva)
+			}
+			if nuevoVendedor != vendedor {
+				cambios = append(cambios, "vendedor: "+vacioComo(vendedor, "ninguno")+" → "+vacioComo(nuevoVendedor, "ninguno"))
+			}
+			if l := c.LimiteCredito; jsmath.Numero(l) != jsmath.Numero(limite) && !(l == "" && limite == "") {
+				cambios = append(cambios, "límite de crédito: "+limiteEnPesos(limite)+" → "+limiteEnPesos(l))
+			}
+		}
+	}
 	if id != "" {
 		err = s.q.EditarCliente(ctx, sqlc.EditarClienteParams{
 			ID: id, Nombre: c.Nombre, RazonSocial: c.RazonSocial, Cuit: c.Cuit, CondicionIva: sqlc.CondicionIva(c.CondicionIva),
@@ -236,7 +266,11 @@ func (s *Servicio) GuardarConID(ctx context.Context, ses *auth.Sesion, f FormCli
 	if c.ID != "" {
 		accion, verbo = sqlc.AccionAuditoriaEditar, "Editó"
 	}
-	bitacora.Anotar(ctx, s.q, s.log, ses, accion, "cliente", id, verbo+" a "+c.Nombre,
+	desc := verbo + " a " + c.Nombre
+	if len(cambios) > 0 {
+		desc += ": " + strings.Join(cambios, " · ")
+	}
+	bitacora.Anotar(ctx, s.q, s.log, ses, accion, "cliente", id, desc,
 		map[string]any{"limiteCredito": c.LimiteCredito, "tipo": c.Tipo})
 	if c.ID != "" {
 		return id, "Cliente actualizado.", nil
@@ -246,7 +280,7 @@ func (s *Servicio) GuardarConID(ctx context.Context, ses *auth.Sesion, f FormCli
 
 // Movimiento es registrarMovimiento: una compra, nota o ajuste cargado a
 // mano (solo el admin). El signo lo pone el tipo.
-func (s *Servicio) Movimiento(ctx context.Context, ses *auth.Sesion, cliente, tipo, monto, detalle string) error {
+func (s *Servicio) Movimiento(ctx context.Context, ses *auth.Sesion, cliente, tipo, monto, detalle string, fecha ...string) error {
 	if !plataforma.UUIDValido(cliente) {
 		return mal("customerId", "Invalid UUID")
 	}
@@ -267,16 +301,47 @@ func (s *Servicio) Movimiento(ctx context.Context, ses *auth.Sesion, cliente, ti
 		m = -m
 	}
 	texto := jsmath.Fijo2(m)
+	// Una deuda vieja que se carga hoy lleva su fecha (M3S3-017): entraba
+	// como de hoy, vencía dentro de 15 días y el seguimiento no la contaba
+	// atrasada. Hasta un año para atrás, nunca para adelante; un mes cerrado
+	// lo frena la base (00221).
+	var cuando pgtype.Timestamptz
+	dia := ""
+	if len(fecha) > 0 {
+		dia = strings.TrimSpace(fecha[0])
+	}
+	if dia != "" {
+		t, err := time.ParseInLocation("2006-01-02", dia, argentina)
+		if err != nil {
+			return mal("fecha", "Revisá la fecha.")
+		}
+		hoy := time.Now().In(argentina)
+		hoyDia := time.Date(hoy.Year(), hoy.Month(), hoy.Day(), 0, 0, 0, 0, argentina)
+		switch {
+		case t.After(hoyDia):
+			return mal("fecha", "La fecha no puede ser de mañana en adelante.")
+		case t.Before(hoyDia.AddDate(-1, 0, 0)):
+			return mal("fecha", "La fecha es de hace más de un año: revisala.")
+		case t.Before(hoyDia):
+			// Al mediodía de ese día: cae en ese día en cualquier zona.
+			cuando = pgtype.Timestamptz{Time: t.Add(12 * time.Hour), Valid: true}
+		}
+	}
 	if err := s.q.MovimientoManual(ctx, sqlc.MovimientoManualParams{CustomerID: cliente, Tipo: sqlc.TipoMovimientoCuenta(tipo),
-		Monto: texto, Detalle: nulo(d), CreatedByUserID: &ses.UserID}); err != nil {
+		Monto: texto, Detalle: nulo(d), CreatedByUserID: &ses.UserID, Fecha: cuando}); err != nil {
 		return err
 	}
 	det := map[string]any{"tipo": tipo, "monto": texto}
+	if cuando.Valid {
+		det["fecha"] = dia
+	}
 	if d != "" {
 		det["detalleCarga"] = d
 	}
+	// Con las palabras y la plata de la pantalla: decía «nota_debito por
+	// 180000.00» (mes 23).
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "cliente", cliente,
-		"Cargó un movimiento de cuenta corriente: "+tipo+" por "+texto, det)
+		"Cargó "+movimientoEnPalabras[tipo]+" de "+formato.Importe(math.Abs(m))+" en la cuenta corriente", det)
 	return nil
 }
 
@@ -460,6 +525,20 @@ func mediodia(v string) (*time.Time, error) {
 	return &t, nil
 }
 
+// noEnElPasado: la próxima acción es de hoy en adelante, en el día
+// argentino.
+func noEnElPasado(cuando *time.Time, ahora time.Time) error {
+	if cuando == nil {
+		return nil
+	}
+	a := ahora.In(argentina)
+	hoy := time.Date(a.Year(), a.Month(), a.Day(), 0, 0, 0, 0, argentina)
+	if cuando.Before(hoy) {
+		return mal("proximaAccion", "La fecha ya pasó: poné de hoy en adelante.")
+	}
+	return nil
+}
+
 // CrearGestion abre un seguimiento de cobranza o de venta.
 func (s *Servicio) CrearGestion(ctx context.Context, ses *auth.Sesion, cliente, asunto, notas, proxima string) error {
 	a, n := strings.TrimSpace(asunto), strings.TrimSpace(notas)
@@ -475,6 +554,10 @@ func (s *Servicio) CrearGestion(ctx context.Context, ses *auth.Sesion, cliente, 
 	}
 	cuando, err := mediodia(proxima)
 	if err != nil {
+		return err
+	}
+	// Una fecha pasada nacía vencida (mes simulado 2).
+	if err := noEnElPasado(cuando, time.Now()); err != nil {
 		return err
 	}
 	if err := s.q.CrearGestion(ctx, sqlc.CrearGestionParams{CustomerID: cliente, Asunto: a, Notas: nulo(n),
@@ -517,7 +600,14 @@ func (s *Servicio) MoverGestion(ctx context.Context, ses *auth.Sesion, id, etapa
 	if p, err := mediodia(proxima); err != nil {
 		return "", err
 	} else if p != nil {
+		if err := noEnElPasado(p, ahora); err != nil {
+			return "", err
+		}
 		actual = p
+	} else if etapa == "promesa" && (actual == nil || !actual.After(ahora)) {
+		// «Prometió» es para cuándo (mes simulado 2: quedaba en rojo con la
+		// fecha vieja).
+		return "", mal("proximaAccion", "Poné para cuándo prometió.")
 	}
 	var cerrado *time.Time
 	if etapa == "cerrado" {
@@ -533,4 +623,36 @@ func (s *Servicio) MoverGestion(ctx context.Context, ses *auth.Sesion, id, etapa
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCambiarEstado, "cliente", g.CustomerID, desc, nil)
 	return g.CustomerID, nil
+}
+
+func deref(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}
+
+// movimientoEnPalabras nombra el tipo de un movimiento cargado a mano.
+var movimientoEnPalabras = map[string]string{
+	"compra": "una compra", "nota_credito": "una nota de crédito", "nota_debito": "una nota de débito", "ajuste": "un ajuste",
+}
+
+// limiteEnPesos es el límite de crédito como se lee en la ficha: «$ 5.000.000»
+// o «sin límite». Decía «5000000.00» (mes 23).
+func limiteEnPesos(l string) string {
+	if strings.TrimSpace(l) == "" {
+		return "sin límite"
+	}
+	v := jsmath.Numero(l)
+	if math.IsNaN(v) {
+		return l
+	}
+	return formato.Importe(v)
+}
+
+func vacioComo(s, siVacio string) string {
+	if s == "" {
+		return siVacio
+	}
+	return s
 }

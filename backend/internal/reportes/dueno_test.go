@@ -123,7 +123,8 @@ func TestNumerosDelDueno(t *testing.T) {
 	if len(p.Cajas) != 1 || p.Cajas[0].Sucursal != "Casa Central" || p.Cajas[0].Esperado != 1300 || p.Efectivo != 1300 ||
 		p.Banco != 120 || p.MercadoPago != 80 || p.Tarjetas != 80 || p.Cheques != (Monto{500, 2}) ||
 		// El depositado sin acreditar sigue siendo plata de la casa (H406).
-		p.ChequesDepositados != (Monto{200, 1}) || p.Total != 2200 {
+		// Lo movido hoy en el banco (120) no suma sin un saldo cargado (M2S2-100).
+		p.ChequesDepositados != (Monto{200, 1}) || p.Total != 2080 {
 		t.Errorf("plata hoy: %+v", p)
 	}
 	g := n.Ganancia
@@ -424,7 +425,9 @@ func TestCostoCeroYUnSoloVendido(t *testing.T) {
 	_, cuerpo, _ = pedir(t, adm, e.u+"cierre/resumen?periodo=2026-10")
 	var r ResumenDelMes
 	_ = json.Unmarshal([]byte(cuerpo), &r)
-	if r.Resultado.Actual != quiere || r.Vendido.Total != vendido {
+	// Lo vendido del cierre, partido por factura, es lo que tiene costo: lo
+	// sin costo va aparte (M3S1-020).
+	if r.Resultado.Actual != quiere || r.Vendido.Total != rep.Totales.NetoCosteado {
 		t.Errorf("resultado del cierre: %+v, vendido %+v", r.Resultado.Actual, r.Vendido)
 	}
 }
@@ -914,5 +917,25 @@ func TestLaVentaCuentaAlEntregarseOFacturarse(t *testing.T) {
 	e.facturaConCae(t, nil, 95, 2420, "2026-11-03T15:00:00Z", &preparando)
 	if o, n := vendido("2026-10"), vendido("2026-11"); o != 1000 || n != 2000 {
 		t.Fatalf("facturado en noviembre: octubre %v, noviembre %v", o, n)
+	}
+}
+
+// Mes 23: el desglose del cierre sumaba un centavo menos que el «Vendido
+// sin IVA» de arriba. 1210,03 con costo y 121,03 sin costo: sin IVA,
+// 1000,0248 y 100,0248. Arriba, 1100,05 − 100,02 = 1000,03; redondeando
+// solo lo costeado daba 1000,02.
+func TestElDesgloseDelCierreCierraAlCentavo(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	placa, tirante := e.catalogo(t)
+	e.pedido(t, "V-1", e.central, "entregado", "mostrador", time.Date(2026, 10, 5, 12, 0, 0, 0, Argentina), nil,
+		[4]any{placa, 1.0, 1210.03, 600.0}, [4]any{tirante, 1.0, 121.03, nil})
+	_, cuerpo, _ := pedir(t, adm, e.u+"cierre/resumen?periodo=2026-10")
+	var r ResumenDelMes
+	_ = json.Unmarshal([]byte(cuerpo), &r)
+	arriba := jsmath.Redondear2(r.Resultado.Actual.VentasNetas - r.Resultado.Actual.VentasSinCosto)
+	partes := jsmath.Redondear2(r.Vendido.Facturado.Total + r.Vendido.SinCae.Total + r.Vendido.Interno.Total + r.Vendido.SinFactura.Total)
+	if arriba != 1000.03 || r.Vendido.Total != arriba || partes != arriba {
+		t.Errorf("arriba %v, total %v, partes %v", arriba, r.Vendido.Total, partes)
 	}
 }

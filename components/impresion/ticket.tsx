@@ -1,4 +1,5 @@
-import { cantidadConUnidad, formatearMonto } from "@/lib/formato";
+import { cantidadConUnidad, formatearMonto, telefonoLegible } from "@/lib/formato";
+import { formatearCantidad } from "@/lib/unidades";
 import { esLineaDelCorte } from "@/lib/mostrador/importes";
 import { fechaDelTicket, type DocumentoTicket } from "@/lib/mostrador/ticket";
 import { BotonImprimir } from "@/app/(impresion)/ticket/[id]/boton";
@@ -51,6 +52,10 @@ export function TicketImpreso({ documento }: { documento: DocumentoTicket }) {
           <span>{fecha}</span>
         </p>
 
+        {/* Anulada, bien grande y arriba: el ticket completo de una venta
+            anulada podía circular como válido (mes simulado, M2S1-083). */}
+        {documento.anulada && <p className="anulada">ANULADA</p>}
+
         {/*
           * Que el número es provisorio se dice acá arriba y no en una nota al
           * pie: es lo primero que hay que saber si mañana hay que buscar esta
@@ -87,8 +92,12 @@ export function TicketImpreso({ documento }: { documento: DocumentoTicket }) {
                       «14 pasada ×» abajo se leía como un cobro de más. */}
                   {!esLineaDelCorte(item) && (
                     <span className="detalle">
-                      {cantidadConUnidad(item.cantidad, item.unidad, item.descripcion)} ×{" "}
-                      {formatearMonto(item.precioUnitario)}
+                      {/* La media placa dice media placa, como la pantalla:
+                          «2 placas» y quien entrega da dos enteras (M2S1-084). */}
+                      {item.presentacion === "media_largo" || item.presentacion === "media_ancho"
+                        ? `${formatearCantidad(item.cantidad)} ${item.cantidad === 1 ? "media placa" : "medias placas"}`
+                        : cantidadConUnidad(item.cantidad, item.unidad, item.descripcion)}{" "}
+                      × {formatearMonto(item.precioUnitario)}
                     </span>
                   )}
                 </td>
@@ -97,6 +106,14 @@ export function TicketImpreso({ documento }: { documento: DocumentoTicket }) {
             ))}
           </tbody>
         </table>
+
+        {/* El número del corte y sus piezas: es con lo que el cliente vuelve
+            a retirar (mes simulado, M2S3-095). */}
+        {documento.cortes && documento.cortes.length > 0 && (
+          <p className="aviso">
+            {documento.cortes.map((c) => `Corte ${c.numero} · ${c.piezas} ${c.piezas === 1 ? "pieza" : "piezas"}`).join(" / ")}
+          </p>
+        )}
 
         <div className="separador" />
 
@@ -138,6 +155,21 @@ export function TicketImpreso({ documento }: { documento: DocumentoTicket }) {
                 : ""}
             </span>
           </p>
+        )}
+
+        {/* Con cuánto pagó y el vuelto, debajo del pago en efectivo: el vuelto
+            no quedaba en ningún lado (mes simulado, M3S1-061). */}
+        {documento.recibido != null && documento.recibido >= documento.total && (
+          <>
+            <p className="linea-datos">
+              <span>Recibido</span>
+              <span>{formatearMonto(documento.recibido)}</span>
+            </p>
+            <p className="linea-datos">
+              <span>Vuelto</span>
+              <span>{formatearMonto(Math.round((documento.recibido - documento.total) * 100) / 100)}</span>
+            </p>
+          </>
         )}
 
         {documento.pagos.some((p) => p.nroLote || p.nroCupon) && (
@@ -208,7 +240,8 @@ export function TicketImpreso({ documento }: { documento: DocumentoTicket }) {
 
         {documento.whatsapp && (
           <p className="pie">
-            Consultas por WhatsApp: {documento.whatsapp.replace(/\D/g, "")}
+            Consultas por WhatsApp: {telefonoLegible(documento.whatsapp)}
+
           </p>
         )}
       </div>

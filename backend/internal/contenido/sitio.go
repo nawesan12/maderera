@@ -303,10 +303,11 @@ func enlaceParaContestar(c Consulta) string {
 	return "https://wa.me/" + id + "?text=" + strings.ReplaceAll(url.QueryEscape(saludo), "+", "%20")
 }
 
-// primerNombre es la primera palabra del nombre, para el saludo.
+// primerNombre es el nombre para el saludo: el de pila de una persona o el
+// del negocio entero (whatsapp.NombreDeSaludo).
 func primerNombre(nombre string) string {
-	if campos := strings.Fields(nombre); len(campos) > 0 {
-		return campos[0]
+	if n := whatsapp.NombreDeSaludo(nombre); n != "" {
+		return n
 	}
 	return nombre
 }

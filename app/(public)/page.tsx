@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { BotonProfesional } from "@/components/sitio/boton-profesional";
 import Image from "next/image";
 import { FondoDeRubro } from "@/components/catalogo/fondo-de-rubro";
+import { TONOS, tonoDePlaca } from "@/lib/catalogo/placa";
 import { enlaceWhatsapp, numeroWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
 import {
@@ -274,12 +276,28 @@ function Categorias({
               ) : (
                 <FondoDeRubro rubro={cat.slug} />
               )}
-              <div className="absolute inset-0 bg-[linear-gradient(to_top,rgb(28_25_22_/_0.88)_0%,rgb(28_25_22_/_0.28)_52%,transparent_100%)]" />
-              <div className="absolute inset-x-4 bottom-3.5">
-                <h3 className="text-[18px] font-bold tracking-[-0.02em] text-white">
+              {/* Sin foto, la placa del rubro a la vista y el título en su
+                  tinta: con el degradado de las fotos encima, la de Cubiertas
+                  era un rectángulo gris liso (mes simulado, M2S2-143). La
+                  portada de banco se sacó a propósito (00180). */}
+              {cat.image && (
+                <div className="absolute inset-0 bg-[linear-gradient(to_top,rgb(28_25_22_/_0.88)_0%,rgb(28_25_22_/_0.28)_52%,transparent_100%)]" />
+              )}
+              <div
+                className={`absolute inset-x-4 bottom-3.5 ${cat.image ? "text-white" : "text-[var(--tinta)] dark:text-[var(--tinta-oscura)]"}`}
+                style={
+                  cat.image
+                    ? undefined
+                    : ({
+                        "--tinta": TONOS[tonoDePlaca(cat.slug)].claro.texto,
+                        "--tinta-oscura": TONOS[tonoDePlaca(cat.slug)].oscuro.texto,
+                      } as React.CSSProperties)
+                }
+              >
+                <h3 className="text-[18px] font-bold tracking-[-0.02em]">
                   {cat.name}
                 </h3>
-                <p className="tabular mt-0.5 text-[12.5px] text-white/70">
+                <p className={`tabular mt-0.5 text-[12.5px] ${cat.image ? "text-white/70" : "opacity-75"}`}>
                   {cat.productCount === 1
                     ? "1 producto"
                     : `${cat.productCount} productos`}
@@ -631,12 +649,7 @@ function BannerProfesionales({ tiendaActiva }: { tiendaActiva: boolean }) {
                 {bajada}
               </p>
 
-              <Link
-                href="/profesionales"
-                className="mt-5 flex h-12 w-fit items-center rounded-[10px] bg-accion px-[22px] text-[15.5px] font-semibold text-white transition-colors hover:bg-accion-hover"
-              >
-                Solicitar cuenta profesional
-              </Link>
+              <BotonProfesional />
             </div>
           </article>
 

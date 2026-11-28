@@ -5,21 +5,25 @@ import { requireStaff } from "@/lib/dal/session";
 import { sucursalesConCaja, turnosCerrados } from "@/lib/dal/admin/caja";
 import {
   anulacionesPorPersona,
+  cajasFuertes,
   efectivoFueraDeCaja,
   emitidoPorCaja,
   listarCajasFisicas,
   turnosParaAsignar,
   ventasSinCaja,
 } from "@/lib/dal/admin/cajas-fisicas";
-import { fechaHora, fechaHoraODia, formatearImporte, formatearMonto, haceCuanto, hora, plural } from "@/lib/formato";
+import { fechaHora, formatearImporte, formatearMonto, haceCuanto, hora, plural } from "@/lib/formato";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { SelectorDeMes } from "@/components/admin/selector-de-mes";
 import { Vacio } from "@/components/admin/vacio";
 import { leerPagina, Paginador, POR_PAGINA } from "@/components/admin/paginador";
 import { leerPeriodoMensual } from "@/lib/periodos";
 import { nombreComprobante, type TipoComprobante } from "@/lib/fiscal/comprobantes";
+import { TOLERANCIA_ARQUEO } from "@/lib/mostrador/arqueo";
+import { CajaFuerte } from "./caja-fuerte";
 import { CajasFisicas } from "./cajas-fisicas";
 import { FondoBase } from "./fondo-base";
+import { FueraDeCaja } from "./fuera-de-caja";
 import { VentasSueltas } from "./ventas-sueltas";
 
 export const metadata: Metadata = { title: "Caja" };
@@ -41,6 +45,9 @@ export const metadata: Metadata = { title: "Caja" };
  */
 const ZONA = "America/Argentina/Buenos_Aires";
 
+/** Lo emitido se trae de a tantas ventas (M3S2-040: cortaba en 200 sin decirlo). */
+const EMITIDOS_POR_PAGINA = 100;
+
 /** El día argentino de un instante, para comparar dos. */
 const diaArgentino = (d: Date) => d.toLocaleDateString("es-AR", { timeZone: ZONA });
 
@@ -58,27 +65,32 @@ const MEDIOS: Record<string, string> = {
 export default async function CajaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string; pagina?: string }>;
+  searchParams: Promise<{ periodo?: string; pagina?: string; emitidos?: string }>;
 }) {
   await requireStaff();
 
-  const { periodo: crudo, pagina: paginaCruda } = await searchParams;
+  const { periodo: crudo, pagina: paginaCruda, emitidos: emitidosCruda } = await searchParams;
   const periodo = leerPeriodoMensual(crudo, new Date());
   const pagina = leerPagina(paginaCruda);
+  const paginaEmitidos = leerPagina(emitidosCruda);
 
   // Las anulaciones del mes por quien las hizo, la que más anuló primero.
   // Las cuenta Go por la fecha de la anulación: sumarlas acá sobre lo
   // emitido, que llega cortado en 200 y por la fecha de la venta, perdía las
   // de la primera quincena.
-  const [sucursales, turnosDelMes, cajas, sueltas, emitido, anulaciones, fueraDeCaja] = await Promise.all([
+  const [sucursales, turnosDelMes, cajas, sueltas, emitidoDelMes, anulaciones, fueraDeCaja, fuertes] = await Promise.all([
     sucursalesConCaja(),
     turnosCerrados(periodo.clave, pagina, POR_PAGINA),
     listarCajasFisicas(),
     ventasSinCaja(),
-    emitidoPorCaja(periodo.clave),
+    emitidoPorCaja(periodo.clave, paginaEmitidos, EMITIDOS_POR_PAGINA),
     anulacionesPorPersona(periodo.clave),
     efectivoFueraDeCaja(periodo.clave),
+    cajasFuertes(),
   ]);
+  const emitido = emitidoDelMes.filas;
+  const resumenEmitido = emitidoDelMes.resumen;
+  const saldoFuerte = new Map(fuertes.map((f) => [f.branchId, f.saldo]));
 
   /*
    * Los turnos a los que se puede mandar una venta suelta. Se piden solo para
@@ -86,7 +98,14 @@ export default async function CajaPage({
    * —que es lo normal— esto no consulta nada.
    */
   const cerrados = turnosDelMes.filas;
-  const conSueltas = [...new Set(sueltas.map((v) => v.branchId))];
+  // Las sucursales con algo que mandar a un turno: ventas sueltas y recibos
+  // cobrados en efectivo sin caja (M3S1-013).
+  const conSueltas = [
+    ...new Set([
+      ...sueltas.map((v) => v.branchId),
+      ...fueraDeCaja.flatMap((f) => (f.tipo === "recibo" && f.branchId ? [f.branchId] : [])),
+    ]),
+  ];
   const turnos = (
     await Promise.all(conSueltas.map((id) => turnosParaAsignar(id)))
   ).flatMap((lista, i) =>
@@ -103,14 +122,18 @@ export default async function CajaPage({
       <EncabezadoPanel
         titulo="Caja"
       >
-        <SelectorDeMes actual={periodo.clave} />
+        <SelectorDeMes actual={periodo.clave} desde={turnosDelMes.primerMes} />
       </EncabezadoPanel>
 
       <section className="grid gap-3 sm:grid-cols-2">
         {sucursales.map((s) => (
-          // En el teléfono el botón baja a su propio renglón: al lado, el
-          // nombre, el turno y el cambio fijo quedaban partidos en tres.
-          <article key={s.id} className="tarjeta flex flex-wrap items-center gap-3.5 p-4 lg:flex-nowrap">
+          // El nombre, el turno y «Ir al mostrador» arriba; abajo, a todo el
+          // ancho, lo que hay en el cajón, el cambio fijo y la caja fuerte.
+          // Al lado del botón, «$ 141.000 en efectivo» se partía en dos
+          // renglones a 1280 px, y la tarjeta más alta dejaba un hueco
+          // arriba por el centrado (mes 23). En el teléfono el botón baja
+          // al final, a todo el ancho.
+          <article key={s.id} className="tarjeta flex flex-wrap items-start gap-x-3.5 gap-y-3 p-4">
             <span
               className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
                 s.turnoId
@@ -120,71 +143,44 @@ export default async function CajaPage({
             >
               <Banknote className="h-5 w-5" />
             </span>
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 self-center">
               <p className="text-base font-semibold">{s.nombre}</p>
               <p className="text-sm text-muted-foreground">
                 {s.turnoId && s.abiertaAt
                   ? `Abierta ${haceCuanto(new Date(s.abiertaAt))}`
                   : "Sin turno abierto"}
               </p>
+            </div>
+            <Link
+              href="/mostrador"
+              className="order-last inline-flex h-10 w-full shrink-0 items-center justify-center gap-1.5 rounded-lg border border-linea px-3.5 text-sm font-medium transition-colors hover:bg-hundida sm:order-none sm:w-auto"
+            >
+              <Store className="h-4 w-4" />
+              Ir al mostrador
+            </Link>
+            <div className="basis-full">
               {/* Lo que tendría que haber ahora en el cajón: la suma de los
                   movimientos del turno, el mismo número que va a pedir el
                   arqueo. Es la pregunta del dueño cuando pasa por la caja. */}
               {s.esperado != null && (
-                <p className="tabular mt-1 text-2xl font-bold leading-tight">
+                <p className="tabular text-2xl font-bold leading-tight">
                   {formatearImporte(s.esperado)}
-                  <span className="ml-2 text-base font-medium text-muted-foreground">
+                  <span className="ml-2 whitespace-nowrap text-base font-medium text-muted-foreground">
                     en efectivo
                   </span>
                 </p>
               )}
               {/* El cambio que no se retira nunca. Ver `FondoBase`. */}
               <FondoBase branchId={s.id} valor={Number(s.fondoBase)} />
+              <CajaFuerte branchId={s.id} saldo={saldoFuerte.get(s.id) ?? 0} />
             </div>
-            <Link
-              href="/mostrador"
-              className="inline-flex h-10 w-full shrink-0 items-center justify-center gap-1.5 rounded-lg border border-linea px-3.5 text-sm font-medium transition-colors hover:bg-hundida lg:w-auto"
-            >
-              <Store className="h-4 w-4" />
-              Ir al mostrador
-            </Link>
           </article>
         ))}
       </section>
 
       <VentasSueltas ventas={sueltas} turnos={turnos} />
 
-      {/* El efectivo que no pasó por ningún turno: el asiento mueve la cuenta
-          Caja, pero ningún arqueo lo cuenta (mes simulado, H157). */}
-      {fueraDeCaja.length > 0 && (
-        <section className="tarjeta-atencion overflow-hidden">
-          <header className="flex items-baseline justify-between gap-3 px-5 py-3.5">
-            <h2 className="text-base font-semibold">Efectivo fuera de caja</h2>
-            <span className="tabular text-base font-semibold">
-              {formatearImporte(fueraDeCaja.reduce((s, f) => s + f.monto, 0))}
-            </span>
-          </header>
-          <ul className="divide-y divide-linea">
-            {fueraDeCaja.map((f) => (
-              <li key={`${f.tipo}-${f.id}`} className="flex items-baseline gap-3 px-5 py-2.5">
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-base">
-                    {f.tipo === "gasto" ? "Gasto · " : f.tipo === "pago" ? "Pago a " : "Recibo "}
-                    {f.detalle}
-                  </span>
-                  <span className="block text-sm text-muted-foreground">
-                    {fechaHoraODia.format(f.fecha)}
-                    {f.sucursal && ` · ${f.sucursal}`}
-                  </span>
-                </span>
-                <span className={`tabular shrink-0 font-semibold ${f.monto < 0 ? "text-saldo-debe" : "text-saldo-favor"}`}>
-                  {formatearImporte(f.monto)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <FueraDeCaja renglones={fueraDeCaja} turnos={turnos} />
 
       <CajasFisicas
         cajas={cajas.map((c) => ({
@@ -201,19 +197,25 @@ export default async function CajaPage({
       />
 
       <section className="tarjeta overflow-hidden">
-        <header className="tarjeta-cabecera grid grid-cols-[1fr_auto] items-baseline gap-x-4 px-5 py-3.5 sm:grid-cols-[1fr_repeat(3,8.5rem)_1.25rem]">
+        <header className="tarjeta-cabecera grid grid-cols-[1fr_auto] items-baseline gap-x-4 px-5 py-3.5 sm:grid-cols-[1fr_repeat(3,8.5rem)_1.25rem] lg:grid-cols-[1fr_repeat(3,10.5rem)_1.25rem]">
           <h2 className="text-base font-semibold">
             Turnos cerrados <span className="tabular ml-1 text-muted-foreground">{turnosDelMes.total}</span>
           </h2>
-          <span className="hidden text-right text-sm uppercase tracking-wide text-muted-foreground sm:block">Tendría que haber</span>
-          <span className="hidden text-right text-sm uppercase tracking-wide text-muted-foreground sm:block">Contado</span>
-          <span className="text-right text-sm uppercase tracking-wide text-muted-foreground">Diferencia</span>
+          {/* Sin turnos, el estado vacío y no los títulos de columnas que
+              no tienen nada abajo (M2S1-118). */}
+          {cerrados.length > 0 && (
+            <>
+              {/* En una línea desde lg: a 1280 «TENDRÍA QUE HABER» y
+                  «cierra · -$ 0,60» se partían en dos (mes 23). */}
+              <span className="hidden text-right text-sm uppercase tracking-wide text-muted-foreground sm:block lg:whitespace-nowrap">Tendría que haber</span>
+              <span className="hidden text-right text-sm uppercase tracking-wide text-muted-foreground sm:block">Contado</span>
+              <span className="text-right text-sm uppercase tracking-wide text-muted-foreground">Diferencia</span>
+            </>
+          )}
         </header>
 
         {cerrados.length === 0 ? (
-          <p className="px-5 py-10 text-center text-base text-muted-foreground">
-            Ningún turno cerrado en el mes elegido.
-          </p>
+          <Vacio icono={Banknote} titulo="Ningún turno cerrado en el mes" />
         ) : (
           /*
            * Un renglón por turno, plegado: la sucursal y el puesto, quién y
@@ -226,9 +228,15 @@ export default async function CajaPage({
           <ul className="divide-y divide-linea">
             {cerrados.map((t) => {
               const esperado = Number(t.esperado);
-              const contado = t.contado === null ? null : Number(t.contado);
+              // Lo contado, o lo corregido al abrir el turno siguiente («conté
+              // mal», M2S3-002); lo de entonces queda a la vista abajo.
+              const contado = t.contado === null ? null : Number(t.contadoCorregido ?? t.contado);
               const diferencia = contado === null ? null : contado - esperado;
-              const cuadra = diferencia !== null && Math.abs(diferencia) < 0.005;
+              // Hasta un peso es «cierra», con los centavos al lado, como en el
+              // mostrador: uno decía «sin diferencia» y el otro «−$ 0,60» del
+              // mismo turno (M2S3-097).
+              const cuadra = diferencia !== null && Math.abs(diferencia) <= TOLERANCIA_ARQUEO;
+              const deOtros = t.movimientos.filter((m) => m.otroPuesto && m.monto > 0);
               const cuenta: [string, number][] = (
                 [
                   ["Fondo", t.fondo],
@@ -242,7 +250,7 @@ export default async function CajaPage({
               return (
                 <li key={t.id}>
                   <details className="group">
-                    <summary className="grid cursor-pointer list-none grid-cols-[1fr_auto] items-baseline gap-x-4 gap-y-1 px-5 py-3 hover:bg-hundida/40 sm:grid-cols-[1fr_repeat(3,8.5rem)_1.25rem] [&::-webkit-details-marker]:hidden">
+                    <summary className="grid cursor-pointer list-none grid-cols-[1fr_auto] items-baseline gap-x-4 gap-y-1 px-5 py-3 hover:bg-hundida/40 sm:grid-cols-[1fr_repeat(3,8.5rem)_1.25rem] lg:grid-cols-[1fr_repeat(3,10.5rem)_1.25rem] [&::-webkit-details-marker]:hidden">
                       <span className="min-w-0">
                         <span className="block truncate text-base font-medium">
                           {t.sucursal}
@@ -260,7 +268,7 @@ export default async function CajaPage({
                           redondeada, una diferencia de 40 centavos se leía
                           «-$ 0» (H164, H263, H363). */}
                       <span
-                        className={`tabular text-right text-base font-semibold ${
+                        className={`tabular text-right text-base font-semibold lg:whitespace-nowrap ${
                           diferencia === null
                             ? "text-muted-foreground"
                             : cuadra
@@ -270,14 +278,27 @@ export default async function CajaPage({
                                 : "text-saldo-favor"
                         }`}
                       >
-                        {diferencia === null ? "—" : cuadra ? "cierra" : formatearImporte(diferencia)}
+                        {diferencia === null
+                          ? "—"
+                          : Math.abs(diferencia) < 0.005
+                            ? "cierra"
+                            : cuadra
+                              ? `cierra · ${formatearImporte(diferencia)}`
+                              : formatearImporte(diferencia)}
                       </span>
                       <ChevronDown className="hidden h-4 w-4 self-center text-muted-foreground transition-transform group-open:rotate-180 sm:block" aria-hidden="true" />
                       {/* Lo que llegó de la cola después del arqueo y las
                           ventas sin conexión que pasaron lo libre o el límite
                           sin PIN: se ven sin desplegar. */}
-                      {(t.tardios > 0 || t.bajoLista > 0 || t.creditoSinAutorizar > 0) && (
+                      {(t.tardios > 0 || t.bajoLista > 0 || t.creditoSinAutorizar > 0 || deOtros.length > 0) && (
                         <span className="col-span-full flex flex-wrap gap-x-4 text-sm">
+                          {/* Lo que cobró otra persona y entró a este cajón: la
+                              diferencia se explica sin preguntar (M2S2-041). */}
+                          {deOtros.map((m) => (
+                            <span key={m.id} className="tabular text-muted-foreground">
+                              {m.motivo?.replace(/ — .*$/, "") ?? "Ingreso"} · {m.quien} · {formatearImporte(m.monto)}
+                            </span>
+                          ))}
                           {t.tardios > 0 && (
                             <span className={`tabular ${t.tardiosMonto < 0 ? "text-saldo-debe" : "text-muted-foreground"}`}>
                               {t.tardios} tarde · {formatearImporte(t.tardiosMonto)}
@@ -310,26 +331,57 @@ export default async function CajaPage({
                         </div>
                         <div className="flex items-baseline justify-between gap-3">
                           <dt className="text-muted-foreground">Contado</dt>
-                          <dd className="tabular">{formatearImporte(contado)}</dd>
+                          <dd className="tabular">{formatearImporte(t.contado === null ? null : Number(t.contado))}</dd>
                         </div>
+                        {t.contadoCorregido != null && (
+                          <div className="flex items-baseline justify-between gap-3">
+                            <dt className="min-w-0 text-muted-foreground">
+                              Corregido{t.corregidoPor && ` · ${t.corregidoPor}`}
+                              {t.correccionMotivo && <span className="block text-sm">{t.correccionMotivo}</span>}
+                            </dt>
+                            <dd className="tabular">{formatearImporte(Number(t.contadoCorregido))}</dd>
+                          </div>
+                        )}
                         {t.notas && <p className="pt-1 text-sm text-muted-foreground">{t.notas}</p>}
+                        {/* Cada ingreso, retiro y gasto, con quién lo cargó si no
+                            fue quien abrió: «Otros ingresos $ 164.200» no se
+                            podía rehacer desde acá (M2S3-044). */}
+                        {t.movimientos.length > 0 && (
+                          <ul className="mt-2 space-y-1 border-t border-linea pt-2 text-sm">
+                            {t.movimientos.map((m) => (
+                              <li
+                                key={m.id}
+                                className={`flex items-baseline justify-between gap-3 ${m.anulado ? "text-muted-foreground line-through" : ""}`}
+                              >
+                                <span className="min-w-0 truncate text-muted-foreground">
+                                  {m.motivo ?? m.tipo}
+                                  {m.otroPuesto && m.quien && ` · ${m.quien}`}
+                                </span>
+                                <span className="tabular shrink-0">{formatearImporte(m.monto)}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </dl>
                       {t.cierre.length > 0 && (
                         <dl className="space-y-1 text-base">
                           {t.cierre.map((r) => (
                             <div
-                              key={`${r.devolucion ? "dev-" : r.cobranza ? "cob-" : ""}${r.medioPago}-${r.quien ?? ""}`}
+                              key={`${r.devolucion ? "dev-" : r.cobranza ? (r.dePedido ? "ped-" : "cob-") : ""}${r.medioPago}-${r.quien ?? ""}`}
                               className="flex items-baseline justify-between gap-3"
                             >
                               <dt className="min-w-0 text-muted-foreground">
                                 {r.devolucion
                                   ? "Devolución · "
                                   : r.cobranza
-                                    ? "Cobro de cuenta · "
+                                    ? r.dePedido
+                                      ? "Cobro de pedido · "
+                                      : "Cobro de cuenta · "
                                     : r.medioPago === "cuenta_corriente"
                                       ? "A cuenta · "
                                       : ""}
                                 {MEDIOS[r.medioPago] ?? r.medioPago}
+                                {r.pedidos && ` · ${r.pedidos}`}
                                 {r.quien && ` · ${r.quien}`} ({r.cantidad})
                               </dt>
                               <dd className="tabular shrink-0">{formatearImporte(r.total)}</dd>
@@ -348,7 +400,7 @@ export default async function CajaPage({
           <Paginador
             pagina={pagina}
             total={turnosDelMes.total}
-            params={{ periodo: crudo }}
+            params={{ periodo: crudo, emitidos: emitidosCruda }}
           />
         </div>
       </section>
@@ -365,20 +417,29 @@ export default async function CajaPage({
         El número provisorio va al lado del definitivo porque es el que trae el
         cliente escrito en el ticket cuando la venta se cobró sin internet.
       */}
-      {/* Plegado: son hasta 200 ventas, y abierto era lo que más alargaba la
+      {/* Plegado: son de a 100 ventas, y abierto era lo que más alargaba la
           página en el teléfono (H242). Las anulaciones por persona se ven
-          sin desplegar. */}
-      <details className="tarjeta group @container overflow-hidden">
+          sin desplegar. Desde la segunda página llega abierto: «Siguiente»
+          lo volvía a plegar y parecía que no había pasado nada (M3S2-040). */}
+      <details open={paginaEmitidos > 1} className="tarjeta group @container overflow-hidden">
         <summary className="flex cursor-pointer list-none flex-wrap items-baseline justify-between gap-3 border-b border-linea px-5 py-4 [&::-webkit-details-marker]:hidden">
           <h2 className="inline-flex items-center gap-2 text-base font-semibold">
             Emitido en el mostrador
-            <span className="tabular font-normal text-muted-foreground">{emitido.length}</span>
+            {/* Las vendidas, sin las anuladas: «27 · $ 0» eran 27 anuladas
+                (mes 23). La cantidad con las anuladas es la del paginador. */}
+            <span className="tabular font-normal text-muted-foreground">{resumenEmitido.cantidad - resumenEmitido.anuladas}</span>
             <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
           </h2>
+          {/* Lo vendido en el mes, sin las anuladas, a la derecha; las
+              anuladas en gris abajo: «68 · $ 1.250.422,60» parecía lo vendido
+              y era lo anulado (M2S2-096). */}
+          <span className={`tabular text-base font-semibold ${resumenEmitido.importe === 0 ? "text-muted-foreground" : ""}`}>
+            {formatearImporte(resumenEmitido.importe)}
+          </span>
           {/* Quién anuló y cuánto, sin contar a ojo: cinco anulaciones por
               semana de la misma persona se ven acá antes que en la bitácora. */}
           {anulaciones.length > 0 && (
-            <ul className="flex flex-wrap gap-x-4 gap-y-1 text-base text-muted-foreground [font-variant-numeric:tabular-nums]">
+            <ul className="flex basis-full flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground [font-variant-numeric:tabular-nums]">
               {anulaciones.map((a) => (
                 <li key={a.quien}>
                   {a.quien} · {plural(a.cantidad, "anulada")} · {formatearMonto(a.total)}
@@ -540,6 +601,15 @@ export default async function CajaPage({
               </li>
             ))}
           </ul>
+          <div className="px-4">
+            <Paginador
+              pagina={paginaEmitidos}
+              total={resumenEmitido.cantidad}
+              porPagina={EMITIDOS_POR_PAGINA}
+              nombre="emitidos"
+              params={{ periodo: crudo, pagina: paginaCruda }}
+            />
+          </div>
           </>
         )}
       </details>

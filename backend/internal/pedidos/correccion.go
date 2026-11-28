@@ -15,6 +15,7 @@ import (
 	"mjbj/internal/numeracion"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/precios"
+	"mjbj/internal/reglas"
 	"mjbj/internal/reservas"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas"
@@ -47,12 +48,31 @@ type RenglonCorregido struct {
 	PrecioUnitario float64 `json:"precioUnitario"`
 }
 
+// RenglonNuevo es un renglón que se suma al corregir (mes simulado 2: la
+// corrección solo cambiaba cantidades y precios de lo que ya estaba).
+type RenglonNuevo struct {
+	VariantID      string  `json:"variantId"`
+	Descripcion    string  `json:"descripcion"`
+	Unidad         string  `json:"unidad"`
+	Cantidad       float64 `json:"cantidad"`
+	PrecioUnitario float64 `json:"precioUnitario"`
+}
+
 // Correccion es lo que manda la pantalla.
 type Correccion struct {
 	Renglones  []RenglonCorregido
+	Nuevos     []RenglonNuevo
 	CostoEnvio *float64
-	Motivo     string
-	PIN, Ficha string
+	// Entrega: «retiro» o «envio» para cambiarla (mes simulado 2: un pedido
+	// creado como retiro no pasaba a envío). Con envío, la dirección y la
+	// zona; el flete va en CostoEnvio o SinCargo.
+	Entrega   string
+	Direccion string
+	Zona      string
+	SinCargo  bool
+	Motivo    string
+	PIN       string
+	Ficha     string
 }
 
 // Corregir corrige los renglones y el flete de un pedido sin factura ni
@@ -79,6 +99,11 @@ func (s *Servicio) Corregir(ctx context.Context, ses *auth.Sesion, pedido string
 		switch {
 		case p.estado == "cancelado":
 			return fallo("El pedido está cancelado.")
+		case p.estado == "entregado":
+			// Entregado, con remitos firmados: lo que cambia va en otro pedido
+			// o en una devolución, cada uno con su remito (mes simulado 2: la
+			// corrección sumaba deuda sin remito y «Todo entregado» seguía).
+			return fallo("Ya se entregó: lo que falta va en otro pedido, y lo que vuelve, con una devolución.")
 		case p.origen == "mostrador":
 			return fallo("Es una venta del mostrador: anulala desde el mostrador y volvé a cargarla.")
 		}
@@ -86,14 +111,22 @@ func (s *Servicio) Corregir(ctx context.Context, ses *auth.Sesion, pedido string
 		var envio, descuento float64
 		var aCuenta bool
 		var partido *float64
+		// El descuento por forma de pago (el del presupuesto pasado a pedido
+		// o el de la tienda) sigue a lo que se vende: quedaba fijo y sumar un
+		// renglón no lo recalculaba (PED-1132: subtotal $ 16.545 con el 10 %
+		// de antes, −$ 1.234,50). Uno puesto a mano, con otro motivo, queda.
+		var medio *string
+		var porMedio bool
 		if err := tx.QueryRow(ctx, `
 			SELECT EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id AND f.estado NOT IN ('anulada', 'borrador')),
 			       `+fragmentos.CobradoDelPedido+` > 0.005 OR `+fragmentos.PagoEnRevision+`,
 			       o.costo_envio::float8, o.descuento::float8,
 			       o.customer_id IS NOT NULL AND EXISTS (SELECT 1 FROM account_movements am
 			         WHERE am.customer_id = o.customer_id AND am.referencia = o.numero AND am.tipo = 'compra'),
-			       o.a_cuenta::float8
-			FROM orders o WHERE o.id = $1`, pedido).Scan(&facturado, &cobrado, &envio, &descuento, &aCuenta, &partido); err != nil {
+			       o.a_cuenta::float8, o.medio_pago::text,
+			       o.medio_pago IS NOT NULL AND o.a_cuenta IS NULL AND o.descuento > 0
+			         AND EXISTS (SELECT 1 FROM payment_discounts pd WHERE pd.medio = o.medio_pago AND pd.etiqueta = o.descuento_motivo)
+			FROM orders o WHERE o.id = $1`, pedido).Scan(&facturado, &cobrado, &envio, &descuento, &aCuenta, &partido, &medio, &porMedio); err != nil {
 			return err
 		}
 		if facturado {
@@ -172,17 +205,126 @@ func (s *Servicio) Corregir(ctx context.Context, ses *auth.Sesion, pedido string
 			notas = append(notas, x.descripcion+": "+strings.Join(n, ", "))
 			x.cantidad, x.precio = cantidad, precio
 		}
+		// Cambiar la entrega: con envío, la dirección y el flete (la zona, de
+		// la lista, propone el suyo); a retiro, sin flete. Solo antes de que
+		// salga algo.
+		nuevaEntrega := ""
+		ent := Entrega{}
+		if c.Entrega != "" && c.Entrega != p.tipoEntrega {
+			if c.Entrega != "retiro" && c.Entrega != "envio" {
+				return fallo("Elegí cómo se entrega.")
+			}
+			if p.estado == "en-camino" {
+				return fallo("Ya salió en camino: la entrega no se cambia.")
+			}
+			var salio bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM deliveries WHERE order_id = $1 AND estado <> 'anulada')`, pedido).Scan(&salio); err != nil {
+				return err
+			}
+			if salio {
+				return fallo("Ya salió una parte con un remito: la entrega no se cambia.")
+			}
+			nuevaEntrega = c.Entrega
+			if c.Entrega == "envio" {
+				ent = Entrega{Envio: true, Direccion: c.Direccion, Zona: c.Zona, SinCargo: c.SinCargo}
+				if c.CostoEnvio != nil {
+					ent.CostoEnvio, ent.ConCosto = *c.CostoEnvio, true
+				}
+				if err := ent.revisar(); err != nil {
+					return err
+				}
+				if err := fleteDeLaZona(ctx, tx, &ent); err != nil {
+					return err
+				}
+				v := ent.CostoEnvio
+				c.CostoEnvio = &v
+				notas = append(notas, "Entrega: se lo llevamos a "+strings.TrimSpace(c.Direccion))
+			} else {
+				cero := 0.0
+				c.CostoEnvio = &cero
+				notas = append(notas, "Entrega: lo retira")
+			}
+		}
 		nuevoEnvio := envio
 		if c.CostoEnvio != nil && ventas.ACentavos(*c.CostoEnvio) != envio {
 			nuevoEnvio = ventas.ACentavos(*c.CostoEnvio)
 			notas = append(notas, "Flete: "+formato.Importe(envio)+" → "+formato.Importe(nuevoEnvio))
+		}
+
+		// Los renglones nuevos: el producto, su precio de lista (para medir
+		// lo que se deja de cobrar) y lo que hace falta para el stock.
+		type nuevo struct {
+			RenglonNuevo
+			lista    *float64
+			costo    *string
+			alicuota *string
+			factor   float64
+			pres     *string
+		}
+		var nuevos []nuevo
+		if len(c.Nuevos) > 0 {
+			conVariante := make([]precios.RenglonConVariante, len(c.Nuevos))
+			for i, n := range c.Nuevos {
+				n.Descripcion = strings.TrimSpace(n.Descripcion)
+				if !plataforma.UUIDValido(n.VariantID) || n.Descripcion == "" {
+					return fallo("Uno de los productos que se suman no existe.")
+				}
+				if !(n.Cantidad > 0) || math.IsInf(n.Cantidad, 0) || n.Cantidad >= 1e7 {
+					return fallo(`Revisá la cantidad de "` + n.Descripcion + `".`)
+				}
+				if n.PrecioUnitario < 0 || math.IsNaN(n.PrecioUnitario) || math.IsInf(n.PrecioUnitario, 0) || n.PrecioUnitario >= 1e10 {
+					return fallo(`Revisá el precio de "` + n.Descripcion + `".`)
+				}
+				if n.Unidad == "" {
+					n.Unidad = "unidad"
+				}
+				v := n.VariantID
+				conVariante[i] = precios.RenglonConVariante{VariantID: &v}
+				nuevos = append(nuevos, nuevo{RenglonNuevo: n})
+			}
+			lista, err := precios.ListaDelCliente(ctx, tx, p.customerID)
+			if err != nil {
+				return err
+			}
+			listas, err := precios.PreciosDeLista(ctx, tx, conVariante, lista)
+			if err != nil {
+				return err
+			}
+			variantes := make([]string, len(nuevos))
+			conPres := make([]reservas.LineaConPresentacion, len(nuevos))
+			for i := range nuevos {
+				nuevos[i].lista = listas[i]
+				variantes[i] = nuevos[i].VariantID
+				v := nuevos[i].VariantID
+				conPres[i] = reservas.LineaConPresentacion{VariantID: &v}
+			}
+			costos, err := reservas.CostosParaCongelar(ctx, tx, variantes)
+			if err != nil {
+				return err
+			}
+			factores, err := reservas.FactoresDeStock(ctx, tx, conPres)
+			if errors.Is(err, ventas.ErrSinMedidas) {
+				return fallo(err.Error())
+			}
+			if err != nil {
+				return err
+			}
+			for i := range nuevos {
+				if c, ok := costos[nuevos[i].VariantID]; ok {
+					nuevos[i].costo = c.CostoUnitario
+					a := c.AlicuotaIva
+					nuevos[i].alicuota = &a
+				}
+				nuevos[i].factor, nuevos[i].pres = factores[i].StockPorUnidad, factores[i].Presentacion
+				notas = append(notas, "Suma "+jsmath.Texto(ventas.CantidadDeStock(nuevos[i].Cantidad))+" "+nuevos[i].Descripcion)
+			}
 		}
 		if len(notas) == 0 {
 			return fallo("No cambió nada.")
 		}
 
 		// Lo que se deja de cobrar contra la lista, como en el mostrador.
-		renglones := make([]ventas.LineaDeVenta, 0, len(orden))
+		renglones := make([]ventas.LineaDeVenta, 0, len(orden)+len(nuevos))
 		for _, id := range orden {
 			x := items[id]
 			l := ventas.LineaDeVenta{VariantID: x.variante, Cantidad: x.cantidad, PrecioUnitario: x.precio}
@@ -191,6 +333,11 @@ func (s *Servicio) Corregir(ctx context.Context, ses *auth.Sesion, pedido string
 				l.PrecioLista = &v
 			}
 			renglones = append(renglones, l)
+		}
+		for _, n := range nuevos {
+			v := n.VariantID
+			renglones = append(renglones, ventas.LineaDeVenta{VariantID: &v, Cantidad: ventas.CantidadDeStock(n.Cantidad),
+				PrecioUnitario: ventas.ACentavos(n.PrecioUnitario), PrecioLista: n.lista})
 		}
 		d := ventas.DesvioDeLaVenta(renglones, 0, 0)
 		libre, err := precios.PorcentajeLibre(ctx, tx)
@@ -211,8 +358,62 @@ func (s *Servicio) Corregir(ctx context.Context, ses *auth.Sesion, pedido string
 
 		// La reserva sigue a lo que falta entregar.
 		var subtotal float64
+		// Sobre qué va el descuento por forma de pago: lo del catálogo, y con
+		// la regla descuento_al_flete también lo cargado a mano (como al
+		// pasar el presupuesto a pedido).
+		alFlete := porMedio && reglas.Es(ctx, tx, reglas.DescuentoAlFlete, "si")
+		var base float64
 		for _, id := range orden {
-			subtotal = ventas.ACentavos(subtotal + ventas.ACentavos(float64(items[id].cantidad*items[id].precio)))
+			sub := ventas.ACentavos(float64(items[id].cantidad * items[id].precio))
+			subtotal = ventas.ACentavos(subtotal + sub)
+			if items[id].variante != nil || alFlete {
+				base = ventas.ACentavos(base + sub)
+			}
+		}
+		var ultimoOrden int
+		if err := tx.QueryRow(ctx, `SELECT coalesce(max(orden), 0) FROM order_items WHERE order_id = $1`, pedido).Scan(&ultimoOrden); err != nil {
+			return err
+		}
+		for i, n := range nuevos {
+			cantidad, precio := ventas.CantidadDeStock(n.Cantidad), ventas.ACentavos(n.PrecioUnitario)
+			sub := ventas.ACentavos(float64(cantidad * precio))
+			subtotal = ventas.ACentavos(subtotal + sub)
+			// Lo que se suma es del catálogo: entra siempre.
+			base = ventas.ACentavos(base + sub)
+			var item string
+			if err := tx.QueryRow(ctx, `
+				INSERT INTO order_items (order_id, variant_id, descripcion, unidad, cantidad, precio_unitario, subtotal,
+				                         presentacion, stock_por_unidad, costo_unitario, alicuota_iva, orden, precio_lista)
+				VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7::numeric, $8, $9::numeric, $10::numeric, $11::numeric, $12, $13::numeric)
+				RETURNING id::text`,
+				pedido, n.VariantID, n.Descripcion, n.Unidad, jsmath.Fijo2(cantidad), jsmath.Fijo2(precio), jsmath.Fijo2(sub), n.pres,
+				jsmath.Texto(n.factor), reservas.CostoPorUnidadDeVenta(n.costo, n.factor), n.alicuota, ultimoOrden+1+i, fijo2ONulo(n.lista)).Scan(&item); err != nil {
+				return err
+			}
+			suc, ok, err := reservas.SucursalDeSalida(ctx, tx, pedido, nil)
+			if err != nil {
+				return err
+			}
+			if ok {
+				if err := reservas.VolverAReservar(ctx, tx, []reservas.ReservaDeVuelta{{OrderID: pedido, OrderItemID: item,
+					VariantID: n.VariantID, BranchID: suc, Cantidad: ventas.UnidadesDeStock(cantidad, n.factor)}}); err != nil {
+					return err
+				}
+			}
+		}
+		if nuevaEntrega != "" {
+			var direccion, zona *string
+			if nuevaEntrega == "envio" {
+				d := strings.TrimSpace(ent.Direccion)
+				direccion = &d
+				if z := strings.TrimSpace(ent.Zona); z != "" {
+					zona = &z
+				}
+			}
+			if _, err := tx.Exec(ctx, `UPDATE orders SET tipo_entrega = $2::tipo_entrega, direccion_entrega = $3, zona_envio = $4 WHERE id = $1`,
+				pedido, nuevaEntrega, direccion, zona); err != nil {
+				return err
+			}
 		}
 		for _, ch := range cambiados {
 			if _, err := tx.Exec(ctx, `UPDATE order_items SET cantidad = $2::numeric, precio_unitario = $3::numeric, subtotal = $4::numeric WHERE id = $1`,
@@ -247,10 +448,45 @@ func (s *Servicio) Corregir(ctx context.Context, ses *auth.Sesion, pedido string
 				}
 			}
 		}
+		if porMedio && medio != nil {
+			esc, err := s.q.WithTx(tx).EscalasDePago(ctx)
+			if err != nil {
+				return err
+			}
+			escalas := make([]ventas.EscalaDePago, len(esc))
+			for i, f := range esc {
+				escalas[i] = ventas.EscalaDePago{Medio: string(f.Medio), DesdeMonto: f.DesdeMonto.F(), Porcentaje: f.Porcentaje.F(), Etiqueta: f.Etiqueta}
+			}
+			nuevo, motivo := 0.0, (*string)(nil)
+			if e := ventas.DescuentoPorMedioDePago(escalas, *medio, base); e != nil {
+				nuevo = ventas.MontoDelDescuentoDePago(base, e.Porcentaje)
+				if e.Etiqueta != "" {
+					m := e.Etiqueta
+					motivo = &m
+				}
+			}
+			if nuevo != descuento {
+				notas = append(notas, "Descuento: "+formato.Importe(descuento)+" → "+formato.Importe(nuevo))
+				descuento = nuevo
+				if _, err := tx.Exec(ctx, `UPDATE orders SET descuento = $2::numeric, descuento_motivo = CASE WHEN $2::numeric > 0 THEN $3 END WHERE id = $1`,
+					pedido, jsmath.Fijo2(descuento), motivo); err != nil {
+					return err
+				}
+			}
+		}
 		total := ventas.ACentavos(subtotal + nuevoEnvio - descuento)
 		viejo := jsmath.Numero(p.total)
+		// «Sin cargo» a propósito (mes 23): el pedido que pasa a envío lo
+		// elige o no; un flete con plata lo apaga; si no, queda como estaba.
+		sinCargo := "flete_sin_cargo AND $3::numeric = 0"
+		switch {
+		case nuevaEntrega == "envio" && ent.SinCargo && !ent.ConCosto:
+			sinCargo = "$3::numeric = 0"
+		case nuevaEntrega != "":
+			sinCargo = "false"
+		}
 		if _, err := tx.Exec(ctx, `UPDATE orders SET subtotal = $2::numeric, costo_envio = $3::numeric, total = $4::numeric,
-			dejado_de_cobrar = $5::numeric, updated_at = now() WHERE id = $1`,
+			dejado_de_cobrar = $5::numeric, flete_sin_cargo = `+sinCargo+`, updated_at = now() WHERE id = $1`,
 			pedido, jsmath.Fijo2(subtotal), jsmath.Fijo2(nuevoEnvio), jsmath.Fijo2(total), jsmath.Fijo2(d.Total)); err != nil {
 			return err
 		}

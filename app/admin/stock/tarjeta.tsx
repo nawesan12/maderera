@@ -5,8 +5,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { Barcode, ChevronDown, History } from "lucide-react";
 import { NivelStock, TINTA_DEL_ESTADO, textoDelEstado } from "@/components/admin/nivel-stock";
-import { formatearUnidad, unidadDeVenta, unidadEnPlural } from "@/lib/formato";
-import { estadoEnSucursal } from "@/lib/stock-ajuste";
+import { diaCorto, formatearUnidad, unidadDeVenta, unidadEnPlural } from "@/lib/formato";
+import { estadoEnSucursal, pideReponer } from "@/lib/stock-ajuste";
 import { formatearCantidad } from "@/lib/unidades";
 import type { FilaStock } from "@/lib/dal/admin/inventory";
 import { AjusteRapido } from "./ajuste-rapido";
@@ -39,6 +39,9 @@ export function TarjetaStock({
   const codigo = unidadDeVenta(fila.unidad, `${fila.productName} ${fila.label}`) ?? fila.unidad;
   const unidad = formatearUnidad(codigo);
   const detalle = `stock-${fila.variantId}`;
+  // La sucursal en negativo va primero: «186 disponibles» con Casa Central
+  // en −14 dejaba el faltante chico, abajo (M2S2-122).
+  const sucursales = [...fila.sucursales].sort((a, b) => Number(b.disponible < 0) - Number(a.disponible < 0));
 
   return (
     <article className={`p-4 ${fila.paraReponer ? "tarjeta-atencion" : "tarjeta"}`}>
@@ -86,23 +89,27 @@ export function TarjetaStock({
           {enCamino && (
             <p className="estado-espera tabular text-sm font-medium">
               +{formatearCantidad(enCamino.cantidad)} en camino
-              {enCamino.llega
-                ? ` · ${new Date(enCamino.llega).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" })}`
-                : ""}
+              {/* Con zona fija: el navegador leía la medianoche UTC del día
+                  prometido como el día anterior, y el servidor no (M3S2-025,
+                  y el error de hidratación #418). */}
+              {enCamino.llega ? ` · ${diaCorto.format(new Date(enCamino.llega))}` : ""}
             </p>
           )}
         </div>
         <p className="shrink-0 text-right">
-          <span className={`tabular block text-xl font-semibold ${fila.total < 0 ? "text-destructive" : ""}`}>
+          <span className={`tabular block text-xl font-semibold ${fila.total === 0 && fila.faltante === 0 ? "text-muted-foreground" : ""}`}>
             {formatearCantidad(fila.total)}
           </span>
-          {/* La suma de lo disponible de cada sucursal: el físico menos lo
-              reservado, lo mismo que dice cada una abajo. */}
+          {/* Lo disponible de las sucursales que tienen; lo vendido de más
+              no se resta: va aparte, en rojo. */}
           <span className="block text-sm leading-tight text-muted-foreground">
             {fila.total === 1 ? unidad : unidadEnPlural(unidad)}
             <br />
             disponible{fila.total === 1 ? "" : "s"}
           </span>
+          {fila.faltante > 0 && (
+            <span className="tabular mt-1 block text-base font-semibold text-saldo-debe">Faltan {formatearCantidad(fila.faltante)}</span>
+          )}
         </p>
       </div>
 
@@ -116,11 +123,15 @@ export function TarjetaStock({
         className="mt-3 flex w-full items-start gap-3 rounded-lg bg-hundida px-3 py-2 text-left sm:hidden"
       >
         <span className="min-w-0 flex-1 space-y-1">
-          {fila.sucursales.map((s) => {
+          {sucursales.map((s) => {
             const estado = estadoEnSucursal(s.disponible, s.min);
+            // La sucursal que pide reposición se lee en negrita: la tarjeta
+            // marcada con «Bien» en Casa Central no decía que la que faltaba
+            // era el Aserradero (M2S1-028).
+            const pide = pideReponer(s.disponible, s.min);
             return (
               <span key={s.id} className="flex items-baseline justify-between gap-3 text-base">
-                <span className="min-w-0 truncate text-muted-foreground">{s.nombre}</span>
+                <span className={`min-w-0 truncate ${pide ? "font-semibold text-foreground" : "text-muted-foreground"}`}>{s.nombre}</span>
                 <span className="flex shrink-0 items-baseline gap-2">
                   {estado !== "bien" && estado !== "va-bajando" && (
                     <span className={`text-sm ${TINTA_DEL_ESTADO[estado]}`}>
@@ -147,8 +158,11 @@ export function TarjetaStock({
         id={detalle}
         className={`mt-3 gap-4 sm:grid sm:grid-cols-[repeat(auto-fit,minmax(14.5rem,1fr))] ${abierto ? "grid" : "hidden"}`}
       >
-        {fila.sucursales.map((s) => (
-          <div key={s.id}>
+        {sucursales.map((s) => (
+          <div
+            key={s.id}
+            className={fila.paraReponer && pideReponer(s.disponible, s.min) ? "-m-2 rounded-lg bg-[var(--naranja-tenue)] p-2" : undefined}
+          >
             <NivelStock
               sucursal={s.nombre}
               cantidad={s.qty}

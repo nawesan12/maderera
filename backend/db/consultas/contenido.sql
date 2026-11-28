@@ -71,13 +71,21 @@ GROUP BY estrellas;
 SELECT id, nombre FROM customers WHERE user_id = $1 AND active LIMIT 1;
 
 -- name: ProductosResenables :many
+-- Con la medida que compró (la lista decía solo «Fenólico» y no se sabía de
+-- qué se estaba reseñando) y el estado de su reseña: la rechazada seguía
+-- diciendo «Enviada» (mes simulado, M3S4-032 y M2S3-077).
 SELECT p.id AS product_id, p.slug, p.name AS nombre, o.id AS order_id, o.numero AS numero_pedido,
-       EXISTS (SELECT 1 FROM product_reviews r WHERE r.customer_id = $1 AND r.order_id = o.id AND r.product_id = p.id) AS ya_resenado
+       EXISTS (SELECT 1 FROM product_reviews r WHERE r.customer_id = $1 AND r.order_id = o.id AND r.product_id = p.id) AS ya_resenado,
+       string_agg(DISTINCT v.label, ', ')::text AS medida,
+       coalesce((SELECT r.estado::text FROM product_reviews r WHERE r.customer_id = $1 AND r.order_id = o.id AND r.product_id = p.id
+                 ORDER BY r.created_at DESC LIMIT 1), '')::text AS estado_resena
 FROM orders o
 JOIN order_items oi ON oi.order_id = o.id
 JOIN product_variants v ON v.id = oi.variant_id
 JOIN products p ON p.id = v.product_id
 WHERE o.customer_id = $1 AND o.estado = 'entregado' AND p.active
+  -- Con el retiro sin firmar todavía no se lo llevó (mes 23, M2S1-071).
+  AND NOT EXISTS (SELECT 1 FROM deliveries rs WHERE rs.order_id = o.id AND rs.estado = 'preparada' AND rs.tipo = 'retiro')
 GROUP BY p.id, p.slug, p.name, o.id, o.numero
 ORDER BY max(o.created_at) DESC
 LIMIT 100;
@@ -88,6 +96,7 @@ SELECT EXISTS (
   JOIN order_items oi ON oi.order_id = o.id
   JOIN product_variants v ON v.id = oi.variant_id
   WHERE o.id = $2 AND o.customer_id = $1 AND o.estado = 'entregado' AND v.product_id = $3
+    AND NOT EXISTS (SELECT 1 FROM deliveries rs WHERE rs.order_id = o.id AND rs.estado = 'preparada' AND rs.tipo = 'retiro')
 );
 
 -- name: CrearResena :one

@@ -6,6 +6,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -13,6 +14,7 @@ import (
 	"mjbj/internal/bitacora"
 	"mjbj/internal/checkout"
 	"mjbj/internal/cobros"
+	"mjbj/internal/cola"
 	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/limites"
@@ -219,17 +221,23 @@ func (s *Servicio) SubirComprobanteDeDeuda(ctx context.Context, x Extras, ses *a
 		VALUES ($1, 'deuda', 'transferencia', $2, $3::numeric, 'en_revision', $4)`, c.id, medio, jsmath.Fijo2(importe), url); err != nil {
 		return Resultado{}, err
 	}
-	titulo := "Transferencia"
-	if medio == "deposito" {
-		titulo = "Depósito"
-	}
 	if x.Push != nil {
+		titulo, cuerpo := AvisoDelInformado(medio, c.nombre, importe)
 		go x.Push.Avisar(context.WithoutCancel(ctx), push.Aviso{
-			Titulo: titulo + " informada · " + c.nombre, Cuerpo: formato.Importe(importe) + " para su cuenta corriente. Verificala en Pagos.",
-			URL: "/admin/pagos", Etiqueta: "pago_informado",
+			Titulo: titulo, Cuerpo: cuerpo, URL: "/admin/pagos", Etiqueta: "pago_informado",
 		})
 	}
 	return Resultado{Ok: "Recibimos tu comprobante. Lo imputamos a tu cuenta al verificarlo y te mandamos el recibo."}, nil
+}
+
+// AvisoDelInformado es el push al panel de una transferencia o un depósito
+// que informó el cliente, con la concordancia de cada uno: decía «Depósito
+// informada» (mes 23).
+func AvisoDelInformado(medio, cliente string, importe float64) (titulo, cuerpo string) {
+	if medio == "deposito" {
+		return "Depósito informado · " + cliente, formato.Importe(importe) + " para su cuenta corriente. Verificalo en Pagos."
+	}
+	return "Transferencia informada · " + cliente, formato.Importe(importe) + " para su cuenta corriente. Verificala en Pagos."
 }
 
 // InformarCheques: los cheques con los que el cliente paga su cuenta nacen
@@ -373,6 +381,7 @@ func (s *Servicio) Conciliar(ctx context.Context, ses *auth.Sesion, pagoID, deci
 		remoto.MotivoRechazo = &m
 	}
 	remoto.Crudo, _ = jsonDe(map[string]any{"conciliadoPor": ses.UserID, "decision": decision})
+	remoto.ConciliadoPor = &ses.UserID
 	r, err := s.Acreditar(ctx, pagoID, remoto)
 	if err != nil {
 		return Resultado{}, err
@@ -380,7 +389,22 @@ func (s *Servicio) Conciliar(ctx context.Context, ses *auth.Sesion, pagoID, deci
 	if _, err := s.pool.Exec(ctx, `UPDATE payments SET conciliado_por = $2, conciliado_at = now() WHERE id = $1`, pagoID, ses.UserID); err != nil {
 		return Resultado{}, err
 	}
-	desc := "Acreditó una transferencia en la conciliación"
+	// Con el importe, el pedido y el cliente: tres acreditaciones seguidas
+	// eran tres renglones iguales (mes simulado, M2S2-038).
+	var monto float64
+	var pedido, cliente string
+	_ = s.pool.QueryRow(ctx, `SELECT p.monto::float8, coalesce(o.numero, ''),
+		  coalesce(nullif(c.razon_social, ''), c.nombre, nullif(o.contacto_nombre, ''), '')
+		FROM payments p LEFT JOIN orders o ON o.id = p.order_id LEFT JOIN customers c ON c.id = coalesce(p.customer_id, o.customer_id)
+		WHERE p.id = $1`, pagoID).Scan(&monto, &pedido, &cliente)
+	de := formato.Importe(monto)
+	if pedido != "" {
+		de += " de " + pedido
+	}
+	if cliente != "" {
+		de += " (" + cliente + ")"
+	}
+	desc := "Acreditó " + de
 	accion := sqlc.AccionAuditoriaCobrar
 	if !aprueba {
 		accion = sqlc.AccionAuditoriaAnular
@@ -388,13 +412,39 @@ func (s *Servicio) Conciliar(ctx context.Context, ses *auth.Sesion, pagoID, deci
 		if motivo != nil {
 			m = *motivo
 		}
-		desc = "Rechazó una transferencia: " + m
+		desc = "Rechazó la transferencia de " + de + ": " + m
 	}
 	bitacora.Anotar(ctx, sqlc.New(s.pool), s.log, ses, accion, "pago", pagoID, desc, nil)
 	if aprueba {
 		return Resultado{Ok: "Cobro acreditado.", Trabajo: r.Trabajo}, nil
 	}
-	return Resultado{Ok: "Cobro rechazado. El cliente lo ve en su pedido."}, nil
+	// El rechazo también se avisa, como la acreditación, con el motivo
+	// (mes simulado, M2S1-053 y M3S2-014): el panel decía «el cliente lo ve
+	// en su pedido» y nadie se lo decía; la persona creía haber pagado. Y el
+	// mensaje dice dónde lo ve: decía «en su pedido» de un pago que no tenía
+	// pedido.
+	var orden, clienteID *string
+	var importe float64
+	if err := s.pool.QueryRow(ctx, `SELECT order_id, customer_id, monto::float8 FROM payments WHERE id = $1`, pagoID).Scan(&orden, &clienteID, &importe); err != nil {
+		return Resultado{}, err
+	}
+	if r.Cambio && r.Estado == Rechazado && (orden != nil || clienteID != nil) {
+		id, err := cola.Encolar(ctx, sqlc.New(s.pool), TipoResultado, map[string]any{
+			"orderId": orden, "customerId": clienteID, "tipo": r.Tipo, "detalle": "rechazado", "pagoId": pagoID, "importe": importe,
+			"motivo": remoto.MotivoRechazo,
+		}, time.Time{})
+		if err != nil {
+			return Resultado{}, err
+		}
+		if orden != nil {
+			return Resultado{Ok: "Cobro rechazado. Le avisamos al cliente y lo ve en su pedido.", Trabajo: &id}, nil
+		}
+		return Resultado{Ok: "Cobro rechazado. El cliente lo ve en Movimientos y se le avisó.", Trabajo: &id}, nil
+	}
+	if orden != nil {
+		return Resultado{Ok: "Cobro rechazado. El cliente lo ve en su pedido."}, nil
+	}
+	return Resultado{Ok: "Cobro rechazado. El cliente lo ve en Movimientos."}, nil
 }
 
 // Reconsultar le vuelve a preguntar a Mercado Pago (los webhooks se

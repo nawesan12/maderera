@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
+import { COOKIE_SOLICITUD } from "@/lib/profesionales/solicitud";
 import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
 
 export interface EstadoSolicitud {
@@ -83,5 +85,12 @@ export async function solicitarAcceso(
   }
 
   revalidatePath("/admin/profesionales");
+  (await cookies()).set(COOKIE_SOLICITUD, new Date().toISOString(), {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/profesionales",
+    maxAge: 60 * 60 * 24 * 30,
+    secure: process.env.NODE_ENV === "production",
+  });
   return { ok: r.data.ok };
 }

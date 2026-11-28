@@ -4,6 +4,8 @@ import (
 	"encoding/base64"
 	"strings"
 	"time"
+
+	"mjbj/internal/formato"
 )
 
 // El remito en PDF (lib/pdf/remito.ts). Sin importes: documenta qué salió
@@ -65,6 +67,33 @@ type RemitoCompleto struct {
 	// Reposicion es el corte de una reposición sin cargo (H321): el remito
 	// lo dice en el título y en la condición de pago.
 	Reposicion string `json:"reposicion,omitempty"`
+	// Los datos fiscales del cliente (un remito R los lleva) y si completa
+	// un pedido que salió en partes.
+	ClienteRazonSocial  string `json:"clienteRazonSocial,omitempty"`
+	ClienteCuit         string `json:"clienteCuit,omitempty"`
+	ClienteCondicionIva string `json:"clienteCondicionIva,omitempty"`
+	Final               bool   `json:"final,omitempty"`
+}
+
+// condicionIva es cómo se lee la condición frente al IVA.
+var condicionIva = map[string]string{
+	"responsable_inscripto": "Responsable inscripto", "monotributista": "Monotributista",
+	"exento": "Exento", "consumidor_final": "Consumidor final",
+}
+
+// TituloDelRemito es el título del papel: parcial si queda algo, final si
+// se llevó lo último de un pedido que ya había salido en parte, total si
+// salió todo de una vez.
+func TituloDelRemito(r RemitoCompleto) string {
+	switch {
+	case r.Reposicion != "":
+		return "Reposición sin cargo"
+	case len(r.Pendientes) > 0:
+		return "Remito de entrega parcial"
+	case r.Final:
+		return "Remito de entrega final"
+	}
+	return "Remito de entrega total"
 }
 
 // medioDelPedido es el medio de pago del pedido como lo lee el chofer.
@@ -127,7 +156,17 @@ func UnidadPara(u string, cantidad float64, descripcion string) string {
 		}
 		return "cortes"
 	}
+	// La media placa se cuenta por medias (M2S3-096), como cantidadConUnidad.
+	if u == "placa" && mediaPlaca.MatchString(descripcion) {
+		if cantidad == 1 {
+			return "media"
+		}
+		return "medias"
+	}
 	a := Unidad(UnidadDeVenta(u, descripcion))
+	if a == "media placa" && cantidad != 1 {
+		return "medias placas"
+	}
 	if cantidad == 1 || strings.ContainsAny(a, ". ²") || len([]rune(a)) <= 2 || strings.HasSuffix(a, "s") {
 		return a
 	}
@@ -194,14 +233,7 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 
 	y := AltoA4 - Margen - 10
 	deAcopio := len(r.Pendientes) > 0
-	titulo := "Remito de entrega total"
-	switch {
-	case r.Reposicion != "":
-		titulo = "Reposición sin cargo"
-	case deAcopio:
-		titulo = "Remito de entrega parcial"
-	}
-	h.Escribir(titulo, Opciones{X: derecha, Y: y, Tamano: 11, Fuente: Negrita, Derecha: true})
+	h.Escribir(TituloDelRemito(r), Opciones{X: derecha, Y: y, Tamano: 11, Fuente: Negrita, Derecha: true})
 	y -= 15
 
 	h.Escribir(r.Numero, Opciones{X: derecha, Y: y, Tamano: 13, Fuente: Mono, Derecha: true})
@@ -241,11 +273,20 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 	if r.Tipo == "envio" {
 		quien = "Recibe"
 	}
+	cliente := r.ClienteNombre
+	if r.ClienteRazonSocial != "" && !strings.EqualFold(r.ClienteRazonSocial, r.ClienteNombre) {
+		cliente = r.ClienteRazonSocial
+	}
 	datos := []Dato{
-		{"Cliente", r.ClienteNombre},
+		{"Cliente", cliente},
 		{quien, oGuion(r.ReceptorNombre)},
 		{domicilio, oGuion(r.ClienteDireccion)},
-		{"Documento", oGuion(r.ReceptorDocumento)},
+		{"Documento de quien " + strings.ToLower(quien), oGuion(r.ReceptorDocumento)},
+	}
+	// Un remito R lleva el CUIT y la condición de IVA del destinatario.
+	if r.ClienteCuit != "" {
+		iva := condicionIva[r.ClienteCondicionIva]
+		datos = append(datos, Dato{"CUIT", Cuit(r.ClienteCuit)}, Dato{"Condición frente al IVA", oGuion(iva)})
 	}
 	if r.Transportista != "" {
 		t := r.Transportista
@@ -261,13 +302,14 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 
 	cursor -= altoCaja2 + Mm(6)
 
-	// Detalle, sin precios.
-	colCantidad := derecha - Mm(30)
-	anchoDescripcion := colCantidad - Mm(18) - Margen
+	// Detalle, sin precios. La cantidad con su unidad en una sola columna
+	// («3 placas»), como el remito impreso: en dos, «1» y «media» quedaban
+	// separados (mes 23).
+	anchoCantidad := Mm(44)
+	anchoDescripcion := derecha - anchoCantidad - Mm(4) - Margen
 	encabezarDetalle := func() {
 		h.Escribir("DESCRIPCIÓN", Opciones{X: Margen, Y: cursor, Tamano: 6, Fuente: Negrita, Color: TintaSuave})
-		h.Escribir("CANTIDAD", Opciones{X: colCantidad, Y: cursor, Tamano: 6, Fuente: Negrita, Color: TintaSuave, Derecha: true})
-		h.Escribir("UNIDAD", Opciones{X: derecha, Y: cursor, Tamano: 6, Fuente: Negrita, Color: TintaSuave, Derecha: true})
+		h.Escribir("CANTIDAD", Opciones{X: derecha, Y: cursor, Tamano: 6, Fuente: Negrita, Color: TintaSuave, Derecha: true})
 
 		cursor -= 6
 		h.Raya(cursor, 1, Tinta)
@@ -307,8 +349,8 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 		}
 		espacio(maximo(float64(len(Renglones(item.Descripcion, Helvetica, 9, anchoDescripcion)))*9*1.35, 12)+4+altoCorte, true)
 		alto := h.EscribirParrafo(item.Descripcion, Parrafo{Opciones: Opciones{X: Margen, Y: cursor, Tamano: 9}, Ancho: anchoDescripcion})
-		h.EscribirNumero(numeroJS(item.Cantidad), Opciones{X: colCantidad, Y: cursor, Tamano: 9, Fuente: Mono, Derecha: true}, Mm(16))
-		h.EscribirEnAncho(UnidadPara(item.Unidad, item.Cantidad, item.Descripcion), Opciones{X: derecha, Y: cursor, Tamano: 8.5, Derecha: true}, Mm(26))
+		h.EscribirEnAncho(formato.Cantidad(item.Cantidad)+" "+UnidadPara(item.Unidad, item.Cantidad, item.Descripcion),
+			Opciones{X: derecha, Y: cursor, Tamano: 9, Fuente: Mono, Derecha: true}, anchoCantidad)
 		if item.Corte != "" {
 			alto += 2 + h.EscribirParrafo(item.Corte, Parrafo{Opciones: Opciones{X: Margen, Y: cursor - maximo(alto, 12) + 1, Tamano: 7.5, Color: TintaSuave},
 				Ancho: anchoDescripcion})
@@ -331,7 +373,7 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 		cursor -= 12
 		anchoUtil := AnchoA4 - Margen*2
 		for _, p := range r.Pendientes {
-			texto := numeroJS(p.Pendiente) + " " + UnidadPara(p.Unidad, p.Pendiente, p.Descripcion) + " · " + p.Descripcion
+			texto := formato.Cantidad(p.Pendiente) + " " + UnidadPara(p.Unidad, p.Pendiente, p.Descripcion) + " · " + p.Descripcion
 			espacio(float64(len(Renglones(texto, Helvetica, 8, anchoUtil)))*8*1.35, false)
 			cursor -= h.EscribirParrafo(texto, Parrafo{Opciones: Opciones{X: Margen, Y: cursor, Tamano: 8}, Ancho: anchoUtil, Interlineado: 11})
 		}

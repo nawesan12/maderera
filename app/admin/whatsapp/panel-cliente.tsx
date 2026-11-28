@@ -3,9 +3,9 @@
 import { useActionState, useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BellOff, BellRing, ClipboardList, Link2, Loader2, Scissors, Search, UserPlus, Wallet } from "lucide-react";
+import { BellOff, BellRing, ClipboardList, Link2, Loader2, Lock, Scissors, Search, UserPlus, Wallet } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
-import { fechaCorta, formatearMonto, moneda } from "@/lib/formato";
+import { fechaCorta, formatearMonto, moneda, telefonoLegible } from "@/lib/formato";
 import {
   buscarClientesParaVincular,
   cambiarBaja,
@@ -14,6 +14,7 @@ import {
   type EstadoWhatsapp,
 } from "./actions";
 import type { DetalleConversacion } from "@/lib/dal/admin/whatsapp";
+import { jidCorto } from "./formato-wa";
 
 const estadoInicial: EstadoWhatsapp = {};
 
@@ -42,6 +43,7 @@ export function PanelCliente({ detalle, enDialogo = false }: { detalle: DetalleC
   }
 
   const excedido = detalle.limiteCredito > 0 && detalle.saldo > detalle.limiteCredito;
+  const enCurso = detalle.documentos.filter((d) => d.tipo === "presupuesto" || d.tipo === "corte").slice(0, 4);
 
   return (
     // `min-w-0`: en el diálogo (que vive fuera del panel) el nombre sin
@@ -68,7 +70,7 @@ export function PanelCliente({ detalle, enDialogo = false }: { detalle: DetalleC
             ya puesto. */}
         <div className="mt-2 grid grid-cols-2 gap-2">
           <Link
-            href={`/admin/presupuestos/nuevo?cliente=${detalle.customerId}`}
+            href={`/admin/presupuestos/nuevo?cliente=${detalle.customerId}${detalle.sinNumero ? "" : `&telefono=${encodeURIComponent(jidCorto(detalle.waJid))}`}`}
             className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-hundida text-base font-medium hover:bg-muted"
           >
             <ClipboardList className="h-4 w-4" aria-hidden="true" />
@@ -98,11 +100,52 @@ export function PanelCliente({ detalle, enDialogo = false }: { detalle: DetalleC
         </p>
         <p className="mt-0.5 text-base text-muted-foreground">
           {detalle.saldo > 0 ? "Debe" : detalle.saldo < 0 ? "A favor" : "Sin deuda"}
-          {detalle.limiteCredito > 0 && <> · límite {moneda.format(detalle.limiteCredito)}</>}
+          {detalle.limiteCredito > 0 && !detalle.clienteBloqueado && <> · límite {moneda.format(detalle.limiteCredito)}</>}
         </p>
-        {excedido && <p className="mt-1.5 text-base text-saldo-debe">Supera el límite. No debería llevarse más a cuenta.</p>}
+        {/* Bloqueada, lo que importa es eso, no el límite (M3S1-017). */}
+        {detalle.clienteBloqueado ? (
+          <p className="mt-1.5 flex items-center gap-1.5 text-base font-medium text-destructive">
+            <Lock className="h-4 w-4 shrink-0" aria-hidden="true" />
+            Cuenta bloqueada
+          </p>
+        ) : (
+          excedido && <p className="mt-1.5 text-base text-saldo-debe">Supera el límite. No debería llevarse más a cuenta.</p>
+        )}
 
       </section>
+
+      {/* Lo que está en curso además de los pedidos: el presupuesto y el
+          corte que salieron de la charla (M2S3-072). */}
+      {enCurso.length > 0 && (
+        <section className="tarjeta overflow-hidden">
+          <h3 className="px-4 py-3 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            Presupuestos y cortes
+          </h3>
+          <ul className="divide-y border-t">
+            {enCurso.map((d) => (
+              <li key={`${d.tipo}-${d.id}`}>
+                <Link
+                  href={d.tipo === "corte" ? `/admin/cortes/${d.id}` : `/admin/presupuestos/${d.id}`}
+                  className="flex items-center gap-2 px-4 py-3 transition-colors hover:bg-muted/60"
+                >
+                  {d.tipo === "corte" ? (
+                    <Scissors className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  ) : (
+                    <ClipboardList className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="codigo block text-base">{d.titulo.replace(/^(Presupuesto|Corte) /, "")}</span>
+                    <span className="block text-sm text-muted-foreground">
+                      {d.fecha ? fechaCorta.format(new Date(d.fecha)) : ""}
+                      {d.tipo === "presupuesto" ? ` · ${d.detalle}` : ""}
+                    </span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="tarjeta overflow-hidden">
         <h3 className="px-4 py-3 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">Últimos pedidos</h3>
@@ -227,7 +270,7 @@ function SinFicha({ detalle }: { detalle: DetalleConversacion }) {
                 <input type="hidden" name="customerId" value={c.id} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-base">{c.nombre}</span>
-                  <span className="tabular block truncate text-sm text-muted-foreground">{c.telefono ?? c.cuit ?? ""}</span>
+                  <span className="tabular block truncate text-sm text-muted-foreground">{c.telefono ? telefonoLegible(c.telefono) : (c.cuit ?? "")}</span>
                 </span>
                 <button
                   type="submit"
@@ -277,7 +320,7 @@ function SinFicha({ detalle }: { detalle: DetalleConversacion }) {
             <input name="email" type="email" className="mt-0.5 h-10 w-full rounded-lg border bg-background px-2.5 text-base" />
           </label>
           <p className="tabular text-sm text-muted-foreground">
-            Teléfono: {detalle.sinNumero ? "WhatsApp no lo comparte" : detalle.waJid.split("@")[0]}
+            Teléfono: {detalle.sinNumero ? "WhatsApp no lo comparte" : jidCorto(detalle.waJid)}
           </p>
           <button
             type="submit"

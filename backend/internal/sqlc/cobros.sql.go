@@ -184,7 +184,7 @@ func (q *Queries) ChequeACartera(ctx context.Context, arg ChequeACarteraParams) 
 }
 
 const chequeCompleto = `-- name: ChequeCompleto :one
-SELECT id, sentido, tipo, numero, banco, librador, emision, fecha_pago, importe, estado, customer_id, order_payment_id, notas, created_by_user_id, created_at, updated_at, circuito, receipt_id, motivo_rechazo FROM cheques WHERE id = $1
+SELECT id, sentido, tipo, numero, banco, librador, emision, fecha_pago, importe, estado, customer_id, order_payment_id, notas, created_by_user_id, created_at, updated_at, circuito, receipt_id, motivo_rechazo, circuito_reparto FROM cheques WHERE id = $1
 `
 
 func (q *Queries) ChequeCompleto(ctx context.Context, id string) (Cheque, error) {
@@ -210,6 +210,7 @@ func (q *Queries) ChequeCompleto(ctx context.Context, id string) (Cheque, error)
 		&i.Circuito,
 		&i.ReceiptID,
 		&i.MotivoRechazo,
+		&i.CircuitoReparto,
 	)
 	return i, err
 }
@@ -347,14 +348,15 @@ func (q *Queries) ChequesDelRecibo(ctx context.Context, receiptID string) ([]*st
 }
 
 const chequesSueltos = `-- name: ChequesSueltos :many
-SELECT id, updated_at, tipo::text AS tipo, numero, banco, importe::float8 AS importe, estado::text AS estado, fecha_pago, motivo_rechazo,
-       (order_payment_id IS NOT NULL)::boolean AS de_una_venta
-FROM cheques
-WHERE customer_id = $1 AND sentido = 'recibido'
-  AND (estado = 'informado' OR (estado = 'rechazado' AND receipt_id IS NULL)
-       OR (order_payment_id IS NOT NULL AND receipt_id IS NULL AND estado <> 'anulado'))
-  AND ($2::timestamptz IS NULL OR created_at >= $2)
-ORDER BY fecha_pago
+SELECT c.id, c.updated_at, c.tipo::text AS tipo, c.numero, c.banco, c.importe::float8 AS importe, c.estado::text AS estado, c.fecha_pago,
+       c.motivo_rechazo, (c.order_payment_id IS NOT NULL)::boolean AS de_una_venta,
+       (SELECT count(*) > 0 FROM account_movements am WHERE am.cheque_id = c.id AND am.tipo = 'nota_debito')::boolean AS con_nota_de_debito
+FROM cheques c
+WHERE c.customer_id = $1 AND c.sentido = 'recibido'
+  AND (c.estado = 'informado' OR (c.estado = 'rechazado' AND c.receipt_id IS NULL)
+       OR (c.order_payment_id IS NOT NULL AND c.receipt_id IS NULL AND c.estado <> 'anulado'))
+  AND ($2::timestamptz IS NULL OR c.created_at >= $2)
+ORDER BY c.fecha_pago
 `
 
 type ChequesSueltosParams struct {
@@ -363,21 +365,23 @@ type ChequesSueltosParams struct {
 }
 
 type ChequesSueltosRow struct {
-	ID            string    `json:"id"`
-	UpdatedAt     time.Time `json:"updatedAt"`
-	Tipo          string    `json:"tipo"`
-	Numero        string    `json:"numero"`
-	Banco         *string   `json:"banco"`
-	Importe       float64   `json:"importe"`
-	Estado        string    `json:"estado"`
-	FechaPago     time.Time `json:"fechaPago"`
-	MotivoRechazo *string   `json:"motivoRechazo"`
-	DeUnaVenta    bool      `json:"deUnaVenta"`
+	ID              string    `json:"id"`
+	UpdatedAt       time.Time `json:"updatedAt"`
+	Tipo            string    `json:"tipo"`
+	Numero          string    `json:"numero"`
+	Banco           *string   `json:"banco"`
+	Importe         float64   `json:"importe"`
+	Estado          string    `json:"estado"`
+	FechaPago       time.Time `json:"fechaPago"`
+	MotivoRechazo   *string   `json:"motivoRechazo"`
+	DeUnaVenta      bool      `json:"deUnaVenta"`
+	ConNotaDeDebito bool      `json:"conNotaDeDebito"`
 }
 
 // Los cheques que no tienen recibo: los informados, los rechazados al
 // recibirlos y los que se entregaron con una venta del mostrador (mes
 // simulado: esos no figuraban en ningún lado de la ficha, ni rebotados).
+// con_nota_de_debito: el rechazo ya volvió a la cuenta con su nota de débito.
 func (q *Queries) ChequesSueltos(ctx context.Context, arg ChequesSueltosParams) ([]ChequesSueltosRow, error) {
 	rows, err := q.db.Query(ctx, chequesSueltos, arg.CustomerID, arg.Desde)
 	if err != nil {
@@ -398,6 +402,7 @@ func (q *Queries) ChequesSueltos(ctx context.Context, arg ChequesSueltosParams) 
 			&i.FechaPago,
 			&i.MotivoRechazo,
 			&i.DeUnaVenta,
+			&i.ConNotaDeDebito,
 		); err != nil {
 			return nil, err
 		}
@@ -439,7 +444,9 @@ const comprasDeContado = `-- name: ComprasDeContado :many
 SELECT o.id, o.created_at, o.numero, (o.total - coalesce(o.a_cuenta, 0))::float8 AS total, o.estado_pago::text AS estado_pago,
   r.id AS recibo_id, r.numero AS recibo_numero, r.estado AS recibo_estado
 FROM orders o
-LEFT JOIN receipts r ON r.id = (SELECT x.id FROM receipts x WHERE x.order_id = o.id AND x.estado <> 'anulado'
+LEFT JOIN receipts r ON r.id = (SELECT x.id FROM receipts x WHERE x.estado <> 'anulado'
+  AND (x.order_id = o.id OR x.id IN (SELECT ip.receipt_id FROM invoice_payments ip JOIN invoices fi ON fi.id = ip.invoice_id
+    WHERE fi.order_id = o.id AND ip.receipt_id IS NOT NULL))
   ORDER BY x.created_at DESC LIMIT 1)
 WHERE o.customer_id = $1 AND (o.medio_pago IS NULL OR o.medio_pago <> 'cuenta_corriente') AND o.estado <> 'cancelado'
   AND ($3::timestamptz IS NULL OR o.created_at >= $3)
@@ -467,6 +474,10 @@ type ComprasDeContadoRow struct {
 // El recibo, si la compra se cobró después con uno (una transferencia
 // conciliada): no fue «pagada en el momento» (H305). Del pedido partido
 // (H047), el resto: la parte a cuenta es su «compra» en el libro.
+// El recibo que cobró la factura del pedido (invoice_payments) también
+// cuenta: no lleva order_id ni pasa por el libro, y sin esto no quedaba
+// ningún renglón suyo en la ficha (el buscador llevaba a un ancla que no
+// existía, mes 23, M2S1-096).
 func (q *Queries) ComprasDeContado(ctx context.Context, arg ComprasDeContadoParams) ([]ComprasDeContadoRow, error) {
 	rows, err := q.db.Query(ctx, comprasDeContado, arg.CustomerID, arg.Limit, arg.Desde)
 	if err != nil {
@@ -603,6 +614,65 @@ func (q *Queries) CrearRecibo(ctx context.Context, arg CrearReciboParams) (strin
 	var id string
 	err := row.Scan(&id)
 	return id, err
+}
+
+const devolucionesFueraDeLaCuenta = `-- name: DevolucionesFueraDeLaCuenta :many
+SELECT d.id, d.created_at, d.importe::float8 AS importe, o.id AS pedido_id, o.numero AS pedido_numero,
+       coalesce(i.tipo::text, '')::text AS nota_tipo, i.punto_venta AS nota_pv, i.numero AS nota_numero
+FROM devoluciones d
+JOIN orders o ON o.id = d.order_id
+LEFT JOIN invoices i ON i.id = d.nota_id
+WHERE o.customer_id = $1 AND d.account_movement_id IS NULL
+  AND ($2::timestamptz IS NULL OR d.created_at >= $2)
+ORDER BY d.created_at DESC
+`
+
+type DevolucionesFueraDeLaCuentaParams struct {
+	CustomerID *string            `json:"customerId"`
+	Desde      pgtype.Timestamptz `json:"desde"`
+}
+
+type DevolucionesFueraDeLaCuentaRow struct {
+	ID           string             `json:"id"`
+	CreatedAt    pgtype.Timestamptz `json:"createdAt"`
+	Importe      float64            `json:"importe"`
+	PedidoID     string             `json:"pedidoId"`
+	PedidoNumero string             `json:"pedidoNumero"`
+	NotaTipo     string             `json:"notaTipo"`
+	NotaPv       *int32             `json:"notaPv"`
+	NotaNumero   *int32             `json:"notaNumero"`
+}
+
+// Las devoluciones de lo que se pagó de contado: el reintegro no pasa por
+// la cuenta y Movimientos no las mostraba, ni con «Notas y ajustes» (mes
+// simulado, M2S3-030). Las que van a la cuenta ya están en el libro.
+func (q *Queries) DevolucionesFueraDeLaCuenta(ctx context.Context, arg DevolucionesFueraDeLaCuentaParams) ([]DevolucionesFueraDeLaCuentaRow, error) {
+	rows, err := q.db.Query(ctx, devolucionesFueraDeLaCuenta, arg.CustomerID, arg.Desde)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DevolucionesFueraDeLaCuentaRow{}
+	for rows.Next() {
+		var i DevolucionesFueraDeLaCuentaRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.Importe,
+			&i.PedidoID,
+			&i.PedidoNumero,
+			&i.NotaTipo,
+			&i.NotaPv,
+			&i.NotaNumero,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const efectivoACaja = `-- name: EfectivoACaja :exec
@@ -821,24 +891,29 @@ func (q *Queries) PagosInformados(ctx context.Context, arg PagosInformadosParams
 
 const partesDeRecibos = `-- name: PartesDeRecibos :many
 SELECT p.receipt_id, p.medio::text AS medio, p.importe::float8 AS importe, c.banco, c.numero, c.tipo,
-       c.id AS cheque_id, c.estado AS cheque_estado,
-       (pay.estado IS NOT DISTINCT FROM 'aprobado' AND pay.proveedor IS NOT DISTINCT FROM 'mercado_pago')::boolean AS por_mercado_pago
+       c.id AS cheque_id, c.estado AS cheque_estado, c.fecha_pago AS cheque_fecha_pago,
+       (pay.estado IS NOT DISTINCT FROM 'aprobado' AND pay.proveedor IS NOT DISTINCT FROM 'mercado_pago')::boolean AS por_mercado_pago,
+       ret.impuesto AS retencion_impuesto, ret.numero AS retencion_certificado
 FROM receipt_parts p LEFT JOIN cheques c ON c.id = p.cheque_id
 LEFT JOIN payments pay ON pay.id = p.payment_id
+LEFT JOIN retenciones_sufridas ret ON p.medio = 'retencion' AND ret.receipt_id = p.receipt_id AND ret.numero = p.referencia
 WHERE p.receipt_id = ANY($1::uuid[])
 ORDER BY p.orden
 `
 
 type PartesDeRecibosRow struct {
-	ReceiptID      string        `json:"receiptId"`
-	Medio          string        `json:"medio"`
-	Importe        float64       `json:"importe"`
-	Banco          *string       `json:"banco"`
-	Numero         *string       `json:"numero"`
-	Tipo           *TipoCheque   `json:"tipo"`
-	ChequeID       *string       `json:"chequeId"`
-	ChequeEstado   *EstadoCheque `json:"chequeEstado"`
-	PorMercadoPago bool          `json:"porMercadoPago"`
+	ReceiptID            string            `json:"receiptId"`
+	Medio                string            `json:"medio"`
+	Importe              float64           `json:"importe"`
+	Banco                *string           `json:"banco"`
+	Numero               *string           `json:"numero"`
+	Tipo                 *TipoCheque       `json:"tipo"`
+	ChequeID             *string           `json:"chequeId"`
+	ChequeEstado         *EstadoCheque     `json:"chequeEstado"`
+	ChequeFechaPago      *time.Time        `json:"chequeFechaPago"`
+	PorMercadoPago       bool              `json:"porMercadoPago"`
+	RetencionImpuesto    *ImpuestoRetenido `json:"retencionImpuesto"`
+	RetencionCertificado *string           `json:"retencionCertificado"`
 }
 
 func (q *Queries) PartesDeRecibos(ctx context.Context, recibos []string) ([]PartesDeRecibosRow, error) {
@@ -859,7 +934,10 @@ func (q *Queries) PartesDeRecibos(ctx context.Context, recibos []string) ([]Part
 			&i.Tipo,
 			&i.ChequeID,
 			&i.ChequeEstado,
+			&i.ChequeFechaPago,
 			&i.PorMercadoPago,
+			&i.RetencionImpuesto,
+			&i.RetencionCertificado,
 		); err != nil {
 			return nil, err
 		}

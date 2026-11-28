@@ -26,19 +26,23 @@ export async function obtenerRecepcion(id: string) {
 }
 
 /** Buscar mercadería para cargar una recepción, con lo que cuesta hoy. */
-export async function buscarParaRecibir(texto: string) {
+export async function buscarParaRecibir(texto: string, proveedor?: string) {
   const consulta = texto.trim();
   if (consulta.length < 2) return [];
   return datos(
-    await (await api()).GET("/api/v1/admin/compras/mercaderia", { params: { query: { texto: consulta.slice(0, 200) } } }),
+    await (await api()).GET("/api/v1/admin/compras/mercaderia", {
+      params: { query: { texto: consulta.slice(0, 200), ...(proveedor ? { proveedor } : {}) } },
+    }),
   );
 }
 
 /** Las mismas variantes, por id (hasta 40): la orden armada desde reposición. */
-export async function variantesParaPedir(ids: string[]) {
+export async function variantesParaPedir(ids: string[], proveedor?: string) {
   const acotados = ids.filter(Boolean).slice(0, 40);
   if (acotados.length === 0) return [];
   return datos(
-    await (await api()).GET("/api/v1/admin/compras/mercaderia", { params: { query: { ids: acotados.join(",") } } }),
+    await (await api()).GET("/api/v1/admin/compras/mercaderia", {
+      params: { query: { ids: acotados.join(","), ...(proveedor ? { proveedor } : {}) } },
+    }),
   );
 }

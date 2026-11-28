@@ -51,3 +51,19 @@ func TestImporte(t *testing.T) {
 		}
 	}
 }
+
+func TestTelefono(t *testing.T) {
+	for entra, sale := range map[string]string{
+		"2235550483":     "223 555-0483",
+		"5492235550312":  "223 555-0312",
+		"+5492235550312": "223 555-0312",
+		"1145678901":     "11 4567-8901",
+		"223 555-0205":   "223 555-0205",
+		"4567":           "4567",
+		"":               "",
+	} {
+		if got := Telefono(entra); got != sale {
+			t.Errorf("Telefono(%q) = %q, quería %q", entra, got, sale)
+		}
+	}
+}

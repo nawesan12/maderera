@@ -81,85 +81,90 @@ export default async function EditarProductoPage({
         </p>
       )}
 
-      {/* Encabezado con contexto */}
-      <div className="tarjeta flex flex-wrap items-start gap-5 p-5">
-        <div className="relative h-28 w-28 shrink-0 overflow-hidden rounded-xl bg-muted">
-          {producto.imagen ? (
-            <Image
-              src={producto.imagen}
-              alt={producto.name}
-              fill
-              className="object-cover"
-              sizes="112px"
-            />
-          ) : (
-            <span className="flex h-full flex-col items-center justify-center gap-1 text-muted-foreground">
-              <ImageOff className="h-6 w-6" />
-              <span className="text-sm">Sin foto</span>
-            </span>
-          )}
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {producto.name}
-            </h1>
-            <EtiquetaEstado estado={producto.active ? "activo" : "inactivo"} />
-            {producto.featured && (
-              <span className="rounded-full bg-brand-orange/15 px-2.5 py-1 text-sm font-medium text-brand-orange-dark">
-                Destacado
+      {/* Encabezado con contexto. El nombre va a todo el ancho y las
+          acciones en una fila debajo: en una columna a la derecha, a 375 el
+          título se partía letra por letra y el estado quedaba tapado (mes
+          simulado, M2S2-033 y M3S2-011). */}
+      <div className="tarjeta space-y-5 p-5">
+        <div className="flex items-start gap-4">
+          <div className="relative h-20 w-20 shrink-0 overflow-hidden sm:h-28 sm:w-28 rounded-xl bg-muted">
+            {producto.imagen ? (
+              <Image
+                src={producto.imagen}
+                alt={producto.name}
+                fill
+                className="object-cover"
+                sizes="112px"
+              />
+            ) : (
+              <span className="flex h-full flex-col items-center justify-center gap-1 text-muted-foreground">
+                <ImageOff className="h-6 w-6" />
+                <span className="text-sm">Sin foto</span>
               </span>
             )}
           </div>
 
-          <p className="mt-0.5 text-base text-muted-foreground">
-            {[
-              categorias.find((c) => c.id === producto.categoryId)?.name,
-              producto.subcategory,
-              producto.brand,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </p>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="min-w-0 break-words text-2xl font-semibold tracking-tight">
+                {producto.name}
+              </h1>
+              <EtiquetaEstado estado={producto.active ? "activo" : "inactivo"} />
+              {producto.featured && (
+                <span className="rounded-full bg-brand-orange/15 px-2.5 py-1 text-sm font-medium text-brand-orange-dark">
+                  Destacado
+                </span>
+              )}
+            </div>
 
-          <dl className="mt-4 flex flex-wrap gap-x-8 gap-y-2">
-            <Dato
-              etiqueta="Medidas"
-              valor={String(producto.variantes.length)}
-              detalle={sinPrecio > 0 ? `${sinPrecio} sin precio` : undefined}
-              alerta={sinPrecio > 0}
-            />
-            <Dato
-              etiqueta="Stock total"
-              valor={String(stockTotal)}
-              detalle={stockTotal === 0 ? "agotado" : undefined}
-              alerta={stockTotal === 0}
-            />
-            <Dato
-              etiqueta="Precio"
-              valor={
-                precios.length > 0
-                  ? moneda.format(Math.min(...precios))
-                  : "Sin cargar"
-              }
-              detalle={
-                precios.length > 1
-                  ? `hasta ${moneda.format(Math.max(...precios))}`
-                  : undefined
-              }
-              alerta={precios.length === 0}
-            />
-            <Dato
-              etiqueta="Fotos"
-              valor={String(producto.galeria.length)}
-              detalle={producto.galeria.length === 0 ? "falta cargar" : undefined}
-              alerta={producto.galeria.length === 0}
-            />
-          </dl>
+            <p className="mt-0.5 text-base text-muted-foreground">
+              {[
+                categorias.find((c) => c.id === producto.categoryId)?.name,
+                producto.subcategory,
+                producto.brand,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          </div>
         </div>
 
-        <div className="flex flex-col gap-2">
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+          <Dato
+            etiqueta="Medidas"
+            valor={String(producto.variantes.length)}
+            detalle={sinPrecio > 0 ? `${sinPrecio} sin precio` : undefined}
+            alerta={sinPrecio > 0}
+          />
+          <Dato
+            etiqueta="Stock total"
+            valor={String(stockTotal)}
+            detalle={stockTotal === 0 ? "agotado" : undefined}
+            alerta={stockTotal === 0}
+          />
+          <Dato
+            etiqueta="Precio"
+            valor={
+              precios.length > 0
+                ? moneda.format(Math.min(...precios))
+                : "Sin cargar"
+            }
+            detalle={
+              precios.length > 1
+                ? `hasta ${moneda.format(Math.max(...precios))}`
+                : undefined
+            }
+            alerta={precios.length === 0}
+          />
+          <Dato
+            etiqueta="Fotos"
+            valor={String(producto.galeria.length)}
+            detalle={producto.galeria.length === 0 ? "falta cargar" : undefined}
+            alerta={producto.galeria.length === 0}
+          />
+        </dl>
+
+        <div className="flex flex-wrap gap-2">
           {producto.active && (
             <a
               href={`/catalogo/${producto.slug}`}

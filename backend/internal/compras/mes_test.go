@@ -341,7 +341,7 @@ func TestPagoPartidoDiceSusMedios(t *testing.T) {
 	_, b = pedir(t, adm, "GET", e.u+"compras/pagos", nil)
 	var pagos []PagoListado
 	_ = json.Unmarshal([]byte(b), &pagos)
-	if len(pagos) != 1 || pagos[0].Medio != "transferencia" || pagos[0].Referencia == nil || *pagos[0].Referencia != "Sim-TRF-900001" || len(pagos[0].Partes) != 2 ||
+	if len(pagos) != 1 || pagos[0].Medio != "transferencia" || pagos[0].Referencia == nil || *pagos[0].Referencia != "cheque 55500001 y transferencia Sim-TRF-900001" || len(pagos[0].Partes) != 2 ||
 		pagos[0].Partes[1].Referencia == nil || *pagos[0].Partes[1].Referencia != "55500001" {
 		t.Errorf("listado: %s", b)
 	}

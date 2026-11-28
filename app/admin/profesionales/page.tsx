@@ -1,4 +1,4 @@
-import { enlaceDeWhatsapp } from "@/lib/formato";
+import { enlaceDeWhatsapp, telefonoLegible } from "@/lib/formato";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { HardHat, Percent, Tags } from "lucide-react";
@@ -183,7 +183,7 @@ function Fila({
                 rel="noopener noreferrer"
                 className="tabular underline-offset-4 hover:text-foreground hover:underline"
               >
-                {solicitud.telefono}
+                {telefonoLegible(solicitud.telefono)}
               </a>
             ) : null}
             {solicitud.matricula ? ` · matrícula ${solicitud.matricula}` : ""}
@@ -195,7 +195,9 @@ function Fila({
             </p>
           )}
 
-          {solicitud.documentoTipo === "dni" && (
+          {/* Solo mientras hay que decidir: en una rechazada ya no
+              corresponde (M2S1-136). */}
+          {solicitud.documentoTipo === "dni" && solicitud.estado !== "rechazada" && (
             <p className="mt-1 text-base text-brand-orange">
               Sin CUIT: la ficha se crea como consumidor final y no se le puede
               facturar A.
@@ -260,6 +262,7 @@ function Fila({
             nombre={solicitud.razonSocial || solicitud.nombre}
             listas={listas}
             clienteExistente={solicitud.clienteExistente}
+            cuit={solicitud.documentoTipo === "cuit" ? solicitud.documentoNumero : null}
           />
         </div>
       )}

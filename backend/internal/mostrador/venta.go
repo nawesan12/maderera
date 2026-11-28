@@ -24,6 +24,7 @@ import (
 	"mjbj/internal/clientes"
 	"mjbj/internal/cobros"
 	"mjbj/internal/cortes"
+	"mjbj/internal/entregas"
 	"mjbj/internal/facturacion"
 	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
@@ -86,6 +87,10 @@ type ResultadoVenta struct {
 	// Ficha: un PIN que ya se tecleó para esta venta. Si la venta falló
 	// después por otra cosa, se reenvía con la ficha y no con el PIN.
 	Ficha string `json:"ficha,omitempty"`
+	// Repetida: el número de la venta igual de recién (M3S4-015). Se vuelve
+	// a mandar con repetidaOk para cobrarla igual.
+	Repetida string `json:"repetida,omitempty"`
+
 	// ClaveUsada: la misma clave llegó con otra venta adentro.
 	ClaveUsada bool `json:"-"`
 	// Lo que queda escrito con la venta.
@@ -175,6 +180,13 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 			return fallo(p), nil
 		}
 		renglonRaro = true
+	}
+	// El corte de la cola que se cobra trae a su cliente (o el nombre y el
+	// teléfono que se anotaron): salía a «Consumidor final», el pedido no
+	// aparecía en la ficha y no había a quién avisar (mes simulado, M2S2-062
+	// y M3S4-041).
+	if err := s.clienteDelCorte(ctx, &v); err != nil {
+		return ResultadoVenta{}, err
 	}
 	if p := ventas.RevisarVenta(v.Lineas, v.MedioPago, v.CustomerID); p != "" {
 		return fallo(p), nil
@@ -330,7 +342,20 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 	var motivoAutomatico *string
 	var lineas []ventas.LineaDeVenta
 	var descuento float64
-	if pedido > 0 {
+	// Con la regla descuento_con_escala en «suma», el descuento tipeado va
+	// además del de la forma de pago: el 5 % del vendedor le sacaba el 10 %
+	// de efectivo y el cliente pagaba más (mes simulado, M2S2-018).
+	sumaEscala := pedido > 0 && automatico > 0 && reglas.Es(ctx, s.pool, reglas.DescuentoConEscala, "suma")
+	if sumaEscala {
+		conEscala, d1 := ventas.AplicarDescuentoSobre(v.Lineas, automatico, elegible)
+		var d2 float64
+		lineas, d2 = ventas.AplicarDescuento(conEscala, pedido)
+		descuento = ventas.ACentavos(d1 + d2)
+		if escala.Etiqueta != "" {
+			e := escala.Etiqueta
+			motivoAutomatico = &e
+		}
+	} else if pedido > 0 {
 		lineas, descuento = ventas.AplicarDescuento(v.Lineas, pedido)
 	} else {
 		if escala != nil && escala.Etiqueta != "" {
@@ -342,8 +367,23 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 	aDescontar := pedido
 	if pedido <= 0 {
 		aDescontar = automatico
+	} else if sumaEscala {
+		aDescontar = pedido + automatico
 	}
 	total := ventas.TotalDeLaVenta(lineas)
+	// Con la regla redondeo_efectivo en «al_peso», lo que se paga todo en
+	// efectivo va sin centavos, a favor del cliente: «$ 354.211,50» con el
+	// cliente contando billetes (mes simulado, M2S1-180).
+	redondeo := 0.0
+	if total > 1 && v.MedioPago == ventas.Efectivo && ventas.UnSoloMedio(v.Pagos, v.MedioPago) &&
+		total != math.Floor(total) && reglas.Es(ctx, s.pool, reglas.RedondeoEfectivo, "al_peso") {
+		var d float64
+		lineas, d = ventas.AplicarDescuento(lineas, ventas.ACentavos(total-math.Floor(total)))
+		redondeo = d
+		descuento = ventas.ACentavos(descuento + d)
+		aDescontar += d
+		total = ventas.TotalDeLaVenta(lineas)
+	}
 	if total <= 0 {
 		// Sin descuento, un total en cero es un precio que falta (comité
 		// final, M14): «el descuento no puede llevarse toda la venta» sobre
@@ -357,6 +397,19 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 	pagos := ventas.NormalizarPagos(v.Pagos, v.MedioPago, total)
 	if p := ventas.RevisarPagos(pagos, total, v.CustomerID); p != "" {
 		return fallo(p), nil
+	}
+	// La misma venta al mismo cliente hace un momento (otra clave): se
+	// pregunta antes de cobrarla otra vez. Dos ventas iguales a Wood Frame
+	// con 29 segundos de diferencia dejaron la cuenta pasada del límite (mes
+	// simulado, M3S4-015). Sin conexión ya pasó: no se pregunta.
+	if !sinConexion && !v.RepetidaOk && v.CustomerID != nil {
+		if numero, hace, err := ventaIgualDeRecien(ctx, s.pool, v, total, ahora); err != nil {
+			return ResultadoVenta{}, err
+		} else if numero != "" {
+			r := fallo("Es igual a " + numero + ", de hace " + hace + ".")
+			r.Repetida = numero
+			return r, nil
+		}
 	}
 	// La tarjeta en línea, con lote y cupón (regla lote_y_cupon, H032): sin
 	// ellos no se concilia contra el posnet. Sin conexión la venta ya pasó.
@@ -383,8 +436,15 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 	// arriba (revisarCobroDelCorte).
 	manual := 0.0
 	if pedido > 0 {
+		// Lo tipeado: sin la escala que se sumó ni el redondeo del efectivo,
+		// que no son del vendedor.
 		manual = descuento
+		if sumaEscala {
+			manual = ventas.ACentavos(manual - automatico)
+		}
+		manual = ventas.ACentavos(manual - redondeo)
 	}
+
 	desvio := ventas.DesvioDeLaVenta(v.Lineas, manual, 0)
 	libre, err := PorcentajeLibre(ctx, s.pool)
 	if err != nil {
@@ -489,6 +549,7 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 	}
 
 	calc := ventaCalculada{
+		sumaEscala: sumaEscala, redondeo: redondeo, recibido: v.EfectivoRecibido,
 		subtotal: subtotal, descuento: descuento, motivoAutomatico: motivoAutomatico, lineas: lineas, total: total,
 		pagos: pagos, medioPago: medioPago, parteEfectivo: parteEfectivo, parteCuenta: parteCuenta, vendedor: vendedor, ahora: ahora,
 		revisarLimite: revisarLimite, huella: huella, dejado: desvio.Total, bajoLista: bajoListaSinAutorizar,
@@ -555,6 +616,12 @@ type ventaCalculada struct {
 	autorizadoPor       *string
 	bajoLista           bool
 	creditoSinAutorizar float64
+	// sumaEscala: el descuento tipeado y el de la forma de pago se sumaron;
+	// redondeo: lo que se dejó de cobrar para que el efectivo cierre sin
+	// centavos; recibido: con cuánto pagó en efectivo (00350).
+	sumaEscala bool
+	redondeo   float64
+	recibido   *float64
 }
 
 func texto(s string) *string { return &s }
@@ -664,6 +731,15 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 		// al cobrar, y el remito del retiro no lo vuelve a sacar
 		// (entregas.SalioConLaVenta). Al terminarse el corte pasa a listo.
 		estado = "preparando"
+		// Cobrar un corte que ya salió de la máquina: el pedido nace listo
+		// para entregar, no en «Preparando» (mes simulado, M3S4-040).
+		listos, err := cortesYaTerminados(ctx, tx, v.Cortes)
+		if err != nil {
+			return ResultadoVenta{}, err
+		}
+		if listos {
+			estado = "listo"
+		}
 	}
 	estadoPago := "pagado"
 	if c.parteCuenta >= c.total-0.009 {
@@ -676,6 +752,16 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 		motivo = v.DescuentoMotivo
 		if motivo == nil {
 			motivo = c.motivoAutomatico
+		} else if c.motivoAutomatico != nil && c.sumaEscala {
+			m := *motivo + " + " + *c.motivoAutomatico
+			motivo = &m
+		}
+		if c.redondeo > 0 {
+			m := "Redondeo"
+			if motivo != nil && *motivo != "" {
+				m = *motivo + " · redondeo"
+			}
+			motivo = &m
 		}
 	}
 	var sincronizada *time.Time
@@ -687,15 +773,17 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 		INSERT INTO orders (numero, clave_mostrador, numero_provisorio, cobrada_at, sincronizada_at, created_at,
 		                    customer_id, contacto_nombre, contacto_telefono, branch_id, estado, origen, tipo_entrega,
 		                    subtotal, descuento, descuento_motivo, total, medio_pago, estado_pago, seller_id, notas, created_by_user_id,
-		                    huella_mostrador, dejado_de_cobrar, autorizado_por, bajo_lista_sin_autorizar, credito_sin_autorizar, comprobante)
+		                    huella_mostrador, dejado_de_cobrar, autorizado_por, bajo_lista_sin_autorizar, credito_sin_autorizar, comprobante,
+		                    efectivo_recibido)
 		VALUES ($1, $2, $3, $4, $5, coalesce($6, now()), $7, $8, $9, $10, $11, 'mostrador', 'retiro',
-		        $12::numeric, $13::numeric, $14, $15::numeric, $16, $17, $18, $19, $20, $21, $22::numeric, $23, $24, $25::numeric, $26)
+		        $12::numeric, $13::numeric, $14, $15::numeric, $16, $17, $18, $19, $20, $21, $22::numeric, $23, $24, $25::numeric, $26,
+		        $27::numeric)
 		RETURNING id`,
 		numero, v.Clave, v.NumeroProvisorio, v.CobradaAt, sincronizada, cobrada,
 		v.CustomerID, v.ContactoNombre, v.ContactoTelefono, v.BranchID, estado,
 		jsmath.Fijo2(c.subtotal), jsmath.Fijo2(c.descuento), motivo, jsmath.Fijo2(c.total), c.medioPago, estadoPago,
 		c.vendedor, v.Notas, usuario, c.huella, jsmath.Fijo2(c.dejado), c.autorizadoPor, c.bajoLista, jsmath.Fijo2(c.creditoSinAutorizar),
-		comprobanteDeLaVenta(v.Comprobante)).Scan(&pedido)
+		comprobanteDeLaVenta(v.Comprobante), recibidoDeLaVenta(c)).Scan(&pedido)
 	if err != nil {
 		return ResultadoVenta{}, err
 	}
@@ -839,6 +927,12 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 			*v.CustomerID, jsmath.Fijo2(c.parteCuenta), "Venta de mostrador "+numero, numero, usuario); err != nil {
 			return ResultadoVenta{}, err
 		}
+		// Lo que se lleva fiado sale con su remito, para firmar (M2S1-073).
+		if estado == "entregado" {
+			if _, err := entregas.ConstanciaParaFirmar(ctx, tx, pedido, &v.BranchID, &usuario); err != nil {
+				return ResultadoVenta{}, err
+			}
+		}
 	}
 
 	// La plata que entró, un renglón por cada pago que no sea deuda.
@@ -861,13 +955,111 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 	return ResultadoVenta{Ok: true, OrderID: pedido, Numero: numero, Total: c.total, Nueva: true, Lineas: c.lineas, AvisoStock: aviso}, nil
 }
 
+// ventaIgualDeRecien es el número de una venta de mostrador al mismo cliente,
+// por el mismo total, con los mismos renglones y de los últimos dos minutos,
+// y hace cuánto fue («29 s»). "" si no hay.
+func ventaIgualDeRecien(ctx context.Context, db *pgxpool.Pool, v VentaPedida, total float64, ahora time.Time) (string, string, error) {
+	var numero string
+	var creada time.Time
+	var renglones []string
+	err := db.QueryRow(ctx, `
+		SELECT o.numero, o.created_at,
+		       (SELECT array_agg(coalesce(oi.variant_id::text, oi.descripcion) || ':' || oi.cantidad::text ORDER BY 1) FROM order_items oi WHERE oi.order_id = o.id)
+		FROM orders o
+		WHERE o.customer_id = $1 AND o.origen = 'mostrador' AND o.estado <> 'cancelado' AND o.clave_mostrador <> $2
+		  AND o.total = $3::numeric AND o.created_at >= $4::timestamptz - interval '2 minutes'
+		ORDER BY o.created_at DESC LIMIT 1`, *v.CustomerID, v.Clave, jsmath.Fijo2(total), ahora).Scan(&numero, &creada, &renglones)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", nil
+	}
+	if err != nil {
+		return "", "", err
+	}
+	// Los renglones también: mismo total con otra cosa es otra venta.
+	cantidades := map[string]float64{}
+	for _, l := range v.Lineas {
+		k := l.Descripcion
+		if l.VariantID != nil {
+			k = *l.VariantID
+		}
+		cantidades[k] += l.Cantidad
+	}
+	for _, r := range renglones {
+		i := strings.LastIndex(r, ":")
+		if i < 0 {
+			continue
+		}
+		cantidades[r[:i]] -= jsmath.Numero(r[i+1:])
+	}
+	for _, c := range cantidades {
+		if math.Abs(c) > 1e-9 {
+			return "", "", nil
+		}
+	}
+	seg := int(ahora.Sub(creada).Seconds())
+	if seg < 0 {
+		seg = 0
+	}
+	hace := fmt.Sprintf("%d s", seg)
+	if seg >= 60 {
+		hace = fmt.Sprintf("%d min", seg/60)
+	}
+	return numero, hace, nil
+}
+
+// clienteDelCorte completa el cliente de una venta que cobra un corte de la
+// cola sin venta, si la pantalla no lo eligió: el de la ficha del corte, o
+// el nombre y el teléfono que se anotaron con él.
+func (s *Servicio) clienteDelCorte(ctx context.Context, v *VentaPedida) error {
+	if v.CustomerID != nil {
+		return nil
+	}
+	for _, k := range v.Cortes {
+		if k.Existente == nil {
+			continue
+		}
+		var cliente, nombre, contacto, telefono *string
+		err := s.pool.QueryRow(ctx, `
+			SELECT co.customer_id::text, c.nombre, nullif(trim(co.contacto_nombre), ''), nullif(trim(co.contacto_telefono), '')
+			FROM cutting_orders co LEFT JOIN customers c ON c.id = co.customer_id
+			WHERE co.id = $1 AND co.order_id IS NULL`, *k.Existente).Scan(&cliente, &nombre, &contacto, &telefono)
+		if errors.Is(err, pgx.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		sinNombre := strings.TrimSpace(v.ContactoNombre) == "" || strings.EqualFold(strings.TrimSpace(v.ContactoNombre), "Consumidor final")
+		switch {
+		case cliente != nil:
+			v.CustomerID = cliente
+			if nombre != nil {
+				v.ContactoNombre = *nombre
+			}
+		case contacto != nil && sinNombre:
+			v.ContactoNombre = *contacto
+		}
+		if v.ContactoTelefono == nil && telefono != nil {
+			v.ContactoTelefono = telefono
+		}
+		return nil
+	}
+	return nil
+}
+
 // vendidoDeMas dice qué medidas de la venta quedaron con lo disponible en
 // negativo: se vendió más de lo que hay, y hay que pedirlo (mes simulado,
 // H218: 135 placas vendidas con 70 en el galpón, sin ningún aviso). La venta
 // se hace igual —vender a pedido es parte del negocio—, pero se dice.
 func vendidoDeMas(ctx context.Context, tx pgx.Tx, pedido string, sucursal string) (string, error) {
+	// Con lo que hay en el estante y para quién está apartado: «faltan 1»
+	// con tres latas a la vista no se entendía, y el vendedor le sacaba la
+	// lata a un pedido web sin saberlo (mes simulado, M3S1-064).
 	filas, err := tx.Query(ctx, `
-		SELECT DISTINCT p.name || ' ' || v.label, (i.qty - i.reservado)::float8
+		SELECT DISTINCT p.name || ' ' || v.label, (i.qty - i.reservado)::float8, greatest(i.qty, 0)::float8,
+		       (SELECT string_agg(DISTINCT o2.numero, ', ') FROM stock_reservations sr2
+		          JOIN order_items oi2 ON oi2.id = sr2.order_item_id JOIN orders o2 ON o2.id = oi2.order_id
+		         WHERE sr2.variant_id = i.variant_id AND sr2.branch_id = i.branch_id AND sr2.estado = 'activa' AND o2.id <> $1)
 		FROM order_items oi
 		JOIN product_variants v ON v.id = oi.variant_id
 		JOIN products p ON p.id = v.product_id
@@ -880,20 +1072,37 @@ func vendidoDeMas(ctx context.Context, tx pgx.Tx, pedido string, sucursal string
 	}
 	var partes []string
 	var nombre string
-	var disponible float64
-	if _, err := pgx.ForEachRow(filas, []any{&nombre, &disponible}, func() error {
-		partes = append(partes, nombre+" (faltan "+formato.Cantidad(-disponible)+")")
+	var disponible, fisico float64
+	var reservados *string
+	if _, err := pgx.ForEachRow(filas, []any{&nombre, &disponible, &fisico, &reservados}, func() error {
+		p := nombre + " (faltan " + formato.Cantidad(-disponible)
+		if reservados != nil && *reservados != "" {
+			p += "; quedan " + formato.Cantidad(fisico) + " apartadas para " + *reservados
+		}
+		partes = append(partes, p+")")
 		return nil
 	}); err != nil {
 		return "", err
 	}
+
 	if len(partes) == 0 {
 		return "", nil
 	}
 	return "Se vendió más de lo que hay: " + strings.Join(partes, ", ") + ".", nil
 }
 
+// recibidoDeLaVenta es con cuánto pagó, si pagó todo en efectivo y alcanzó:
+// el ticket dice el vuelto (mes simulado, M3S1-061).
+func recibidoDeLaVenta(c ventaCalculada) *string {
+	if c.recibido == nil || !(*c.recibido >= c.total-0.005) || c.parteEfectivo < c.total-0.005 || *c.recibido > 1e9 {
+		return nil
+	}
+	f := jsmath.Fijo2(*c.recibido)
+	return &f
+}
+
 // comprobanteDeLaVenta es con qué salió la venta: «interno» o «fiscal»
+
 // (migración 00230). Lo que no es ninguno de los dos queda nulo.
 func comprobanteDeLaVenta(c string) *string {
 	if c != "interno" && c != "fiscal" {
@@ -1027,12 +1236,24 @@ func revisarCorte(k CorteDeMostrador) string {
 	return ""
 }
 
+// soloElCorte: la venta no lleva mercadería fuera de la del corte.
+func soloElCorte(v VentaPedida) bool {
+	for _, l := range v.Lineas {
+		if l.VariantID != nil && l.Corte == nil {
+			return false
+		}
+	}
+	return true
+}
+
 func insertarCorte(ctx context.Context, tx pgx.Tx, v VentaPedida, k *CorteDeMostrador, pedido, usuario string) error {
 	// El que ya estaba en la cola sin venta se ata a esta: sus piezas son
 	// las de su ficha (con ellas se armó lo que se cobra).
 	if k.Existente != nil {
-		tag, err := tx.Exec(ctx, `UPDATE cutting_orders SET order_id = $2, customer_id = coalesce(customer_id, $3), updated_at = now()
-			WHERE id = $1 AND order_id IS NULL AND estado <> 'cancelado'`, *k.Existente, pedido, v.CustomerID)
+		// El de una venta rehecha vuelve a la cola al atarse (ver anular.go).
+		tag, err := tx.Exec(ctx, `UPDATE cutting_orders SET order_id = $2, customer_id = coalesce(customer_id, $3), updated_at = now(),
+			  estado = CASE WHEN estado = 'cancelado' THEN 'en-cola'::estado_corte ELSE estado END, rehacer_de = NULL
+			WHERE id = $1 AND order_id IS NULL AND (estado <> 'cancelado' OR rehacer_de IS NOT NULL)`, *k.Existente, pedido, v.CustomerID)
 		if err != nil {
 			return err
 		}
@@ -1043,6 +1264,25 @@ func insertarCorte(ctx context.Context, tx pgx.Tx, v VentaPedida, k *CorteDeMost
 		// «Lo retira el» aunque el corte lo tenía (mes simulado, PED-1155).
 		_, err = tx.Exec(ctx, `UPDATE orders o SET entregar_el = co.retira_el FROM cutting_orders co
 			WHERE o.id = $2 AND co.id = $1 AND o.entregar_el IS NULL AND co.retira_el IS NOT NULL`, *k.Existente, pedido)
+		if err != nil {
+			return err
+		}
+		// La venta que solo cobra el corte: a nombre del cliente del corte
+		// (figuraba «Consumidor final»), y se retira donde está el corte, no
+		// en la caja que cobró (mes simulado 2: un corte del Aserradero se
+		// daba por entregado en Casa Central sin traslado). La plata entra
+		// igual al turno que la cobró, y caja_branch_id guarda cuál: el Z
+		// de la otra sucursal la sumaba sin que pasara por su cajón (mes
+		// 23, PED-1142).
+		if soloElCorte(v) {
+			_, err = tx.Exec(ctx, `UPDATE orders o SET
+				  contacto_nombre = CASE WHEN o.customer_id IS NULL AND lower(o.contacto_nombre) = 'consumidor final' THEN co.contacto_nombre ELSE o.contacto_nombre END,
+				  contacto_telefono = coalesce(o.contacto_telefono, co.contacto_telefono),
+				  customer_id = coalesce(o.customer_id, co.customer_id),
+				  caja_branch_id = coalesce(o.caja_branch_id, o.branch_id),
+				  branch_id = coalesce(co.branch_id, o.branch_id)
+				FROM cutting_orders co WHERE o.id = $2 AND co.id = $1`, *k.Existente, pedido)
+		}
 		return err
 	}
 	numero, err := numeracion.Corte(ctx, tx)
@@ -1123,4 +1363,20 @@ func revisarCuitDelComprobante(ctx context.Context, db *pgxpool.Pool, v VentaPed
 	}
 	_, msj := clientes.LeerDocumento(cuit)
 	return msj, nil
+}
+
+// cortesYaTerminados dice si todos los cortes de la venta son de la cola y ya
+// salieron de la máquina. Uno nuevo, que nace con la venta, todavía no.
+func cortesYaTerminados(ctx context.Context, tx pgx.Tx, ks []CorteDeMostrador) (bool, error) {
+	ids := make([]string, 0, len(ks))
+	for _, k := range ks {
+		if k.Existente == nil {
+			return false, nil
+		}
+		ids = append(ids, *k.Existente)
+	}
+	var todos bool
+	err := tx.QueryRow(ctx, `SELECT count(*) = $2 FROM cutting_orders WHERE id::text = ANY($1) AND estado IN ('terminado', 'retirado')`,
+		ids, len(ids)).Scan(&todos)
+	return todos, err
 }

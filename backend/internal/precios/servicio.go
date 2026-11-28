@@ -88,6 +88,10 @@ type FilaPrecio struct {
 	// Piso es el precio final que apenas cubre el costo (PisoDeCosto); nil
 	// sin costo cargado. La grilla marca la lista que queda por debajo.
 	Piso *float64 `json:"piso"`
+	// La oferta vigente de la lista general: el precio de antes y hasta
+	// cuándo (el día siguiente al último, a las 0 h). Nil sin oferta.
+	PrecioAnterior *string    `json:"precioAnterior"`
+	OfertaHasta    *time.Time `json:"ofertaHasta"`
 }
 
 // ConteosDePrecios son los totales de cada estado con los mismos filtros.
@@ -257,6 +261,31 @@ func (s *Servicio) completar(ctx context.Context, ls listas, out []FilaPrecio) (
 	if err != nil {
 		return nil, err
 	}
+	type oferta struct {
+		antes string
+		hasta time.Time
+	}
+	ofertas := map[string]oferta{}
+	if ls.general != nil {
+		fo, err := s.pool.Query(ctx, `SELECT variant_id, precio_anterior::text, oferta_hasta FROM price_list_items
+			WHERE price_list_id = $1 AND variant_id = ANY($2::uuid[]) AND precio_anterior IS NOT NULL AND oferta_hasta > now()`, ls.general.ID, variantes)
+		if err != nil {
+			return nil, err
+		}
+		for fo.Next() {
+			var v string
+			var o oferta
+			if err := fo.Scan(&v, &o.antes, &o.hasta); err != nil {
+				fo.Close()
+				return nil, err
+			}
+			ofertas[v] = o
+		}
+		fo.Close()
+		if err := fo.Err(); err != nil {
+			return nil, err
+		}
+	}
 	buscar := func(v string, l *sqlc.PriceList) string {
 		if l != nil {
 			if x, ok := precio[precioDe{v, l.ID}]; ok {
@@ -278,6 +307,10 @@ func (s *Servicio) completar(ctx context.Context, ls listas, out []FilaPrecio) (
 		}
 		if u, ok := ultima[f.VariantID]; ok {
 			f.Actualizado = &u
+		}
+		if o, ok := ofertas[f.VariantID]; ok {
+			antes, hasta := o.antes, o.hasta
+			f.PrecioAnterior, f.OfertaHasta = &antes, &hasta
 		}
 	}
 	return out, nil
@@ -393,8 +426,28 @@ func (s *Servicio) Editar(ctx context.Context, ses *auth.Sesion, variante, lista
 	}
 	valor := jsmath.Fijo2(n)
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		_, err := cambiar(ctx, s.q.WithTx(tx), ses, variante, lista, valor, sqlc.PriceChangeSourceManual, nil, nil)
-		return err
+		var antes *string
+		var producto, nombreLista string
+		if err := tx.QueryRow(ctx, `SELECT (SELECT price::text FROM price_list_items WHERE variant_id = v.id AND price_list_id = l.id),
+			  p.name || CASE WHEN v.label <> '' AND v.label <> p.name THEN ' · ' || v.label ELSE '' END, l.name
+			FROM product_variants v JOIN products p ON p.id = v.product_id, price_lists l WHERE v.id = $1 AND l.id = $2`,
+			variante, lista).Scan(&antes, &producto, &nombreLista); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		cambio, err := cambiar(ctx, s.q.WithTx(tx), ses, variante, lista, valor, sqlc.PriceChangeSourceManual, nil, nil)
+		if err != nil || !cambio {
+			return err
+		}
+		// El precio cambiado a mano, con el de antes: quedaba solo en el
+		// historial de precios y la bitácora no lo mostraba (mes 23, M2S1-047).
+		desde := "sin precio"
+		if antes != nil {
+			desde = formato.Importe(jsmath.Numero(*antes))
+		}
+		bitacora.Anotar(ctx, sqlc.New(tx), s.log, ses, sqlc.AccionAuditoriaEditar, "precio", variante,
+			"Precio "+nombreLista+" de "+producto+": "+desde+" → "+formato.Importe(n),
+			map[string]any{"priceListId": lista, "antes": antes, "despues": valor})
+		return nil
 	})
 }
 

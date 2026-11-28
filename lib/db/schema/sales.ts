@@ -91,6 +91,8 @@ export const quotes = pgTable(
     createdByUserId: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /** La clave por intento del presupuesto del mostrador: el doble toque no emite dos (00350). */
+    claveMostrador: text(),
   },
   (t) => [
     uniqueIndex("quotes_numero_idx").on(t.numero),
@@ -214,6 +216,8 @@ export const orders = pgTable(
     /** Zona de envío elegida, para poder explicar el costo cobrado. */
     zonaEnvio: text(),
     costoEnvio: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
+    /** El envío se pasó a pedido con «Sin cargo»: no es un flete por cotizar. */
+    fleteSinCargo: boolean().notNull().default(false),
     subtotal: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
     /**
      * Descuento sobre el total, en plata.
@@ -291,7 +295,12 @@ export const orders = pgTable(
     canceladoAt: timestamp({ withTimezone: true }),
     /** Lo que un pedido partido cargó a la cuenta corriente; el resto, con medioPago (00311). */
     aCuenta: numeric({ precision: 12, scale: 2 }),
+    /** Con cuánto pagó en efectivo, para el vuelto del ticket (00350). */
+    efectivoRecibido: numeric({ precision: 12, scale: 2 }),
+    /** La sucursal de la caja que la cobró, si no es branchId: la venta de un corte de otra sucursal (00452). */
+    cajaBranchId: uuid().references(() => branches.id, { onDelete: "set null" }),
   },
+
   (t) => [
     uniqueIndex("orders_numero_idx").on(t.numero),
     uniqueIndex("orders_clave_mostrador_idx").on(t.claveMostrador),
@@ -579,6 +588,8 @@ export const cuttingOrders = pgTable(
     motivoAnulado: text(),
     /* 00340: el pedido aparte con las pasadas, si el suyo ya no se tocaba (FK en goose). */
     cargoOrderId: uuid(),
+    /* 00390: el total que se le dijo al cliente al tomar el corte suelto. */
+    totalTomado: numeric({ precision: 14, scale: 2, mode: "number" }),
   },
   (t) => [
     uniqueIndex("cutting_orders_numero_idx").on(t.numero),

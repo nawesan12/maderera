@@ -21,7 +21,7 @@ import { estadoDelPago } from "@/lib/cuenta/portal";
  * La franja de color al costado es la misma que usa el panel para ese estado,
  * así el cliente y quien lo atiende por teléfono están mirando lo mismo.
  */
-export function TarjetaPedido({ pedido }: { pedido: PedidoPropio }) {
+export function TarjetaPedido({ pedido, compacta = false }: { pedido: PedidoPropio; compacta?: boolean }) {
   const etapas =
     pedido.tipoEntrega === "retiro" ? ETAPAS_RETIRO : ETAPAS_PEDIDO;
   const cancelado = pedido.estado === "cancelado";
@@ -34,6 +34,31 @@ export function TarjetaPedido({ pedido }: { pedido: PedidoPropio }) {
     (pago?.clave === "pendiente" ||
       pago?.clave === "parcial" ||
       pago?.clave === "en_revision");
+
+  // Los terminados, en un renglón: número, fecha, total y un solo estado.
+  // Cada tarjeta decía tres veces lo mismo (la pastilla, la barra llena y
+  // «Retirado · 4 de 4») y seis pedidos ocupaban dos pantallas (M3S4-039).
+  if (compacta) {
+    return (
+      <Link
+        href={`/mi-cuenta/pedidos/${pedido.numero}`}
+        className="group relative flex items-center gap-3 overflow-hidden rounded-xl border bg-card px-4 py-3 pl-5 transition-shadow hover:shadow-md"
+      >
+        <AcentoEstado estado={pedido.estado} />
+        <span className="min-w-0 flex-1">
+          <span className="tabular block font-semibold">{pedido.numero}</span>
+          <span className="block text-sm text-muted-foreground">
+            {fechaCorta.format(pedido.createdAt)}
+            {avisaPago && pago && (
+              <span className="text-brand-orange-dark"> · {pago.etiqueta}</span>
+            )}
+          </span>
+        </span>
+        <span className="tabular shrink-0 font-semibold">{formatearMonto(pedido.total)}</span>
+        <EtiquetaEstado estado={pedido.estado} contexto="pedido" />
+      </Link>
+    );
+  }
 
   return (
     <Link
@@ -74,7 +99,9 @@ export function TarjetaPedido({ pedido }: { pedido: PedidoPropio }) {
             <span className="tabular text-xl font-semibold">
               {formatearMonto(pedido.total)}
             </span>
-            <EtiquetaEstado estado={pedido.estado} contexto="pedido" />
+            {/* En curso el estado lo dice la barra; la pastilla, solo en el
+                cancelado, que no la lleva (M3S4-039). */}
+            {cancelado && <EtiquetaEstado estado={pedido.estado} contexto="pedido" />}
           </div>
         </div>
 

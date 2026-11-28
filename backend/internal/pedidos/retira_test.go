@@ -17,7 +17,7 @@ func TestAvanzarUnRetiroPideElDocumento(t *testing.T) {
 	retiro := e.pedido(t, ses, 1)
 	envio := e.pedido(t, ses, 1)
 	e.exec(t, `update orders set tipo_entrega = 'envio' where id = $1`, envio)
-	e.exec(t, `update orders set estado = 'listo'`)
+	e.exec(t, `update orders set estado = 'listo', estado_pago = 'pagado'`)
 	u := e.srv.URL + "/api/v1/admin/pedidos/"
 
 	// Sin documento: 422 en el campo, y nada se movió.

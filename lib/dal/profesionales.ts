@@ -3,7 +3,10 @@ import "server-only";
 import { cache } from "react";
 import { cacheLife, cacheTag } from "next/cache";
 import { cachearPublico, ETIQUETAS } from "@/lib/cache-publico";
+import { cookies } from "next/headers";
 import { api, apiPublica, datos } from "@/lib/api/servidor";
+import { degradar } from "@/lib/degradar";
+import { SENAL_ESTADO } from "@/lib/senal-cliente";
 
 /**
  * Lecturas del portal de profesionales, del lado público.
@@ -75,6 +78,22 @@ export interface DocumentoTecnico {
 
 export async function documentosVisibles(): Promise<DocumentoTecnico[]> {
   return datos(await (await api()).GET("/api/v1/contenido/documentos"));
+}
+
+/**
+ * De los reservados de una ficha, los que quien mira puede bajar: al
+ * profesional aprobado el candado lo mandaba a pedir el alta (mes simulado,
+ * M3S1-022). La ficha va a la caché compartida con los ids y sin títulos;
+ * esto se pide aparte, con la sesión. Sin la señal no hay sesión que mirar.
+ */
+export async function reservadosParaQuienMira(ids: string[]): Promise<DocumentoTecnico[]> {
+  if (ids.length === 0) return [];
+  if (!(await cookies()).get(SENAL_ESTADO)) return [];
+  return degradar(
+    "los documentos reservados de la ficha",
+    async () => (await documentosVisibles()).filter((d) => d.soloProfesionales && ids.includes(d.id)),
+    [],
+  );
 }
 
 /** Cuántos documentos hay reservados para profesionales, sin mostrar cuáles. */

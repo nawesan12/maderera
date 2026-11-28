@@ -1,6 +1,7 @@
 package pdf
 
 import (
+	"strings"
 	"time"
 
 	"mjbj/internal/jsmath"
@@ -128,8 +129,10 @@ func Presupuesto(d DatosPresupuesto, _ time.Time) ([]byte, error) {
 		}
 		return s
 	}
+	// La empresa solo si no es el mismo nombre (M2S4-064: «Sim Mueblería
+	// Atlántica SRL · Sim Mueblería Atlántica SRL»).
 	cliente := p.Cliente
-	if p.Empresa != "" {
+	if p.Empresa != "" && !strings.EqualFold(strings.TrimSpace(p.Empresa), strings.TrimSpace(p.Cliente)) {
 		cliente = p.Cliente + " · " + p.Empresa
 	}
 	iva := "Consumidor final"
@@ -139,14 +142,20 @@ func Presupuesto(d DatosPresupuesto, _ time.Time) ([]byte, error) {
 			iva = c
 		}
 	}
-	altoCaja := h.CuadroDeDatos("CLIENTE", []Dato{
-		{"Cliente", cliente},
-		{"Cód. cliente", o(p.ClienteCodigo, "—")},
-		{"Vendedor", o(p.Vendedor, o(p.Asesor, "—"))},
-		{"Domicilio", o(p.ClienteDireccion, "—")},
-		{"CUIT", Cuit(p.ClienteCuit)},
-		{"IVA", iva},
-	}, cursor, 3)
+	// El vendedor es el que armó el presupuesto, el mismo que dice la
+	// pantalla («Asesor»); el de la ficha solo si no hay otro (M2S4-064). El
+	// código de cliente, solo si lo tiene (M3S4-029: «Cód. cliente -»).
+	datos := []Dato{{"Cliente", cliente}}
+	if p.ClienteCodigo != "" {
+		datos = append(datos, Dato{"Cód. cliente", p.ClienteCodigo})
+	}
+	datos = append(datos,
+		Dato{"Vendedor", o(p.Asesor, o(p.Vendedor, "—"))},
+		Dato{"Domicilio", o(p.ClienteDireccion, "—")},
+		Dato{"CUIT", Cuit(p.ClienteCuit)},
+		Dato{"IVA", iva},
+	)
+	altoCaja := h.CuadroDeDatos("CLIENTE", datos, cursor, 3)
 
 	cursor -= altoCaja + Mm(6)
 
@@ -177,14 +186,17 @@ func Presupuesto(d DatosPresupuesto, _ time.Time) ([]byte, error) {
 	for _, item := range p.Items {
 		antes := cursor
 		renglones := len(Renglones(item.Descripcion, Helvetica, 9, anchoDescripcion))
-		renglonesUnidad := len(Renglones(Unidad(item.Unidad), Helvetica, 7, anchoUnidad))
+		// La lata de 4 litros se vende por unidad: «2 l» se leía como dos
+		// litros (M2S3-074), como ya decía el remito.
+		unidad := Unidad(UnidadDeVenta(item.Unidad, item.Descripcion))
+		renglonesUnidad := len(Renglones(unidad, Helvetica, 7, anchoUnidad))
 		cursor = presupuestoEspacio(h, cursor, maximo(Mm(14), maximo(float64(renglones)*9*1.35, float64(renglonesUnidad)*9)+4))
 		if cursor != antes {
 			cursor = encabezado(cursor)
 		}
 
 		h.EscribirNumero(numeroJS(num(item.Cantidad)), Opciones{X: colCantidad, Y: cursor, Tamano: 9, Fuente: Mono, Derecha: true}, anchoCantidad)
-		altoUnidad := h.EscribirParrafo(Unidad(item.Unidad), Parrafo{Opciones: Opciones{X: colUnidad, Y: cursor, Tamano: 7, Color: TintaSuave, Derecha: true}, Ancho: anchoUnidad, Interlineado: 9})
+		altoUnidad := h.EscribirParrafo(unidad, Parrafo{Opciones: Opciones{X: colUnidad, Y: cursor, Tamano: 7, Color: TintaSuave, Derecha: true}, Ancho: anchoUnidad, Interlineado: 9})
 		alto := maximo(altoUnidad, h.EscribirParrafo(item.Descripcion, Parrafo{Opciones: Opciones{X: colDescripcion, Y: cursor, Tamano: 9}, Ancho: anchoDescripcion}))
 		h.EscribirNumero(Moneda2De(item.PrecioUnitario), Opciones{X: colPrecio, Y: cursor, Tamano: 9, Fuente: Mono, Derecha: true}, anchoPrecio)
 		h.EscribirNumero(Moneda2De(item.Subtotal), Opciones{X: derecha, Y: cursor, Tamano: 9, Fuente: Mono, Derecha: true}, anchoTotal)

@@ -144,7 +144,7 @@ export function ResumenImpreso({
           <section className="comprobante-datos">
             <p className="etiqueta">Antigüedad de la deuda</p>
 
-            <table className="detalle">
+            <table className="detalle tramos">
               <thead>
                 <tr>
                   {aging.tramos.map((t) => (

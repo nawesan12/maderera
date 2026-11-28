@@ -1,4 +1,4 @@
-import { tienda } from "@/lib/dal/contenido";
+import { ajuste, tienda } from "@/lib/dal/contenido";
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -16,7 +16,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { telefonoParaMarcar } from "@/lib/formato";
 import { REDES } from "@/lib/empresa";
 import { metadatosDePagina, sucursalJsonLd } from "@/lib/seo";
-import { SUCURSALES, sucursalPublicada } from "@/lib/sucursales";
+import { SUCURSALES, conWhatsappDelSitio, sucursalPublicada } from "@/lib/sucursales";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
 
 /**
@@ -79,8 +79,9 @@ export default async function SucursalPage({
 }) {
   const { slug } = await params;
   const laTienda = await tienda();
-  const sucursal = sucursalPublicada(slug);
-  if (!sucursal) notFound();
+  const ficha = sucursalPublicada(slug);
+  if (!ficha) notFound();
+  const [sucursal] = conWhatsappDelSitio([ficha], await ajuste("whatsapp_principal"));
 
   const otras = SUCURSALES.filter((s) => s.slug !== slug);
   const servicios = renglones(sucursal.servicios);
@@ -241,7 +242,8 @@ export default async function SucursalPage({
               </Link>{" "}
               o mirá el{" "}
               <Link href="/catalogo" className="font-medium text-acento-texto hover:underline">
-                catálogo con precios
+                {/* Con la tienda apagada el catálogo no muestra precios (M3S1-075). */}
+                {laTienda.activa ? "catálogo con precios" : "catálogo"}
               </Link>
               .
             </p>

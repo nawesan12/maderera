@@ -126,6 +126,11 @@ type MovimientoDeCuenta struct {
 	// factura: mes simulado, H070) y FacturaDelRemito la factura que la cubrió.
 	GoodsReceiptID   *string `json:"goodsReceiptId"`
 	FacturaDelRemito *string `json:"facturaDelRemito"`
+	// ChequeID es el cheque que rebotó (el renglón se llama «Cheque
+	// rechazado», no «Ajuste»: M2S3-055) y AplicaA la factura a la que se
+	// aplicó un ajuste que bajó la deuda.
+	ChequeID *string `json:"chequeId"`
+	AplicaA  *string `json:"aplicaA"`
 }
 
 // GastoDelProveedor es un gasto pagado en el acto a un proveedor (un flete,
@@ -202,7 +207,9 @@ func (s *Servicio) ObtenerProveedor(ctx context.Context, id string) (*Proveedor,
 		    LIMIT 1), m.detalle) ELSE m.detalle END,
 		  m.referencia, m.created_at, m.purchase_invoice_id, m.supplier_payment_id, m.goods_receipt_id,
 		  (SELECT lpad(f.punto_venta::text, 4, '0') || '-' || lpad(f.numero::text, 8, '0') FROM purchase_invoice_receipts x JOIN purchase_invoices f ON f.id = x.purchase_invoice_id
-		   WHERE x.goods_receipt_id = m.goods_receipt_id LIMIT 1)
+		   WHERE x.goods_receipt_id = m.goods_receipt_id LIMIT 1),
+		  m.cheque_id,
+		  (SELECT lpad(f.punto_venta::text, 4, '0') || '-' || lpad(f.numero::text, 8, '0') FROM purchase_invoices f WHERE f.id = m.aplica_a_id)
 		FROM supplier_movements m
 		WHERE m.supplier_id = $1 ORDER BY m.created_at DESC LIMIT 200`, id)
 	if err != nil {
@@ -212,7 +219,7 @@ func (s *Servicio) ObtenerProveedor(ctx context.Context, id string) (*Proveedor,
 		var m MovimientoDeCuenta
 		var monto jsmath.Num
 		err := r.Scan(&m.ID, &m.Tipo, &monto, &m.Detalle, &m.Referencia, &m.CreatedAt, &m.PurchaseInvoiceID, &m.SupplierPaymentID,
-			&m.GoodsReceiptID, &m.FacturaDelRemito)
+			&m.GoodsReceiptID, &m.FacturaDelRemito, &m.ChequeID, &m.AplicaA)
 		m.Monto = float64(monto)
 		return m, err
 	})
@@ -307,6 +314,22 @@ func (s *Servicio) GuardarProveedor(ctx context.Context, ses *auth.Sesion, m map
 	if err != nil {
 		return "", "", err
 	}
+	// Un CUIT que ya tiene otro proveedor: las facturas y los pagos se
+	// repartían entre dos cuentas y el acumulado del mes para retener se
+	// contaba por separado (M3S3-008).
+	if f.Cuit != nil && NormalizarNumeroDeCheque(*f.Cuit) != "" {
+		var otro, nombre string
+		err := s.pool.QueryRow(ctx, `
+			SELECT id, nombre FROM suppliers
+			WHERE regexp_replace(coalesce(cuit, ''), '\D', '', 'g') = $1 AND ($2::uuid IS NULL OR id <> $2::uuid)
+			ORDER BY estado = 'activo' DESC LIMIT 1`, NormalizarNumeroDeCheque(*f.Cuit), f.ID).Scan(&otro, &nombre)
+		if err == nil {
+			return "", "", plataforma.Invalido(map[string]string{"cuit": "Ya existe " + nombre + " con ese CUIT."})
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return "", "", err
+		}
+	}
 	args := []any{f.Nombre, f.RazonSocial, f.Cuit, f.CondicionIva, f.Contacto, f.Telefono, f.Email, f.Direccion, f.Rubro,
 		f.Cbu, f.AliasCbu, int32(f.DiasPago), f.Notas, f.CondicionGanancias, f.ExentoGananciasHasta}
 	if f.ID != nil {
@@ -360,10 +383,46 @@ func (s *Servicio) RegistrarMovimiento(ctx context.Context, ses *auth.Sesion, m 
 	default:
 		return "", fallo("Elegí si el ajuste sube o baja la deuda.")
 	}
-	if _, err := s.pool.Exec(ctx, `
-		INSERT INTO supplier_movements (supplier_id, tipo, monto, detalle, referencia, created_by_user_id)
-		VALUES ($1, $2::tipo_movimiento_proveedor, $3::numeric, $4, $5, $6)`,
-		x.SupplierID, x.Tipo, jsmath.Fijo2(conSigno), x.Detalle, x.Referencia, ses.UserID); err != nil {
+	// Un ajuste que baja la deuda se puede aplicar a una factura, como una
+	// nota de crédito (una bonificación pactada, M3S2-028): la factura queda
+	// pagada por lo que cubre.
+	var aplicaA *string
+	if v, _ := m["aplicaA"].(string); v != "" {
+		if conSigno > 0 {
+			return "", fallo("Solo un ajuste que baja la deuda se aplica a una factura.")
+		}
+		aplicaA = &v
+	}
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if aplicaA != nil {
+			if !plataforma.UUIDValido(*aplicaA) {
+				return fallo("Esa factura no existe.")
+			}
+			var dueno, tipo string
+			var anulada bool
+			var total, imputado jsmath.Num
+			err := tx.QueryRow(ctx, `SELECT supplier_id, tipo::text, anulada_at IS NOT NULL, total, `+AplicadoA("f")+`
+				FROM purchase_invoices f WHERE id = $1 FOR UPDATE`, *aplicaA).Scan(&dueno, &tipo, &anulada, &total, &imputado)
+			if errors.Is(err, pgx.ErrNoRows) || err == nil && dueno != x.SupplierID {
+				return fallo("Esa factura no es de este proveedor.")
+			}
+			if err != nil {
+				return err
+			}
+			if anulada || strings.HasPrefix(tipo, "nota_credito") {
+				return fallo("Ese comprobante no se paga.")
+			}
+			if saldo := SaldoDeFactura(total.F(), imputado.F()); x.Monto-saldo > 0.009 {
+				return fallo("A esa factura le quedan " + formato.Importe(saldo) + ": el ajuste no puede ser mayor.")
+			}
+		}
+		_, err := tx.Exec(ctx, `
+			INSERT INTO supplier_movements (supplier_id, tipo, monto, detalle, referencia, created_by_user_id, aplica_a_id)
+			VALUES ($1, $2::tipo_movimiento_proveedor, $3::numeric, $4, $5, $6, $7)`,
+			x.SupplierID, x.Tipo, jsmath.Fijo2(conSigno), x.Detalle, x.Referencia, ses.UserID, aplicaA)
+		return err
+	})
+	if err != nil {
 		if strings.Contains(err.Error(), "foreign key") {
 			return "", fallo("Ese proveedor no existe.")
 		}
@@ -435,10 +494,34 @@ func (s *Servicio) BorrarCondicion(ctx context.Context, ses *auth.Sesion, id, su
 	if !plataforma.UUIDValido(id) {
 		return nil
 	}
-	if _, err := s.pool.Exec(ctx, `DELETE FROM supplier_terms WHERE id = $1 AND supplier_id = $2`, id, supplierID); err != nil {
+	// La bitácora dice cuál era (M3S4-022): «Borró una condición» sola no
+	// dejaba saber qué se había pactado.
+	var modalidad string
+	var plazo int32
+	var bonif jsmath.Num
+	var detalle *string
+	err := s.pool.QueryRow(ctx, `DELETE FROM supplier_terms WHERE id = $1 AND supplier_id = $2
+		RETURNING modalidad::text, plazo_dias, bonificacion_pct, detalle`, id, supplierID).Scan(&modalidad, &plazo, &bonif, &detalle)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
 		return err
 	}
-	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEliminar, "condicion_proveedor", id, "Borró una condición de pago del proveedor", nil)
+	cual := NombreDelMedio(modalidad)
+	if plazo == 0 {
+		cual += " contado"
+	} else {
+		cual += fmt.Sprintf(" a %d días", plazo)
+	}
+	if bonif.F() > 0 {
+		cual += " · " + strings.Replace(jsmath.Texto(bonif.F()), ".", ",", 1) + " % de bonificación"
+	}
+	if detalle != nil && *detalle != "" {
+		cual += " (" + *detalle + ")"
+	}
+	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEliminar, "proveedor", supplierID,
+		"Borró la condición de pago «"+cual+"» de "+s.nombreDelProveedor(ctx, supplierID), nil)
 	return nil
 }
 

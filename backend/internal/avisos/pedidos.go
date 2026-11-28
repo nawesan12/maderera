@@ -75,9 +75,12 @@ type tituloDeEstado struct{ titulo, texto string }
 var titulosDeEstado = map[string]tituloDeEstado{
 	"preparando": {"Estamos preparando tu pedido", "Ya lo estamos armando en el depósito."},
 	"listo":      {"Tu pedido está listo", "Podés pasar a retirarlo en el horario de atención: lunes a viernes de 8 a 16, sábados de 8 a 12."},
-	"en-camino":  {"Tu pedido salió para la entrega", "Va en camino a la dirección que nos diste."},
-	"entregado":  {"Tu pedido fue entregado", "Gracias por comprar en Maderera Juan B. Justo."},
-	"cancelado":  {"Tu pedido fue cancelado", "Si esto no era lo que esperabas, escribinos y lo revisamos: puede haber sido un error nuestro."},
+	// El listo de un envío no se retira (mes simulado, M2S1-074): a Rocío,
+	// con envío, le llegaba «listo para retirar».
+	"listo-envio": {"Tu pedido está listo", "Ya está armado y sale para la entrega. Te avisamos cuando salga."},
+	"en-camino":   {"Tu pedido salió para la entrega", "Va en camino a la dirección que nos diste."},
+	"entregado":   {"Tu pedido fue entregado", "Gracias por comprar en Maderera Juan B. Justo."},
+	"cancelado":   {"Tu pedido fue cancelado", "Si esto no era lo que esperabas, escribinos y lo revisamos: puede haber sido un error nuestro."},
 }
 
 // PedidoCambioDeEstado es el aviso de un pedido que avanzó. El asunto y el
@@ -131,13 +134,31 @@ func PagoAcreditado(sitio, nombre string, monto float64, medio, referencia, toke
 	})
 }
 
+// PagoRechazado es el aviso de una transferencia informada que no se aceptó
+// en la conciliación: el motivo y el enlace al pedido, donde se sube otro
+// comprobante.
+func PagoRechazado(sitio, nombre, numero, token, motivo string) Correo {
+	datos := []email.Bloque{{Etiqueta: "Pedido", Valor: numero}}
+	if motivo != "" {
+		datos = append(datos, email.Bloque{Etiqueta: "Motivo", Valor: motivo})
+	}
+	return armar(sitio, "No pudimos acreditar tu pago · "+numero, email.Opciones{
+		Titulo:   "No pudimos acreditar tu pago",
+		Adelanto: "Revisamos el comprobante del pedido " + numero + " y no lo encontramos en la cuenta.",
+		Saludo:   nombre,
+		Parrafos: []string{"Desde el pedido podés subir otro comprobante. Si ya transferiste, escribinos y lo revisamos juntos."},
+		Datos:    datos,
+		CTA:      &email.Enlace{Texto: "Ver el pedido", URL: URLDelPedido(sitio, numero, token)},
+	})
+}
+
 // PresupuestoRecibido es el acuse de un pedido de presupuesto del sitio.
 // La hora de respuesta va en hora argentina (el TS la daba en la zona del
 // servidor, que en producción es UTC).
 func PresupuestoRecibido(sitio, nombre, numero string, express bool, respondeHasta *time.Time) Correo {
 	parrafo := "Lo estamos armando y te contestamos a la brevedad."
 	if express {
-		parrafo = "Como sos cliente profesional, entra por la cola express: te contestamos dentro de las 24 horas hábiles."
+		parrafo = "Como sos cliente profesional, entra por la cola express."
 	}
 	datos := []email.Bloque{{Etiqueta: "Número", Valor: numero}}
 	if respondeHasta != nil {
@@ -179,6 +200,20 @@ func PedidoParaFirmar(sitio, nombre, numero, remito, url string) Correo {
 	return armar(sitio, "Remito "+remito+" para firmar", email.Opciones{
 		Titulo:   "Firmá el remito " + remito,
 		Adelanto: "Confirmá desde el celular lo que estás retirando.",
+		Saludo:   nombre,
+		Parrafos: []string{"Abrí este link desde el celular y firmá con el dedo. Reemplaza al remito en papel."},
+		Datos:    []email.Bloque{{Etiqueta: "Remito", Valor: remito}, {Etiqueta: "Pedido", Valor: numero}},
+		CTA:      &email.Enlace{Texto: "Firmar ahora", URL: url},
+		Cierre:   "El link deja de servir una vez firmado.",
+	})
+}
+
+// PedidoParaFirmarLaEntrega es PedidoParaFirmar de un envío (mes simulado,
+// M2S1-074, M2S2-113): el que recibe en la obra no está retirando nada.
+func PedidoParaFirmarLaEntrega(sitio, nombre, numero, remito, url string) Correo {
+	return armar(sitio, "Firmá el remito de tu entrega", email.Opciones{
+		Titulo:   "Firmá el remito " + remito,
+		Adelanto: "Confirmá desde el celular lo que recibiste.",
 		Saludo:   nombre,
 		Parrafos: []string{"Abrí este link desde el celular y firmá con el dedo. Reemplaza al remito en papel."},
 		Datos:    []email.Bloque{{Etiqueta: "Remito", Valor: remito}, {Etiqueta: "Pedido", Valor: numero}},

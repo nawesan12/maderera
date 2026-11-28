@@ -2,6 +2,7 @@ package mostrador
 
 import (
 	"context"
+	"mjbj/internal/formato"
 	"net/http"
 	"testing"
 	"time"
@@ -246,6 +247,14 @@ func TestReintentoACuentaCorriente(t *testing.T) {
 	if n := e.num(t, `select count(*)::float8 from orders`); n != 1 {
 		t.Errorf("pedidos: %v", n)
 	}
+	// M2S1-073: lo que se lleva fiado sale con su remito para firmar, sin
+	// volver a sacar el stock (y el reintento no hace otro).
+	if n := e.num(t, `select count(*)::float8 from deliveries where order_id = $1 and estado = 'preparada' and tipo = 'retiro' and firma_token is not null`, pedido); n != 1 {
+		t.Errorf("remitos para firmar de la venta a cuenta: %v", n)
+	}
+	if n := e.num(t, `select count(*)::float8 from inventory_movements where note like 'Remito %'`); n != 0 {
+		t.Errorf("el remito de la venta volvió a sacar stock: %v", n)
+	}
 }
 
 // Pasarse del límite lo autoriza un admin con su PIN: el «autorizado» que
@@ -477,5 +486,15 @@ func TestPINConPrecioYCredito(t *testing.T) {
 	_, m, b := pedir(t, ven, "POST", e.u+"/api/v1/mostrador/ventas", v)
 	if a := autorizacionDe(t, m); a["motivo"] != "precio" || a["monto"] != 15000.5 || a["credito"] != float64(30000) {
 		t.Fatalf("las dos cifras: %s", b)
+	}
+}
+
+func TestLaVentaDiceQuienAutorizo(t *testing.T) {
+	r := ResultadoVenta{Numero: "PED-1012", Total: 354211.5, DejadoDeCobrar: 118070.5, AutorizadoPor: "Sim Dueña"}
+	if d := DescripcionDeLaVenta(r); d != "Venta de mostrador PED-1012 por "+formato.Importe(354211.5)+" · descuento de "+formato.Importe(118070.5)+" · autorizó Sim Dueña con PIN" {
+		t.Error(d)
+	}
+	if d := DescripcionDeLaVenta(ResultadoVenta{Numero: "PED-1", Total: 100}); d != "Venta de mostrador PED-1 por "+formato.Importe(100) {
+		t.Error(d)
 	}
 }

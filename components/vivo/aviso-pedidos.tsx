@@ -22,7 +22,13 @@ export function AvisoDePedidosEnVivo() {
   useEnVivo(["pedidos"], (aviso) => {
     if (aviso.canal !== "pedidos") return;
 
-    if (ruta === "/admin" || ruta.startsWith("/admin/pedidos")) router.refresh();
+    if (ruta === "/admin" || ruta.startsWith("/admin/pedidos") || ruta.startsWith("/admin/reparto")) router.refresh();
+
+    // Cualquier pedido nuevo o que cambia de estado refresca la pantalla; el
+    // aviso es solo para lo que entra por la tienda (los del panel los cargó
+    // alguien que ya sabe que existen). Un evento viejo, sin «nuevo», es el
+    // de la tienda de siempre.
+    if (aviso.nuevo === false || (aviso.origen && aviso.origen !== "tienda")) return;
 
     toast.info(aviso.numero ? `Entró un pedido web: ${aviso.numero}` : "Entró un pedido web", {
       duration: 20_000,

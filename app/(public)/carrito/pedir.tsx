@@ -67,11 +67,11 @@ export function PedirPresupuesto({
     <form action={accion} className="space-y-3 rounded-xl border p-4">
       <div>
         <p className="font-medium">Pedir el presupuesto</p>
-        <p className="text-sm text-muted-foreground">
-          {esProfesional
-            ? "Te contestamos dentro de las 24 horas hábiles."
-            : "Te lo contestamos el mismo día, dentro del horario de atención."}
-        </p>
+        {!esProfesional && (
+          <p className="text-sm text-muted-foreground">
+            Te lo contestamos el mismo día, dentro del horario de atención.
+          </p>
+        )}
         <p className="mt-1 text-sm text-muted-foreground">
           Los campos con <span className="text-acento-texto">*</span> hay que
           completarlos.
@@ -227,7 +227,7 @@ function Campo({
     <div>
       <label htmlFor={nombre} className="block text-sm font-medium">
         {etiqueta}
-        {requerido && <span className="text-acento-texto" aria-label="obligatorio">
+        {requerido && <span className="text-acento-texto" aria-hidden="true">
             {" *"}
           </span>}
       </label>

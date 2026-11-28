@@ -242,7 +242,8 @@ export function Hilo({
         </DialogContent>
       </Dialog>
 
-      {detalle.botEstado === "derivada" && <AvisoDerivada conversacionId={detalle.id} />}
+      {/* Resuelta, la franja ya no pide nada (M2S3-072). */}
+      {detalle.botEstado === "derivada" && detalle.estado !== "cerrada" && <AvisoDerivada conversacionId={detalle.id} motivo={detalle.botMotivo} />}
 
       {detalle.bajaAt && (
         <p className="flex items-center gap-2 border-b bg-muted/50 px-4 py-2 text-sm text-muted-foreground">
@@ -255,7 +256,7 @@ export function Hilo({
       {/* Mensajes */}
       <div tabIndex={0} role="log" aria-label="Mensajes de la conversación" className="flex-1 space-y-1 overflow-y-auto bg-hundida px-3 py-3 sm:px-4 sm:py-4" aria-live="polite">
         {detalle.mensajes.length === 0 ? (
-          <p className="py-10 text-center text-base text-muted-foreground">Todavía no hay mensajes en esta conversación.</p>
+          <p className="py-3 text-center text-base text-muted-foreground">Todavía no hay mensajes en esta conversación.</p>
         ) : (
           detalle.mensajes.map((mensaje, i) => {
             const anterior = detalle.mensajes[i - 1];
@@ -322,6 +323,7 @@ export function Hilo({
           documentos={detalle.documentos}
           onCerrar={ventanaAbierta ? () => setModo("texto") : null}
           waId={waId}
+          amplio={detalle.mensajes.length === 0}
         />
       ) : (
         <form
@@ -503,7 +505,11 @@ function Burbuja({
 
   return (
     <div className={`group flex ${saliente ? "justify-end" : "justify-start"}`}>
-      <div className={`relative max-w-[85%] sm:max-w-[75%] ${mensaje.reaccionCliente || mensaje.reaccionNuestra ? "mb-3" : ""}`}>
+      <div className="max-w-[85%] sm:max-w-[75%]">
+        {/* La reacción va montada en el borde de su burbuja, como en
+            WhatsApp: medida contra el bloque entero, con la fila de
+            «Responder» abajo, flotaba sobre el mensaje siguiente (M3S2-048). */}
+        <div className={`relative ${mensaje.reaccionCliente || mensaje.reaccionNuestra ? "mb-3" : ""}`}>
         <div
           className={`rounded-2xl px-3.5 py-2.5 shadow-sm ${
             mensaje.estado === "fallido"
@@ -561,6 +567,7 @@ function Burbuja({
             {mensaje.reaccionNuestra}
           </span>
         )}
+        </div>
 
         {/* Acciones sobre lo que mandó el cliente: citarlo o reaccionar. Se
             ven al pasar el mouse, y siempre con el teclado (focus-within). */}
@@ -954,13 +961,17 @@ function SimuladorEntrante({ conversacionId }: { conversacionId: string }) {
 }
 
 /** El bot la pasó a una persona y no contesta más acá hasta que se la devuelvan. */
-function AvisoDerivada({ conversacionId }: { conversacionId: string }) {
+/** El porqué de la derivación iba solo en el push (mes 23): ahora queda acá. */
+function AvisoDerivada({ conversacionId, motivo }: { conversacionId: string; motivo?: string | null }) {
   const router = useRouter();
   const [pendiente, empezar] = useTransition();
   return (
     <p className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b bg-naranja-claro/60 px-4 py-2 text-sm font-medium text-acento-sobre-claro">
       <UserRound className="h-4 w-4 shrink-0" />
-      El bot la pasó a una persona
+      <span className="min-w-0">
+        El bot la pasó a una persona
+        {motivo && <span className="font-normal">: {motivo}</span>}
+      </span>
       <button
         type="button"
         disabled={pendiente}

@@ -35,12 +35,14 @@ const ESTADOS = {
   revision: "En revisión",
   enviado: "Enviados",
   aceptado: "Aceptados",
+  // A donde lleva «presupuestos aceptados sin pedido» del inicio.
+  "sin-pedido": "Sin pedido",
   rechazado: "Rechazados",
   cerrados: "Cerrados",
 };
 
 /** Los estados que todavía esperan algo (el «abiertos» de Go). */
-const ABIERTOS = new Set(["abiertos", "pendiente", "revision", "enviado"]);
+const ABIERTOS = new Set(["abiertos", "pendiente", "revision", "enviado", "sin-pedido"]);
 
 const ORIGEN: Record<string, string> = {
   sitio: "Pedido desde el sitio",
@@ -116,6 +118,14 @@ export default async function PresupuestosPage({
     redirect(`/admin/presupuestos${q.size > 0 ? `?${q}` : ""}`);
   }
 
+  // Con el filtro «Aceptados», los que todavía no son pedido van «Por
+  // atender» con «Pasar a pedido», como en «Todos»; los que ya son pedido,
+  // cerrados (M2S1-092: la misma fila caía en grupos distintos según el
+  // filtro, y el aviso «aceptado sin pedido» llevaba a una lista donde no
+  // estaba).
+  const soloAceptados = estado === "aceptado" && cerrados !== null;
+  const aceptadosSinPedido = soloAceptados ? cerrados.filas.filter((p) => !p.pedidoId) : [];
+  const listaCerrada = soloAceptados ? { ...cerrados, filas: cerrados.filas.filter((p) => p.pedidoId) } : cerrados;
   const total = (abiertos?.total ?? 0) + (cerrados?.total ?? 0);
   const vigentes = {
     buscar: params.buscar,
@@ -191,10 +201,18 @@ export default async function PresupuestosPage({
             </GrupoListado>
           )}
 
-          {cerrados && (
+          {aceptadosSinPedido.length > 0 && (
+            <GrupoListado titulo="Por atender" cantidad={aceptadosSinPedido.length} destacado>
+              {aceptadosSinPedido.map((p) => (
+                <Tarjeta key={p.id} presupuesto={p} />
+              ))}
+            </GrupoListado>
+          )}
+
+          {listaCerrada && (!soloAceptados || listaCerrada.filas.length > 0) && (
             <GrupoListado
               titulo="Cerrados"
-              cantidad={cerrados.total}
+              cantidad={soloAceptados ? listaCerrada.filas.length : listaCerrada.total}
               vacio={
                 <p className="px-1 text-base text-texto-2">
                   Ninguno cerrado todavía.
@@ -204,9 +222,9 @@ export default async function PresupuestosPage({
               {/* Un renglón por cerrado (mes simulado: con 40 en el mes, la
                   página medía 9.500 px en el teléfono y lo abierto quedaba
                   arriba en dos tarjetas). */}
-              {cerrados.filas.length > 0 && (
+              {listaCerrada.filas.length > 0 && (
                 <ul className="tarjeta divide-y divide-linea overflow-hidden">
-                  {cerrados.filas.map((p) => (
+                  {listaCerrada.filas.map((p) => (
                     <Renglon key={p.id} presupuesto={p} />
                   ))}
                 </ul>

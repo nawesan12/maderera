@@ -16,6 +16,7 @@ import { ImportadorDeLista } from "../lista-precios/importador";
 import { formatearMonto } from "@/lib/formato";
 import { FormularioProveedor } from "../formulario";
 import { CuentaDelProveedor } from "./cuenta";
+import { BajaDelProveedor } from "./baja";
 
 export const metadata: Metadata = { title: "Proveedor" };
 
@@ -58,6 +59,7 @@ export default async function ProveedorPage({
   ]);
 
   if (!proveedor) notFound();
+  const inactivo = proveedor.estado === "inactivo";
 
   return (
     <div className="space-y-6">
@@ -75,16 +77,23 @@ export default async function ProveedorPage({
             <h1 className="text-[26px] font-bold tracking-tight">
               {proveedor.nombre}
             </h1>
-            <p className="mt-1 text-base text-muted-foreground">
-              {[
-                proveedor.razonSocial,
-                proveedor.cuit,
-                proveedor.diasPago === 0
-                  ? "pago contra entrega"
-                  : `pago a ${proveedor.diasPago} días`,
-              ]
-                .filter(Boolean)
-                .join(" · ")}
+            {/* Dado de baja, la ficha lo dice (mes 23): no había rastro. */}
+            {inactivo && (
+              <span className="mt-1 inline-block rounded-full bg-muted px-2.5 py-0.5 text-sm font-medium text-muted-foreground">
+                Inactivo
+              </span>
+            )}
+            {/* La razón social en su renglón y el CUIT entero, sin partirse
+                (M2S2-081: «…SRL · 30-» / «71555040-3»). */}
+            {proveedor.razonSocial && proveedor.razonSocial !== proveedor.nombre && (
+              <p className="mt-1 text-base text-muted-foreground">{proveedor.razonSocial}</p>
+            )}
+            <p className="mt-0.5 text-base text-muted-foreground">
+              {proveedor.cuit && <span className="tabular whitespace-nowrap">{proveedor.cuit}</span>}
+              {proveedor.cuit && " · "}
+              <span className="whitespace-nowrap">
+                {proveedor.diasPago === 0 ? "pago contra entrega" : `pago a ${proveedor.diasPago} días`}
+              </span>
             </p>
           </div>
 
@@ -103,12 +112,15 @@ export default async function ProveedorPage({
                 {formatearMonto(proveedor.saldo)}
               </p>
             </div>
-            <Link
-              href={`/admin/compras/pagos?proveedor=${proveedor.id}`}
-              className="boton-accion inline-flex h-12 items-center rounded-xl px-6 text-base font-semibold"
-            >
-              Pagar
-            </Link>
+            {/* Al inactivo se le paga solo lo que se le debe, como en Pagos. */}
+            {(!inactivo || proveedor.saldo > 0.005) && (
+              <Link
+                href={`/admin/compras/pagos?proveedor=${proveedor.id}`}
+                className="boton-accion inline-flex h-12 items-center rounded-xl px-6 text-base font-semibold"
+              >
+                Pagar
+              </Link>
+            )}
           </div>
         </header>
       </div>
@@ -136,18 +148,28 @@ export default async function ProveedorPage({
               const vencida = dias !== null && dias < 0;
               const nota = f.tipo.startsWith("nota_credito");
               const cheque = f.tipo === "cheque_rechazado";
+              const ajuste = f.tipo === "ajuste";
+              const nombre = (
+                <>
+                  <span className="codigo block font-medium">{nota ? `Nota de crédito ${f.numero}` : f.numero}</span>
+                  <span className="block text-sm text-muted-foreground">
+                    {cheque ? "Rechazado" : `del ${fechaCorta.format(new Date(f.fechaEmision))}`}
+                  </span>
+                </>
+              );
               return (
                 <li key={f.id} className="flex flex-wrap items-center gap-x-5 gap-y-2 px-5 py-3">
-                  <Link
-                    href={cheque ? "/admin/cheques" : `/admin/compras/facturas/${f.id}`}
-                    className="min-w-0 flex-1 hover:underline"
-                  >
-                    <span className="codigo block font-medium">{nota ? `Nota de crédito ${f.numero}` : f.numero}</span>
-                    <span className="block text-sm text-muted-foreground">
-                      {cheque ? "Rechazado" : `del ${fechaCorta.format(f.fechaEmision)}`}
-                    </span>
-                  </Link>
-                  {!nota && !cheque && (
+                  {ajuste ? (
+                    <span className="min-w-0 flex-1">{nombre}</span>
+                  ) : (
+                    <Link
+                      href={cheque ? "/admin/cheques" : `/admin/compras/facturas/${f.id}`}
+                      className="min-w-0 flex-1 hover:underline"
+                    >
+                      {nombre}
+                    </Link>
+                  )}
+                  {!nota && !cheque && !ajuste && (
                     <span className={`tabular text-base ${vencida ? "font-semibold text-saldo-debe" : dias === 0 ? "font-semibold text-brand-orange-dark" : "text-muted-foreground"}`}>
                       {vence ? (dias === 0 ? "vence hoy" : `${vencida ? "venció" : "vence"} el ${fechaCorta.format(vence)}`) : "sin vencimiento"}
                     </span>
@@ -175,6 +197,9 @@ export default async function ProveedorPage({
       <CuentaDelProveedor
         supplierId={proveedor.id}
         movimientos={proveedor.movimientos}
+        facturas={pendientes
+          .filter((f) => !f.tipo.startsWith("nota_credito") && f.tipo !== "cheque_rechazado" && f.tipo !== "ajuste")
+          .map((f) => ({ id: f.id, numero: f.numero, saldo: f.saldo }))}
       />
 
       {/* Lo pagado en el acto (un flete, la luz): no pasa por la cuenta, pero
@@ -236,6 +261,7 @@ export default async function ProveedorPage({
               exentoGananciasHasta: proveedor.exentoGananciasHasta,
             }}
           />
+          {proveedor.estado !== "inactivo" && <BajaDelProveedor id={proveedor.id} nombre={proveedor.nombre} />}
         </div>
       </details>
 

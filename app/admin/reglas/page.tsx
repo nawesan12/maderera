@@ -37,8 +37,8 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
         clave: "ganancia_gastos",
         pregunta: "Los gastos, ¿con IVA o sin IVA?",
         opciones: [
-          { valor: "con_iva", texto: "Con IVA" },
-          { valor: "sin_iva", texto: "Sin IVA" },
+          { valor: "con_iva", texto: "Con el IVA que no da crédito" },
+          { valor: "sin_iva", texto: "Sin ningún IVA" },
         ],
       },
       {
@@ -72,10 +72,26 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
       },
       {
         clave: "asiento_sin_cae",
-        pregunta: "El cobro de una factura sin CAE",
+        pregunta: "El cobro de una factura sin CAE, hasta el CAE",
         opciones: [
-          { valor: "al_cae", texto: "Se asienta al llegar el CAE" },
+          { valor: "al_cae", texto: "En Anticipos de clientes" },
           { valor: "transitoria", texto: "En una cuenta transitoria" },
+        ],
+      },
+      {
+        clave: "endoso_espera_cae",
+        pregunta: "El cheque de una factura sin CAE se endosa",
+        opciones: [
+          { valor: "si", texto: "Sí, como blanco" },
+          { valor: "al_cae", texto: "Recién con el CAE" },
+        ],
+      },
+      {
+        clave: "deuda_sin_comprobante",
+        pregunta: "La deuda cargada a mano en la cuenta",
+        opciones: [
+          { valor: "circuito_b", texto: "Al circuito sin factura" },
+          { valor: "saldo_inicial", texto: "Al estudio, contra Saldos iniciales" },
         ],
       },
     ],
@@ -131,6 +147,22 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
         ],
       },
       {
+        clave: "descuento_con_escala",
+        pregunta: "Un descuento tipeado y el de la forma de pago",
+        opciones: [
+          { valor: "reemplaza", texto: "Vale el tipeado" },
+          { valor: "suma", texto: "Se suman" },
+        ],
+      },
+      {
+        clave: "redondeo_efectivo",
+        pregunta: "El total en efectivo, ¿con centavos?",
+        opciones: [
+          { valor: "no", texto: "Con centavos" },
+          { valor: "al_peso", texto: "Al peso, a favor del cliente" },
+        ],
+      },
+      {
         clave: "lote_y_cupon",
         pregunta: "Lote y cupón de la tarjeta",
         opciones: [
@@ -139,11 +171,48 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
         ],
       },
       {
+        clave: "entregar_sin_cobrar",
+        pregunta: "Entregar sin cobrar, ¿quién pide el PIN?",
+        opciones: [
+          { valor: "deposito", texto: "Solo el depósito" },
+          { valor: "fuera_de_la_cuenta", texto: "También quien vende, fuera de la cuenta corriente" },
+        ],
+      },
+      {
+        clave: "retencion_en_el_cobro",
+        pregunta: "La retención que trae el cliente con el pago, ¿quién la carga en el cobro?",
+        opciones: [
+          { valor: "admin", texto: "Solo un admin" },
+          { valor: "quien_cobra", texto: "Quien cobra" },
+        ],
+      },
+      {
         clave: "firma_sin_pin",
         pregunta: "Sin ningún PIN cargado, ¿firma la contraseña de un admin?",
         opciones: [
           { valor: "contrasena", texto: "Sí" },
           { valor: "solo_pin", texto: "No, solo el PIN" },
+        ],
+      },
+    ],
+  },
+  {
+    titulo: "Descuento por medio de pago",
+    reglas: [
+      {
+        clave: "descuento_al_flete",
+        pregunta: "¿Alcanza al flete?",
+        opciones: [
+          { valor: "no", texto: "No" },
+          { valor: "si", texto: "Sí" },
+        ],
+      },
+      {
+        clave: "escala_con_lista",
+        pregunta: "En la tienda, ¿se suma al precio de profesional?",
+        opciones: [
+          { valor: "si", texto: "Sí" },
+          { valor: "no", texto: "No, ese precio ya es de contado" },
         ],
       },
     ],
@@ -160,11 +229,50 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
         ],
       },
       {
+        clave: "corte_chico_stock",
+        pregunta: "La placa de la casa de ese corte, en el stock",
+        opciones: [
+          { valor: "no_mueve", texto: "Sigue contada" },
+          { valor: "descuenta", texto: "Sale al terminar el corte" },
+        ],
+      },
+      {
+        clave: "listo_con_el_corte",
+        pregunta: "Con el último corte terminado, pasa solo a «Listo»",
+        opciones: [
+          { valor: "mostrador", texto: "La venta del mostrador" },
+          { valor: "todos", texto: "Cualquier pedido" },
+        ],
+      },
+      {
         clave: "sucursal_del_corte_suelto",
         pregunta: "Dónde se corta un corte suelto",
         opciones: [
           { valor: "primera", texto: "La primera sucursal, ya marcada" },
           { valor: "preguntar", texto: "Se elige siempre" },
+        ],
+      },
+    ],
+  },
+  {
+    titulo: "Productos",
+    reglas: [
+      {
+        clave: "alta_de_producto",
+        pregunta: "Un producto nuevo arranca",
+        opciones: [
+          { valor: "activo", texto: "Activo" },
+          { valor: "inactivo", texto: "Inactivo, hasta prenderlo" },
+        ],
+      },
+      {
+        clave: "redondeo_lista_proveedor",
+        pregunta: "El precio que propone la lista del proveedor",
+        opciones: [
+          { valor: "centavos", texto: "Con centavos" },
+          { valor: "peso", texto: "Al peso" },
+          { valor: "decena", texto: "A la decena" },
+          { valor: "centena", texto: "A la centena" },
         ],
       },
     ],
@@ -202,11 +310,35 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
     titulo: "Compras",
     reglas: [
       {
+        clave: "base_retencion_iva",
+        pregunta: "La retención de IVA se calcula sobre…",
+        opciones: [
+          { valor: "neto", texto: "El neto, como Ganancias" },
+          { valor: "total", texto: "El total con IVA" },
+        ],
+      },
+      {
+        clave: "exportar_sicore",
+        pregunta: "Las retenciones del mes también en TXT para SICORE",
+        opciones: [
+          { valor: "no", texto: "No, solo el CSV" },
+          { valor: "si", texto: "Sí" },
+        ],
+      },
+      {
         clave: "anular_compra_con_pagos",
         pregunta: "Al anular una factura de compra que ya se pagó…",
         opciones: [
           { valor: "a_cuenta", texto: "Los pagos quedan a cuenta del proveedor" },
           { valor: "bloquear", texto: "No se puede: primero se anulan los pagos" },
+        ],
+      },
+      {
+        clave: "cae_en_compras",
+        pregunta: "La factura A de compra sin CAE",
+        opciones: [
+          { valor: "opcional", texto: "Entra igual" },
+          { valor: "exigido", texto: "No entra sin CAE" },
         ],
       },
     ],

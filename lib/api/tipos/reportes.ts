@@ -197,6 +197,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/cierre/liquidaciones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Lo que liquidó la tarjeta, neto de su comisión (pasa de Tarjetas a acreditar al Banco) */
+        post: operations["CargarLiquidacion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/inicio/metricas": {
         parameters: {
             query?: never;
@@ -239,6 +256,56 @@ export interface paths {
         get: operations["NumerosDelDueno"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/inicio/saldo-banco": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Anota lo que dice el banco ahora. Desde ahí «Plata hoy» lleva el saldo con lo que entra y sale (00450). Solo el admin. */
+        post: operations["CargarSaldoDelBanco"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/sistema": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Los trabajos de la cola que fallaron y la última corrida de cada tarea del worker. Solo el admin. */
+        get: operations["EstadoDelSistema"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/sistema/trabajos/{id}/reintentar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ReintentarTrabajo"];
         delete?: never;
         options?: never;
         head?: never;
@@ -350,9 +417,14 @@ export interface components {
         ReporteTotales: {
             /**
              * Format: double
-             * @description Con IVA; subtotales de renglones o total de los pedidos
+             * @description Con IVA
              */
             total: number;
+            /**
+             * Format: double
+             * @description Lo que suman con IVA las filas del corte; en los cortes por renglón
+             */
+            renglones: number;
             /**
              * Format: double
              * @description Unidades o operaciones
@@ -394,7 +466,7 @@ export interface components {
             disponibleCentral: number;
             /** Format: double */
             disponibleAserradero: number;
-            /** @description El proveedor habitual (el último con el que se cargó un código) */
+            /** @description El proveedor al que se le compró por última vez la medida (o el último con el que se cargó un código) */
             proveedorId?: string | null;
             proveedor?: string | null;
             /** Format: double */
@@ -403,8 +475,27 @@ export interface components {
             vendido: number;
             /** Format: double */
             cobertura: number | null;
-            /** Format: double */
+            /**
+             * Format: double
+             * @description Lo que se compra en la vista elegida
+             */
             sugerido: number;
+            /** Format: double */
+            comprarCentral: number;
+            /** Format: double */
+            comprarAserradero: number;
+            /**
+             * Format: double
+             * @description Lo que conviene traer del Aserradero en vez de comprar
+             */
+            trasladoACentral: number;
+            /**
+             * Format: double
+             * @description Lo que conviene traer de Casa Central en vez de comprar
+             */
+            trasladoAAserradero: number;
+            /** @description Alguna sucursal tiene la medida en negativo */
+            negativo: boolean;
         };
         Reposicion: {
             filas: components["schemas"]["ReposicionFila"][];
@@ -443,6 +534,13 @@ export interface components {
             detalle: string;
             cantidad: number;
             donde: string;
+            /** @description Los casos del aviso uno por uno, con su importe y a dónde se resuelve cada uno */
+            casos?: {
+                nombre: string;
+                /** Format: double */
+                importe?: number;
+                donde: string;
+            }[];
         };
         CierreTotales: {
             /** Format: double */
@@ -479,6 +577,14 @@ export interface components {
             vendido: components["schemas"]["CierreVendido"];
             compras: components["schemas"]["CierreTotalesConIva"];
             gastos: components["schemas"]["CierreTotales"];
+            gastosB: components["schemas"]["CierreTotales"];
+            /** @description El primer mes con algún movimiento (YYYY-MM) */
+            primerMes: string;
+            /**
+             * Format: double
+             * @description Lo cobrado con tarjeta hasta el fin del mes que todavía no liquidó
+             */
+            tarjetasSinLiquidar: number;
             retencionesPracticadas: components["schemas"]["CierreTotales"];
             retencionesSufridas: components["schemas"]["CierreTotales"];
             percepcionesIibb: components["schemas"]["CierreTotales"];
@@ -717,52 +823,93 @@ export interface components {
                  * @description Lo que el libro debe por encima de las facturas con saldo (saldo inicial, ajustes, remitos)
                  */
                 sinFactura: number;
+                /**
+                 * Format: double
+                 * @description La parte de sinFactura que es mercadería recibida con remito y sin factura
+                 */
+                remitosSinFactura: number;
                 proveedores: number;
             };
             cheques: {
                 aCobrar: components["schemas"]["Monto"];
                 aCubrir: components["schemas"]["Monto"];
             };
-            plataHoy: {
-                cajas: {
-                    branchId: string;
-                    sucursal: string;
-                    /**
-                     * Format: double
-                     * @description Lo que tendría que haber
-                     */
-                    esperado: number;
-                    cerrada: boolean;
-                }[];
-                /** Format: double */
-                efectivo: number;
-                /**
-                 * Format: double
-                 * @description Lo retirado hoy de las cajas a la caja fuerte
-                 */
-                cajaFuerte: number;
-                /**
-                 * Format: double
-                 * @description Lo que se movió hoy en el banco
-                 */
-                banco: number;
-                /** Format: double */
-                bancoEntro: number;
-                /** Format: double */
-                bancoSalio: number;
-                /** Format: double */
-                mercadoPago: number;
-                /**
-                 * Format: double
-                 * @description A acreditar; no suma al total
-                 */
-                tarjetas: number;
-                cheques: components["schemas"]["Monto"];
-                chequesDepositados: components["schemas"]["Monto"];
-                /** Format: double */
-                total: number;
-            };
+            plataHoy: components["schemas"]["PlataHoy"];
             ganancia: components["schemas"]["ResultadoComparado"];
+        };
+        PlataHoy: {
+            cajas: {
+                branchId: string;
+                sucursal: string;
+                /**
+                 * Format: double
+                 * @description Lo que tendría que haber
+                 */
+                esperado: number;
+                cerrada: boolean;
+            }[];
+            /** Format: double */
+            efectivo: number;
+            /**
+             * Format: double
+             * @description Lo retirado hoy de las cajas a la caja fuerte
+             */
+            cajaFuerte: number;
+            /**
+             * Format: double
+             * @description Lo que se movió hoy en el banco
+             */
+            banco: number;
+            /** Format: double */
+            bancoEntro: number;
+            /** Format: double */
+            bancoSalio: number;
+            /** Format: double */
+            mercadoPago: number;
+            /**
+             * Format: double
+             * @description A acreditar; no suma al total
+             */
+            tarjetas: number;
+            cheques: components["schemas"]["Monto"];
+            chequesDepositados: components["schemas"]["Monto"];
+            /**
+             * Format: double
+             * @description El último saldo cargado más lo que entró y menos lo que salió desde entonces; sin saldo cargado, null y el banco no suma al total
+             */
+            bancoSaldo: number | null;
+            /** Format: date-time */
+            bancoSaldoAl: string | null;
+            /**
+             * Format: double
+             * @description Lo que hay: efectivo, caja fuerte, Mercado Pago, cheques y el saldo del banco si se cargó. Lo movido hoy en el banco no suma
+             */
+            total: number;
+        };
+        EstadoDelSistema: {
+            pendientes: number;
+            trabajos: {
+                id: string;
+                tipo: string;
+                estado: string;
+                intentos: number;
+                maxIntentos: number;
+                ultimoError: string | null;
+                /** Format: date-time */
+                createdAt: string;
+                /** Format: date-time */
+                terminadoAt: string | null;
+            }[];
+            tareas: {
+                tarea: string;
+                periodo: string;
+                estado: string;
+                error: string | null;
+                /** Format: date-time */
+                iniciadaAt: string;
+                /** Format: date-time */
+                terminadaAt: string | null;
+            }[];
         };
         Cobranzas: {
             /** @description Cuántos renglones hay en el período */
@@ -783,7 +930,7 @@ export interface components {
             filas: {
                 id: string;
                 /** @enum {string} */
-                tipo: "recibo" | "en-linea";
+                tipo: "recibo" | "en-linea" | "devolucion";
                 numero: string | null;
                 /** Format: date-time */
                 fecha: string;
@@ -1125,6 +1272,8 @@ export interface operations {
                 "application/json": {
                     periodo: string;
                     cerrado: boolean;
+                    /** @description Por qué se reabre; obligatorio para reabrir */
+                    motivo?: string;
                 };
             };
         };
@@ -1137,6 +1286,37 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MesCerrado"];
                 };
+            };
+        };
+    };
+    CargarLiquidacion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    fecha: string;
+                    /** Format: double */
+                    bruto: number;
+                    /** Format: double */
+                    comision: number;
+                    referencia?: string;
+                    /** @enum {string} */
+                    circuito?: "blanco" | "negro";
+                };
+            };
+        };
+        responses: {
+            /** @description Cargada */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -1204,6 +1384,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NumerosDelDueno"];
+                };
+            };
+        };
+    };
+    CargarSaldoDelBanco: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: double */
+                    monto: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Cómo queda «Plata hoy» */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlataHoy"];
+                };
+            };
+        };
+    };
+    EstadoDelSistema: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Lo que falló y lo que corrió */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EstadoDelSistema"];
+                };
+            };
+        };
+    };
+    ReintentarTrabajo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Vuelve a la cola */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok: string;
+                    };
                 };
             };
         };

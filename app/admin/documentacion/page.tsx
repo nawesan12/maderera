@@ -154,9 +154,16 @@ function Grupo({
                 {doc.tamanoBytes ? ` · ${peso(doc.tamanoBytes)}` : ""} ·{" "}
                 {fechaCorta.format(doc.createdAt)}
               </p>
+              {/* Sin archivo subido no se publica en el sitio: daba 404. */}
+              {!doc.tamanoBytes && (
+                <span className="estado-problema mt-1 inline-flex rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium text-[var(--estado-tinta)]">
+                  Sin archivo
+                </span>
+              )}
             </div>
 
             <DestinosDocumento
+              key={`${doc.id}:${doc.productos.map((p) => p.id).join(",")}:${doc.categorias.map((c) => c.id).join(",")}`}
               id={doc.id}
               titulo={doc.titulo}
               productos={doc.productos}

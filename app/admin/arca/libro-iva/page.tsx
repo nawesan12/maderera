@@ -81,7 +81,9 @@ export default async function LibroIvaPage({
           className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
         >
           <Download className="h-5 w-5" />
-          Libro IVA Digital
+          {/* Sin ventas autorizadas, el archivo trae solo las compras
+              (M2S4-045): el botón lo dice. */}
+          {libro.filas.length === 0 ? "Libro IVA Digital · compras" : "Libro IVA Digital"}
         </a>
         {sinAutorizar > 0 && (
           <Link
@@ -101,8 +103,9 @@ export default async function LibroIvaPage({
         </section>
       ) : (
         <div className="tarjeta overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[64rem] text-left">
+          {/* Sin ancho mínimo: debajo de 640 px se apila sola. */}
+          <div>
+            <table className="w-full text-left">
               <thead>
                 <tr className="border-b text-sm uppercase tracking-[0.06em] text-muted-foreground">
                   <th scope="col" className="px-4 py-3 font-semibold">Fecha</th>

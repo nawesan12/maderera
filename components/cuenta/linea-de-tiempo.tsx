@@ -4,7 +4,7 @@ import { FileText } from "lucide-react";
 import type { ClaseDeMovimiento, MovimientoDelCliente } from "@/lib/dal/historial-cliente";
 // Los centavos solo cuando los hay, como en el resto de la ficha (mes simulado:
 // «$ 339.100,00» acá y «$ 339.100» en Pedidos).
-import { formatearMonto } from "@/lib/formato";
+import { claveDeMesAR, diaYMesAR, formatearMonto, mesYAnioAR } from "@/lib/formato";
 
 /**
  * Los movimientos de un cliente, agrupados por mes.
@@ -33,11 +33,15 @@ const ESTILO: Record<ClaseDeMovimiento, { etiqueta: string; familia: string }> =
   pago_rechazado: { etiqueta: "No acreditado", familia: "estado-problema" },
   cheque_por_recibir: { etiqueta: "Cheque por recibir", familia: "estado-espera" },
   cheque: { etiqueta: "Cheque", familia: "estado-cerrado" },
-  cheque_rechazado: { etiqueta: "Cheque rechazado", familia: "estado-problema" },
+  cheque_rechazado: { etiqueta: "Rechazado por el banco", familia: "estado-problema" },
+  cheque_no_tomado: { etiqueta: "No aceptado", familia: "estado-cerrado" },
 };
 
-const MES = new Intl.DateTimeFormat("es-AR", { month: "long", year: "numeric" });
-const DIA = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit" });
+// En hora argentina: el servidor corre en UTC y lo de después de las 21 h
+// figuraba al día siguiente, y lo del 30 a la noche en el mes siguiente
+// (M2S2-023, M2S2-037, M2S2-068, M3S3-040).
+const MES = mesYAnioAR;
+const DIA = diaYMesAR;
 
 type ReciboDelMovimiento = NonNullable<MovimientoDelCliente["recibo"]>;
 type ChequeDelMovimiento = NonNullable<MovimientoDelCliente["cheques"]>[number];
@@ -71,7 +75,7 @@ export function LineaDeTiempo({
   // Agrupados por mes, en el orden en que llegan (lo más nuevo arriba).
   const meses: { clave: string; titulo: string; filas: MovimientoDelCliente[] }[] = [];
   for (const m of movimientos) {
-    const clave = `${m.fecha.getFullYear()}-${m.fecha.getMonth()}`;
+    const clave = claveDeMesAR(m.fecha);
     const ultimo = meses.at(-1);
     if (ultimo?.clave === clave) ultimo.filas.push(m);
     else {
@@ -147,7 +151,11 @@ function Fila({
   );
 
   return (
-    <li className={`px-5 py-3.5 ${anulado ? "opacity-70" : ""}`}>
+    <li
+      // El buscador del encabezado lleva a este renglón («REC-0005»).
+      id={m.recibo ? `recibo-${m.recibo.numero}` : undefined}
+      className={`scroll-mt-24 px-5 py-3.5 target:bg-hundida ${anulado ? "opacity-70" : ""}`}
+    >
       {/* Si la etiqueta y un importe de siete cifras no entran en un renglón,
           el importe baja, alineado a la derecha, en vez de montarse sobre la
           etiqueta (H212, medido a 375 px). */}
@@ -214,9 +222,9 @@ function Fila({
           )}
           {/* El recibo emitido no cambia, pero el pago no puede verse entero
               si un cheque suyo rebotó (H303). */}
-          {m.recibo?.chequeRechazado && m.clase === "pago" && (
+          {(m.recibo?.chequeRechazado || m.recibo?.chequeDevuelto) && m.clase === "pago" && (
             <span className="estado-problema rounded-full bg-[var(--estado-fondo)] px-2 py-0.5 text-xs font-semibold">
-              Con un cheque rechazado
+              {m.recibo.chequeRechazado ? "Con un cheque rechazado" : "Con un cheque devuelto"}
             </span>
           )}
           {m.recibo && !m.recibo.anulado && accionDelRecibo?.(m.recibo, m)}

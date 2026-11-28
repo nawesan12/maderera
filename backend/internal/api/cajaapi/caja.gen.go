@@ -97,9 +97,10 @@ type CajaFisica struct {
 
 // CajaFueraDeCaja defines model for CajaFueraDeCaja.
 type CajaFueraDeCaja struct {
-	Detalle string    `json:"detalle"`
-	Fecha   time.Time `json:"fecha"`
-	Id      string    `json:"id"`
+	BranchId *string   `json:"branchId"`
+	Detalle  string    `json:"detalle"`
+	Fecha    time.Time `json:"fecha"`
+	Id       string    `json:"id"`
 
 	// Monto con signo: el recibo entra, el gasto sale
 	Monto    float64             `json:"monto"`
@@ -110,18 +111,46 @@ type CajaFueraDeCaja struct {
 // CajaFueraDeCajaTipo defines model for CajaFueraDeCaja.Tipo.
 type CajaFueraDeCajaTipo string
 
+// CajaFuerte defines model for CajaFuerte.
+type CajaFuerte struct {
+	BranchId       string     `json:"branchId"`
+	Saldo          float64    `json:"saldo"`
+	Sucursal       string     `json:"sucursal"`
+	UltimoDeposito *time.Time `json:"ultimoDeposito"`
+}
+
+// CajaMovimiento defines model for CajaMovimiento.
+type CajaMovimiento struct {
+	Anulado    bool      `json:"anulado"`
+	CreatedAt  time.Time `json:"createdAt"`
+	Destino    *string   `json:"destino"`
+	Id         string    `json:"id"`
+	Monto      float64   `json:"monto"`
+	Motivo     *string   `json:"motivo"`
+	OrderId    *string   `json:"orderId"`
+	OtroPuesto bool      `json:"otroPuesto"`
+	Quien      *string   `json:"quien"`
+	Tipo       string    `json:"tipo"`
+}
+
 // CajaRenglonDelCierre defines model for CajaRenglonDelCierre.
 type CajaRenglonDelCierre struct {
 	Cantidad int `json:"cantidad"`
 
-	// Cobranza lo cobrado por recibos de cuenta en el mostrador durante el turno
+	// Cobranza lo cobrado por recibos durante el turno (los del mostrador, y el efectivo de los del panel que entró a este cajón)
 	Cobranza bool `json:"cobranza"`
+
+	// DePedido el cobro es de un pedido, no de la cuenta
+	DePedido *bool `json:"dePedido,omitempty"`
 
 	// Devolucion Ventas anuladas o devoluciones parciales durante el turno (la venta queda en el Z de su turno)
 	Devolucion bool   `json:"devolucion"`
 	MedioPago  string `json:"medioPago"`
 
-	// Quien Quién hizo las devoluciones parciales del renglón
+	// Pedidos los pedidos de las devoluciones parciales, o los recibos que cobró otra persona
+	Pedidos *string `json:"pedidos,omitempty"`
+
+	// Quien Quién cobró el recibo si no es quien abrió el turno
 	Quien *string `json:"quien"`
 
 	// Total En negativo si es una devolución
@@ -178,6 +207,12 @@ type TurnoCerrado struct {
 	Cierre         []CajaRenglonDelCierre `json:"cierre"`
 	Contado        *float64               `json:"contado"`
 
+	// ContadoCorregido Lo que había, corregido al abrir el turno siguiente
+	ContadoCorregido *float64   `json:"contadoCorregido,omitempty"`
+	CorreccionMotivo *string    `json:"correccionMotivo,omitempty"`
+	CorregidoAt      *time.Time `json:"corregidoAt,omitempty"`
+	CorregidoPor     *string    `json:"corregidoPor,omitempty"`
+
 	// CreditoSinAutorizar Ventas sin conexión del turno que cargaron a cuenta corriente pasado el límite sin PIN
 	CreditoSinAutorizar int `json:"creditoSinAutorizar"`
 
@@ -192,10 +227,13 @@ type TurnoCerrado struct {
 	Fondo    float64 `json:"fondo"`
 
 	// Gastos En negativo
-	Gastos        float64 `json:"gastos"`
-	Id            string  `json:"id"`
-	Notas         *string `json:"notas"`
-	OtrosIngresos float64 `json:"otrosIngresos"`
+	Gastos float64 `json:"gastos"`
+	Id     string  `json:"id"`
+
+	// Movimientos Los ingresos, retiros, gastos y devoluciones del turno
+	Movimientos   []CajaMovimiento `json:"movimientos"`
+	Notas         *string          `json:"notas"`
+	OtrosIngresos float64          `json:"otrosIngresos"`
 
 	// Puesto La caja física desde la que se abrió
 	Puesto *string `json:"puesto"`
@@ -239,15 +277,30 @@ type AnulacionesPorPersonaParams struct {
 // CrearCajaFisicaJSONBody defines parameters for CrearCajaFisica.
 type CrearCajaFisicaJSONBody map[string]interface{}
 
+// DepositarDeLaCajaFuerteJSONBody defines parameters for DepositarDeLaCajaFuerte.
+type DepositarDeLaCajaFuerteJSONBody struct {
+	// Clave Una por intento
+	Clave  string  `json:"clave"`
+	Monto  float64 `json:"monto"`
+	Motivo *string `json:"motivo,omitempty"`
+}
+
 // EmitidoPorCajaParams defines parameters for EmitidoPorCaja.
 type EmitidoPorCajaParams struct {
 	// Periodo aaaa-mm (si falta
-	Periodo *string `form:"periodo,omitempty" json:"periodo,omitempty"`
+	Periodo        *string `form:"periodo,omitempty" json:"periodo,omitempty"`
+	Limite         *int    `form:"limite,omitempty" json:"limite,omitempty"`
+	Desplazamiento *int    `form:"desplazamiento,omitempty" json:"desplazamiento,omitempty"`
 }
 
 // EfectivoFueraDeCajaParams defines parameters for EfectivoFueraDeCaja.
 type EfectivoFueraDeCajaParams struct {
 	Periodo *string `form:"periodo,omitempty" json:"periodo,omitempty"`
+}
+
+// AsignarReciboAlTurnoJSONBody defines parameters for AsignarReciboAlTurno.
+type AsignarReciboAlTurnoJSONBody struct {
+	SessionId string `json:"sessionId"`
 }
 
 // GuardarFondoBaseJSONBody defines parameters for GuardarFondoBase.
@@ -277,6 +330,12 @@ type AsignarVentaAlTurnoJSONBody struct {
 // CrearCajaFisicaJSONRequestBody defines body for CrearCajaFisica for application/json ContentType.
 type CrearCajaFisicaJSONRequestBody CrearCajaFisicaJSONBody
 
+// DepositarDeLaCajaFuerteJSONRequestBody defines body for DepositarDeLaCajaFuerte for application/json ContentType.
+type DepositarDeLaCajaFuerteJSONRequestBody DepositarDeLaCajaFuerteJSONBody
+
+// AsignarReciboAlTurnoJSONRequestBody defines body for AsignarReciboAlTurno for application/json ContentType.
+type AsignarReciboAlTurnoJSONRequestBody AsignarReciboAlTurnoJSONBody
+
 // GuardarFondoBaseJSONRequestBody defines body for GuardarFondoBase for application/json ContentType.
 type GuardarFondoBaseJSONRequestBody GuardarFondoBaseJSONBody
 
@@ -298,11 +357,20 @@ type ServerInterface interface {
 	// (POST /api/v1/admin/caja/cajas-fisicas/{id}/baja)
 	DarDeBajaCajaFisica(w http.ResponseWriter, r *http.Request, id string)
 
+	// (GET /api/v1/admin/caja/cajas-fuertes)
+	CajasFuertes(w http.ResponseWriter, r *http.Request)
+
+	// (POST /api/v1/admin/caja/cajas-fuertes/{id}/deposito)
+	DepositarDeLaCajaFuerte(w http.ResponseWriter, r *http.Request, id string)
+
 	// (GET /api/v1/admin/caja/emitido)
 	EmitidoPorCaja(w http.ResponseWriter, r *http.Request, params EmitidoPorCajaParams)
 
 	// (GET /api/v1/admin/caja/fuera-de-caja)
 	EfectivoFueraDeCaja(w http.ResponseWriter, r *http.Request, params EfectivoFueraDeCajaParams)
+
+	// (POST /api/v1/admin/caja/fuera-de-caja/recibos/{id}/asignar)
+	AsignarReciboAlTurno(w http.ResponseWriter, r *http.Request, id string)
 
 	// (GET /api/v1/admin/caja/sucursales)
 	SucursalesConCaja(w http.ResponseWriter, r *http.Request)
@@ -419,6 +487,46 @@ func (siw *ServerInterfaceWrapper) DarDeBajaCajaFisica(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// CajasFuertes operation middleware
+func (siw *ServerInterfaceWrapper) CajasFuertes(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CajasFuertes(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DepositarDeLaCajaFuerte operation middleware
+func (siw *ServerInterfaceWrapper) DepositarDeLaCajaFuerte(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DepositarDeLaCajaFuerte(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // EmitidoPorCaja operation middleware
 func (siw *ServerInterfaceWrapper) EmitidoPorCaja(w http.ResponseWriter, r *http.Request) {
 
@@ -437,6 +545,32 @@ func (siw *ServerInterfaceWrapper) EmitidoPorCaja(w http.ResponseWriter, r *http
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "periodo"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "periodo", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limite" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limite", r.URL.Query(), &params.Limite, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limite"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limite", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "desplazamiento" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "desplazamiento", r.URL.Query(), &params.Desplazamiento, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "desplazamiento"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "desplazamiento", Err: err})
 		}
 		return
 	}
@@ -476,6 +610,32 @@ func (siw *ServerInterfaceWrapper) EfectivoFueraDeCaja(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.EfectivoFueraDeCaja(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AsignarReciboAlTurno operation middleware
+func (siw *ServerInterfaceWrapper) AsignarReciboAlTurno(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AsignarReciboAlTurno(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -785,6 +945,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/caja/cajas-fisicas/{id}/baja", wrapper.DarDeBajaCajaFisica)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/caja/ventas-sueltas", wrapper.VentasSinCaja)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/caja/fuera-de-caja", wrapper.EfectivoFueraDeCaja)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/caja/fuera-de-caja/recibos/{id}/asignar", wrapper.AsignarReciboAlTurno)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/caja/cajas-fuertes", wrapper.CajasFuertes)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/caja/cajas-fuertes/{id}/deposito", wrapper.DepositarDeLaCajaFuerte)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/caja/ventas-sueltas/{id}/asignar", wrapper.AsignarVentaAlTurno)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/caja/turnos-para-asignar", wrapper.TurnosParaAsignar)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/caja/emitido", wrapper.EmitidoPorCaja)
@@ -920,6 +1083,66 @@ func (response DarDeBajaCajaFisica422ApplicationProblemPlusJSONResponse) VisitDa
 	return err
 }
 
+type CajasFuertesRequestObject struct {
+}
+
+type CajasFuertesResponseObject interface {
+	VisitCajasFuertesResponse(w http.ResponseWriter) error
+}
+
+type CajasFuertes200JSONResponse []CajaFuerte
+
+func (response CajasFuertes200JSONResponse) VisitCajasFuertesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DepositarDeLaCajaFuerteRequestObject struct {
+	Id   string `json:"id"`
+	Body *DepositarDeLaCajaFuerteJSONRequestBody
+}
+
+type DepositarDeLaCajaFuerteResponseObject interface {
+	VisitDepositarDeLaCajaFuerteResponse(w http.ResponseWriter) error
+}
+
+type DepositarDeLaCajaFuerte200JSONResponse struct{ CajaHechoJSONResponse }
+
+func (response DepositarDeLaCajaFuerte200JSONResponse) VisitDepositarDeLaCajaFuerteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DepositarDeLaCajaFuerte422ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response DepositarDeLaCajaFuerte422ApplicationProblemPlusJSONResponse) VisitDepositarDeLaCajaFuerteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type EmitidoPorCajaRequestObject struct {
 	Params EmitidoPorCajaParams
 }
@@ -928,7 +1151,17 @@ type EmitidoPorCajaResponseObject interface {
 	VisitEmitidoPorCajaResponse(w http.ResponseWriter) error
 }
 
-type EmitidoPorCaja200JSONResponse []CajaEmitido
+type EmitidoPorCaja200JSONResponse struct {
+	Filas   []CajaEmitido `json:"filas"`
+	Resumen struct {
+		Anuladas int `json:"anuladas"`
+		Cantidad int `json:"cantidad"`
+
+		// Importe Lo vendido
+		Importe         float64 `json:"importe"`
+		ImporteAnuladas float64 `json:"importeAnuladas"`
+	} `json:"resumen"`
+}
 
 func (response EmitidoPorCaja200JSONResponse) VisitEmitidoPorCajaResponse(w http.ResponseWriter) error {
 
@@ -960,6 +1193,45 @@ func (response EfectivoFueraDeCaja200JSONResponse) VisitEfectivoFueraDeCajaRespo
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AsignarReciboAlTurnoRequestObject struct {
+	Id   string `json:"id"`
+	Body *AsignarReciboAlTurnoJSONRequestBody
+}
+
+type AsignarReciboAlTurnoResponseObject interface {
+	VisitAsignarReciboAlTurnoResponse(w http.ResponseWriter) error
+}
+
+type AsignarReciboAlTurno200JSONResponse struct{ CajaHechoJSONResponse }
+
+func (response AsignarReciboAlTurno200JSONResponse) VisitAsignarReciboAlTurnoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AsignarReciboAlTurno422ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response AsignarReciboAlTurno422ApplicationProblemPlusJSONResponse) VisitAsignarReciboAlTurnoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1034,7 +1306,10 @@ type TurnosCerradosResponseObject interface {
 
 type TurnosCerrados200JSONResponse struct {
 	Filas []TurnoCerrado `json:"filas"`
-	Total int            `json:"total"`
+
+	// PrimerMes aaaa-mm del primer mes con algo en la caja
+	PrimerMes *string `json:"primerMes,omitempty"`
+	Total     int     `json:"total"`
 }
 
 func (response TurnosCerrados200JSONResponse) VisitTurnosCerradosResponse(w http.ResponseWriter) error {
@@ -1146,11 +1421,20 @@ type StrictServerInterface interface {
 	// (POST /api/v1/admin/caja/cajas-fisicas/{id}/baja)
 	DarDeBajaCajaFisica(ctx context.Context, request DarDeBajaCajaFisicaRequestObject) (DarDeBajaCajaFisicaResponseObject, error)
 
+	// (GET /api/v1/admin/caja/cajas-fuertes)
+	CajasFuertes(ctx context.Context, request CajasFuertesRequestObject) (CajasFuertesResponseObject, error)
+
+	// (POST /api/v1/admin/caja/cajas-fuertes/{id}/deposito)
+	DepositarDeLaCajaFuerte(ctx context.Context, request DepositarDeLaCajaFuerteRequestObject) (DepositarDeLaCajaFuerteResponseObject, error)
+
 	// (GET /api/v1/admin/caja/emitido)
 	EmitidoPorCaja(ctx context.Context, request EmitidoPorCajaRequestObject) (EmitidoPorCajaResponseObject, error)
 
 	// (GET /api/v1/admin/caja/fuera-de-caja)
 	EfectivoFueraDeCaja(ctx context.Context, request EfectivoFueraDeCajaRequestObject) (EfectivoFueraDeCajaResponseObject, error)
+
+	// (POST /api/v1/admin/caja/fuera-de-caja/recibos/{id}/asignar)
+	AsignarReciboAlTurno(ctx context.Context, request AsignarReciboAlTurnoRequestObject) (AsignarReciboAlTurnoResponseObject, error)
 
 	// (GET /api/v1/admin/caja/sucursales)
 	SucursalesConCaja(ctx context.Context, request SucursalesConCajaRequestObject) (SucursalesConCajaResponseObject, error)
@@ -1317,6 +1601,63 @@ func (sh *strictHandler) DarDeBajaCajaFisica(w http.ResponseWriter, r *http.Requ
 	}
 }
 
+// CajasFuertes operation middleware
+func (sh *strictHandler) CajasFuertes(w http.ResponseWriter, r *http.Request) {
+	var request CajasFuertesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CajasFuertes(ctx, request.(CajasFuertesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CajasFuertes")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CajasFuertesResponseObject); ok {
+		if err := validResponse.VisitCajasFuertesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DepositarDeLaCajaFuerte operation middleware
+func (sh *strictHandler) DepositarDeLaCajaFuerte(w http.ResponseWriter, r *http.Request, id string) {
+	var request DepositarDeLaCajaFuerteRequestObject
+
+	request.Id = id
+
+	var body DepositarDeLaCajaFuerteJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DepositarDeLaCajaFuerte(ctx, request.(DepositarDeLaCajaFuerteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DepositarDeLaCajaFuerte")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DepositarDeLaCajaFuerteResponseObject); ok {
+		if err := validResponse.VisitDepositarDeLaCajaFuerteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // EmitidoPorCaja operation middleware
 func (sh *strictHandler) EmitidoPorCaja(w http.ResponseWriter, r *http.Request, params EmitidoPorCajaParams) {
 	var request EmitidoPorCajaRequestObject
@@ -1362,6 +1703,39 @@ func (sh *strictHandler) EfectivoFueraDeCaja(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(EfectivoFueraDeCajaResponseObject); ok {
 		if err := validResponse.VisitEfectivoFueraDeCajaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AsignarReciboAlTurno operation middleware
+func (sh *strictHandler) AsignarReciboAlTurno(w http.ResponseWriter, r *http.Request, id string) {
+	var request AsignarReciboAlTurnoRequestObject
+
+	request.Id = id
+
+	var body AsignarReciboAlTurnoJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AsignarReciboAlTurno(ctx, request.(AsignarReciboAlTurnoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AsignarReciboAlTurno")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AsignarReciboAlTurnoResponseObject); ok {
+		if err := validResponse.VisitAsignarReciboAlTurnoResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -1540,52 +1914,60 @@ func (sh *strictHandler) AsignarVentaAlTurno(w http.ResponseWriter, r *http.Requ
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"3c126cfPFJCvr/83AA==",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -25,7 +25,7 @@ func TestBuscar(t *testing.T) {
 	for _, x := range r {
 		tipos[x.Tipo] = x.Titulo + " | " + x.Detalle
 	}
-	if tipos["Cliente"] != "Carpintería Ñandú | 30-58944525-9" || tipos["Proveedor"] == "" || tipos["Pedido"] != "PED-0042 · Juan Ñandú | pendiente · 10/11/2026" {
+	if tipos["Cliente"] != "Carpintería Ñandú | 30-58944525-9" || tipos["Proveedor"] == "" || tipos["Pedido"] != "PED-0042 · Juan Ñandú | Sin preparar · 10/11/2026" {
 		t.Errorf("admin: %v", tipos)
 	}
 	// Una palabra corta no busca nada.
@@ -38,5 +38,20 @@ func TestBuscar(t *testing.T) {
 		if x.Tipo == "Cliente" || x.Tipo == "Proveedor" {
 			t.Errorf("el aserradero vio %s", x.Tipo)
 		}
+	}
+
+	// El aserradero encuentra el corte por el número de su pedido, con el
+	// estado como lo dice la cola (M3S4-024).
+	_, _ = pool.Exec(ctx, `insert into cutting_orders (numero, contacto_nombre, material_descripcion, order_id, estado)
+		select 'CRT-59', 'Carla', 'MDF', id, 'terminado' from orders where numero = 'PED-0042'`)
+	r, _ = Buscar(ctx, pool, rol(sqlc.StaffRoleAserradero), "PED-0042")
+	encontrado := false
+	for _, x := range r {
+		if x.Tipo == "Corte" && x.Titulo == "CRT-59 · Carla" && x.Detalle == "MDF · Terminado" {
+			encontrado = true
+		}
+	}
+	if !encontrado {
+		t.Errorf("el corte del pedido: %v", r)
 	}
 }

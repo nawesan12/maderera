@@ -20,6 +20,7 @@ paths:
         - { name: estado, in: query, schema: { type: string, enum: [todas, sin-stock, reponer, con-stock] } }
         - { name: marca, in: query, schema: { type: string, maxLength: 120 } }
         - { name: proveedor, in: query, schema: { type: string } }
+        - { name: sucursal, in: query, schema: { type: string, maxLength: 80 }, description: El slug de una sucursal; los grupos miran solo esa }
         - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 30 } }
         - { name: desplazamiento, in: query, schema: { type: integer, minimum: 0, default: 0 } }
       responses:
@@ -84,7 +85,7 @@ paths:
                 type: array
                 items:
                   type: object
-                  required: [id, variantId, productId, productName, label, branchName, type, concepto, referencia, qty, note, createdAt]
+                  required: [id, variantId, productId, productName, label, branchName, type, concepto, referencia, qty, note, createdAt, usuario, antes, despues]
                   properties:
                     id: { type: string }
                     variantId: { type: string }
@@ -98,6 +99,9 @@ paths:
                     qty: { type: number, format: double }
                     note: { type: string, nullable: true }
                     createdAt: { type: string, format: date-time }
+                    usuario: { type: string, nullable: true, description: Quién lo hizo }
+                    antes: { type: number, format: double, nullable: true, description: El stock de la sucursal antes de un ajuste o un conteo }
+                    despues: { type: number, format: double, nullable: true, description: Y después }
   /api/v1/admin/stock/ajuste:
     post:
       operationId: AjustarStock
@@ -212,8 +216,38 @@ paths:
       operationId: RecibirTraslado
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                renglones:
+                  type: array
+                  maxItems: 100
+                  description: Lo que llegó de cada medida. Sin renglones, llegó todo lo del comprobante
+                  items:
+                    type: object
+                    required: [variantId, cantidad]
+                    additionalProperties: false
+                    properties:
+                      variantId: { type: string }
+                      cantidad: { type: string, maxLength: 20 }
+                      faltante: { type: string, enum: [origen, perdido], description: Lo que no llegó de esta medida; sin esto, el de todo el traslado }
+                faltante: { type: string, enum: [origen, perdido], description: Lo que no llegó vuelve al origen o se perdió }
       responses:
         "204": { description: Recibido; el destino suma lo que llegó }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/stock/traslados/{id}/anular:
+    post:
+      operationId: AnularTraslado
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Anulado; todo vuelve al origen }
         "404": { $ref: "#/components/responses/Problema" }
         "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/sucursales:
@@ -319,7 +353,7 @@ components:
         nivel: { $ref: "#/components/schemas/Nivel" }
     FilaStock:
       type: object
-      required: [variantId, productId, productSlug, productName, label, sku, codigoBarras, categoryName, unidad, largoMm, imagen, sucursales, total, paraReponer]
+      required: [variantId, productId, productSlug, productName, label, sku, codigoBarras, categoryName, unidad, largoMm, imagen, sucursales, total, faltante, paraReponer]
       properties:
         variantId: { type: string }
         productId: { type: string }
@@ -333,31 +367,38 @@ components:
         largoMm: { type: integer, nullable: true }
         imagen: { type: string, nullable: true }
         sucursales: { type: array, items: { $ref: "#/components/schemas/StockEnSucursal" } }
-        total: { type: number, format: double, description: la suma de lo disponible de cada sucursal }
+        total: { type: number, format: double, description: la suma de lo disponible de las sucursales que tienen (un negativo no resta) }
+        faltante: { type: number, format: double, description: lo vendido de más, sumado de las sucursales en negativo }
         paraReponer: { type: boolean }
     Traslado:
       type: object
-      required: [id, codigo, origen, destino, nota, estado, creadoPor, createdAt, recibidoPor, recibidoAt, renglones]
+      required: [id, codigo, origenId, origen, destino, nota, estado, creadoPor, createdAt, recibidoPor, recibidoAt, faltante, anuladoPor, anuladoAt, renglones]
       properties:
         id: { type: string }
         codigo: { type: string }
+        origenId: { type: string }
         origen: { type: string }
         destino: { type: string }
         nota: { type: string, nullable: true }
-        estado: { type: string, enum: [en-camino, recibido] }
+        estado: { type: string, enum: [en-camino, recibido, anulado] }
         creadoPor: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
         recibidoPor: { type: string, nullable: true }
         recibidoAt: { type: string, format: date-time, nullable: true }
+        faltante: { type: string, nullable: true, enum: [origen, perdido], description: Qué pasó con lo que no llegó }
+        anuladoPor: { type: string, nullable: true }
+        anuladoAt: { type: string, format: date-time, nullable: true }
         renglones:
           type: array
           items:
             type: object
-            required: [variantId, producto, medida, sku, unidad, cantidad]
+            required: [variantId, producto, medida, sku, unidad, cantidad, recibido, faltante]
             properties:
               variantId: { type: string }
               producto: { type: string }
               medida: { type: string }
               sku: { type: string }
               unidad: { type: string }
-              cantidad: { type: number, format: double }
+              cantidad: { type: number, format: double, description: Lo que se mandó }
+              recibido: { type: number, format: double, nullable: true, description: Lo que llegó }
+              faltante: { type: string, nullable: true, enum: [origen, perdido], description: Qué pasó con lo que no llegó de esta medida }

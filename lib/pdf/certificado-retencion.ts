@@ -8,6 +8,7 @@ import {
   encabezadoEmisor,
   escribir,
   escribirCentrado,
+  escribirParrafo,
   linea,
   mm,
   nuevaHoja,
@@ -229,13 +230,16 @@ export async function certificadoDeRetencionPdf(
 
   y -= altoCuadro + mm(10);
 
-  escribir(
+  // Partido al ancho de la hoja, como en Go: un pago con varios medios se
+  // salía por la derecha (mes 23, M2S1-037).
+  const alto = escribirParrafo(
     hoja,
     `Retención practicada sobre el pago del ${datos.pago.fecha.toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })} por ${datos.pago.medio}${
       datos.pago.referencia ? ` (${datos.pago.referencia})` : ""
     }.`,
-    { x: MARGEN, y, tamano: 8.5, color: TINTA_SUAVE },
+    { x: MARGEN, y, tamano: 8.5, color: TINTA_SUAVE, ancho: A4.ancho - 2 * MARGEN, interlineado: mm(4.2) },
   );
+  y -= alto - mm(4.2);
 
   y -= mm(24);
 

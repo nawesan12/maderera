@@ -6,10 +6,14 @@ import { useRouter } from "next/navigation";
 import { Loader2, Mail, MessageCircle, Pencil, Send, Truck } from "lucide-react";
 import {
   anularOrdenDeCompra,
+  cambiarFechaDeOrden,
+  cerrarOrdenConFaltante,
   marcarOrdenEnviada,
   recibirDeLaOrden,
   type EstadoOrden,
 } from "../actions";
+import { CampoFecha } from "@/components/ui/campo-fecha";
+import { hoyEnArgentina } from "@/lib/formato";
 
 /**
  * Lo que se puede hacer con una orden.
@@ -23,6 +27,8 @@ export function AccionesDeOrden({
   id,
   estado,
   falta,
+  llegoAlgo = false,
+  fechaPrometida = "",
   whatsapp,
   correo,
   borrador,
@@ -30,6 +36,10 @@ export function AccionesDeOrden({
   id: string;
   estado: string;
   falta: boolean;
+  /** Si ya llegó algo: se cierra con faltante en vez de anular. */
+  llegoAlgo?: boolean;
+  /** aaaa-mm-dd; se corrige mientras la orden no llegó entera. */
+  fechaPrometida?: string;
   /** La recepción en borrador de esta orden: se corrige esa, no se hace otra. */
   borrador: { id: string; numeroRemito: string | null } | null;
   /** La orden armada para mandarle al proveedor, si tiene teléfono o correo. */
@@ -41,10 +51,15 @@ export function AccionesDeOrden({
   const [enCurso, empezar] = useTransition();
   const [remito, setRemito] = useState("");
   const [motivo, setMotivo] = useState("");
+  const [fecha, setFecha] = useState(fechaPrometida);
 
-  if (estado === "anulada") return null;
+  // Completa o anulada, no queda nada por hacer: lo recibido se corrige
+  // anulando la recepción (M2S1-138).
+  if (estado === "anulada" || estado === "completa") return null;
 
   const recibible = (estado === "enviada" || estado === "parcial") && falta;
+  // De la que ya llegó una parte, «Cerrar con faltante» reemplaza a anular.
+  const cerrar = estado === "parcial" && llegoAlgo;
 
   return (
     <section className="tarjeta space-y-3 p-5">
@@ -132,7 +147,6 @@ export function AccionesDeOrden({
             <input
               value={remito}
               onChange={(e) => setRemito(e.target.value)}
-              placeholder="0002-00034512"
               className="tabular mt-1 h-12 w-full rounded-lg border border-linea bg-background px-3 text-base"
             />
           </label>
@@ -158,9 +172,38 @@ export function AccionesDeOrden({
         </div>
       )}
 
+      {/* La fecha prometida se corrige mientras no llegó todo (M3S4-020). */}
+      {(estado === "enviada" || estado === "parcial") && (
+        <div className="flex flex-wrap items-end gap-2 border-t border-linea pt-3">
+          <label className="block">
+            <span className="text-base font-medium">Llega el</span>
+            <CampoFecha
+              value={fecha}
+              min={hoyEnArgentina()}
+              onChange={(e) => setFecha(e.target.value)}
+              className="tabular mt-1 h-11 w-40 rounded-lg border border-linea bg-background px-3 text-base"
+            />
+          </label>
+          <button
+            type="button"
+            disabled={enCurso || fecha === fechaPrometida}
+            onClick={() =>
+              empezar(async () => {
+                const r = await cambiarFechaDeOrden(id, fecha);
+                setResultado(r);
+                if (r.ok) router.refresh();
+              })
+            }
+            className="tarjeta-hundida h-11 rounded-lg px-4 text-base font-medium disabled:opacity-50"
+          >
+            Guardar
+          </button>
+        </div>
+      )}
+
       <details className="border-t border-linea pt-3">
         <summary className="cursor-pointer text-base text-muted-foreground">
-          Anular esta orden
+          {cerrar ? "Cerrar con faltante" : "Anular esta orden"}
         </summary>
         <div className="mt-3 flex flex-wrap gap-2">
           <input
@@ -173,21 +216,17 @@ export function AccionesDeOrden({
             type="button"
             onClick={() =>
               empezar(async () => {
-                const r = await anularOrdenDeCompra(id, motivo);
+                const r = cerrar ? await cerrarOrdenConFaltante(id, motivo) : await anularOrdenDeCompra(id, motivo);
                 setResultado(r);
                 if (r.ok) router.refresh();
               })
             }
-            disabled={enCurso || !motivo.trim()}
+            disabled={enCurso || (!cerrar && !motivo.trim())}
             className="h-11 shrink-0 rounded-lg border border-linea px-4 text-base font-medium disabled:opacity-50"
           >
-            Anular
+            {cerrar ? "Cerrar" : "Anular"}
           </button>
         </div>
-        {/* Lo ya recibido no se toca: la mercadería está en el depósito. */}
-        <p className="mt-2 text-sm text-muted-foreground">
-          Anular solo saca de &quot;en camino&quot; lo que falta.
-        </p>
       </details>
     </section>
   );

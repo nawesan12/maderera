@@ -6,7 +6,7 @@ import { formatearMonto } from "@/lib/formato";
 
 /** Lo que contesta Go cuando falta el PIN de un admin (internal/autorizacion). */
 export interface Autorizacion {
-  motivo: "precio" | "credito" | "anular" | "devolver" | "presupuesto" | "costo" | "remito" | "cheque";
+  motivo: "precio" | "credito" | "anular" | "devolver" | "presupuesto" | "costo" | "remito" | "cheque" | "cheque_devuelto" | "sin_cobrar";
   monto: number;
   /** Con motivo precio: lo que además pasa el límite de cuenta corriente. */
   credito?: number;
@@ -40,6 +40,10 @@ function queSeAutoriza(a: Autorizacion): string {
       return "Anular un remito firmado";
     case "cheque":
       return `Rechazar un cheque de ${formatearMonto(a.monto)}`;
+    case "cheque_devuelto":
+      return `Devolver al cliente un cheque de ${formatearMonto(a.monto)}`;
+    case "sin_cobrar":
+      return `Entregar ${formatearMonto(a.monto)} sin cobrar`;
   }
 }
 
@@ -132,20 +136,24 @@ export function CampoPin({
    * tener Enter.
    */
   return (
-    <div className="@container">
+    <div>
+      {/* El aviso arriba y el campo, «Autorizar» y la X en una fila que no se
+          parte: al lado, la X caía sola en otro renglón (mes simulado,
+          M2S4-062). */}
       <div
-        className={`flex flex-wrap items-center gap-2.5 ${tiembla ? "animate-temblar" : ""}`}
+        className={`flex flex-col gap-2 ${tiembla ? "animate-temblar" : ""}`}
         onAnimationEnd={() => setTiembla(false)}
       >
         <span
           role="status"
-          className={`min-h-6 basis-full text-base font-semibold @lg:order-2 @lg:basis-auto @lg:text-right ${
+          className={`min-h-6 text-base font-semibold ${
             bloqueado || autorizacion.pinIncorrecto || corto ? "estado-problema" : "text-brand-orange"
           }`}
         >
           {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : leyenda}
         </span>
-        <label className="relative min-w-[8rem] flex-1 @lg:order-1">
+        <div className="flex items-center gap-2.5">
+        <label className="relative min-w-0 flex-1">
           <span className="sr-only">{conClave ? "Contraseña admin" : "PIN admin"}</span>
           <KeyRound
             className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground"
@@ -188,7 +196,7 @@ export function CampoPin({
           type="button"
           onClick={mandar}
           disabled={bloqueado || enviando || pin.length === 0}
-          className={`boton-accion inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl px-4 text-base font-semibold disabled:opacity-50 @lg:order-3 ${
+          className={`boton-accion inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl px-4 text-base font-semibold disabled:opacity-50 ${
             grande ? "h-16" : "h-12"
           }`}
         >
@@ -199,13 +207,15 @@ export function CampoPin({
           type="button"
           onClick={onCancelar}
           aria-label="Volver"
-          className={`inline-flex shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-hundida hover:text-foreground @lg:order-4 ${
+          className={`inline-flex shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-hundida hover:text-foreground ${
             grande ? "h-16 w-16" : "h-12 w-12"
           }`}
         >
           <X className="h-5 w-5" />
         </button>
+        </div>
       </div>
     </div>
   );
 }
+

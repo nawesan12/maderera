@@ -157,22 +157,22 @@ func (e MovimientoDeCajaJSONBodyTipo) Valid() bool {
 
 // Defines values for DevolucionDeMostradorJSONBodyDestino.
 const (
-	Afuera DevolucionDeMostradorJSONBodyDestino = "afuera"
-	Caja   DevolucionDeMostradorJSONBodyDestino = "caja"
-	Cuenta DevolucionDeMostradorJSONBodyDestino = "cuenta"
-	Deuda  DevolucionDeMostradorJSONBodyDestino = "deuda"
+	DevolucionDeMostradorJSONBodyDestinoAfuera DevolucionDeMostradorJSONBodyDestino = "afuera"
+	DevolucionDeMostradorJSONBodyDestinoCaja   DevolucionDeMostradorJSONBodyDestino = "caja"
+	DevolucionDeMostradorJSONBodyDestinoCuenta DevolucionDeMostradorJSONBodyDestino = "cuenta"
+	DevolucionDeMostradorJSONBodyDestinoDeuda  DevolucionDeMostradorJSONBodyDestino = "deuda"
 )
 
 // Valid indicates whether the value is a known member of the DevolucionDeMostradorJSONBodyDestino enum.
 func (e DevolucionDeMostradorJSONBodyDestino) Valid() bool {
 	switch e {
-	case Afuera:
+	case DevolucionDeMostradorJSONBodyDestinoAfuera:
 		return true
-	case Caja:
+	case DevolucionDeMostradorJSONBodyDestinoCaja:
 		return true
-	case Cuenta:
+	case DevolucionDeMostradorJSONBodyDestinoCuenta:
 		return true
-	case Deuda:
+	case DevolucionDeMostradorJSONBodyDestinoDeuda:
 		return true
 	default:
 		return false
@@ -194,6 +194,27 @@ func (e DevolucionDeMostradorJSONBodySinStock) Valid() bool {
 	case DevolucionDeMostradorJSONBodySinStockOtro:
 		return true
 	case DevolucionDeMostradorJSONBodySinStockRota:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DevolucionSinFacturaDeMostradorJSONBodyDestino.
+const (
+	DevolucionSinFacturaDeMostradorJSONBodyDestinoAfuera DevolucionSinFacturaDeMostradorJSONBodyDestino = "afuera"
+	DevolucionSinFacturaDeMostradorJSONBodyDestinoCaja   DevolucionSinFacturaDeMostradorJSONBodyDestino = "caja"
+	DevolucionSinFacturaDeMostradorJSONBodyDestinoCuenta DevolucionSinFacturaDeMostradorJSONBodyDestino = "cuenta"
+)
+
+// Valid indicates whether the value is a known member of the DevolucionSinFacturaDeMostradorJSONBodyDestino enum.
+func (e DevolucionSinFacturaDeMostradorJSONBodyDestino) Valid() bool {
+	switch e {
+	case DevolucionSinFacturaDeMostradorJSONBodyDestinoAfuera:
+		return true
+	case DevolucionSinFacturaDeMostradorJSONBodyDestinoCaja:
+		return true
+	case DevolucionSinFacturaDeMostradorJSONBodyDestinoCuenta:
 		return true
 	default:
 		return false
@@ -244,17 +265,20 @@ type MostradorAutorizacionMotivo string
 
 // MostradorCliente defines model for MostradorCliente.
 type MostradorCliente struct {
-	CondicionIva  string   `json:"condicionIva"`
-	Cuit          *string  `json:"cuit"`
-	Direccion     *string  `json:"direccion"`
-	Email         *string  `json:"email"`
-	Estado        string   `json:"estado"`
-	Id            string   `json:"id"`
-	LimiteCredito *float64 `json:"limiteCredito,omitempty"`
-	Nombre        string   `json:"nombre"`
-	PriceListId   *string  `json:"priceListId"`
-	RazonSocial   *string  `json:"razonSocial"`
-	Telefono      *string  `json:"telefono"`
+	CondicionIva string `json:"condicionIva"`
+
+	// CuentaBloqueada la cuenta corriente está bloqueada: no se le anota
+	CuentaBloqueada *bool    `json:"cuentaBloqueada,omitempty"`
+	Cuit            *string  `json:"cuit"`
+	Direccion       *string  `json:"direccion"`
+	Email           *string  `json:"email"`
+	Estado          string   `json:"estado"`
+	Id              string   `json:"id"`
+	LimiteCredito   *float64 `json:"limiteCredito,omitempty"`
+	Nombre          string   `json:"nombre"`
+	PriceListId     *string  `json:"priceListId"`
+	RazonSocial     *string  `json:"razonSocial"`
+	Telefono        *string  `json:"telefono"`
 }
 
 // MostradorDescarga defines model for MostradorDescarga.
@@ -295,19 +319,24 @@ type MostradorLinea struct {
 
 // MostradorMovimiento defines model for MostradorMovimiento.
 type MostradorMovimiento struct {
+	// Anulado el gasto o el pago del renglón se anuló después
+	Anulado   *bool     `json:"anulado,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 
-	// Destino a dónde fue un retiro
+	// Destino a dónde fue un retiro, o de dónde vino un ingreso
 	Destino *MostradorMovimientoDestino `json:"destino,omitempty"`
 	Id      string                      `json:"id"`
 	Monto   float64                     `json:"monto"`
 	Motivo  *string                     `json:"motivo"`
 	OrderId *string                     `json:"orderId"`
-	Quien   *string                     `json:"quien"`
-	Tipo    string                      `json:"tipo"`
+
+	// OtroPuesto lo cargó alguien que no es quien está en la terminal (sin terminal, quien abrió el turno)
+	OtroPuesto *bool   `json:"otroPuesto,omitempty"`
+	Quien      *string `json:"quien"`
+	Tipo       string  `json:"tipo"`
 }
 
-// MostradorMovimientoDestino a dónde fue un retiro
+// MostradorMovimientoDestino a dónde fue un retiro, o de dónde vino un ingreso
 type MostradorMovimientoDestino string
 
 // MostradorPantalla defines model for MostradorPantalla.
@@ -320,6 +349,9 @@ type MostradorPantalla struct {
 	ListaGeneral      *string               `json:"listaGeneral"`
 	Movimientos       []MostradorMovimiento `json:"movimientos"`
 	Turno             *MostradorTurno       `json:"turno"`
+
+	// UltimoCierre el último turno cerrado hoy, para reimprimir su papel
+	UltimoCierre *MostradorTurnoCerrado `json:"ultimoCierre,omitempty"`
 
 	// UltimoContado lo contado al cerrar el último turno de la sucursal: con eso abre el siguiente
 	UltimoContado *float64              `json:"ultimoContado"`
@@ -357,14 +389,20 @@ type MostradorRenglonADevolver struct {
 type MostradorRenglonDelCierre struct {
 	Cantidad int `json:"cantidad"`
 
-	// Cobranza lo cobrado por recibos de cuenta en el mostrador durante el turno
+	// Cobranza lo cobrado por recibos durante el turno (los del mostrador, y el efectivo de los del panel que entró a este cajón)
 	Cobranza bool `json:"cobranza"`
+
+	// DePedido el cobro es de un pedido, no de la cuenta
+	DePedido *bool `json:"dePedido,omitempty"`
 
 	// Devolucion Ventas anuladas o devoluciones parciales durante el turno (la venta queda en el Z de su turno)
 	Devolucion bool   `json:"devolucion"`
 	MedioPago  string `json:"medioPago"`
 
-	// Quien Quién hizo las devoluciones parciales del renglón
+	// Pedidos los pedidos de las devoluciones parciales, o los recibos que cobró otra persona
+	Pedidos *string `json:"pedidos,omitempty"`
+
+	// Quien Quién cobró el recibo si no es quien abrió el turno
 	Quien *string `json:"quien"`
 
 	// Total En negativo si es una devolución
@@ -403,7 +441,10 @@ type MostradorResultadoVenta struct {
 	Numero  *string           `json:"numero,omitempty"`
 	Ok      bool              `json:"ok"`
 	OrderId *string           `json:"orderId,omitempty"`
-	Total   float64           `json:"total"`
+
+	// Repetida el número de una venta igual al mismo cliente de recién: se reenvía con repetidaOk para cobrarla igual
+	Repetida *string `json:"repetida,omitempty"`
+	Total    float64 `json:"total"`
 }
 
 // MostradorTurno defines model for MostradorTurno.
@@ -428,6 +469,26 @@ type MostradorTurno struct {
 	VentasEnEfectivo float64 `json:"ventasEnEfectivo"`
 }
 
+// MostradorTurnoCerrado defines model for MostradorTurnoCerrado.
+type MostradorTurnoCerrado struct {
+	AbiertaAt     time.Time                   `json:"abiertaAt"`
+	AbiertaPor    string                      `json:"abiertaPor"`
+	CerradaAt     *time.Time                  `json:"cerradaAt"`
+	Cierre        []MostradorRenglonDelCierre `json:"cierre"`
+	Contado       *float64                    `json:"contado"`
+	Devoluciones  float64                     `json:"devoluciones"`
+	Esperado      float64                     `json:"esperado"`
+	Fondo         float64                     `json:"fondo"`
+	Gastos        float64                     `json:"gastos"`
+	Id            string                      `json:"id"`
+	Movimientos   []MostradorMovimiento       `json:"movimientos"`
+	Notas         *string                     `json:"notas"`
+	OtrosIngresos float64                     `json:"otrosIngresos"`
+	Retiros       float64                     `json:"retiros"`
+	Sucursal      string                      `json:"sucursal"`
+	Ventas        float64                     `json:"ventas"`
+}
+
 // MostradorVariante defines model for MostradorVariante.
 type MostradorVariante struct {
 	AnchoMm      *int                          `json:"anchoMm"`
@@ -438,8 +499,11 @@ type MostradorVariante struct {
 	Medida       string                        `json:"medida"`
 
 	// Piso el precio final que apenas cubre el costo (sin costo cargado, null)
-	Piso           *float64 `json:"piso,omitempty"`
-	Precio         float64  `json:"precio"`
+	Piso   *float64 `json:"piso,omitempty"`
+	Precio float64  `json:"precio"`
+
+	// PrecioAnterior en oferta vigente: el precio de antes, para tacharlo
+	PrecioAnterior *float64 `json:"precioAnterior,omitempty"`
 	PrecioMediaPct float64  `json:"precioMediaPct"`
 	Producto       string   `json:"producto"`
 	Sku            string   `json:"sku"`
@@ -496,7 +560,10 @@ type AbrirCajaJSONBody struct {
 	BranchId string `json:"branchId"`
 
 	// CajaId la caja física de la PC que abre, si tiene una
-	CajaId       *string  `json:"cajaId,omitempty"`
+	CajaId *string `json:"cajaId,omitempty"`
+
+	// Corregir la diferencia es un conteo mal hecho: se corrige el arqueo del turno anterior en vez de cargar un movimiento entre turnos
+	Corregir     *bool    `json:"corregir,omitempty"`
 	FondoInicial *float64 `json:"fondoInicial"`
 
 	// Motivo adónde fue (o de dónde vino) la diferencia con lo contado al cerrar el turno anterior
@@ -520,7 +587,10 @@ type DesvincularTerminalJSONBody struct {
 
 // MovimientoDeCajaJSONBody defines parameters for MovimientoDeCaja.
 type MovimientoDeCajaJSONBody struct {
-	// Destino a dónde va un retiro; sin él se clasifica por el motivo
+	// Categoria con destino otro, la categoría de gasto: el retiro es un gasto en efectivo
+	Categoria *string `json:"categoria,omitempty"`
+
+	// Destino a dónde va un retiro, o de dónde viene un ingreso; sin él se clasifica por el motivo
 	Destino   *MovimientoDeCajaJSONBodyDestino `json:"destino,omitempty"`
 	Monto     *float64                         `json:"monto"`
 	Motivo    string                           `json:"motivo"`
@@ -589,6 +659,9 @@ type AnularVentaDeMostradorJSONBody struct {
 	// Pin el PIN de un admin, o su contraseña si ninguno cargó PIN
 	Pin *string `json:"pin,omitempty"`
 
+	// Rehacer se anula para volver a cobrarla: el corte que no se terminó queda en la cola, sin venta, para atarlo a la nueva
+	Rehacer *bool `json:"rehacer,omitempty"`
+
 	// VolvioLaMercaderia false: el cliente se la llevó y el stock no vuelve (pide el PIN)
 	VolvioLaMercaderia *bool `json:"volvioLaMercaderia,omitempty"`
 }
@@ -611,6 +684,24 @@ type DevolucionDeMostradorJSONBodyDestino string
 
 // DevolucionDeMostradorJSONBodySinStock defines parameters for DevolucionDeMostrador.
 type DevolucionDeMostradorJSONBodySinStock string
+
+// DevolucionSinFacturaDeMostradorJSONBody defines parameters for DevolucionSinFacturaDeMostrador.
+type DevolucionSinFacturaDeMostradorJSONBody struct {
+	Clave string `json:"clave"`
+
+	// Destino cuenta: la venta fue a cuenta corriente y vuelve a la cuenta (o baja lo que falta cobrar)
+	Destino   DevolucionSinFacturaDeMostradorJSONBodyDestino `json:"destino"`
+	Ficha     *string                                        `json:"ficha,omitempty"`
+	Motivo    string                                         `json:"motivo"`
+	Pin       *string                                        `json:"pin,omitempty"`
+	Renglones []struct {
+		Cantidad    float64 `json:"cantidad"`
+		OrderItemId string  `json:"orderItemId"`
+	} `json:"renglones"`
+}
+
+// DevolucionSinFacturaDeMostradorJSONBodyDestino defines parameters for DevolucionSinFacturaDeMostrador.
+type DevolucionSinFacturaDeMostradorJSONBodyDestino string
 
 // DevolucionDeMostradorCalculoJSONBody defines parameters for DevolucionDeMostradorCalculo.
 type DevolucionDeMostradorCalculoJSONBody struct {
@@ -652,6 +743,9 @@ type AnularVentaDeMostradorJSONRequestBody AnularVentaDeMostradorJSONBody
 
 // DevolucionDeMostradorJSONRequestBody defines body for DevolucionDeMostrador for application/json ContentType.
 type DevolucionDeMostradorJSONRequestBody DevolucionDeMostradorJSONBody
+
+// DevolucionSinFacturaDeMostradorJSONRequestBody defines body for DevolucionSinFacturaDeMostrador for application/json ContentType.
+type DevolucionSinFacturaDeMostradorJSONRequestBody DevolucionSinFacturaDeMostradorJSONBody
 
 // DevolucionDeMostradorCalculoJSONRequestBody defines body for DevolucionDeMostradorCalculo for application/json ContentType.
 type DevolucionDeMostradorCalculoJSONRequestBody DevolucionDeMostradorCalculoJSONBody
@@ -718,6 +812,12 @@ type ServerInterface interface {
 
 	// (POST /api/v1/mostrador/ventas/{id}/devolucion)
 	DevolucionDeMostrador(w http.ResponseWriter, r *http.Request, id string)
+
+	// (GET /api/v1/mostrador/ventas/{id}/devolucion-sin-factura)
+	DevolucionSinFacturaDatos(w http.ResponseWriter, r *http.Request, id string)
+
+	// (POST /api/v1/mostrador/ventas/{id}/devolucion-sin-factura)
+	DevolucionSinFacturaDeMostrador(w http.ResponseWriter, r *http.Request, id string)
 
 	// (POST /api/v1/mostrador/ventas/{id}/devolucion/calculo)
 	DevolucionDeMostradorCalculo(w http.ResponseWriter, r *http.Request, id string)
@@ -1198,6 +1298,58 @@ func (siw *ServerInterfaceWrapper) DevolucionDeMostrador(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
+// DevolucionSinFacturaDatos operation middleware
+func (siw *ServerInterfaceWrapper) DevolucionSinFacturaDatos(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DevolucionSinFacturaDatos(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DevolucionSinFacturaDeMostrador operation middleware
+func (siw *ServerInterfaceWrapper) DevolucionSinFacturaDeMostrador(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DevolucionSinFacturaDeMostrador(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DevolucionDeMostradorCalculo operation middleware
 func (siw *ServerInterfaceWrapper) DevolucionDeMostradorCalculo(w http.ResponseWriter, r *http.Request) {
 
@@ -1350,6 +1502,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/mostrador/ventas/{id}/anular", wrapper.AnularVentaDeMostrador)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/mostrador/ventas/{id}/devolucion", wrapper.DevolucionDeMostradorDatos)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/mostrador/ventas/{id}/devolucion", wrapper.DevolucionDeMostrador)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/mostrador/ventas/{id}/devolucion-sin-factura", wrapper.DevolucionSinFacturaDatos)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/mostrador/ventas/{id}/devolucion-sin-factura", wrapper.DevolucionSinFacturaDeMostrador)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/mostrador/ventas/{id}/devolucion/calculo", wrapper.DevolucionDeMostradorCalculo)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/mostrador/buscar", wrapper.BuscarEnMostrador)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/mostrador/precios", wrapper.PreciosDelCliente)
@@ -1925,12 +2079,40 @@ type AnularVentaDeMostrador200JSONResponse struct {
 	// Avisado la factura que quedó viva se le avisó a administración
 	Avisado *bool `json:"avisado,omitempty"`
 
+	// Comprobante interno o fiscal
+	Comprobante *string `json:"comprobante,omitempty"`
+
 	// ConCorte la venta tenía un corte, que no se rehace solo
-	ConCorte         *bool   `json:"conCorte,omitempty"`
+	ConCorte *bool `json:"conCorte,omitempty"`
+
+	// Cortes los cortes que quedaron en la cola sin venta, para atarlos a la venta rehecha
+	Cortes *[]string `json:"cortes,omitempty"`
+
+	// CustomerId el cliente de la venta, para rehacerla
+	CustomerId       *string `json:"customerId,omitempty"`
 	Error            *string `json:"error,omitempty"`
 	FacturaPendiente *string `json:"facturaPendiente,omitempty"`
 	FacturaSinCae    *bool   `json:"facturaSinCae,omitempty"`
 	Ok               *string `json:"ok,omitempty"`
+
+	// Pagos cómo se pagó, con los datos de la tarjeta y del cheque, para rehacerla
+	Pagos *[]struct {
+		Cheque *struct {
+			Banco string `json:"banco"`
+
+			// FechaPago AAAA-MM-DD
+			FechaPago string  `json:"fechaPago"`
+			Librador  *string `json:"librador"`
+			Numero    string  `json:"numero"`
+			Tipo      string  `json:"tipo"`
+		} `json:"cheque"`
+		Cuotas   int     `json:"cuotas"`
+		Importe  float64 `json:"importe"`
+		Medio    string  `json:"medio"`
+		NroCupon *string `json:"nroCupon"`
+		NroLote  *string `json:"nroLote"`
+		Tarjeta  *string `json:"tarjeta"`
+	} `json:"pagos,omitempty"`
 
 	// PorAfuera Lo que falta devolver por el posnet o el banco (sin el efectivo, la cuenta corriente ni el cheque en cartera)
 	PorAfuera *float64 `json:"porAfuera,omitempty"`
@@ -2057,6 +2239,103 @@ func (response DevolucionDeMostrador422ApplicationProblemPlusJSONResponse) Visit
 	return err
 }
 
+type DevolucionSinFacturaDatosRequestObject struct {
+	Id string `json:"id"`
+}
+
+type DevolucionSinFacturaDatosResponseObject interface {
+	VisitDevolucionSinFacturaDatosResponse(w http.ResponseWriter) error
+}
+
+type DevolucionSinFacturaDatos200JSONResponse struct {
+	// Afuera lo cobrado con los otros medios que todavía no se devolvió
+	Afuera float64 `json:"afuera"`
+
+	// Efectivo lo cobrado en efectivo que todavía no se devolvió
+	Efectivo  float64 `json:"efectivo"`
+	Numero    string  `json:"numero"`
+	Renglones []struct {
+		Cantidad       float64 `json:"cantidad"`
+		Descripcion    string  `json:"descripcion"`
+		Devuelto       float64 `json:"devuelto"`
+		OrderItemId    string  `json:"orderItemId"`
+		PrecioUnitario float64 `json:"precioUnitario"`
+		Unidad         string  `json:"unidad"`
+	} `json:"renglones"`
+}
+
+func (response DevolucionSinFacturaDatos200JSONResponse) VisitDevolucionSinFacturaDatosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DevolucionSinFacturaDatos404ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response DevolucionSinFacturaDatos404ApplicationProblemPlusJSONResponse) VisitDevolucionSinFacturaDatosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DevolucionSinFacturaDeMostradorRequestObject struct {
+	Id   string `json:"id"`
+	Body *DevolucionSinFacturaDeMostradorJSONRequestBody
+}
+
+type DevolucionSinFacturaDeMostradorResponseObject interface {
+	VisitDevolucionSinFacturaDeMostradorResponse(w http.ResponseWriter) error
+}
+
+type DevolucionSinFacturaDeMostrador200JSONResponse struct {
+	// Autorizacion Hace falta el PIN de un administrador (internal/autorizacion)
+	Autorizacion *MostradorAutorizacion `json:"autorizacion,omitempty"`
+	Error        *string                `json:"error,omitempty"`
+	Ok           *string                `json:"ok,omitempty"`
+}
+
+func (response DevolucionSinFacturaDeMostrador200JSONResponse) VisitDevolucionSinFacturaDeMostradorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DevolucionSinFacturaDeMostrador422ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response DevolucionSinFacturaDeMostrador422ApplicationProblemPlusJSONResponse) VisitDevolucionSinFacturaDeMostradorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type DevolucionDeMostradorCalculoRequestObject struct {
 	Id   string `json:"id"`
 	Body *DevolucionDeMostradorCalculoJSONRequestBody
@@ -2160,6 +2439,12 @@ type StrictServerInterface interface {
 
 	// (POST /api/v1/mostrador/ventas/{id}/devolucion)
 	DevolucionDeMostrador(ctx context.Context, request DevolucionDeMostradorRequestObject) (DevolucionDeMostradorResponseObject, error)
+
+	// (GET /api/v1/mostrador/ventas/{id}/devolucion-sin-factura)
+	DevolucionSinFacturaDatos(ctx context.Context, request DevolucionSinFacturaDatosRequestObject) (DevolucionSinFacturaDatosResponseObject, error)
+
+	// (POST /api/v1/mostrador/ventas/{id}/devolucion-sin-factura)
+	DevolucionSinFacturaDeMostrador(ctx context.Context, request DevolucionSinFacturaDeMostradorRequestObject) (DevolucionSinFacturaDeMostradorResponseObject, error)
 
 	// (POST /api/v1/mostrador/ventas/{id}/devolucion/calculo)
 	DevolucionDeMostradorCalculo(ctx context.Context, request DevolucionDeMostradorCalculoRequestObject) (DevolucionDeMostradorCalculoResponseObject, error)
@@ -2790,6 +3075,65 @@ func (sh *strictHandler) DevolucionDeMostrador(w http.ResponseWriter, r *http.Re
 	}
 }
 
+// DevolucionSinFacturaDatos operation middleware
+func (sh *strictHandler) DevolucionSinFacturaDatos(w http.ResponseWriter, r *http.Request, id string) {
+	var request DevolucionSinFacturaDatosRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DevolucionSinFacturaDatos(ctx, request.(DevolucionSinFacturaDatosRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DevolucionSinFacturaDatos")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DevolucionSinFacturaDatosResponseObject); ok {
+		if err := validResponse.VisitDevolucionSinFacturaDatosResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DevolucionSinFacturaDeMostrador operation middleware
+func (sh *strictHandler) DevolucionSinFacturaDeMostrador(w http.ResponseWriter, r *http.Request, id string) {
+	var request DevolucionSinFacturaDeMostradorRequestObject
+
+	request.Id = id
+
+	var body DevolucionSinFacturaDeMostradorJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DevolucionSinFacturaDeMostrador(ctx, request.(DevolucionSinFacturaDeMostradorRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DevolucionSinFacturaDeMostrador")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DevolucionSinFacturaDeMostradorResponseObject); ok {
+		if err := validResponse.VisitDevolucionSinFacturaDeMostradorResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // DevolucionDeMostradorCalculo operation middleware
 func (sh *strictHandler) DevolucionDeMostradorCalculo(w http.ResponseWriter, r *http.Request, id string) {
 	var request DevolucionDeMostradorCalculoRequestObject
@@ -2828,89 +3172,106 @@ func (sh *strictHandler) DevolucionDeMostradorCalculo(w http.ResponseWriter, r *
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

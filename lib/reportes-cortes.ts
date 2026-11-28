@@ -43,3 +43,24 @@ export function leerCorte(valor?: string): CorteDelReporte {
     ? (valor as CorteDelReporte)
     : "producto";
 }
+
+/**
+ * El margen de un renglón del reporte, neto contra neto y solo de lo que
+ * tiene costo, y su color: un margen bajo no se pinta como uno sano. Menos
+ * del 5 % va en el color de espera y el negativo en el de deuda (M2S1-039).
+ */
+export function margenDelRenglon(netoCosteado: number, costo: number): {
+  margen: number;
+  pct: number | null;
+  color: "text-saldo-debe" | "estado-espera" | "text-saldo-favor";
+} {
+  const margen = netoCosteado - costo;
+  const pct = netoCosteado > 0 ? (margen / netoCosteado) * 100 : null;
+  const color =
+    margen < 0 || (pct !== null && pct < 0)
+      ? "text-saldo-debe"
+      : pct !== null && pct < 5
+        ? "estado-espera"
+        : "text-saldo-favor";
+  return { margen, pct, color };
+}

@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Truck } from "lucide-react";
-import { fechaCorta, diasHasta } from "@/lib/formato";
+import { cantidadConUnidad, fechaCorta, diasHasta } from "@/lib/formato";
 import { recibirDeLaOrden } from "@/app/admin/compras/ordenes/actions";
 
 interface Esperada {
@@ -15,6 +15,7 @@ interface Esperada {
   fechaPrometida: Date | null;
   pendientes: number;
   lineas: number;
+  faltantes?: { descripcion: string; cantidad: number; unidad: string | null }[];
 }
 
 /**
@@ -51,23 +52,35 @@ function Fila({ orden: o }: { orden: Esperada }) {
           <span className="codigo font-semibold">{o.numero}</span>
           <span className="truncate">{o.proveedor}</span>
         </p>
-        <p className="tabular text-base text-muted-foreground">
+        {/* En la letra del texto; lo que falta, en mercadería y no en
+            renglones (M2S1-167, M2S2-124). */}
+        <p className="text-base text-muted-foreground">
           {o.sucursal ?? "—"}
           {o.fechaPrometida && (
-            <span className={dias !== null && dias < 0 ? "font-medium text-saldo-debe" : undefined}>
+            <span className={`tabular-nums ${dias !== null && dias < 0 ? "font-medium text-saldo-debe" : ""}`}>
               {" · "}
               {fechaCorta.format(o.fechaPrometida)}
             </span>
           )}
-          {o.estado === "parcial" && ` · faltan ${o.pendientes} de ${o.lineas}`}
         </p>
+        {o.estado === "parcial" && (o.faltantes?.length ?? 0) > 0 && (
+          <p className="text-base">
+            {o.faltantes!.slice(0, 2).map((f, i) => (
+              <span key={i} className="block">
+                <span className="font-semibold">Faltan {cantidadConUnidad(f.cantidad, f.unidad, f.descripcion)}</span>
+                <span className="text-muted-foreground"> · {f.descripcion}</span>
+              </span>
+            ))}
+            {o.faltantes!.length > 2 && <span className="text-muted-foreground">y {o.faltantes!.length - 2} más</span>}
+          </p>
+        )}
       </div>
       <input
         value={remito}
         onChange={(e) => setRemito(e.target.value)}
         aria-label={`Número de remito de ${o.numero}`}
         placeholder="N.º de remito"
-        className="codigo h-12 w-full rounded-lg border border-linea bg-background px-3 text-base"
+        className="codigo h-12 w-full rounded-lg border border-linea bg-background px-3 text-base placeholder:font-sans"
       />
       <button
         type="button"

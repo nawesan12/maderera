@@ -1,7 +1,6 @@
 "use client";
 
 import { useActionState, useId, useState, useTransition } from "react";
-import Image from "next/image";
 import {
   BadgePercent,
   CalendarDays,
@@ -15,6 +14,7 @@ import {
 } from "lucide-react";
 import { borrarPromo, guardarPromo, type EstadoPromo } from "./actions";
 import { Confirmar } from "@/components/admin/confirmar";
+import { ElegirImagen } from "@/components/admin/elegir-imagen";
 import {
   Hoja,
   Interruptor,
@@ -38,8 +38,6 @@ export interface PromoEditable {
   activo: boolean;
   /** El logo del banco o de la billetera, si tiene. */
   imagenUrl: string | null;
-  /** Si hoy está efectivamente publicada, contando la vigencia. */
-  alAire: boolean;
 }
 
 export function EditorDePromo({ promo }: { promo: PromoEditable | null }) {
@@ -56,13 +54,12 @@ export function EditorDePromo({ promo }: { promo: PromoEditable | null }) {
     <form {...sinReiniciar(guardar)} className="space-y-4">
       {promo && <input type="hidden" name="id" value={promo.id} />}
 
-      <Hoja>
+      <Hoja plana>
         <Seccion titulo="La promoción" icono={BadgePercent}>
           <Campo
             nombre="medio"
             etiqueta="Con qué se paga"
             valorInicial={promo?.medio ?? ""}
-            placeholder="Banco Nación"
             requerido
           />
           <Campo
@@ -94,32 +91,12 @@ export function EditorDePromo({ promo }: { promo: PromoEditable | null }) {
             de un vistazo: el cliente reconoce a su banco por la marca antes que
             por el nombre escrito. */}
         <Seccion titulo="Logo" icono={ImageIcon} columnas={1}>
-          <div>
-            <label
-              htmlFor={`${id}-img`}
-              className="block text-base font-medium"
-            >
-              Logo del banco o la billetera
-            </label>
-            <div className="mt-1 flex flex-wrap items-center gap-4">
-              {promo?.imagenUrl && (
-                <Image
-                  src={promo.imagenUrl}
-                  alt=""
-                  width={120}
-                  height={40}
-                  className="h-10 w-auto max-w-[120px] object-contain"
-                />
-              )}
-              <input
-                id={`${id}-img`}
-                type="file"
-                name="imagen"
-                accept="image/jpeg,image/png,image/webp,image/avif"
-                className="block text-base"
-              />
-            </div>
-          </div>
+          <ElegirImagen
+            nombre="imagen"
+            etiqueta="Logo del banco o la billetera"
+            actual={promo?.imagenUrl ?? null}
+            forma="logo"
+          />
           {promo?.imagenUrl && (
             <Interruptor
               nombre="quitarImagen"
@@ -196,11 +173,6 @@ export function EditorDePromo({ promo }: { promo: PromoEditable | null }) {
               icono={Power}
               defecto={promo?.activo ?? true}
             />
-            {promo && !promo.alAire && promo.activo && (
-              <p className="mt-2 text-sm text-muted-foreground">
-                Hoy no se ve: la vigencia ya pasó.
-              </p>
-            )}
           </div>
         </Seccion>
       </Hoja>

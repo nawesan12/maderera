@@ -3,6 +3,8 @@ import {
   avisoDePagosEnVerificacion,
   distintivoDeLista,
   estadoDelPago,
+  estadoVisibleDelPedido,
+  tituloDeRemitos,
   mensajeDeConsulta,
   pedidosEnCurso,
   importeAInformar,
@@ -197,5 +199,18 @@ describe("el encabezado del resumen impreso", () => {
     expect(sumaAlNombre("RF Construcciones SRL", "Roberto Fernández")).toBe(true);
     expect(sumaAlNombre("Maderera Juan B. Justo S.R.L.", "MJBJ")).toBe(true);
     expect(sumaAlNombre("Algo SA", "")).toBe(false);
+  });
+});
+
+describe("los remitos del pedido en el portal (mes simulado, tanda 23)", () => {
+  it("con el retiro sin firmar el pedido no figura entregado (M2S1-071)", () => {
+    expect(estadoVisibleDelPedido("entregado", [{ estado: "preparada", tipo: "retiro" }])).toBe("por-firmar");
+    expect(estadoVisibleDelPedido("entregado", [{ estado: "entregada", tipo: "retiro" }])).toBe("entregado");
+    expect(estadoVisibleDelPedido("en-camino", [{ estado: "preparada", tipo: "envio" }])).toBe("en-camino");
+  });
+  it("un envío no es un retiro (M2S1-155)", () => {
+    expect(tituloDeRemitos([{ tipo: "envio" }])).toBe("1 envío");
+    expect(tituloDeRemitos([{ tipo: "retiro" }, { tipo: "retiro" }])).toBe("2 retiros");
+    expect(tituloDeRemitos([{ tipo: "retiro" }, { tipo: "envio" }])).toBe("2 remitos");
   });
 });

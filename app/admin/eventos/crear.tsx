@@ -61,12 +61,26 @@ function paraCampo(fecha: Date | null): string | undefined {
 export function CrearEvento({ evento }: { evento?: EventoEditable } = {}) {
   const [estado, accion, creando] = useActionState(crearEvento, inicial);
   const [abierto, setAbierto] = useState(false);
+  // Al crear o guardar se cierra: quedaba abierto con «Crear» y un segundo
+  // toque duplicaba el evento (M2S1-119). El aviso queda al lado del botón.
+  const [aviso, setAviso] = useState<string | null>(null);
+  const [visto, setVisto] = useState(estado);
+  if (visto !== estado) {
+    setVisto(estado);
+    if (estado.ok) {
+      setAbierto(false);
+      setAviso(estado.ok);
+    }
+  }
 
   if (!abierto) {
-    return evento ? (
+    const boton = evento ? (
       <button
         type="button"
-        onClick={() => setAbierto(true)}
+        onClick={() => {
+          setAviso(null);
+          setAbierto(true);
+        }}
         className="inline-flex h-10 items-center gap-2 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
       >
         <Pencil className="h-4 w-4" />
@@ -75,12 +89,26 @@ export function CrearEvento({ evento }: { evento?: EventoEditable } = {}) {
     ) : (
       <button
         type="button"
-        onClick={() => setAbierto(true)}
+        onClick={() => {
+          setAviso(null);
+          setAbierto(true);
+        }}
         className="inline-flex h-10 items-center gap-2 rounded-lg bg-accion px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark"
       >
         <Plus className="h-5 w-5" />
         Nuevo evento
       </button>
+    );
+    return aviso ? (
+      <div className="flex flex-wrap items-center gap-3">
+        {boton}
+        <span className="flex items-center gap-2 text-base text-muted-foreground">
+          <Check className="h-4 w-4 text-brand-green" />
+          {aviso}
+        </span>
+      </div>
+    ) : (
+      boton
     );
   }
 
@@ -156,13 +184,6 @@ export function CrearEvento({ evento }: { evento?: EventoEditable } = {}) {
           </p>
         )}
 
-        {estado.ok && (
-          <p className="flex items-center gap-2 text-base text-muted-foreground">
-            <Check className="h-4 w-4 text-brand-green" />
-            {estado.ok}
-          </p>
-        )}
-
         <div className="flex gap-2">
           <button
             type="submit"
@@ -205,7 +226,7 @@ function Campo({
       <label htmlFor={nombre} className="block text-base font-medium">
         {etiqueta}
         {requerido && (
-          <span className="text-brand-orange" aria-label="obligatorio">
+          <span className="text-brand-orange" aria-hidden="true">
             {" *"}
           </span>
         )}

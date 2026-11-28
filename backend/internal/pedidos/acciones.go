@@ -22,6 +22,7 @@ import (
 	"mjbj/internal/numeracion"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/precios"
+	"mjbj/internal/reglas"
 	"mjbj/internal/reservas"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
@@ -41,6 +42,14 @@ const TrabajoCambioDeEstado = "pedido.estado"
 // correo con el detalle y el WhatsApp con el PDF (presupuesto_listo).
 const TrabajoPresupuestoEnviado = "presupuesto.enviado"
 
+// TrabajoPresupuestoPorCorreo es solo el correo de un presupuesto que ya
+// salió (por WhatsApp, por ejemplo): el cliente lo pide también por mail
+// (M2S1-098). No vuelve a mandar el WhatsApp ni cambia el estado.
+const TrabajoPresupuestoPorCorreo = "presupuesto.correo"
+
+// MotivoPorCorreo es lo que manda «Por correo» de un presupuesto ya enviado.
+const MotivoPorCorreo = "por_correo"
+
 // EncolarPresupuestoEnviado deja el aviso del presupuesto armado en la
 // cola, dentro de la transacción de quien lo pasa a «enviado».
 func EncolarPresupuestoEnviado(ctx context.Context, tx pgx.Tx, quoteID string) error {
@@ -55,6 +64,10 @@ type Resultado struct {
 	ID     string `json:"id,omitempty"`
 	Numero string `json:"numero,omitempty"`
 	Estado string `json:"estado,omitempty"`
+	// FirmaToken: el enlace de firma del remito que salió al avanzar. En
+	// un retiro el cliente está presente: la pantalla va derecho a la firma
+	// (mes simulado 2: quedaba «Sin firmar», un paso aparte que se olvidaba).
+	FirmaToken string `json:"firmaToken,omitempty"`
 }
 
 // NotaEntregadoSinCobrar encabeza la nota del historial de un pedido que se
@@ -218,8 +231,40 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 				return err
 			}
 			usuario := ses.UserID
+			saldo, err := entregas.SaldoDeAcopio(ctx, tx, id)
+			if err != nil {
+				return err
+			}
+			if len(entregas.SoloPendientes(saldo)) > 0 {
+				// El documento primero: es lo que se corrige en el lugar.
+				if p.tipoEntrega != "envio" {
+					if campo, msj := quien.Revisar(); msj != "" {
+						return plataforma.Invalido(map[string]string{campo: msj})
+					}
+				}
+				if _, err := entregas.AutorizarSinCobrar(ctx, tx, s.aut, ses, id, quien.SinCobrar); err != nil {
+					return err
+				}
+			}
 			if remito, err = entregas.RemitoPorLoQueQueda(ctx, tx, id, sucursal, p.tipoEntrega, &usuario, quien); err != nil {
 				return err
+			}
+			// Sin mercadería, el pedido que solo lleva el corte sale con el
+			// remito de sus piezas, con quien retira, para firmar (mes
+			// simulado 2: se entregaba sin firma ni constancia).
+			if remito == nil && siguiente == "entregado" && p.tipoEntrega != "envio" {
+				solo, err := entregas.SoloElCorte(ctx, tx, id)
+				if err != nil {
+					return err
+				}
+				if solo {
+					if campo, msj := quien.Revisar(); msj != "" {
+						return plataforma.Invalido(map[string]string{campo: msj})
+					}
+					if remito, err = entregas.RemitoDelCorte(ctx, tx, id, sucursal, &usuario, quien); err != nil {
+						return err
+					}
+				}
 			}
 		}
 		// Entregar sin cobrar se puede (existe el pago contra entrega), pero
@@ -267,7 +312,11 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 	if remito != nil {
 		ok = p.numero + " quedó " + texto + ": la mercadería salió con el remito " + remito.Numero + ", que queda para firmar."
 	}
-	return &Resultado{Ok: ok, Numero: p.numero, Estado: siguiente}, nil
+	out := &Resultado{Ok: ok, Numero: p.numero, Estado: siguiente}
+	if remito != nil {
+		out.FirmaToken = remito.FirmaToken
+	}
+	return out, nil
 }
 
 // Cancelar cancela el pedido y libera lo reservado (el físico no se toca:
@@ -382,7 +431,12 @@ func (s *Servicio) Cancelar(ctx context.Context, ses *auth.Sesion, id string, mo
 	if err != nil {
 		return nil, err
 	}
-	desc := "Canceló el pedido"
+	var numero string
+	_ = s.pool.QueryRow(ctx, `SELECT numero FROM orders WHERE id = $1`, id).Scan(&numero)
+	desc := "Canceló " + numero
+	if numero == "" {
+		desc = "Canceló el pedido"
+	}
 	if motivo != nil && *motivo != "" {
 		desc += ": " + *motivo
 	}
@@ -471,6 +525,7 @@ func (s *Servicio) CambiarEstadoPresupuestoConMotivo(ctx context.Context, ses *a
 	// solo cuando el presupuesto llega a «enviado» desde otro estado, y dos
 	// clics seguidos en «enviado» dan un solo aviso (el segundo espera al
 	// primero y ya lo encuentra enviado).
+	soloCorreo, yaSalio := false, false
 	err := s.enTransaccion(ctx, func(tx pgx.Tx) error {
 		var anterior string
 		err := tx.QueryRow(ctx, `SELECT estado::text FROM quotes WHERE id = $1 FOR UPDATE`, id).Scan(&anterior)
@@ -479,6 +534,35 @@ func (s *Servicio) CambiarEstadoPresupuestoConMotivo(ctx context.Context, ses *a
 			return noEsta("No se encontró el presupuesto.")
 		}
 		if err != nil {
+			return err
+		}
+		// Con un pedido vivo no se rechaza: el cliente ya compró. Con el pedido
+		// cancelado, sí (M2S4-066: quedaba «Aceptado» para siempre).
+		if estado == "rechazado" {
+			var vivo bool
+			if err := tx.QueryRow(ctx, `SELECT exists(SELECT 1 FROM orders WHERE quote_id = $1 AND estado <> 'cancelado')`, id).Scan(&vivo); err != nil {
+				return err
+			}
+			if vivo {
+				return fallo("Este presupuesto ya es un pedido: cancelá el pedido primero.")
+			}
+		}
+		// «Por correo» de uno que ya salió (por WhatsApp): solo el correo, y
+		// el estado queda como estaba. Lo pide el botón (motivo «por_correo»):
+		// un segundo clic en «enviado» sigue sin mandar nada. Dos clics en
+		// dos minutos, un correo.
+		if estado == "enviado" && anterior == "enviado" && motivo == MotivoPorCorreo {
+			soloCorreo = true
+			var reciente bool
+			if err := tx.QueryRow(ctx, `SELECT exists(SELECT 1 FROM trabajos WHERE tipo = $1 AND carga->>'quoteId' = $2
+				AND created_at > now() - interval '2 minutes')`, TrabajoPresupuestoPorCorreo, id).Scan(&reciente); err != nil {
+				return err
+			}
+			if reciente {
+				yaSalio = true
+				return nil
+			}
+			_, err := cola.Encolar(ctx, sqlc.New(tx), TrabajoPresupuestoPorCorreo, map[string]string{"quoteId": id}, time.Time{})
 			return err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE quotes SET estado = $2, motivo_rechazo = $3, updated_at = now() WHERE id = $1`, id, estado, motivoRechazo); err != nil {
@@ -491,6 +575,15 @@ func (s *Servicio) CambiarEstadoPresupuestoConMotivo(ctx context.Context, ses *a
 	})
 	if err != nil {
 		return nil, err
+	}
+	// El segundo clic en dos minutos no manda otro: no se le dice que sí
+	// (mes 23: decía «Le mandamos el presupuesto por correo»).
+	if soloCorreo && yaSalio {
+		return &Resultado{Ok: "El correo con el presupuesto ya salió hace un momento.", Estado: estado}, nil
+	}
+	if soloCorreo {
+		s.anotar(ctx, ses, sqlc.AccionAuditoriaEditar, "presupuesto", id, "Mandó el presupuesto por correo", nil)
+		return &Resultado{Ok: "Le mandamos el presupuesto por correo.", Estado: estado}, nil
 	}
 	desc := "Pasó el presupuesto a " + estado
 	if motivoRechazo != nil {
@@ -535,6 +628,9 @@ type Entrega struct {
 	// un admin). Vacío en uno vigente.
 	Precios    string
 	PIN, Ficha string
+	// Sucursal es el slug de la sucursal de donde sale, si no es la del
+	// presupuesto: lo que falta en una y hay en otra (M2S1-089).
+	Sucursal string
 	// ACuenta es la parte que va a la cuenta corriente de un pedido partido
 	// (H047); el resto se paga con MedioPago. Cero: el pedido no se parte.
 	ACuenta float64
@@ -659,6 +755,17 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 		}
 		if err != nil {
 			return err
+		}
+		if strings.TrimSpace(ent.Sucursal) != "" {
+			var otra string
+			err := tx.QueryRow(ctx, `SELECT id FROM branches WHERE slug = $1 AND active`, strings.TrimSpace(ent.Sucursal)).Scan(&otra)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return fallo("Esa sucursal no existe.")
+			}
+			if err != nil {
+				return err
+			}
+			q.branchID = &otra
 		}
 		// Un pedido cancelado no traba (mes simulado): el presupuesto vuelve
 		// a pasarse a pedido, corregido, sin cargarlo todo de nuevo.
@@ -809,6 +916,40 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 			}
 			aCuenta = true
 		}
+		// El descuento por forma de pago, como en el mostrador (mes simulado
+		// 2, M2S1-080: el presupuesto prometía «10 % en efectivo o
+		// transferencia» y el pedido cobraba la lista): sobre lo que se vende
+		// del catálogo (con la regla descuento_al_flete, también lo cargado a
+		// mano), con el pedido entero por un solo medio. Los renglones quedan
+		// a lista y el descuento va al pedido, como el de la tienda.
+		var descuento float64
+		var motivoDescuento *string
+		if ent.MedioPago != nil && !aCuenta {
+			esc, err := s.q.WithTx(tx).EscalasDePago(ctx)
+			if err != nil {
+				return err
+			}
+			escalas := make([]ventas.EscalaDePago, len(esc))
+			for i, f := range esc {
+				escalas[i] = ventas.EscalaDePago{Medio: string(f.Medio), DesdeMonto: f.DesdeMonto.F(), Porcentaje: f.Porcentaje.F(), Etiqueta: f.Etiqueta}
+			}
+			alFlete := reglas.Es(ctx, tx, reglas.DescuentoAlFlete, "si")
+			base := 0.0
+			for _, l := range lineas {
+				if l.variantID != nil || alFlete {
+					base += jsmath.Numero(l.subt)
+				}
+			}
+			base = ventas.ACentavos(base)
+			if e := ventas.DescuentoPorMedioDePago(escalas, *ent.MedioPago, base); e != nil {
+				descuento = ventas.MontoDelDescuentoDePago(base, e.Porcentaje)
+				if e.Etiqueta != "" {
+					m := e.Etiqueta
+					motivoDescuento = &m
+				}
+				totalPedido = ventas.ACentavos(totalPedido - descuento)
+			}
+		}
 		deuda := totalPedido
 		if partido != nil {
 			deuda = jsmath.Numero(*partido)
@@ -838,18 +979,25 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 			INSERT INTO orders (numero, customer_id, quote_id, contacto_nombre, contacto_email, contacto_telefono, branch_id,
 			                    estado, origen, subtotal, total, notas, seller_id, created_by_user_id,
 			                    tipo_entrega, direccion_entrega, zona_envio, costo_envio, medio_pago, entregar_el,
-			                    dejado_de_cobrar, autorizado_por, a_cuenta)
+			                    dejado_de_cobrar, autorizado_por, a_cuenta, flete_sin_cargo)
 			VALUES ($1, $2, $3, $4, $5, $6,
 			        CASE WHEN $13::tipo_entrega = 'retiro'
 			             THEN coalesce($7::uuid, (SELECT id FROM branches WHERE active ORDER BY sort_order LIMIT 1))
 			             ELSE $7::uuid END,
-			        'pendiente', 'presupuesto', $8::numeric, $9::numeric + $14::numeric, $10, $11, $12,
+			        'pendiente', 'presupuesto', $8::numeric, $9::numeric + $14::numeric - $22::numeric, $10, $11, $12,
 			        $13::tipo_entrega, $15, $16, $14::numeric, $17::medio_pago,
 			        coalesce($18::date, (SELECT (necesita_para AT TIME ZONE 'America/Argentina/Buenos_Aires')::date FROM quotes WHERE id = $3)),
-			        $19::numeric, $20, $21::numeric)
+			        $19::numeric, $20, $21::numeric, $23)
 			RETURNING id`, numero, q.customerID, quoteID, q.nombre, q.email, q.telefono, q.branchID, q.subtotal, q.total, q.notas,
-			q.sellerID, ses.UserID, tipo, costo, direccion, zona, ent.MedioPago, entregarEl, jsmath.Fijo2(dejado), autorizadoPor, partido).Scan(&pedidoID); err != nil {
+			q.sellerID, ses.UserID, tipo, costo, direccion, zona, ent.MedioPago, entregarEl, jsmath.Fijo2(dejado), autorizadoPor, partido,
+			jsmath.Fijo2(descuento), ent.Envio && ent.SinCargo && !ent.ConCosto).Scan(&pedidoID); err != nil {
 			return err
+		}
+		if descuento > 0 {
+			if _, err := tx.Exec(ctx, `UPDATE orders SET descuento = $2::numeric, descuento_motivo = $3 WHERE id = $1`,
+				pedidoID, jsmath.Fijo2(descuento), motivoDescuento); err != nil {
+				return err
+			}
 		}
 
 		var variantes []string

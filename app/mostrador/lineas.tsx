@@ -36,7 +36,18 @@ export function sumar(lineas: LineaDeVenta[], nueva: LineaDeVenta): LineaDeVenta
 }
 
 
+/**
+ * Cuánto de la medida del renglón no está en la sucursal (en unidades de
+ * stock: la media placa usa media). Cero si alcanza o no se sabe.
+ */
+export function faltan(l: LineaDeVenta): number {
+  if (l.disponible == null || !l.variantId || l.corteId != null) return 0;
+  const usa = l.presentacion ? l.cantidad / 2 : l.cantidad;
+  return Math.max(0, Math.round((usa - l.disponible) * 1000) / 1000);
+}
+
 export function Lineas({
+
   lineas,
   sinCargo,
   onCambiar,
@@ -106,6 +117,8 @@ export function Lineas({
           // Cambiado a mano respecto de la lista: en naranja, con la lista
           // tachada al lado. Quien mira la pantalla ve qué se tocó.
           const tocado = l.precioLista != null && Math.abs(l.precioLista - l.precioUnitario) > 0.005;
+          // En oferta y sin tocar: el de antes tachado en el mismo lugar.
+          const oferta = !tocado && l.precioAnterior != null && l.precioAnterior > l.precioUnitario + 0.005;
           // Lo del corte se lee por su importe y se corrige reabriéndolo: Go
           // rechaza un corte que no cobra lo de su plano (comité final, A2).
           // La pasada suelta, sin corte atado, también: su cantidad es de
@@ -136,6 +149,14 @@ export function Lineas({
                     : l.presentacion
                       ? "cada media placa"
                       : `por ${formatearUnidad(unidadDeVenta(l.unidad, l.descripcion))}`}
+                  {/* Lo que no alcanza en la sucursal, antes de cobrar: se
+                      enteraba al cobrar y el stock quedaba en negativo (mes
+                      simulado, M2S3-050). */}
+                  {faltan(l) > 0 && (
+                    <span className="estado-espera ml-2 rounded-md bg-[var(--estado-fondo)] px-1.5 py-0.5 font-semibold text-[var(--estado-tinta)]">
+                      {l.disponible! > 0 ? `faltan ${formatearCantidad(faltan(l))}` : "sin stock acá"}
+                    </span>
+                  )}
                 </span>
               </span>
 
@@ -193,7 +214,7 @@ export function Lineas({
                     <PrecioDelRenglon
                       valor={l.precioUnitario}
                       alCambiar={(n) => cambiar(i, "precioUnitario", n)}
-                      aria-describedby={tocado ? `lista-${i}` : undefined}
+                      aria-describedby={tocado || oferta ? `lista-${i}` : undefined}
                       className={`tabular h-11 w-28 rounded-lg border bg-background px-2.5 text-right text-base ${
                         tocado ? "border-brand-orange font-semibold text-brand-orange" : "border-linea"
                       }`}
@@ -205,6 +226,14 @@ export function Lineas({
                       >
                         {formatearMonto(l.precioLista!)}
                       </span>
+                    )}
+                    {oferta && (
+                      <s
+                        id={`lista-${i}`}
+                        className="tabular absolute -bottom-4 right-1 text-xs text-muted-foreground"
+                      >
+                        {formatearMonto(l.precioAnterior!)}
+                      </s>
                     )}
                   </label>
                 </>

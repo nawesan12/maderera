@@ -63,7 +63,7 @@ export function AccionesDeFactura({
                 ? `Sale del libro IVA y la cuenta de ${proveedor} vuelve a como estaba antes de cargarla. Los ${formatearMonto(pagado)} que ya se le pagaron quedan a cuenta, para aplicarlos a otra factura.`
                 : `Sale del libro IVA y la cuenta de ${proveedor} vuelve a como estaba antes de cargarla. El número queda libre para cargar la correcta.`
             }
-            confirmar="Anular la factura"
+            confirmar={factura.tipo.startsWith("nota_") ? "Anular la nota" : "Anular la factura"}
             anular={(motivo) => anularFacturaDeCompra(factura.id, factura.supplierId, motivo)}
             alTerminar={setResultado}
           />

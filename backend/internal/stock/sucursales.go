@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/catalogo"
+	"mjbj/internal/ventas/fragmentos"
 )
 
 // MetricasDeSucursal son los números de cada sucursal para /admin/sucursales
@@ -43,12 +44,15 @@ func InicioDelDia(ahora time.Time) time.Time {
 }
 
 // MetricasPorSucursal es sucursalesConMetricas: ventas, pedidos y clientes
-// de hoy; pedidos abiertos; cortes en cola; el stock valuado a precio de
+// de hoy. «Vendido hoy» cuenta con la regla «venta_reconocida», como
+// Reportes: sumaba todo pedido tomado hoy y daba más que lo vendido en el mes
+// (mes simulado, M2S2-028). Además: pedidos abiertos; cortes en cola; el stock valuado a precio de
 // lista general; y cuántas medidas llegaron al mínimo.
 func (s *Servicio) MetricasPorSucursal(ctx context.Context, ahora time.Time) ([]MetricasDeSucursal, error) {
 	filas, err := s.pool.Query(ctx, `
 		SELECT b.id, b.slug, b.name, b.sort_order, b.active,
-		  coalesce(v.total, 0)::float8, coalesce(v.pedidos, 0), coalesce(v.clientes, 0),
+		  coalesce((SELECT sum(h.monto) FROM `+fragmentos.HechosDeVenta+` h WHERE h.branch_id = b.id AND h.fecha >= $1), 0)::float8,
+		  coalesce(v.pedidos, 0), coalesce(v.clientes, 0),
 		  coalesce((SELECT count(*)::int FROM orders o WHERE o.branch_id = b.id AND o.estado NOT IN ('entregado', 'cancelado')), 0),
 		  coalesce((SELECT count(*)::int FROM cutting_orders c WHERE c.branch_id = b.id AND c.estado IN ('en-cola', 'en-proceso')), 0),
 		  coalesce((SELECT sum(i.qty * pli.price) FROM inventory i
@@ -61,7 +65,7 @@ func (s *Servicio) MetricasPorSucursal(ctx context.Context, ahora time.Time) ([]
 		    WHERE i.branch_id = b.id AND `+catalogo.ReponerEnFila+`), 0)
 		FROM branches b
 		LEFT JOIN (
-		  SELECT branch_id, sum(total) AS total, count(*)::int AS pedidos,
+		  SELECT branch_id, count(*)::int AS pedidos,
 		    count(DISTINCT coalesce(customer_id::text, contacto_email, id::text))::int AS clientes
 		  FROM orders WHERE created_at >= $1 AND estado <> 'cancelado' GROUP BY branch_id
 		) v ON v.branch_id = b.id

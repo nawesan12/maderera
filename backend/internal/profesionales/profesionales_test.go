@@ -186,6 +186,29 @@ func (e *entorno) uno(t *testing.T, q string, args ...any) string {
 	return s
 }
 
+// M3S2-033: el freno cuenta por documento; cuatro personas desde la misma
+// conexión piden su cuenta sin chocar, y la misma persona sí se frena.
+func TestElFrenoEsPorDocumento(t *testing.T) {
+	e := armar(t)
+	anon := &http.Client{}
+	u := e.srv.URL + "/api/v1/profesionales/solicitud"
+	form := func(doc string) map[string]any {
+		return map[string]any{"nombre": "Ana Pérez", "documentoTipo": "dni", "documentoNumero": doc, "email": "ana@prueba.test",
+			"telefono": "0223 474-3328", "rubro": "carpintero"}
+	}
+	for _, doc := range []string{"30111222", "30111223", "30111224", "30111225"} {
+		if st, p := pedir(t, anon, "POST", u, form(doc)); st != 200 {
+			t.Fatalf("%s desde la misma conexión: %d %v", doc, st, p)
+		}
+	}
+	for i := 0; i < 2; i++ {
+		pedir(t, anon, "POST", u, form("30111222"))
+	}
+	if st, _ := pedir(t, anon, "POST", u, form("30111222")); st != 429 {
+		t.Fatalf("el mismo documento muchas veces: %d", st)
+	}
+}
+
 func TestSolicitudYAprobacion(t *testing.T) {
 	e := armar(t)
 	ven := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
@@ -196,15 +219,30 @@ func TestSolicitudYAprobacion(t *testing.T) {
 	// La solicitud pública: zod, y una pendiente por documento.
 	form := map[string]any{"nombre": "Ana Pérez", "documentoTipo": "cuit", "documentoNumero": "20-12345678-9", "email": "ana@prueba.test",
 		"telefono": "0223 474-3328", "rubro": "carpintero", "razonSocial": ""}
-	if st, p := pedir(t, anon, "POST", e.srv.URL+"/api/v1/profesionales/solicitud", form); st != 422 || primerError(p) != "Revisá el número: no coincide con el tipo de documento." {
+	if st, p := pedir(t, anon, "POST", e.srv.URL+"/api/v1/profesionales/solicitud", form); st != 422 || primerError(p) != "El CUIT no es válido: revisá el último número." {
 		t.Fatalf("CUIT mal: %d %v", st, p)
 	}
+	// M2S1-172: el verificador mal no es un problema de tipo; un DNI corto sí.
+	form["documentoTipo"], form["documentoNumero"] = "dni", "123"
+	if st, p := pedir(t, anon, "POST", e.srv.URL+"/api/v1/profesionales/solicitud", form); st != 422 || primerError(p) != "Revisá el número: no coincide con el tipo de documento." {
+		t.Fatalf("DNI corto: %d %v", st, p)
+	}
+	form["documentoTipo"] = "cuit"
 	form["documentoNumero"] = "20-12345678-6"
-	if st, p := pedir(t, anon, "POST", e.srv.URL+"/api/v1/profesionales/solicitud", form); st != 200 || p["ok"] != "Recibimos tu solicitud. Te contestamos dentro de las próximas 24 horas hábiles." {
+	if st, p := pedir(t, anon, "POST", e.srv.URL+"/api/v1/profesionales/solicitud", form); st != 200 || p["ok"] != "Recibimos tu solicitud. Un asesor la va a revisar." {
 		t.Fatalf("solicitud: %d %v", st, p)
 	}
 	if st, p := pedir(t, anon, "POST", e.srv.URL+"/api/v1/profesionales/solicitud", form); st != 200 || !strings.HasPrefix(p["ok"].(string), "Ya tenemos tu solicitud") {
 		t.Fatalf("la segunda: %d %v", st, p)
+	}
+	// Mes 23: con el mismo CUIT y otro correo no es «la tuya»: se dice.
+	otra := map[string]any{}
+	for k, v := range form {
+		otra[k] = v
+	}
+	otra["email"] = "otro@prueba.test"
+	if st, p := pedir(t, anon, "POST", e.srv.URL+"/api/v1/profesionales/solicitud", otra); st != 422 || !strings.HasPrefix(primerError(p), "Ese documento ya tiene una solicitud en revisión") {
+		t.Fatalf("de otro: %d %v", st, p)
 	}
 	if got := e.buzon.asuntos(); got != "ana@prueba.test: Recibimos tu solicitud de acceso profesional" {
 		t.Fatalf("acuse: %s", got)
@@ -389,10 +427,26 @@ func TestEventos(t *testing.T) {
 	if st, p := pedir(t, ven, "PUT", e.srv.URL+"/api/v1/admin/eventos/asistencia", map[string]any{"id": beto, "estado": "cancelada"}); st != 200 || p["ok"] != "Listo." {
 		t.Fatalf("cancelar a Beto: %d %v", st, p)
 	}
+	// M2S1-129: «vino» recién desde que empieza.
+	ana := as["_lista"].([]any)[0].(map[string]any)["id"].(string)
+	if st, p := pedir(t, ven, "PUT", e.srv.URL+"/api/v1/admin/eventos/asistencia", map[string]any{"id": ana, "estado": "asistio"}); st != 422 || p["detail"] != "La asistencia se toma desde que empieza el evento." {
+		t.Fatalf("vino antes del evento: %d %v", st, p)
+	}
+	// M2S1-130: el panel sabe que es de mañana y a cuántos les llega.
+	_, l = pedir(t, ven, "GET", e.srv.URL+"/api/v1/admin/eventos", nil)
+	for _, x := range l["_lista"].([]any) {
+		if x.(map[string]any)["id"] == id {
+			este = x.(map[string]any)
+		}
+	}
+	// Mes 23: sin la asistencia tomada no hay «asistentes», hay anotados.
+	if este["manana"] != true || este["porRecordar"] != 1.0 || este["empezo"] != false || este["sinMarcar"] != 1.0 || este["asistieron"] != 0.0 {
+		t.Fatalf("mañana y por recordar: %v", este)
+	}
 
 	// Los recordatorios: los de mañana, una sola vez.
 	e.buzon.mensajes = nil
-	if st, p := pedir(t, ven, "POST", e.srv.URL+"/api/v1/admin/eventos/recordatorios", nil); st != 200 || p["ok"] != "Salieron 1 recordatorio." {
+	if st, p := pedir(t, ven, "POST", e.srv.URL+"/api/v1/admin/eventos/recordatorios", nil); st != 200 || p["ok"] != "Salió 1 recordatorio." {
 		t.Fatalf("recordatorios: %d %v", st, p)
 	}
 	if got := e.buzon.asuntos(); got != "ana@prueba.test: Mañana te esperamos: Taller de Wood Frame" {
@@ -409,6 +463,49 @@ func TestEventos(t *testing.T) {
 	if st, _ := pedir(t, anon, "POST", e.srv.URL+"/api/v1/eventos/aviso-por-pago", map[string]any{"customerId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111"},
 		"Authorization", "Bearer "+secretoInterno); st != 200 {
 		t.Fatalf("aviso por pago: %d", st)
+	}
+}
+
+// M2S1-119 y M2S1-130: un borrador sin anotados se borra (uno con gente o
+// publicado, no), y un evento se recuerda desde su tarjeta, una vez.
+func TestBorrarYRecordarUnEvento(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	borrador := e.uno(t, `insert into events (slug, titulo, inicia, cupo, estado) values ('b', 'B', now() + interval '9 days', 3, 'borrador') returning id`)
+	conGente := e.uno(t, `insert into events (slug, titulo, inicia, cupo, estado) values ('c', 'C', now() + interval '9 days', 3, 'publicado') returning id`)
+	e.uno(t, `insert into event_registrations (event_id, nombre, email, estado) values ($1, 'Ana', 'ana@x.test', 'confirmada'), ($1, 'Beto', 'beto@x.test', 'asistio') returning id`, conGente)
+	if err := e.s.BorrarEvento(ctx, borrador); err != nil {
+		t.Fatalf("borrar el borrador: %v", err)
+	}
+	if err := e.s.BorrarEvento(ctx, conGente); err == nil {
+		t.Fatal("borró un evento publicado con gente")
+	}
+	// M3S4-038: el marcado «vino» antes de tiempo también recibe el recordatorio.
+	if n, err := e.s.RecordarEvento(ctx, conGente); err != nil || n != 2 {
+		t.Fatalf("recordar el evento: %d %v", n, err)
+	}
+	if n, _ := e.s.RecordarEvento(ctx, conGente); n != 0 {
+		t.Fatalf("se repitió: %d", n)
+	}
+}
+
+// M2S2-016: con el cobro en línea apagado, un evento pago no reserva lugar;
+// uno gratis se anota igual.
+func TestEventoPagoSinCobroEnLinea(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	pago := e.uno(t, `insert into events (slug, titulo, inicia, cupo, precio, estado) values ('pago', 'Pago', now() + interval '2 days', 3, 15000, 'publicado') returning id`)
+	gratis := e.uno(t, `insert into events (slug, titulo, inicia, cupo, estado) values ('gratis', 'Gratis', now() + interval '2 days', 3, 'publicado') returning id`)
+	e.s.PagoOnline = func() bool { return false }
+	if _, err := e.s.Anotar(ctx, Anotarse{EventID: pago, Nombre: "Persona", Email: "p@x.test"}, nil, nil, false); err == nil ||
+		!strings.Contains(err.Error()+primerErrorDe(err), "pago online no está disponible") {
+		t.Fatalf("se anotó a un evento pago sin cobro: %v", err)
+	}
+	if n := e.uno(t, `select count(*)::text from event_registrations where event_id = $1`, pago); n != "0" {
+		t.Fatalf("retuvo el lugar: %s", n)
+	}
+	if _, err := e.s.Anotar(ctx, Anotarse{EventID: gratis, Nombre: "Persona", Email: "p@x.test"}, nil, nil, false); err != nil {
+		t.Fatalf("el gratis: %v", err)
 	}
 }
 

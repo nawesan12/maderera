@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -20,7 +21,7 @@ import (
 // el rol de la bandeja.
 
 // Filtros de la bandeja.
-var Filtros = []string{"todas", "sin-leer", "mias", "sin-asignar", "resueltas"}
+var Filtros = []string{"todas", "sin-leer", "mias", "sin-asignar", "derivadas", "resueltas"}
 
 // ConversacionListada es una fila de la lista.
 type ConversacionListada struct {
@@ -40,6 +41,11 @@ type ConversacionListada struct {
 	AsignadoAUserID      *string    `json:"asignadoAUserId"`
 	AsignadoNombre       *string    `json:"asignadoNombre"`
 	Baja                 bool       `json:"baja"`
+	// ParaContestar: lo último lo escribió el cliente y el bot no va a
+	// contestar porque la charla es de una persona (derivada, asignada o con
+	// alguien que escribió desde el panel hace poco: botPuedeHablar). La
+	// bandeja no lo marcaba y el pedido de corte quedaba sin respuesta (mes 23).
+	ParaContestar bool `json:"paraContestar"`
 }
 
 // ListarConversaciones son las 150 más recientes del filtro.
@@ -56,10 +62,20 @@ func (s *Servicio) ListarConversaciones(ctx context.Context, filtro, usuarioID s
 		args = append(args, usuarioID)
 	case "sin-asignar":
 		cond += ` and c.asignado_a_user_id is null`
+	case "derivadas":
+		// Las que el bot pasó a una persona y nadie tomó: a donde lleva
+		// «conversación derivada sin asignar» del inicio (mes simulado,
+		// M3S2-020; «Sin asignar» abría también las que atiende el bot).
+		cond += ` and c.asignado_a_user_id is null and c.bot_estado = 'derivada'`
 	}
 	r, err := s.pool.Query(ctx, `
 		select c.id, c.wa_jid, c.display_name, c.customer_id, cu.nombre, cu.tipo::text, c.estado::text, c.ultimo_mensaje_at,
-		       c.ultimo_mensaje_preview, c.ultimo_entrante_at, c.no_leidos, c.asignado_a_user_id, u.name, c.baja_at is not null
+		       c.ultimo_mensaje_preview, c.ultimo_entrante_at, c.no_leidos, c.asignado_a_user_id, u.name, c.baja_at is not null,
+		       c.estado = 'abierta' and c.ultimo_entrante_at is not null and c.ultimo_entrante_at >= coalesce(c.ultimo_mensaje_at, c.ultimo_entrante_at)
+		         and (c.bot_estado <> 'activo' or c.asignado_a_user_id is not null or exists (
+		           select 1 from whatsapp_mensajes m where m.conversacion_id = c.id and m.direccion = 'saliente'
+		             and coalesce(m.origen, '') in ('panel', 'telefono', 'aviso') and m.ocurrido_at > now() - interval '12 hours'
+		             and m.ocurrido_at > coalesce(c.bot_devuelto_at, '-infinity'::timestamptz)))
 		  from whatsapp_conversaciones c
 		  left join customers cu on cu.id = c.customer_id
 		  left join "user" u on u.id = c.asignado_a_user_id
@@ -75,7 +91,7 @@ func (s *Servicio) ListarConversaciones(ctx context.Context, filtro, usuarioID s
 	for r.Next() {
 		var c ConversacionListada
 		if err := r.Scan(&c.ID, &c.WaJid, &c.DisplayName, &c.CustomerID, &c.ClienteNombre, &c.ClienteTipo, &c.Estado, &c.UltimoMensajeAt,
-			&c.UltimoMensajePreview, &c.UltimoEntranteAt, &c.NoLeidos, &c.AsignadoAUserID, &c.AsignadoNombre, &c.Baja); err != nil {
+			&c.UltimoMensajePreview, &c.UltimoEntranteAt, &c.NoLeidos, &c.AsignadoAUserID, &c.AsignadoNombre, &c.Baja, &c.ParaContestar); err != nil {
 			return nil, err
 		}
 		c.Nombre = oTexto(primero(c.ClienteNombre, c.DisplayName), "Sin identificar")
@@ -174,24 +190,29 @@ type DetalleConversacion struct {
 	BajaDetalle      *string    `json:"bajaDetalle"`
 	ResueltaAt       *time.Time `json:"resueltaAt"`
 	BotEstado        string     `json:"botEstado"`
-	ClienteNombre    *string    `json:"clienteNombre"`
-	ClienteTipo      *string    `json:"clienteTipo"`
+	// BotMotivo es por qué el bot la pasó a una persona (mes 23).
+	BotMotivo     *string `json:"botMotivo"`
+	ClienteNombre *string `json:"clienteNombre"`
+	ClienteTipo   *string `json:"clienteTipo"`
 	// ClienteLista es la lista de precios propia, si no es la general: el
 	// chip dice «Constructora» y no «Profesional» a todos (como el portal).
-	ClienteLista    *string              `json:"clienteLista"`
-	ClienteTelefono *string              `json:"clienteTelefono"`
-	ClienteEmail    *string              `json:"clienteEmail"`
-	ClienteLimite   *string              `json:"clienteLimite"`
-	ClienteEstado   *string              `json:"clienteEstado"`
-	Conocidos       map[string]string    `json:"conocidos"`
-	Nombre          string               `json:"nombre"`
-	SinNumero       bool                 `json:"sinNumero"`
-	VentanaAbierta  bool                 `json:"ventanaAbierta"`
-	Mensajes        []MensajeDeLaBandeja `json:"mensajes"`
-	Saldo           float64              `json:"saldo"`
-	LimiteCredito   float64              `json:"limiteCredito"`
-	Pedidos         []PedidoDelCliente   `json:"pedidos"`
-	Documentos      []DocumentoListado   `json:"documentos"`
+	ClienteLista    *string `json:"clienteLista"`
+	ClienteTelefono *string `json:"clienteTelefono"`
+	ClienteEmail    *string `json:"clienteEmail"`
+	ClienteLimite   *string `json:"clienteLimite"`
+	ClienteEstado   *string `json:"clienteEstado"`
+	// ClienteBloqueado: la cuenta corriente está bloqueada; el costado lo
+	// dice en vez del límite (M3S1-017).
+	ClienteBloqueado bool                 `json:"clienteBloqueado"`
+	Conocidos        map[string]string    `json:"conocidos"`
+	Nombre           string               `json:"nombre"`
+	SinNumero        bool                 `json:"sinNumero"`
+	VentanaAbierta   bool                 `json:"ventanaAbierta"`
+	Mensajes         []MensajeDeLaBandeja `json:"mensajes"`
+	Saldo            float64              `json:"saldo"`
+	LimiteCredito    float64              `json:"limiteCredito"`
+	Pedidos          []PedidoDelCliente   `json:"pedidos"`
+	Documentos       []DocumentoListado   `json:"documentos"`
 }
 
 // ObtenerConversacion es el detalle; nil si no existe.
@@ -202,14 +223,14 @@ func (s *Servicio) ObtenerConversacion(ctx context.Context, id string) (*Detalle
 	var d DetalleConversacion
 	err := s.pool.QueryRow(ctx, `
 		select c.id, c.wa_jid, c.display_name, c.customer_id, c.order_id, c.estado::text, c.notas, c.ultimo_entrante_at, c.no_leidos,
-		       c.asignado_a_user_id, c.baja_at, c.baja_detalle, c.resuelta_at, c.bot_estado,
+		       c.asignado_a_user_id, c.baja_at, c.baja_detalle, c.resuelta_at, c.bot_estado, c.bot_motivo,
 		       cu.nombre, cu.tipo::text, cu.telefono, cu.email, cu.limite_credito::text, cu.estado::text,
-		       CASE WHEN pl.is_default THEN NULL ELSE pl.name END
+		       CASE WHEN pl.is_default THEN NULL ELSE pl.name END, coalesce(cu.cuenta_bloqueada, false)
 		  from whatsapp_conversaciones c left join customers cu on cu.id = c.customer_id
 		  left join price_lists pl on pl.id = cu.price_list_id
 		 where c.id = $1`, id).Scan(&d.ID, &d.WaJid, &d.DisplayName, &d.CustomerID, &d.OrderID, &d.Estado, &d.Notas, &d.UltimoEntranteAt,
-		&d.NoLeidos, &d.AsignadoAUserID, &d.BajaAt, &d.BajaDetalle, &d.ResueltaAt, &d.BotEstado,
-		&d.ClienteNombre, &d.ClienteTipo, &d.ClienteTelefono, &d.ClienteEmail, &d.ClienteLimite, &d.ClienteEstado, &d.ClienteLista)
+		&d.NoLeidos, &d.AsignadoAUserID, &d.BajaAt, &d.BajaDetalle, &d.ResueltaAt, &d.BotEstado, &d.BotMotivo,
+		&d.ClienteNombre, &d.ClienteTipo, &d.ClienteTelefono, &d.ClienteEmail, &d.ClienteLimite, &d.ClienteEstado, &d.ClienteLista, &d.ClienteBloqueado)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -244,6 +265,31 @@ func (s *Servicio) ObtenerConversacion(ctx context.Context, id string) (*Detalle
 	}
 	if d.Saldo > 0 {
 		d.Conocidos["saldo"] = formato.Importe(d.Saldo)
+	}
+	// El último cheque rechazado de la ficha, para la plantilla «Cheque
+	// rechazado» (M3S3-029): había que tipear el banco, el número, el
+	// importe y el motivo que ya estaban cargados. Se dice como el aviso
+	// automático (notificaciones.ChequeRechazado). Van con el nombre de la
+	// plantilla adelante: el {{importe}} del recibo no es el del cheque.
+	if d.CustomerID != nil {
+		var tipo, numero string
+		var banco, motivo *string
+		var importe float64
+		err := s.pool.QueryRow(ctx, `select tipo::text, numero, banco, importe::float8, motivo_rechazo from cheques
+			where customer_id = $1 and estado = 'rechazado' order by updated_at desc, created_at desc limit 1`, *d.CustomerID).
+			Scan(&tipo, &numero, &banco, &importe, &motivo)
+		switch {
+		case err == nil:
+			d.Conocidos["cheque_rechazado:cheque"] = ChequeEnLaPlantilla(tipo, banco, numero)
+			d.Conocidos["cheque_rechazado:importe"] = formato.Importe(importe)
+			if motivo != nil && strings.TrimSpace(*motivo) != "" {
+				d.Conocidos["cheque_rechazado:motivo"] = strings.TrimSpace(*motivo)
+			} else {
+				d.Conocidos["cheque_rechazado:motivo"] = "lo rechazó el banco"
+			}
+		case !errors.Is(err, pgx.ErrNoRows):
+			return nil, err
+		}
 	}
 	d.Conocidos["fecha"] = FechaCorta(ahora)
 	d.Nombre = oTexto(primero(d.ClienteNombre, d.DisplayName), "Sin identificar")
@@ -395,7 +441,7 @@ func (s *Servicio) DocumentosDelCliente(ctx context.Context, customerID string) 
 				return d, err
 			}},
 		{`select d.id, d.numero, o.numero, d.created_at from deliveries d join orders o on o.id = d.order_id
-			where o.customer_id = $1 order by d.created_at desc limit 5`,
+			where o.customer_id = $1 and d.estado <> 'anulada' order by d.created_at desc limit 5`,
 			func(r pgx.Rows) (DocumentoListado, error) {
 				var d DocumentoListado
 				var numero, pedido string
@@ -414,7 +460,7 @@ func (s *Servicio) DocumentosDelCliente(ctx context.Context, customerID string) 
 				d.Tipo, d.Titulo, d.Descripcion, d.Detalle, d.Fecha = "recibo", "Recibo "+numero, "el recibo "+numero, formato.Importe(total), &f
 				return d, err
 			}},
-		{`select id, numero, created_at from cutting_orders where customer_id = $1 order by created_at desc limit 5`,
+		{`select id, numero, created_at from cutting_orders where customer_id = $1 and estado <> 'cancelado' order by created_at desc limit 5`,
 			func(r pgx.Rows) (DocumentoListado, error) {
 				var d DocumentoListado
 				var numero string
@@ -535,4 +581,18 @@ type GastoChico struct {
 	Tope       float64 `json:"tope"`
 	Proporcion float64 `json:"proporcion"`
 	Alcanzado  bool    `json:"alcanzado"`
+}
+
+// ChequeEnLaPlantilla es el cheque para la plantilla «cheque_rechazado», que ya dice
+// «el cheque {{cheque}}»: con el nombre entero quedaba «el cheque Cheque
+// Banco Nación N° …» (mes 23). La usan el aviso automático y la bandeja.
+func ChequeEnLaPlantilla(tipo string, banco *string, numero string) string {
+	var partes []string
+	if tipo == "echeq" {
+		partes = append(partes, "electrónico")
+	}
+	if banco != nil && strings.TrimSpace(*banco) != "" {
+		partes = append(partes, strings.TrimSpace(*banco))
+	}
+	return strings.Join(append(partes, "N° "+numero), " ")
 }

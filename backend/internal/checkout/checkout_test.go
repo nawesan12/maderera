@@ -69,6 +69,8 @@ func armar(t *testing.T) *entorno {
 	e.exec(t, `insert into price_list_items (price_list_id, variant_id, price) values ($1, $2, 84500), ($1, $3, 1200.50)`, lista, e.placa, e.tirante)
 	e.exec(t, `insert into variant_costs (variant_id, cantidad_base, costo_promedio) values ($1, 1, 40000.5)`, e.placa)
 	e.exec(t, `insert into inventory (variant_id, branch_id, qty) values ($1, $3, 100), ($2, $3, 100)`, e.placa, e.tirante, e.sucursal)
+	// Sin a dónde transferir la tienda no acepta transferencias (M3S1-016).
+	e.exec(t, `insert into datos_bancarios (banco, titular, cuit, cbu, alias) values ('Banco', 'MJBJ', '30-71234567-9', '0110000000000000000000', 'mjbj.madera')`)
 	return e
 }
 
@@ -173,7 +175,7 @@ func TestCarritoAnonimo(t *testing.T) {
 	}
 	// El primer agregar crea el carrito y la cookie.
 	code, b := pedir(t, c, "POST", u+"/items", map[string]any{"variantId": e.placa, "descripcion": "Fenólico 18 mm", "cantidad": 2})
-	if code != 200 || !strings.Contains(b, "va al presupuesto") {
+	if code != 200 || !strings.Contains(b, "va al carrito") {
 		t.Fatalf("agregar: %d %s", code, b)
 	}
 	req, _ := http.NewRequest("GET", e.srv.URL, nil)

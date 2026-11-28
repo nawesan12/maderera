@@ -34,3 +34,12 @@ func TestElNombreDelCircuito(t *testing.T) {
 		t.Errorf("interno: %q", reglas.Circuito(ctx, pool))
 	}
 }
+
+func TestElArchivoBCambiaConLaRegla(t *testing.T) {
+	if got := reglas.EnElTexto("$ 10,00 en el archivo B: la factura queda sola.", "interno"); got != "$ 10,00 en el archivo del circuito interno: la factura queda sola." {
+		t.Errorf("%q", got)
+	}
+	if got := reglas.EnElTexto("van al archivo B.", "b"); got != "van al archivo B." {
+		t.Errorf("con «b» no cambia: %q", got)
+	}
+}

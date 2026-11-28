@@ -2,6 +2,7 @@
 titulo: Productos, fotos y sugeridos
 resumen: Cargar un producto con sus medidas, subir fotos y armar las sugerencias que suben el ticket.
 orden: 7
+para: admin, vendedor
 ---
 
 ## Producto y medidas
@@ -23,7 +24,7 @@ Cada medida necesita:
 
 ## La unidad de venta
 
-Elija con cuidado: **es la unidad en la que se factura**. Si el machimbre se
+Elegí con cuidado: **es la unidad en la que se factura**. Si el machimbre se
 vende por metro cuadrado, la unidad es m² y el precio es por m². Cambiarla
 después de haber vendido deja los pedidos viejos con la unidad vieja.
 
@@ -46,7 +47,7 @@ Abajo de la ficha hay dos listas, y son dos preguntas distintas:
   ahorra al cliente un segundo viaje.
 - **Alternativas** — con qué se reemplaza si no convence o no hay stock.
 
-Se escriben en el buscador y se eligen de la lista. El orden es el que usted
+Se escriben en el buscador y se eligen de la lista. El orden es el que vos
 carga: primero lo que más se lleva.
 
 **Los complementos los tiene que cargar alguien.** Ninguna regla automática sabe

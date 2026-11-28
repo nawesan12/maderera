@@ -364,10 +364,18 @@ func leerGasto(m map[string]any) (FormGasto, error) {
 		x.Tipo = c.opcion("tipo", "", tiposComprobanteCompra...)
 		x.PuntoVenta = c.numero("puntoVenta", nil, entero(), minimo(0), maximo(99999))
 		x.Numero = c.numero("numero", nil, entero(), minimo(1))
+		// Una factura o una nota tiene su punto de venta: sin él quedaba
+		// «0000-00000345» en el libro IVA compras (mes 23). El ticket y el
+		// «otro» pueden no tenerlo.
+		if c.ok() && x.PuntoVenta < 1 && x.Tipo != "ticket" && x.Tipo != "otro" {
+			c.mal("puntoVenta", "Falta el punto de venta de la factura.")
+		}
 		x.Iva21 = c.numero("iva21", f(0), minimo(0))
 		x.Iva105 = c.numero("iva105", f(0), minimo(0))
 		x.Iva27 = c.numero("iva27", f(0), minimo(0))
 		x.Percepciones = c.numero("percepciones", f(0), minimo(0))
+		// El CAE del comprobante, como en la factura de compra (M2S2-039).
+		x.Cae = c.opcionalONulo("cae", 20)
 		if g.SupplierID == nil {
 			l.mal("supplierId", "Elegí a quién se le pagó: la factura es de un proveedor.")
 		}
@@ -382,6 +390,7 @@ func leerGasto(m map[string]any) (FormGasto, error) {
 // FacturaDelGasto es el comprobante de un gasto: el neto es el importe menos
 // el IVA y las percepciones.
 type FacturaDelGasto struct {
+	Cae                                *string
 	Tipo                               string
 	PuntoVenta, Numero                 float64
 	Iva21, Iva105, Iva27, Percepciones float64
@@ -439,6 +448,9 @@ type FormPago struct {
 	// del cheque) y las notas de crédito a favor que se descuentan.
 	Cheques        []Imputacion `json:"-"`
 	NotasDeCredito []string     `json:"-"`
+	// Los ajustes que subieron la deuda (un saldo inicial) que se pagan: el
+	// id es el del movimiento (M2S1-125).
+	Ajustes []Imputacion `json:"-"`
 }
 
 var mediosDePago = []string{"transferencia", "efectivo", "cheque", "echeq"}
@@ -465,6 +477,10 @@ func leerPago(m map[string]any) (FormPago, error) {
 	p.Cheques = []Imputacion{}
 	l.lista("cheques", true, 0, "", 30, func(_ int, e *lector) {
 		p.Cheques = append(p.Cheques, Imputacion{e.uuid("chequeId", ""), e.numero("importe", nil, minimo(0))})
+	})
+	p.Ajustes = []Imputacion{}
+	l.lista("ajustes", true, 0, "", 30, func(_ int, e *lector) {
+		p.Ajustes = append(p.Ajustes, Imputacion{e.uuid("movimientoId", ""), e.numero("importe", nil, minimo(0))})
 	})
 	p.NotasDeCredito = []string{}
 	if lista, ok := m["notasDeCredito"].([]any); ok {
@@ -599,6 +615,10 @@ type FilaAplicar struct {
 	VariantID      string  `json:"variantId"`
 	Costo          float64 `json:"costo"`
 	PrecioSugerido float64 `json:"precioSugerido"`
+	// CostoNeto es el de la planilla sin IVA; nil si no vino. Un
+	// PrecioSugerido 0 es «solo el costo»: sin margen escrito y sin costo
+	// anterior, el precio de venta no se toca.
+	CostoNeto *float64 `json:"costoNeto"`
 }
 
 // leerFilasAplicar es el z.array(...) de aplicarLista, sin coerción: los
@@ -618,10 +638,14 @@ func leerFilasAplicar(v any) ([]FilaAplicar, bool) {
 		variante, ok2 := m["variantId"].(string)
 		costo, ok3 := m["costo"].(float64)
 		precio, ok4 := m["precioSugerido"].(float64)
-		if !ok1 || !ok2 || !ok3 || !ok4 || !plataforma.UUIDValido(variante) || !(precio > 0) {
+		if !ok1 || !ok2 || !ok3 || !ok4 || !plataforma.UUIDValido(variante) || precio < 0 {
 			return nil, false
 		}
-		out = append(out, FilaAplicar{codigo, variante, costo, precio})
+		fila := FilaAplicar{Codigo: codigo, VariantID: variante, Costo: costo, PrecioSugerido: precio}
+		if n, ok := m["costoNeto"].(float64); ok && n > 0 {
+			fila.CostoNeto = &n
+		}
+		out = append(out, fila)
 	}
 	return out, true
 }

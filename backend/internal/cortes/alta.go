@@ -251,6 +251,21 @@ func (s *Servicio) Alta(ctx context.Context, ses *auth.Sesion, f FormCorte) (str
 	if len(piezas) == 0 {
 		return "", "", error422("Agregá al menos una pieza al despiece.")
 	}
+	// Un tapacanto sin ningún lado marcado no llega a ningún lado: el
+	// archivo, las etiquetas y el cobro salen de los lados de cada pieza, y
+	// «en frentes» quedaba solo en el texto (mes simulado, M2S2-044).
+	if canto != nil && strings.TrimSpace(*canto) != "" {
+		conCanto := false
+		for _, p := range piezas {
+			if p.cantoLargo > 0 || p.cantoAncho > 0 {
+				conCanto = true
+				break
+			}
+		}
+		if !conCanto {
+			return "", "", plataforma.Invalido(map[string]string{"cantoDescripcion": "Marcá en qué lados de cada pieza va el tapacanto, o dejalo vacío."})
+		}
+	}
 	// 500 renglones de 999 eran medio millón de piezas: el alta las
 	// guardaba y la ficha se colgaba armando el plano.
 	unidades := 0
@@ -363,6 +378,25 @@ func (s *Servicio) Alta(ctx context.Context, ses *auth.Sesion, f FormCorte) (str
 				return err
 			}
 		}
+		// El reemplazo hereda la hora del trabajo que corrige: su lugar en
+		// la cola y cuánto viene esperando el cliente. Corregir una etiqueta
+		// mandaba un urgente de media hora al final, como recién llegado
+		// (mes simulado, M2S2-104 y M3S4-023).
+		if f.Reemplaza != "" {
+			if _, err := tx.Exec(ctx, `UPDATE cutting_orders n SET created_at = v.created_at
+				FROM cutting_orders v WHERE n.id = $1 AND v.id = $2`, id, f.Reemplaza); err != nil {
+				return err
+			}
+			// La consulta de donde salió el corte corregido apunta al nuevo:
+			// abrirla decía «ya se pasó a corte: ver el CRT-5», el anulado
+			// (M2S1-197).
+			if _, err := tx.Exec(ctx, `UPDATE consultas_corte SET cutting_order_id = $1 WHERE cutting_order_id = $2`, id, f.Reemplaza); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `UPDATE consultas_corte_grupos SET cutting_order_id = $1 WHERE cutting_order_id = $2`, id, f.Reemplaza); err != nil {
+				return err
+			}
+		}
 		if f.Consulta != "" {
 			sql := `UPDATE consultas_corte SET cutting_order_id = $1
 				WHERE token = $2 AND cutting_order_id IS NULL`
@@ -388,7 +422,21 @@ func (s *Servicio) Alta(ctx context.Context, ses *auth.Sesion, f FormCorte) (str
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "corte", numero,
 		"Cargó el corte "+numero+" para "+contacto, nil)
+	s.tomarTotal(ctx, id)
 	return numero, id, nil
+}
+
+// tomarTotal guarda el total con que se toma el corte suelto, el que se le
+// dice al cliente: si la tarifa cambia, la ficha muestra los dos (M3S2-030).
+// Se vuelve a tomar cuando cambia el trabajo —las pasadas, el acomodo, el
+// disco—: con la tarifa igual, CRT-7 salía «$ 4.800» tachado y «$ 3.600»
+// solo por el acomodo a mano.
+func (s *Servicio) tomarTotal(ctx context.Context, id string) {
+	if f, err := s.Ficha(ctx, id); err == nil && f != nil && f.Modo == "suelto" && f.Cuenta.Total > 0 {
+		if _, err := s.pool.Exec(ctx, `UPDATE cutting_orders SET total_tomado = $2 WHERE id = $1`, id, jsmath.Num(f.Cuenta.Total)); err != nil {
+			s.log.Error("total tomado del corte", "error", err)
+		}
+	}
 }
 
 // planoDelAlta es el plano del corte que se está dando de alta, como lo va a
@@ -414,8 +462,12 @@ func (s *Servicio) planoDelAlta(ctx context.Context, f FormCorte, piezas []pieza
 		paraElPlano[i] = PiezaAcortar{LargoMm: float64(p.largo), AnchoMm: float64(p.ancho), Cantidad: float64(p.cantidad),
 			RespetaVeta: float64(p.veta), Etiqueta: p.etiqueta, CantoLargo: float64(p.cantoLargo), CantoAncho: float64(p.cantoAncho)}
 	}
-	return PlanoConLaHoja(DatosDelPlano{Piezas: paraElPlano, PlacaLargo: medida.Largo, PlacaAncho: medida.Ancho,
-		AnchoSierra: &sierra, Fijadas: LeerAcomodoManual(f.AcomodoManual)}), nil
+	plano := PlanoConLaHoja(DatosDelPlano{Piezas: paraElPlano, PlacaLargo: medida.Largo, PlacaAncho: medida.Ancho,
+		AnchoSierra: &sierra, Fijadas: LeerAcomodoManual(f.AcomodoManual)})
+	if f.VariantID == "" {
+		plano = ConPlacaDelCliente(plano)
+	}
+	return plano, nil
 }
 
 // placaDelPedido avisa si el corte de un pedido va en una placa que el pedido
@@ -774,10 +826,18 @@ func (s *Servicio) GuardarTarifa(ctx context.Context, ses *auth.Sesion, f FormTa
 	lista := opcional(f.PriceListID)
 	var err error
 	if f.ID != "" {
-		_, err = s.pool.Exec(ctx, `
+		// Guardar sin cambiar nada no toca la fila ni deja renglón en la
+		// bitácora (mes 23): quedaba «Corte de …» repetido por cada clic.
+		var tag pgconn.CommandTag
+		tag, err = s.pool.Exec(ctx, `
 			UPDATE cutting_rates SET material = $1, price_list_id = $2, precio_por_pasada = $3::numeric,
-				precio_por_metro_canto = $4::numeric, activo = $5, updated_at = $6 WHERE id = $7`,
+				precio_por_metro_canto = $4::numeric, activo = $5, updated_at = $6 WHERE id = $7
+			  AND (material, price_list_id, precio_por_pasada, precio_por_metro_canto, activo)
+			      IS DISTINCT FROM ($1, $2::uuid, $3::numeric, $4::numeric, $5)`,
 			material, lista, pp, pc, f.Activo, ahora, f.ID)
+		if err == nil && tag.RowsAffected() == 0 {
+			return nil
+		}
 	} else {
 		_, err = s.pool.Exec(ctx, `
 			INSERT INTO cutting_rates (material, price_list_id, precio_por_pasada, precio_por_metro_canto, activo, updated_at)
@@ -863,6 +923,12 @@ func (s *Servicio) GuardarSierra(ctx context.Context, ses *auth.Sesion, mm float
 		return error422(msg)
 	}
 	sierra := jsmath.Num(jsmath.Round(float64(mm*10)) / 10)
+	// Guardar el mismo ancho no deja renglón (mes simulado, M2S4-053).
+	var antes *jsmath.Num
+	_ = s.pool.QueryRow(ctx, `SELECT ancho_sierra_mm FROM calculator_settings LIMIT 1`).Scan(&antes)
+	if antes != nil && *antes == sierra {
+		return nil
+	}
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `UPDATE calculator_settings SET ancho_sierra_mm = $1, updated_at = now()`, sierra)
 		if err != nil || tag.RowsAffected() > 0 {

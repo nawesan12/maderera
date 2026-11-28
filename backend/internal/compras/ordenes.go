@@ -33,6 +33,9 @@ type OrdenListada struct {
 	// PorLlegar es el neto de lo que falta recibir: «en camino» no cuenta
 	// lo que ya llegó de una orden parcial (mes simulado).
 	PorLlegar float64 `json:"porLlegar"`
+	// Recibido es el neto de lo que ya llegó: el de una orden cerrada con
+	// faltante (M2S3-013).
+	Recibido float64 `json:"recibido"`
 }
 
 // ListarOrdenes es listarOrdenesDeCompra: las últimas, con el neto y los
@@ -40,14 +43,15 @@ type OrdenListada struct {
 func (s *Servicio) ListarOrdenes(ctx context.Context, limite int) ([]OrdenListada, error) {
 	filas, err := s.pool.Query(ctx, `
 		SELECT o.id, o.numero, o.estado::text, o.fecha_prometida, o.created_at, s.nombre, o.supplier_id, b.name,
-		  coalesce(t.lineas, 0), t.neto, coalesce(t.pendientes, 0), t.por_llegar
+		  coalesce(t.lineas, 0), t.neto, coalesce(t.pendientes, 0), t.por_llegar, t.recibido
 		FROM purchase_orders o
 		JOIN suppliers s ON s.id = o.supplier_id
 		LEFT JOIN branches b ON b.id = o.branch_id
 		LEFT JOIN (
 		  SELECT purchase_order_id, count(*)::int AS lineas, sum(cantidad * costo_unitario) AS neto,
 		    count(*) FILTER (WHERE cantidad_recibida < cantidad)::int AS pendientes,
-		    sum(greatest(cantidad - cantidad_recibida, 0) * costo_unitario) AS por_llegar
+		    sum(greatest(cantidad - cantidad_recibida, 0) * costo_unitario) AS por_llegar,
+		    sum(least(cantidad_recibida, cantidad) * costo_unitario) AS recibido
 		  FROM purchase_order_items GROUP BY purchase_order_id
 		) t ON t.purchase_order_id = o.id
 		ORDER BY o.created_at DESC LIMIT $1`, limite)
@@ -57,9 +61,11 @@ func (s *Servicio) ListarOrdenes(ctx context.Context, limite int) ([]OrdenListad
 	return pgx.CollectRows(filas, func(r pgx.CollectableRow) (OrdenListada, error) {
 		var o OrdenListada
 		var neto, porLlegar *jsmath.Num
-		err := r.Scan(&o.ID, &o.Numero, &o.Estado, &o.FechaPrometida, &o.CreatedAt, &o.Proveedor, &o.SupplierID, &o.Sucursal, &o.Lineas, &neto, &o.Pendientes, &porLlegar)
+		var recibido *jsmath.Num
+		err := r.Scan(&o.ID, &o.Numero, &o.Estado, &o.FechaPrometida, &o.CreatedAt, &o.Proveedor, &o.SupplierID, &o.Sucursal, &o.Lineas, &neto, &o.Pendientes, &porLlegar, &recibido)
 		o.Neto = numOCero(neto)
 		o.PorLlegar = numOCero(porLlegar)
+		o.Recibido = numOCero(recibido)
 		return o, err
 	})
 }
@@ -76,6 +82,18 @@ type RenglonDeOrden struct {
 	CostoUnitario    string `json:"costoUnitario"`
 	AlicuotaIva      string `json:"alicuotaIva"`
 	Orden            int32  `json:"orden"`
+	// CostoRecibido es el promedio con que llegó en las recepciones
+	// confirmadas de la orden: la ficha marca cuando no es el pedido
+	// ($ 40.400 → $ 41.500, M2S1-035).
+	CostoRecibido *string `json:"costoRecibido"`
+}
+
+// RecepcionDeLaOrden es un remito que llegó contra la orden.
+type RecepcionDeLaOrden struct {
+	ID           string    `json:"id"`
+	NumeroRemito *string   `json:"numeroRemito"`
+	Fecha        time.Time `json:"fecha"`
+	Estado       string    `json:"estado"`
 }
 
 // Orden es una orden con sus renglones.
@@ -95,6 +113,8 @@ type Orden struct {
 	// ficha lleva a corregir esa en vez de ofrecer recibir otra vez.
 	BorradorAbierto *BorradorDeOrden `json:"borradorAbierto"`
 	Items           []RenglonDeOrden `json:"items"`
+	// Recepciones son los remitos de la orden, con enlace (M2S1-035).
+	Recepciones []RecepcionDeLaOrden `json:"recepciones"`
 }
 
 // BorradorDeOrden es la recepción en borrador que salió de una orden.
@@ -121,12 +141,26 @@ func (s *Servicio) ObtenerOrden(ctx context.Context, id string) (*Orden, error) 
 		return nil, err
 	}
 	filas, err := s.pool.Query(ctx, `
-		SELECT id, purchase_order_id, variant_id, descripcion, cantidad::text, cantidad_recibida::text, costo_unitario::text, alicuota_iva::text, orden
-		FROM purchase_order_items WHERE purchase_order_id = $1 ORDER BY orden`, id)
+		SELECT i.id, i.purchase_order_id, i.variant_id, i.descripcion, i.cantidad::text, i.cantidad_recibida::text, i.costo_unitario::text,
+		  i.alicuota_iva::text, i.orden,
+		  (SELECT (sum(g.cantidad * g.costo_unitario) / nullif(sum(g.cantidad), 0))::numeric(14, 4)::text
+		   FROM goods_receipt_items g JOIN goods_receipts r ON r.id = g.receipt_id
+		   WHERE r.purchase_order_id = i.purchase_order_id AND r.estado = 'confirmada' AND g.variant_id = i.variant_id)
+		FROM purchase_order_items i WHERE i.purchase_order_id = $1 ORDER BY i.orden`, id)
 	if err != nil {
 		return nil, err
 	}
 	o.Items, err = pgx.CollectRows(filas, pgx.RowToStructByPos[RenglonDeOrden])
+	if err != nil {
+		return nil, err
+	}
+	filas, err = s.pool.Query(ctx, `
+		SELECT id, numero_remito, fecha, estado::text FROM goods_receipts
+		WHERE purchase_order_id = $1 AND estado <> 'borrador' ORDER BY fecha, created_at`, id)
+	if err != nil {
+		return nil, err
+	}
+	o.Recepciones, err = pgx.CollectRows(filas, pgx.RowToStructByPos[RecepcionDeLaOrden])
 	if err != nil {
 		return nil, err
 	}
@@ -233,12 +267,29 @@ func (s *Servicio) AnularOrden(ctx context.Context, ses *auth.Sesion, id, motivo
 	}
 	var numero string
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		err := tx.QueryRow(ctx, `
-			UPDATE purchase_orders SET estado = 'anulada', notas = coalesce(notas || ' · ', '') || $2 WHERE id = $1 RETURNING numero`,
-			id, "Anulada: "+motivo).Scan(&numero)
+		// Una orden de la que ya llegó algo no se anula: quedaba «Anulada»
+		// con todo su neto aunque la mercadería estaba en el depósito y
+		// facturada (M2S3-013, M2S1-138). Se cierra con faltante, y lo
+		// recibido se corrige anulando la recepción.
+		var estado string
+		var llego bool
+		err := tx.QueryRow(ctx, `SELECT estado::text, EXISTS (SELECT 1 FROM purchase_order_items WHERE purchase_order_id = $1 AND cantidad_recibida > 0)
+			FROM purchase_orders WHERE id = $1 FOR UPDATE`, id).Scan(&estado, &llego)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return fallo("Esa orden no existe.")
 		}
+		if err != nil {
+			return err
+		}
+		if estado == "anulada" {
+			return fallo("Esa orden ya está anulada.")
+		}
+		if llego || estado == "completa" {
+			return fallo("De esta orden ya llegó mercadería: cerrala con faltante o anulá la recepción.")
+		}
+		err = tx.QueryRow(ctx, `
+			UPDATE purchase_orders SET estado = 'anulada', notas = coalesce(notas || ' · ', '') || $2 WHERE id = $1 RETURNING numero`,
+			id, "Anulada: "+motivo).Scan(&numero)
 		if err != nil {
 			return err
 		}
@@ -253,6 +304,75 @@ func (s *Servicio) AnularOrden(ctx context.Context, ses *auth.Sesion, id, motivo
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCambiarEstado, "orden_compra", id, "Anuló "+numero+": "+motivo, nil)
 	return numero + " quedó anulada.", nil
+}
+
+// CerrarConFaltante deja completa una orden de la que llegó una parte y el
+// proveedor avisó que no tiene el resto (M2S3-013): sale de «en camino» y
+// el listado la muestra con lo que llegó. Los borradores de recepción que
+// tenía se anulan, como al anular.
+func (s *Servicio) CerrarConFaltante(ctx context.Context, ses *auth.Sesion, id, motivo string) (string, error) {
+	motivo = trimJS(motivo)
+	if !plataforma.UUIDValido(id) {
+		return "", fallo("Esa orden no existe.")
+	}
+	var numero string
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var estado string
+		err := tx.QueryRow(ctx, `SELECT estado::text, numero FROM purchase_orders WHERE id = $1 FOR UPDATE`, id).Scan(&estado, &numero)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return fallo("Esa orden no existe.")
+		}
+		if err != nil {
+			return err
+		}
+		if estado != "parcial" {
+			return fallo("Solo se cierra con faltante una orden de la que llegó una parte.")
+		}
+		nota := "Cerrada con faltante"
+		if motivo != "" {
+			nota += ": " + motivo
+		}
+		if _, err := tx.Exec(ctx, `UPDATE purchase_orders SET estado = 'completa', notas = coalesce(notas || ' · ', '') || $2 WHERE id = $1`,
+			id, nota); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `UPDATE goods_receipts SET estado = 'anulada', notas = coalesce(notas || ' · ', '') || $2
+			WHERE purchase_order_id = $1 AND estado = 'borrador'`, id, "Anulada al cerrar la orden con faltante")
+		return err
+	})
+	if err != nil {
+		return "", err
+	}
+	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCambiarEstado, "orden_compra", id, "Cerró "+numero+" con faltante"+
+		map[bool]string{true: ": " + motivo, false: ""}[motivo != ""], nil)
+	return numero + " quedó cerrada con lo que llegó.", nil
+}
+
+// CambiarFechaPrometida corrige la fecha prometida mientras la orden no llegó
+// entera (M3S4-020): una vez enviada no había forma de cargarla.
+func (s *Servicio) CambiarFechaPrometida(ctx context.Context, ses *auth.Sesion, id, fecha string) (string, error) {
+	if !plataforma.UUIDValido(id) {
+		return "", fallo("Esa orden no existe.")
+	}
+	var prometida *time.Time
+	if f := trimJS(fecha); f != "" {
+		p, err := fechaPrometidaDe(&f, time.Now())
+		if err != nil {
+			return "", err
+		}
+		prometida = p
+	}
+	var numero string
+	err := s.pool.QueryRow(ctx, `UPDATE purchase_orders SET fecha_prometida = $2 WHERE id = $1 AND estado IN ('borrador', 'enviada', 'parcial') RETURNING numero`,
+		id, prometida).Scan(&numero)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", fallo("A esa orden ya no se le cambia la fecha.")
+	}
+	if err != nil {
+		return "", err
+	}
+	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "orden_compra", id, "Cambió la fecha prometida de "+numero, nil)
+	return "Fecha guardada.", nil
 }
 
 // RecibirDeLaOrden es recibirDeLaOrden: una recepción en borrador con lo que

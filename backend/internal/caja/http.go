@@ -119,7 +119,55 @@ func (a *PanelAPI) TurnosCerrados(ctx context.Context, r cajaapi.TurnosCerradosR
 	if err != nil {
 		return nil, err
 	}
-	return okPanel(map[string]any{"filas": v, "total": total}), nil
+	primer, err := a.p.PrimerMes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return okPanel(map[string]any{"filas": v, "total": total, "primerMes": primer}), nil
+}
+
+func (o respuestaPanel) VisitCajasFuertesResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuestaPanel) VisitDepositarDeLaCajaFuerteResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuestaPanel) VisitAsignarReciboAlTurnoResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+
+func (a *PanelAPI) CajasFuertes(ctx context.Context, _ cajaapi.CajasFuertesRequestObject) (cajaapi.CajasFuertesResponseObject, error) {
+	if _, err := pantallaDeCaja(ctx); err != nil {
+		return nil, err
+	}
+	v, err := a.p.CajasFuertes(ctx)
+	return okPanel(v), err
+}
+
+func (a *PanelAPI) DepositarDeLaCajaFuerte(ctx context.Context, r cajaapi.DepositarDeLaCajaFuerteRequestObject) (cajaapi.DepositarDeLaCajaFuerteResponseObject, error) {
+	ses, err := pantallaDeCaja(ctx)
+	if err != nil {
+		return nil, err
+	}
+	motivo := ""
+	if r.Body.Motivo != nil {
+		motivo = *r.Body.Motivo
+	}
+	m, err := a.p.DepositarDeLaCajaFuerte(ctx, ses, r.Id, r.Body.Monto, motivo, r.Body.Clave)
+	if err != nil {
+		return nil, err
+	}
+	return okPanel(map[string]string{"ok": m}), nil
+}
+
+func (a *PanelAPI) AsignarReciboAlTurno(ctx context.Context, r cajaapi.AsignarReciboAlTurnoRequestObject) (cajaapi.AsignarReciboAlTurnoResponseObject, error) {
+	ses, err := pantallaDeCaja(ctx)
+	if err != nil {
+		return nil, err
+	}
+	m, err := a.p.AsignarReciboAlTurno(ctx, ses, r.Id, r.Body.SessionId)
+	if err != nil {
+		return nil, err
+	}
+	return okPanel(map[string]string{"ok": m}), nil
 }
 
 func (a *PanelAPI) ListarCajasFisicas(ctx context.Context, _ cajaapi.ListarCajasFisicasRequestObject) (cajaapi.ListarCajasFisicasResponseObject, error) {
@@ -195,8 +243,22 @@ func (a *PanelAPI) EmitidoPorCaja(ctx context.Context, r cajaapi.EmitidoPorCajaR
 		periodo = *r.Params.Periodo
 	}
 	desde, hasta := MesArgentino(periodo, a.ahora())
-	v, err := a.p.EmitidoPorCaja(ctx, desde, hasta)
-	return okPanel(v), err
+	limite, desplazamiento := 200, 0
+	if r.Params.Limite != nil {
+		limite = *r.Params.Limite
+	}
+	if r.Params.Desplazamiento != nil {
+		desplazamiento = *r.Params.Desplazamiento
+	}
+	v, err := a.p.EmitidoPorCaja(ctx, desde, hasta, limite, desplazamiento)
+	if err != nil {
+		return nil, err
+	}
+	resumen, err := a.p.ResumenEmitido(ctx, desde, hasta)
+	if err != nil {
+		return nil, err
+	}
+	return okPanel(map[string]any{"filas": v, "resumen": resumen}), nil
 }
 
 func (a *PanelAPI) AnulacionesPorPersona(ctx context.Context, r cajaapi.AnulacionesPorPersonaRequestObject) (cajaapi.AnulacionesPorPersonaResponseObject, error) {

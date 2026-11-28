@@ -13,6 +13,7 @@ import {
 } from "@/lib/etiquetas-de-medidas";
 import { CodigoDeBarras } from "@/components/admin/codigo-de-barras";
 import { BotonImprimir } from "@/app/(impresion)/ticket/[id]/boton";
+import { EscalaDeLaHoja } from "./escala";
 
 export const metadata: Metadata = {
   title: "Etiquetas",
@@ -77,6 +78,7 @@ async function Contenido({
 
   return (
     <div className="etiquetas-medidas">
+      <EscalaDeLaHoja />
       <style>{`
         ${pagina}
         .etiquetas-medidas { font-family: var(--font-sans, sans-serif); color: #000; background: #e9e6e1; min-height: 100vh; padding-bottom: 12mm; }
@@ -84,6 +86,9 @@ async function Contenido({
         .etiquetas-medidas .boton-imprimir { display: inline-flex; align-items: center; gap: 0.5rem; border-radius: 0.5rem; background: oklch(0.68 0.19 48); padding: 0.5rem 1.25rem; font-weight: 600; color: #fff; }
         .etiquetas-medidas .hoja { background: #fff; margin: 8mm auto; box-shadow: 0 2px 12px rgb(0 0 0 / 0.1); }
         .etiquetas-medidas .hoja.a4 { width: 210mm; padding: 15.1mm 7.2mm; display: grid; grid-template-columns: repeat(3, 63.5mm); grid-auto-rows: 38.1mm; column-gap: 2.5mm; }
+        @media screen { .etiquetas-medidas .hoja.a4 { zoom: var(--escala-hoja, 1); } }
+        @media screen and (max-width: 809px) { .etiquetas-medidas .hoja.a4 { zoom: var(--escala-hoja, 0.43); } }
+        @media screen and (max-width: 640px) { .etiquetas-medidas .barra { flex-wrap: wrap; padding: 0.75rem 1rem; } }
         .etiquetas-medidas .hoja.rollo { width: 50mm; height: 25mm; }
         .etiquetas-medidas .etiqueta { overflow: hidden; display: flex; flex-direction: column; padding: 2mm 3mm; break-inside: avoid; }
         .etiquetas-medidas .rollo .etiqueta { width: 50mm; height: 25mm; padding: 1.5mm 2mm; }
@@ -101,15 +106,19 @@ async function Contenido({
         .etiquetas-medidas .barras { margin-top: auto; width: 100%; }
         .etiquetas-medidas .a4 .barras { height: 13mm; }
         .etiquetas-medidas .rollo .barras { height: 9mm; }
-        .etiquetas-medidas .codigo { text-align: center; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; line-height: 1.1; }
-        .etiquetas-medidas .a4 .codigo { font-size: 8pt; }
-        .etiquetas-medidas .rollo .codigo { font-size: 6pt; }
+        .etiquetas-medidas .numero { margin-top: 0.8mm; text-align: center; color: #000; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; line-height: 1.1; }
+        .etiquetas-medidas .a4 .numero { font-size: 8pt; }
+        .etiquetas-medidas .rollo .numero { font-size: 6pt; }
+        /* La hoja es papel: siempre clara, aunque el panel esté en oscuro. */
+        :root { color-scheme: light; }
+        html, body { background: #e9e6e1; }
         @media print {
+          html, body { background: #fff !important; }
           .etiquetas-medidas { background: none; padding: 0; min-height: 0; }
           .etiquetas-medidas .barra { display: none; }
           .etiquetas-medidas .hoja { margin: 0; box-shadow: none; break-after: page; }
           .etiquetas-medidas .hoja:last-child { break-after: auto; }
-          .etiquetas-medidas .hoja.a4 { padding: 0; width: auto; }
+          .etiquetas-medidas .hoja.a4 { padding: 0; width: auto; zoom: 1; }
         }
       `}</style>
 
@@ -133,7 +142,10 @@ async function Contenido({
               {e.barras && (
                 <CodigoDeBarras modulos={e.barras.modulos} etiqueta={e.codigo} className="barras" />
               )}
-              <p className="codigo">{e.codigo}</p>
+              {/* No es el `.codigo` del panel: ese es una pastilla hundida que
+                  en oscuro salía como una banda negra pegada a las barras
+                  (mes simulado, M2S2-056, M3S1-056). */}
+              <p className="numero">{e.codigo}</p>
             </article>
           ))}
         </div>

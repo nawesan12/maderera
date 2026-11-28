@@ -108,6 +108,7 @@ paths:
                 tipo: { type: string }
                 monto: { type: string }
                 detalle: { type: string }
+                fecha: { type: string, description: "AAAA-MM-DD, si es de otro día; vacío es hoy" }
       responses:
         "200": { $ref: "#/components/responses/Ok" }
         "422": { $ref: "#/components/responses/Problema" }
@@ -128,6 +129,26 @@ paths:
                 cuentaWebId: { type: string }
       responses:
         "200": { $ref: "#/components/responses/Ok" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/clientes/{id}/invitacion:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: InvitarAlPortal
+      description: |
+        Le abre la cuenta web a un cliente cargado en el panel, con el correo
+        de la ficha, y le manda el link de activación (M2S1-097).
+      responses:
+        "200":
+          description: Lo que pasó y el link, para mandarlo también por WhatsApp
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, url]
+                properties:
+                  ok: { type: string }
+                  url: { type: string }
         "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/clientes/{id}/bloqueo:
     parameters:
@@ -374,6 +395,8 @@ paths:
                     tipo: { type: string }
                     cliente: { type: string, nullable: true }
                     circuito: { type: string, enum: [blanco, negro] }
+                    esperaCae: { type: boolean, description: de una venta con su factura esperando el CAE }
+                    trabado: { type: boolean, description: espera el CAE y la regla endoso_espera_cae no deja endosarlo }
   /api/v1/admin/cheques/{id}/estado:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string } }
@@ -846,7 +869,7 @@ components:
         fecha: { type: string, format: date-time }
         clase:
           type: string
-          enum: [compra, pago, nota_credito, nota_debito, ajuste, compra_contado, pago_en_revision, pago_rechazado, cheque_por_recibir, cheque, cheque_rechazado]
+          enum: [compra, pago, nota_credito, nota_debito, ajuste, compra_contado, pago_en_revision, pago_rechazado, cheque_por_recibir, cheque, cheque_rechazado, cheque_no_tomado]
         titulo: { type: string }
         detalle: { type: string, nullable: true }
         importe: { type: number, format: double, nullable: true }
@@ -862,14 +885,19 @@ components:
           required: [id, numero, anulado, porMercadoPago]
           properties: { id: { type: string }, numero: { type: string }, anulado: { type: boolean },
             porMercadoPago: { type: boolean, description: Una parte es un cobro de Mercado Pago aprobado; no se anula desde el panel },
-            chequeRechazado: { type: boolean } }
+            chequeRechazado: { type: boolean },
+            chequeDevuelto: { type: boolean, description: el cheque que volvió estaba en la cartera y se le devolvió al cliente } }
         cheques:
           type: array
           description: Los cheques del renglón que el banco todavía puede rechazar (H272)
           items:
             type: object
-            required: [id, nombre, importe]
-            properties: { id: { type: string }, nombre: { type: string }, importe: { type: number, format: double } }
+            required: [id, nombre, importe, devolver]
+            properties:
+              id: { type: string }
+              nombre: { type: string }
+              importe: { type: number, format: double }
+              devolver: { type: boolean, description: En la cartera y sin vencer, se devuelve al cliente }
     Historial:
       type: object
       required: [movimientos, hayMas, saldo]
@@ -1004,9 +1032,13 @@ components:
         recibo: { type: string, nullable: true }
         motivoRechazo: { type: string, nullable: true }
         saldoCliente: { type: number, format: double, nullable: true, description: lo que debe hoy el cliente (solo en los informados) }
+        noAceptado: { type: boolean, description: rechazado sin haberse aceptado (era informado) }
+        devuelto: { type: boolean, description: rechazado desde la cartera, devuelto al cliente }
+        esperaCae: { type: boolean, description: de una venta con su factura esperando el CAE }
+        clienteRazonSocial: { type: string, nullable: true, description: la razón social del cliente, para reconocer al librador }
     Gestion:
       type: object
-      required: [id, customerId, cliente, etapa, asunto, notas, proximaAccionAt, vencida, createdAt]
+      required: [id, customerId, cliente, etapa, asunto, notas, proximaAccionAt, vencida, paraHoy, createdAt]
       properties:
         id: { type: string }
         customerId: { type: string }
@@ -1015,5 +1047,7 @@ components:
         asunto: { type: string }
         notas: { type: string, nullable: true }
         proximaAccionAt: { type: string, format: date-time, nullable: true }
-        vencida: { type: boolean }
+        vencida: { type: boolean, description: "la próxima acción es de un día argentino que ya pasó" }
+        paraHoy: { type: boolean, description: "la próxima acción es de hoy (día argentino)" }
         createdAt: { type: string, format: date-time }
+        saldo: { type: number, format: double, description: "lo que debe el cliente en la cuenta (positivo, debe)" }

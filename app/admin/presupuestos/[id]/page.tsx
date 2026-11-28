@@ -11,11 +11,14 @@ import { AlertTriangle, FileDown } from "lucide-react";
 import { EncabezadoFicha } from "@/components/admin/encabezado-ficha";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { fechaCorta, formatearMonto } from "@/components/admin/formato";
-import { cantidadConUnidad } from "@/lib/formato";
+import { cantidadConUnidad, telefonoLegible } from "@/lib/formato";
 import { obtenerPresupuesto } from "@/lib/dal/admin/ventas";
 import { obtenerCliente } from "@/lib/dal/admin/clientes";
 import { AccionesPresupuesto, EnviarAlCliente } from "../acciones";
 import { zonasParaPedido } from "../zonas";
+import { escalasDePago } from "@/lib/dal/descuentos-pago";
+import { ajustesDelSitio } from "@/lib/dal/contenido";
+import { valorDeRegla } from "@/lib/reglas";
 
 /**
  * La ficha de un presupuesto.
@@ -37,11 +40,13 @@ export default async function FichaPresupuestoPage({
   const { id } = await params;
   const { pasar } = await searchParams;
   if (!esUuid(id)) notFound();
-  const [usuario, p, aviso, zonas] = await Promise.all([
+  const [usuario, p, aviso, zonas, escalas, ajustes] = await Promise.all([
     requireStaff(),
     obtenerPresupuesto(id),
     avisoManual("presupuesto_listo", { tipo: "quote", id }),
     zonasParaPedido(),
+    escalasDePago(),
+    ajustesDelSitio(),
   ]);
 
   if (!p) notFound();
@@ -56,6 +61,10 @@ export default async function FichaPresupuestoPage({
   // Un presupuesto rechazado o ya hecho pedido no se va a vender a ese
   // precio: el aviso del costo no tiene a quién servirle (mes simulado).
   const bajoCosto = abierto && !p.pedidoId ? p.items.filter((i) => i.bajoCosto).length : 0;
+  // Sobre qué va el descuento por forma de pago (lo mismo que Go): lo del
+  // catálogo, y con la regla, también lo cargado a mano.
+  const alFlete = valorDeRegla(ajustes, "descuento_al_flete") === "si";
+  const baseEscala = p.items.filter((i) => alFlete || i.variantId).reduce((t, i) => t + Number(i.subtotal), 0);
   const empresa = p.empresa && p.empresa !== p.cliente ? p.empresa : null;
 
   return (
@@ -68,6 +77,12 @@ export default async function FichaPresupuestoPage({
           <>
             <EtiquetaEstado estado={p.estado} />
             {p.vencido && p.estado !== "vencido" && <EtiquetaEstado estado="vencido" />}
+            {/* El motivo como etiqueta, junto al estado (M3S2-051). */}
+            {p.motivoRechazo && (
+              <span className="estado-cerrado rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-semibold text-[var(--estado-tinta)]">
+                {p.motivoRechazo}
+              </span>
+            )}
           </>
         }
         detalle={
@@ -75,7 +90,16 @@ export default async function FichaPresupuestoPage({
             {fechaCorta.format(p.createdAt)}
             {p.validoHasta && ` · vale hasta ${fechaCorta.format(p.validoHasta)}`}
             {p.sucursal && ` · ${p.sucursal}`}
-            {p.motivoRechazo && ` · se perdió por: ${p.motivoRechazo.toLowerCase()}`}
+            {/* Los pedidos que salieron de él y se cancelaron (M3S3-031). */}
+            {p.pedidosCancelados?.map((c, i) => (
+              <span key={c.id}>
+                {i === 0 ? " · " : ", "}
+                <Link href={`/admin/pedidos/${c.id}`} className="codigo hover:underline">
+                  {c.numero}
+                </Link>
+              </span>
+            ))}
+            {(p.pedidosCancelados?.length ?? 0) > 0 && ((p.pedidosCancelados?.length ?? 0) === 1 ? " cancelado" : " cancelados")}
           </>
         }
       />
@@ -119,6 +143,12 @@ export default async function FichaPresupuestoPage({
           abrirPasar={pasar === "1"}
           credito={credito}
           bajoCosto={bajoCosto}
+          escalas={escalas}
+          baseEscala={baseEscala}
+          sucursal={p.sucursalSlug}
+          renglones={p.items
+            .filter((i) => (i.disponible?.length ?? 0) > 0)
+            .map((i) => ({ descripcion: i.descripcion, cantidad: Number(i.cantidad), disponible: i.disponible ?? [] }))}
         />
       </section>
 
@@ -129,9 +159,15 @@ export default async function FichaPresupuestoPage({
             Mandárselo
           </h2>
           <div className="flex flex-wrap items-start gap-2">
-            {aviso && <AvisarPorWhatsapp aviso={aviso} atajo compacto />}
+            {/* Un solo PDF: el del aviso («PDF para adjuntar») y este iban al
+                mismo lugar (M2S1-188). */}
+            {aviso && <AvisarPorWhatsapp aviso={{ ...aviso, pdf: null }} atajo compacto />}
             <MandarPorWhatsapp tipo="presupuesto" id={p.id} />
-            {["pendiente", "revision"].includes(p.estado) && <EnviarAlCliente id={p.id} />}
+            {/* Mandado por WhatsApp sigue a mano: el cliente lo pide también
+                por mail (M2S1-098). */}
+            {["pendiente", "revision", "enviado"].includes(p.estado) && (
+              <EnviarAlCliente id={p.id} yaEnviado={p.estado === "enviado"} />
+            )}
             <a
               href={`/api/presupuestos/${p.id}/pdf`}
               className="inline-flex h-11 items-center gap-2 rounded-lg bg-hundida px-3.5 text-base font-medium transition-colors hover:bg-muted"
@@ -188,18 +224,20 @@ export default async function FichaPresupuestoPage({
                 total={Number(p.total)}
                 contacto={{ nombre: p.cliente, telefono: p.telefono }}
                 ficha={p.fichaPorCorreo}
+                delPanel={p.origen === "mostrador" || p.origen === "telefono"}
               />
             )}
             <dl className="space-y-1.5 text-base">
               <div className="flex justify-between gap-3">
                 <dt className="text-muted-foreground">Teléfono</dt>
-                <dd className="tabular">{p.telefono ?? "—"}</dd>
+                <dd className="tabular">{p.telefono ? telefonoLegible(p.telefono) : "—"}</dd>
               </div>
               <div className="flex justify-between gap-3">
                 <dt className="text-muted-foreground">Correo</dt>
                 {/* Entero, partido donde haga falta: cortado en la columna
-                    angosta no había forma de leerlo (mes simulado). */}
-                <dd className="min-w-0 break-all text-right">{p.email ?? "—"}</dd>
+                    angosta no había forma de leerlo (mes simulado). Sin el
+                    suyo, el de la ficha, que es al que sale (M2S1-183). */}
+                <dd className="min-w-0 break-all text-right">{p.email ?? p.emailFicha ?? "—"}</dd>
               </div>
               {p.asesor && (
                 <div className="flex justify-between gap-3">

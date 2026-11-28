@@ -212,7 +212,7 @@ type ChequeAReponer = components["schemas"]["FacturaConSaldo"];
 function Vence({ fecha }: { fecha: Date | null }) {
   if (!fecha) return <span className="text-muted-foreground">—</span>;
   const dias = diasHasta(fecha);
-  if (dias === 0) return <span className="font-semibold text-brand-orange-dark">Vence hoy</span>;
+  if (dias === 0) return <span className="font-semibold text-acento-sobre-claro">Vence hoy</span>;
   return (
     <span className={dias !== null && dias < 0 ? "font-semibold text-saldo-debe" : undefined}>
       {fechaCorta.format(fecha)}

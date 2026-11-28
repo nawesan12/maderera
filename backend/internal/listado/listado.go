@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"mjbj/internal/auth"
+	"mjbj/internal/busqueda"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
 )
@@ -137,10 +138,24 @@ func (c *Consulta) BusquedaFlexible(texto string, columnas []string, exacto ...s
 // PrimeroPalabrasEnteras es una expresión para ORDER BY … DESC: cuántas
 // palabras de la búsqueda arrancan una palabra de `expr`. Buscando «laca»,
 // la Laca va antes que las placas, que la contienen en el medio (H295).
+//
+// Y cuántas coinciden enteras, sin otra cifra pegada: buscando «MDF 18», el
+// «18» arrancaba también el «1830» de la placa de 3 mm, que salía primero y
+// Enter la elegía (mes simulado, M3S3-049). El «18mm» sí cuenta.
 func (c *Consulta) PrimeroPalabrasEnteras(texto, expr string) string {
 	var partes []string
 	for _, t := range Terminos(texto) {
-		partes = append(partes, "(f_unaccent("+expr+") ~* ('\\m' || f_unaccent("+c.Arg(regexp.QuoteMeta(t))+"::text)))::int")
+		// «2x4» no arranca ninguna palabra de «Tirante Pino 2" x 4"», y el
+		// machimbre de 1/2" x 4" lo contiene compactado: salía primero por
+		// el nombre y Enter lo elegía en Trasladar y Recibir (mes 23, como
+		// M3S3-049 con pulgadas). La medida entera vale por las dos.
+		if re, ok := busqueda.MedidaPorPor(t); ok {
+			partes = append(partes, "((f_unaccent("+expr+") ~* "+c.Arg(re)+")::int * 2)")
+			continue
+		}
+		arg := c.Arg(regexp.QuoteMeta(t))
+		partes = append(partes, "(f_unaccent("+expr+") ~* ('\\m' || f_unaccent("+arg+"::text)))::int",
+			"(f_unaccent("+expr+") ~* ('\\m' || f_unaccent("+arg+"::text) || '(?![0-9])'))::int")
 	}
 	if len(partes) == 0 {
 		// «0» a secas en un ORDER BY es «la columna cero»: un error.

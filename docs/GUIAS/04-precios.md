@@ -2,6 +2,7 @@
 titulo: Precios
 resumen: Editar un precio, aplicar un aumento a todo un rubro e importar una planilla sin romper la lista.
 orden: 4
+para: admin
 ---
 
 ## Dos listas
@@ -32,7 +33,7 @@ Botón **Ajuste masivo**. Se elige:
 - Un **motivo**, que es lo que se lee después en el historial.
 
 El ajuste se aplica en una sola operación sobre todo lo que entra en el filtro.
-Antes de confirmar, revise el filtro: un ajuste sin categoría toca el catálogo
+Antes de confirmar, revisá el filtro: un ajuste sin categoría toca el catálogo
 entero.
 
 Los ajustes masivos quedan en la bitácora.
@@ -46,7 +47,7 @@ Cuando el proveedor manda una lista nueva, se importa en vez de tipearla.
    nuevo, y en qué productos no encontró el código.
 3. Recién ahí se confirma.
 
-**Nunca se aplica nada antes de que usted mire la comparación.** Importar a
+**Nunca se aplica nada antes de que mires la comparación.** Importar a
 ciegas es la forma más rápida de arruinar una lista: basta una columna corrida
 o un archivo viejo.
 

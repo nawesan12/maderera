@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
 import { GraficoVentas } from "@/components/admin/grafico-ventas";
@@ -9,6 +10,7 @@ import {
 } from "@/lib/dal/admin/resumen";
 import type { resolverPeriodo } from "@/lib/periodos";
 import { MESES_PARA_EL_GRAFICO, mesesConVentas } from "@/lib/inicio";
+import { SaldoDelBanco } from "@/components/admin/saldo-del-banco";
 
 /**
  * Los números del negocio: lo que el dueño de una maderera pregunta cuando
@@ -91,7 +93,16 @@ export async function NumerosDelNegocio({
             debo.estaSemana > 0
               ? `${moneda.format(debo.estaSemana)} vence esta semana`
               : "Nada vence esta semana",
-            ...(debo.sinFactura > 0 ? [`${moneda.format(debo.sinFactura)} sin factura`] : []),
+            // Lo recibido con remito y sin factura es lo que hay que reclamar;
+            // el resto del libro sobre las facturas son saldos iniciales y
+            // ajustes, y llamarlo «sin factura» hacía buscar remitos que no
+            // había (mes simulado, M3S1-029).
+            debo.remitosSinFactura > 0 && {
+              texto: `${moneda.format(debo.remitosSinFactura)} en remitos sin factura`,
+              href: "/admin/recepciones?estado=sin-factura",
+            },
+            debo.sinFactura - debo.remitosSinFactura > 0.005 &&
+              `${moneda.format(debo.sinFactura - debo.remitosSinFactura)} en saldos y ajustes`,
           ]}
         />
         <Tarjeta
@@ -119,19 +130,24 @@ export async function NumerosDelNegocio({
                 )
               : ["Sin cajas abiertas"]),
             plata.cajaFuerte !== 0 && `Caja fuerte ${moneda.format(plata.cajaFuerte)}`,
-            // El banco es lo que se movió hoy, con su signo: lo que entró
-            // menos lo que se pagó (Go, PlataHoy). Sumaba solo lo cobrado.
-            (plata.bancoEntro !== 0 || plata.bancoSalio !== 0) &&
-              `Banco hoy ${conSigno(plata.banco)}`,
-            plata.bancoEntro !== 0 &&
-              plata.bancoSalio !== 0 &&
-              `Entró ${moneda.format(plata.bancoEntro)} · salió ${moneda.format(plata.bancoSalio)}`,
+            // Con un saldo cargado, el banco es plata que hay y suma (Go
+            // lleva el saldo con lo que entra y sale).
+            plata.bancoSaldo != null && `Banco ${moneda.format(plata.bancoSaldo)}`,
             plata.mercadoPago !== 0 && `Mercado Pago hoy ${moneda.format(plata.mercadoPago)}`,
             plata.cheques.cantidad > 0 && `Cheques en cartera ${moneda.format(plata.cheques.total)}`,
             plata.chequesDepositados.cantidad > 0 &&
               `Cheques depositados ${moneda.format(plata.chequesDepositados.total)}`,
             // De acá para abajo no suma al total: va separado, para que la
-            // cuenta de arriba cierre a la vista.
+            // cuenta de arriba cierre a la vista. Lo que se movió hoy en el
+            // banco es un movimiento, no plata que haya (M2S2-100): sumado,
+            // el primer día daba el total en negativo.
+            (plata.bancoEntro !== 0 || plata.bancoSalio !== 0) && {
+              texto:
+                plata.bancoEntro !== 0 && plata.bancoSalio !== 0
+                  ? `Banco hoy ${conSigno(plata.banco)} · entró ${moneda.format(plata.bancoEntro)}, salió ${moneda.format(plata.bancoSalio)}`
+                  : `Banco hoy ${conSigno(plata.banco)}`,
+              aparte: true,
+            },
             plata.tarjetas > 0 && {
               texto: `Tarjetas a acreditar ${moneda.format(plata.tarjetas)}`,
               aparte: true,
@@ -154,6 +170,11 @@ export async function NumerosDelNegocio({
               problema: true,
               href: "/admin/facturacion?estado=anulada-viva",
               aparte: true,
+            },
+            {
+              texto: "saldo-del-banco",
+              aparte: true,
+              nodo: <SaldoDelBanco cargado={plata.bancoSaldo != null} />,
             },
           ]}
         />
@@ -180,6 +201,9 @@ export async function NumerosDelNegocio({
               href: "/admin/reportes?corte=producto#ventas",
             },
             `Costo ${moneda.format(g.costo)} · gastos ${moneda.format(g.gastos)}`,
+            // El flete cobrado suma a la ganancia (sin IVA): sin el renglón,
+            // las cifras de la tarjeta no daban el resultado (M3S3-024).
+            g.envios > 0 && `Envíos cobrados sin IVA ${moneda.format(g.envios)}`,
             ganancia.anterior.resultado !== 0 &&
               `Mismo día del mes pasado ${moneda.format(ganancia.anterior.resultado)}`,
           ]}
@@ -316,7 +340,7 @@ function ElPersonal({ personas }: { personas: Persona[] }) {
 type Renglon =
   | string
   // aparte: no forma parte de la cifra grande; va debajo de una raya.
-  | { texto: string; problema?: boolean; href?: string; aparte?: boolean }
+  | { texto: string; problema?: boolean; href?: string; aparte?: boolean; nodo?: ReactNode }
   | false
   | null
   | undefined;
@@ -359,7 +383,7 @@ function Tarjeta({
       : variacion > 0
         ? ArrowUpRight
         : ArrowDownRight;
-  const visibles: { texto: string; problema?: boolean; href?: string; aparte?: boolean }[] =
+  const visibles: { texto: string; problema?: boolean; href?: string; aparte?: boolean; nodo?: ReactNode }[] =
     renglones.flatMap((r) => (!r ? [] : typeof r === "string" ? [{ texto: r }] : [r]));
   const primeroAparte = visibles.findIndex((r) => r.aparte);
   return (
@@ -405,7 +429,9 @@ function Tarjeta({
                 i === primeroAparte && i > 0 ? "!mt-3 border-t border-dashed border-linea pt-3" : ""
               }`}
             >
-              {r.href ? (
+              {r.nodo ? (
+                r.nodo
+              ) : r.href ? (
                 <Link
                   href={r.href}
                   className="relative z-10 underline decoration-current/30 underline-offset-4 hover:decoration-current"

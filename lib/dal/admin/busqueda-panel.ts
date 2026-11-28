@@ -4,7 +4,8 @@ import { api, datos } from "@/lib/api/servidor";
 
 /*
  * El buscador del panel lo resuelve la API de Go (backend/internal/buscador):
- * clientes, pedidos, presupuestos, comprobantes, cortes y proveedores, solo
+ * clientes, pedidos, presupuestos, comprobantes, recibos, remitos, cheques,
+ * productos, cortes y proveedores, solo
  * de las pantallas a las que entra el rol.
  */
 

@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useId, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { Confirmar } from "@/components/admin/confirmar";
 import { ETIQUETA_ROL, type RolStaff } from "@/lib/roles";
 import { cambiarPuesto, darDeAlta, darDeBaja, type EstadoPersonal } from "./actions";
@@ -26,12 +26,16 @@ interface Persona {
 export function FilaDePersona({ persona, esVos }: { persona: Persona; esVos: boolean }) {
   const [cambiando, empezar] = useTransition();
   const [confirmando, setConfirmando] = useState(false);
+  // Entrar o salir de Administración da o saca todo el panel: se confirma.
+  // Antes se aplicaba al soltar el desplegable (mes simulado, M2S1-132).
+  const [puestoAConfirmar, setPuestoAConfirmar] = useState<RolStaff | null>(null);
   const id = useId();
 
   function hacer(fn: () => Promise<EstadoPersonal>) {
     empezar(async () => {
       const r = await fn();
       setConfirmando(false);
+      setPuestoAConfirmar(null);
       if (r.error) toast.error(r.error);
       else toast.success(r.ok ?? "Listo.");
     });
@@ -54,7 +58,11 @@ export function FilaDePersona({ persona, esVos }: { persona: Persona; esVos: boo
             id={`${id}-rol`}
             value={persona.rol}
             disabled={cambiando}
-            onChange={(e) => hacer(() => cambiarPuesto(persona.id, e.target.value as RolStaff))}
+            onChange={(e) => {
+              const rol = e.target.value as RolStaff;
+              if (rol === "admin" || persona.rol === "admin") setPuestoAConfirmar(rol);
+              else hacer(() => cambiarPuesto(persona.id, rol));
+            }}
             className="h-11 min-w-0 flex-1 rounded-lg border bg-background px-2.5 text-base sm:flex-none"
           >
             {PUESTOS.map(([valor, texto]) => (
@@ -63,17 +71,37 @@ export function FilaDePersona({ persona, esVos }: { persona: Persona; esVos: boo
               </option>
             ))}
           </select>
+          {cambiando && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />}
           <button
             type="button"
             disabled={cambiando}
             onClick={() => setConfirmando(true)}
-            className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted disabled:opacity-60"
+            className="inline-flex h-11 shrink-0 items-center px-2 text-base text-destructive underline-offset-2 hover:underline disabled:opacity-60"
           >
-            {cambiando && <Loader2 className="h-4 w-4 animate-spin" />}
             Dar de baja
           </button>
         </div>
       )}
+      <Confirmar
+        abierto={puestoAConfirmar !== null}
+        alCerrar={() => setPuestoAConfirmar(null)}
+        titulo={
+          puestoAConfirmar === "admin"
+            ? `Pasar a ${persona.nombre} a ${ETIQUETA_ROL.admin}`
+            : `Sacar a ${persona.nombre} de ${ETIQUETA_ROL.admin}`
+        }
+        detalle={
+          puestoAConfirmar === "admin"
+            ? "Ve y cambia todo el panel, también precios, personal y reglas."
+            : "Deja de ver lo de Administración."
+        }
+        confirmar={puestoAConfirmar ? `Sí, ${ETIQUETA_ROL[puestoAConfirmar]}` : "Sí"}
+        pendiente={cambiando}
+        alConfirmar={() => {
+          const rol = puestoAConfirmar;
+          if (rol) hacer(() => cambiarPuesto(persona.id, rol));
+        }}
+      />
       <Confirmar
         abierto={confirmando}
         alCerrar={() => setConfirmando(false)}
@@ -93,6 +121,7 @@ const inicial: EstadoPersonal = {};
 /** El alta: nombre, correo, puesto y la contraseña con la que entra la primera vez. */
 export function FormularioDeAlta() {
   const [estado, enviar, enviando] = useActionState(darDeAlta, inicial);
+  const [verClave, setVerClave] = useState(false);
   const formulario = useRef<HTMLFormElement>(null);
   const id = useId();
 
@@ -141,16 +170,27 @@ export function FormularioDeAlta() {
         <label htmlFor={`${id}-clave`} className="block text-base font-medium">
           Contraseña inicial
         </label>
-        <input
-          id={`${id}-clave`}
-          name="clave"
-          type="text"
-          required
-          minLength={8}
-          autoComplete="new-password"
-          spellCheck={false}
-          className={CAMPO}
-        />
+        <div className="relative">
+          <input
+            id={`${id}-clave`}
+            name="clave"
+            type={verClave ? "text" : "password"}
+            required
+            minLength={8}
+            autoComplete="new-password"
+            spellCheck={false}
+            className={`${CAMPO} pr-12`}
+          />
+          <button
+            type="button"
+            onClick={() => setVerClave((v) => !v)}
+            aria-label={verClave ? "Ocultar la contraseña" : "Mostrar la contraseña"}
+            aria-pressed={verClave}
+            className="absolute right-1 top-1 flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground"
+          >
+            {verClave ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+          </button>
+        </div>
       </div>
       {estado.error && (
         <p role="alert" className="estado-problema text-base font-medium sm:col-span-2">

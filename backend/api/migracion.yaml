@@ -258,6 +258,8 @@ components:
         resumen: { type: string }
         errores: { type: array, items: { type: string } }
         avisos: { type: array, items: { type: string } }
+        actualiza: { type: boolean, description: La fila cae sobre una ficha que ya existe }
+        cambios: { type: array, items: { type: string }, description: «Domicilio — A → B», lo que le cambiaría }
     VistaPreviaDeMigracion:
       type: object
       properties:
@@ -265,6 +267,7 @@ components:
         validas: { type: integer }
         conAviso: { type: integer }
         conError: { type: integer }
+        actualizan: { type: integer, description: Las válidas que caen sobre una ficha que ya existe }
         muestra: { type: array, items: { $ref: "#/components/schemas/FilaPreviaDeMigracion" } }
         rechazos: { type: array, items: { $ref: "#/components/schemas/RechazoDeMigracion" } }
     LoteDeMigracion:

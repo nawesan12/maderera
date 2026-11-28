@@ -186,7 +186,8 @@ function Tarjeta({ producto }: { producto: ProductoAdmin }) {
         ) : (
           <span className="flex h-full flex-col items-center justify-center gap-1.5 text-muted-foreground">
             <ImageOff className="h-7 w-7" />
-            <span className="text-sm">Sin foto</span>
+            {/* Sin foto no entra al feed de Google Merchant (M2S2-094). */}
+            <span className="text-sm">Sin foto · no va a Google</span>
           </span>
         )}
 

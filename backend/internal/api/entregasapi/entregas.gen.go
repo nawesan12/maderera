@@ -188,13 +188,19 @@ type Problema struct {
 
 // RemitoCompleto defines model for RemitoCompleto.
 type RemitoCompleto struct {
-	ClienteDireccion  *string              `json:"clienteDireccion"`
-	ClienteNombre     string               `json:"clienteNombre"`
-	CreatedAt         time.Time            `json:"createdAt"`
-	CustomerId        *string              `json:"customerId"`
-	Estado            RemitoCompletoEstado `json:"estado"`
-	EstadoPago        string               `json:"estadoPago"`
-	Factura           *FacturaDelRemito    `json:"factura"`
+	ClienteCondicionIva *string              `json:"clienteCondicionIva,omitempty"`
+	ClienteCuit         *string              `json:"clienteCuit,omitempty"`
+	ClienteDireccion    *string              `json:"clienteDireccion"`
+	ClienteNombre       string               `json:"clienteNombre"`
+	ClienteRazonSocial  *string              `json:"clienteRazonSocial,omitempty"`
+	CreatedAt           time.Time            `json:"createdAt"`
+	CustomerId          *string              `json:"customerId"`
+	Estado              RemitoCompletoEstado `json:"estado"`
+	EstadoPago          string               `json:"estadoPago"`
+	Factura             *FacturaDelRemito    `json:"factura"`
+
+	// Final Se llevó lo último de un pedido que ya había salido en parte
+	Final             *bool                `json:"final,omitempty"`
 	FirmaUrl          *string              `json:"firmaUrl"`
 	FirmadoAt         *time.Time           `json:"firmadoAt"`
 	Id                string               `json:"id"`
@@ -245,14 +251,17 @@ type RemitoDeLaVisita struct {
 
 // RemitoDelPedido defines model for RemitoDelPedido.
 type RemitoDelPedido struct {
-	CantidadLineas    int                   `json:"cantidadLineas"`
-	CreatedAt         time.Time             `json:"createdAt"`
-	Estado            RemitoDelPedidoEstado `json:"estado"`
-	FirmaToken        *string               `json:"firmaToken"`
-	FirmadoAt         *time.Time            `json:"firmadoAt"`
-	Id                string                `json:"id"`
-	Numero            string                `json:"numero"`
-	NumeroSeguimiento *string               `json:"numeroSeguimiento"`
+	CantidadLineas int                   `json:"cantidadLineas"`
+	CreatedAt      time.Time             `json:"createdAt"`
+	Estado         RemitoDelPedidoEstado `json:"estado"`
+
+	// Final Se llevó lo último de un pedido que ya había salido en parte
+	Final             *bool      `json:"final,omitempty"`
+	FirmaToken        *string    `json:"firmaToken"`
+	FirmadoAt         *time.Time `json:"firmadoAt"`
+	Id                string     `json:"id"`
+	Numero            string     `json:"numero"`
+	NumeroSeguimiento *string    `json:"numeroSeguimiento"`
 
 	// Parcial Cuando se hizo quedaba algo por entregar (lo mismo que dice el PDF)
 	Parcial        bool    `json:"parcial"`
@@ -272,13 +281,16 @@ type RemitoDelPedidoTipo string
 
 // RemitoDelPortal defines model for RemitoDelPortal.
 type RemitoDelPortal struct {
-	CreatedAt      time.Time             `json:"createdAt"`
-	Estado         RemitoDelPortalEstado `json:"estado"`
-	FirmadoAt      *time.Time            `json:"firmadoAt"`
-	Id             string                `json:"id"`
-	Numero         string                `json:"numero"`
-	ReceptorNombre *string               `json:"receptorNombre"`
-	Tipo           RemitoDelPortalTipo   `json:"tipo"`
+	CreatedAt time.Time             `json:"createdAt"`
+	Estado    RemitoDelPortalEstado `json:"estado"`
+
+	// FirmaToken del remito preparado que espera la firma
+	FirmaToken     *string             `json:"firmaToken"`
+	FirmadoAt      *time.Time          `json:"firmadoAt"`
+	Id             string              `json:"id"`
+	Numero         string              `json:"numero"`
+	ReceptorNombre *string             `json:"receptorNombre"`
+	Tipo           RemitoDelPortalTipo `json:"tipo"`
 }
 
 // RemitoDelPortalEstado defines model for RemitoDelPortal.Estado.
@@ -298,6 +310,9 @@ type RemitoParaAvisar struct {
 	Email        *string `json:"email"`
 	EmailCliente *string `json:"emailCliente"`
 	EstadoPedido string  `json:"estadoPedido"`
+
+	// EstadoRemito preparada, entregada o anulada: el pedido de firma sale solo si sigue preparada
+	EstadoRemito *string `json:"estadoRemito,omitempty"`
 	FirmaToken   *string `json:"firmaToken"`
 	Nombre       string  `json:"nombre"`
 	Numero       string  `json:"numero"`
@@ -317,16 +332,25 @@ type RemitoPreparado struct {
 type RenglonDeAcopio struct {
 	Descripcion string `json:"descripcion"`
 
+	// EnCorte Los cortes sin terminar del renglón (en cola o en la máquina). Ausente si no tiene
+	EnCorte *string `json:"enCorte,omitempty"`
+
+	// EnCorteCantidad Lo pendiente que se lleva el corte, en la unidad del renglón: no sale hasta que se termine. El resto sale sin cortar
+	EnCorteCantidad *float64 `json:"enCorteCantidad,omitempty"`
+
 	// EnElGalpon Lo que hay en el estante de la sucursal de donde sale
 	EnElGalpon *float64 `json:"enElGalpon,omitempty"`
 
 	// Enteros El producto no se fracciona; sale entero (salvo exactamente lo pendiente). Ausente es falso
-	Enteros     *bool   `json:"enteros,omitempty"`
-	Entregado   float64 `json:"entregado"`
-	OrderItemId string  `json:"orderItemId"`
-	Pedido      float64 `json:"pedido"`
-	Pendiente   float64 `json:"pendiente"`
-	Unidad      string  `json:"unidad"`
+	Enteros   *bool   `json:"enteros,omitempty"`
+	Entregado float64 `json:"entregado"`
+
+	// GalponEnStock Lo mismo en la unidad del stock (placas enteras), cuando el renglón es una presentación (media placa). Ausente si es la misma
+	GalponEnStock *float64 `json:"galponEnStock,omitempty"`
+	OrderItemId   string   `json:"orderItemId"`
+	Pedido        float64  `json:"pedido"`
+	Pendiente     float64  `json:"pendiente"`
+	Unidad        string   `json:"unidad"`
 }
 
 // ZonaDeEnvioDelPanel defines model for ZonaDeEnvioDelPanel.
@@ -2165,63 +2189,67 @@ func (sh *strictHandler) RemitoPdf(w http.ResponseWriter, r *http.Request, id st
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"oZl1b5X2GsHF6dmno7H5/N8DAA==",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -23,8 +23,9 @@ func TestLaBusquedaPoneElNombrePrimeroYTraeElPiso(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(r) < 2 || r[0].VariantID != variante {
-		t.Fatalf("la laca no va primero: %+v", r)
+	// Y las placas no aparecen: «laca» es la mitad de «placa» (M2S1-187).
+	if len(r) != 1 || r[0].VariantID != variante {
+		t.Fatalf("la laca sola: %+v", r)
 	}
 
 	r, err = e.svc.Buscar(ctx, "fenolico", e.central, nil)

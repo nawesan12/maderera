@@ -305,8 +305,9 @@ self.addEventListener("push", (evento) => {
   evento.waitUntil(
     self.registration.showNotification(aviso.titulo ?? "Maderera Juan B. Justo", {
       body: aviso.cuerpo ?? "",
-      icon: "/mostrador/icono-192.png",
-      badge: "/mostrador/icono-192.png",
+      // Los avisos de venta son del Panel: con su ícono (M3S1-033).
+      icon: "/panel/icono-192.png",
+      badge: "/panel/icono-192.png",
       // La etiqueta agrupa: tres ventas seguidas no dejan tres notificaciones
       // apiladas, la última reemplaza a la anterior.
       tag: aviso.etiqueta ?? "mjbj",

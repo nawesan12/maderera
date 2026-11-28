@@ -566,11 +566,10 @@ func TestBajaDeUnaFacturaFiada(t *testing.T) {
 	admin := e.staff(t, "admin@mjbj.test", sqlc.StaffRoleAdmin)
 	cliente := conFichaDeGomez(t, e)
 	id := emitirA(t, e, admin, "12100")
-	st, b := pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes/"+id+"/cobros",
-		map[string]string{"modo": "cuenta_corriente", "monto": "12100"})
-	if st != 200 {
-		t.Fatalf("pasar a cuenta: %d %s", st, b)
-	}
+	// La manual a un cliente con ficha ya nace en la cuenta (M3S4-008); el
+	// pase de antes, el de las facturas que se pasaban a mano, queda como
+	// cobro «cuenta_corriente».
+	e.exec(t, `INSERT INTO invoice_payments (invoice_id, medio, monto) VALUES ($1, 'cuenta_corriente', 12100)`, id)
 	// Ya en la cuenta, no se pasa otra vez.
 	if st, b := pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes/"+id+"/cobros",
 		map[string]string{"modo": "cuenta_corriente", "monto": "12100"}); st != 422 {

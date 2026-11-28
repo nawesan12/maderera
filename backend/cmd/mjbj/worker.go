@@ -22,6 +22,7 @@ import (
 	"mjbj/internal/pagos"
 	"mjbj/internal/pedidos"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/precios"
 	"mjbj/internal/productos"
 	"mjbj/internal/profesionales"
 	"mjbj/internal/push"
@@ -70,7 +71,7 @@ func correrWorker() error {
 		}
 		avisos.Avisar(ctx, push.Aviso{
 			Titulo: "Un trabajo automático no se pudo hacer", Cuerpo: tipo + ": " + mensaje,
-			URL: "/admin/sistema", Etiqueta: "trabajo-fallido",
+			URL: "/admin/sistema", Etiqueta: "trabajo-fallido", Pantalla: "/admin/sistema", // la pantalla existe desde M2S2-061
 		})
 	}
 	c.Registrar(revalidar.Tipo, revalidar.Manejador(cfg.Revalidar))
@@ -114,7 +115,7 @@ func correrWorker() error {
 				}
 				avisos.Avisar(ctx, push.Aviso{
 					Titulo: titulo, Cuerpo: "No se venden, no tienen stock o no tienen precio. Revisá si se dan de baja.",
-					URL: "/admin/productos/candidatos", Etiqueta: "candidatos-baja",
+					URL: "/admin/productos/candidatos", Etiqueta: "candidatos-baja", Pantalla: "/admin/productos",
 				})
 			}
 			return map[string]any{"candidatosDeBaja": len(c)}, nil
@@ -138,6 +139,16 @@ func correrWorker() error {
 			return map[string]any{"invalidadas": 2}, err
 		},
 	}, tareas.Tarea{
+		// Las ofertas que vencieron vuelven al precio de antes (M2S2-030).
+		Nombre: "vencer-ofertas", Frecuencia: tareas.Hora,
+		Ejecutar: func(ctx context.Context) (map[string]any, error) {
+			n, err := precios.Nuevo(pool, log).VencerOfertas(ctx)
+			if err == nil && n > 0 {
+				err = revalidar.Encolar(ctx, q, revalidar.Aviso{Etiquetas: []string{"catalogo"}})
+			}
+			return map[string]any{"vencidas": n}, err
+		},
+	}, tareas.Tarea{
 		// El parte del día al panel (lo pendiente del admin, lo urgente
 		// primero) y la limpieza de las tablas que crecen solas.
 		Nombre: "parte-y-limpieza", Frecuencia: tareas.Dia, DesdeHora: 7,
@@ -152,30 +163,8 @@ func correrWorker() error {
 			if err != nil {
 				return nil, err
 			}
-			if len(filas) > 0 {
-				var urgentes []reportes.Pendiente
-				for _, f := range filas {
-					if f.Urgente {
-						urgentes = append(urgentes, f)
-					}
-				}
-				primeras := filas
-				titulo := "Para hoy en la maderera"
-				if len(urgentes) > 0 {
-					primeras = urgentes
-					titulo = "Para hoy: " + strconv.Itoa(len(urgentes)) + " cosas urgentes"
-					if len(urgentes) == 1 {
-						titulo = "Para hoy: 1 cosa urgente"
-					}
-				}
-				if len(primeras) > 3 {
-					primeras = primeras[:3]
-				}
-				var partes []string
-				for _, f := range primeras {
-					partes = append(partes, strconv.Itoa(f.Cantidad)+" "+f.Texto)
-				}
-				avisos.Avisar(ctx, push.Aviso{Titulo: titulo, Cuerpo: strings.Join(partes, " · "), URL: "/admin", Etiqueta: "parte-del-dia"})
+			if aviso, ok := avisoDelParte(filas); ok {
+				avisos.Avisar(ctx, aviso)
 			}
 			limpias, err := limites.Nuevo(q, log).LimpiarViejas(ctx)
 			if err != nil {
@@ -321,4 +310,37 @@ func correrWorker() error {
 			}
 		}
 	}
+}
+
+// avisoDelParte es el push «Para hoy» con lo pendiente del admin, lo urgente
+// primero. Va solo a los dispositivos del admin: sin rol salía a todos, y
+// el aserradero recibía los cobros y las facturas de la dueña (mes 23).
+func avisoDelParte(filas []reportes.Pendiente) (push.Aviso, bool) {
+	if len(filas) == 0 {
+		return push.Aviso{}, false
+	}
+	var urgentes []reportes.Pendiente
+	for _, f := range filas {
+		if f.Urgente {
+			urgentes = append(urgentes, f)
+		}
+	}
+	primeras := filas
+	titulo := "Para hoy en la maderera"
+	if len(urgentes) > 0 {
+		primeras = urgentes
+		titulo = "Para hoy: " + strconv.Itoa(len(urgentes)) + " cosas urgentes"
+		if len(urgentes) == 1 {
+			titulo = "Para hoy: 1 cosa urgente"
+		}
+	}
+	if len(primeras) > 3 {
+		primeras = primeras[:3]
+	}
+	var partes []string
+	for _, f := range primeras {
+		partes = append(partes, strconv.Itoa(f.Cantidad)+" "+f.Texto)
+	}
+	return push.Aviso{Titulo: titulo, Cuerpo: strings.Join(partes, " · "), URL: "/admin", Etiqueta: "parte-del-dia",
+		Roles: []sqlc.StaffRole{sqlc.StaffRoleAdmin}}, true
 }

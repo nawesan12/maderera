@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { BellOff, MessageSquarePlus, Search } from "lucide-react";
+import { BellOff, BotOff, MessageSquarePlus, Search } from "lucide-react";
 import { haceCuanto, jidCorto } from "./formato-wa";
 import { Hilo } from "./hilo";
 import { PanelCliente } from "./panel-cliente";
@@ -23,6 +23,7 @@ const FILTROS: { valor: FiltroBandeja; texto: string; contador?: "sinLeer" | "mi
   { valor: "sin-leer", texto: "Sin leer", contador: "sinLeer" },
   { valor: "mias", texto: "Mías", contador: "mias" },
   { valor: "sin-asignar", texto: "Sin asignar", contador: "sinAsignar" },
+  { valor: "derivadas", texto: "Derivadas" },
   { valor: "resueltas", texto: "Resueltas" },
 ];
 
@@ -49,6 +50,7 @@ export function Bandeja({
   pantallaCompleta = false,
   gasto = null,
   mensajes = null,
+  botApagado = false,
 }: {
   conversaciones: ConversacionListada[];
   detalle: DetalleConversacion | null;
@@ -63,6 +65,8 @@ export function Bandeja({
   gasto?: { usd: number; tope: number; proporcion: number; alcanzado: boolean } | null;
   /** Los mensajes del mes contra el tope (el bot ahorra desde el 80 %). */
   mensajes?: { usados: number; tope: number; ahorro: boolean; alcanzado: boolean } | null;
+  /** El bot está apagado en la configuración: nadie contesta solo. */
+  botApagado?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -181,7 +185,14 @@ export function Bandeja({
               {gasto.alcanzado ? " · tope alcanzado: contestá desde el teléfono" : " · desde el teléfono es gratis"}
             </p>
           )}
-          {mensajes && (
+          {/* Fija, para que nadie espere una respuesta del bot (M2S1-101). */}
+          {botApagado && (
+            <p className="estado-espera inline-flex w-fit items-center gap-1.5 rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)]" data-bot-apagado>
+              <BotOff className="h-4 w-4" aria-hidden="true" />
+              Bot apagado
+            </p>
+          )}
+          {mensajes && !botApagado && (
             <p
               className={`text-sm ${mensajes.alcanzado ? "estado-problema font-medium text-[var(--estado-tinta)]" : mensajes.ahorro ? "estado-espera font-medium text-[var(--estado-tinta)]" : "text-muted-foreground"}`}
               data-mensajes-whatsapp
@@ -204,7 +215,7 @@ export function Bandeja({
                   ? "No hay conversaciones resueltas."
                   : filtro === "mias"
                     ? "No tenés conversaciones asignadas."
-                    : filtro === "sin-leer" || filtro === "sin-asignar"
+                    : filtro === "sin-leer" || filtro === "sin-asignar" || filtro === "derivadas"
                       ? "Nada por acá: está todo atendido."
                       : "Todavía no entró ningún mensaje."}
             </li>
@@ -254,6 +265,9 @@ export function Bandeja({
                       </span>
 
                       <span className="mt-1 flex flex-wrap gap-1.5">
+                        {/* El bot calla porque la atiende una persona: si no
+                            se marca, el pedido queda sin respuesta (mes 23). */}
+                        {c.paraContestar && <Pildora atencion>Para contestar</Pildora>}
                         {!c.customerId && <Pildora>Sin ficha</Pildora>}
                         {c.asignadoAUserId && (
                           <Pildora>{c.asignadoAUserId === usuarioId ? "La atendés vos" : c.asignadoNombre}</Pildora>
@@ -306,11 +320,23 @@ export function Bandeja({
   );
 }
 
-function Pildora({ children, verde = false }: { children: React.ReactNode; verde?: boolean }) {
+function Pildora({
+  children,
+  verde = false,
+  atencion = false,
+}: {
+  children: React.ReactNode;
+  verde?: boolean;
+  atencion?: boolean;
+}) {
   return (
     <span
       className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-sm ring-1 ring-inset ${
-        verde ? "text-saldo-favor ring-saldo-favor/30" : "text-muted-foreground ring-border"
+        atencion
+          ? "estado-problema bg-[var(--estado-fondo)] font-semibold text-[var(--estado-tinta)] ring-transparent"
+          : verde
+            ? "text-saldo-favor ring-saldo-favor/30"
+            : "text-muted-foreground ring-border"
       }`}
     >
       {children}

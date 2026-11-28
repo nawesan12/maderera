@@ -655,6 +655,10 @@ export interface components {
             orderId: string;
             numeroPedido: string;
             yaResenado: boolean;
+            /** @description las medidas que compró de ese producto en ese pedido */
+            medida: string;
+            /** @description pendiente, publicada o rechazada; vacío si no la dejó */
+            estadoResena: string;
         };
         Ajuste: {
             clave: string;
@@ -1570,7 +1574,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Los slugs de los que no son borrador, los más nuevos primero */
+            /** @description Los slugs de los publicados o cerrados que no pasaron, el más cercano primero */
             200: {
                 headers: {
                     [name: string]: unknown;

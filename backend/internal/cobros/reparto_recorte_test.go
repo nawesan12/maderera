@@ -53,7 +53,7 @@ const ramaDelReciboDeAntes = `SELECT ` + claveDeRecibo + `, r.created_at, 2, r.i
               WHERE x.receipt_id = r.id AND ch.circuito = 'negro'), 0) ELSE 0 END::float8,
     cardinality(pend.destinos) > 0,
     r.reparto_deudores::float8, r.reparto_anticipo::float8, r.reparto_b::float8, '', 0, 0, r.recibido_de,
-    pend.destinos, pend.por_facturar, ''
+    pend.destinos, pend.por_facturar, '', ` + columnasDelRecibo + `
   FROM receipts r CROSS JOIN LATERAL (` + pendientesDeAntes + `) pend
   WHERE r.created_at <= $1 AND {R}`
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, MapPin, X } from "lucide-react";
 import { toast } from "sonner";
@@ -35,11 +35,28 @@ export function DestinosDocumento({
   const [buscando, empezarBusqueda] = useTransition();
   const [guardando, empezar] = useTransition();
 
-  const total = iniciales.length + elegidasIniciales.length;
+  // Lo guardado, sin esperar a que vuelva la página: después de «Guardar» la
+  // tarjeta seguía en «Mostrar en fichas» hasta recargar (mes 23). Si la
+  // página trae otra cosa, la tarjeta se vuelve a montar (key en page.tsx).
+  const [total, setTotal] = useState(iniciales.length + elegidasIniciales.length);
+  // Solo vale la respuesta de lo último que se tipeó: una búsqueda vieja que
+  // llegaba tarde pisaba la nueva.
+  const ultima = useRef(0);
 
   function buscar(texto: string) {
     setConsulta(texto);
-    empezarBusqueda(async () => setResultados(await buscarProductosParaDocumento(texto)));
+    const esta = ++ultima.current;
+    empezarBusqueda(async () => {
+      let filas: Destino[] = [];
+      try {
+        filas = await buscarProductosParaDocumento(texto);
+      } catch {
+        filas = [];
+      }
+      if (esta !== ultima.current) return;
+      const vistos = new Set<string>();
+      setResultados(filas.filter((f) => !vistos.has(f.id) && vistos.add(f.id)));
+    });
   }
 
   function guardar() {
@@ -50,6 +67,7 @@ export function DestinosDocumento({
         return;
       }
       toast.success(r.ok ?? "Guardado.");
+      setTotal(productos.length + categorias.size);
       setAbierto(false);
       router.refresh();
     });
@@ -67,7 +85,7 @@ export function DestinosDocumento({
       </button>
 
       <Dialog open={abierto} onOpenChange={setAbierto}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>{titulo}</DialogTitle>
           </DialogHeader>

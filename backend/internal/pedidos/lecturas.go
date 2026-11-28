@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/entregas"
+	"mjbj/internal/fiscal"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/precios"
 	"mjbj/internal/ventas"
@@ -136,6 +137,11 @@ func (s *Servicio) ListarPresupuestos(ctx context.Context, f Filtros, limite, de
 	case "cerrados":
 		cond = append(cond, "NOT (q.estado::text = ANY("+a.poner(estadosAbiertos)+") OR "+sinPedido+")")
 		cerrados = true
+	case "sin-pedido":
+		// A donde lleva «presupuestos aceptados sin pedido» del inicio: con
+		// «aceptado» salían los 27, encabezados por uno que ya tenía pedido
+		// (mes simulado, M3S2-020).
+		cond = append(cond, sinPedido)
 	case "", "todos":
 	default:
 		cond = append(cond, "q.estado::text = "+a.poner(f.Estado))
@@ -231,6 +237,18 @@ type ItemDePresupuesto struct {
 	// ConPresentacion: el renglón es una presentación (media placa): su
 	// precio no se compara con el costo de la unidad de stock.
 	ConPresentacion bool `json:"-"`
+	// Disponible es lo que hay para vender (físico menos reservado) en cada
+	// sucursal activa, para avisar al pasarlo a pedido (M2S1-089: reservaba
+	// 20 sin stock en Casa Central y la dejaba en −20). Vacío en un renglón
+	// sin variante, en una presentación o en otra unidad que la del stock.
+	Disponible []DisponibleEnSucursal `json:"disponible"`
+}
+
+// DisponibleEnSucursal es lo que hay de un renglón en una sucursal.
+type DisponibleEnSucursal struct {
+	Sucursal   string  `json:"sucursal"`
+	Nombre     string  `json:"nombre"`
+	Disponible float64 `json:"disponible"`
 }
 
 // FichaDePresupuesto es consultarPresupuesto.
@@ -268,6 +286,23 @@ type FichaDePresupuesto struct {
 	TotalDeHoy *string `json:"totalDeHoy"`
 	// FichaPorCorreo: como en FichaDePedido.
 	FichaPorCorreo *FichaParaUnir `json:"fichaPorCorreo"`
+	// EmailFicha es el correo de la ficha del cliente: al que sale el
+	// presupuesto cuando el suyo no tiene (M2S1-183: decía «Correo —» y
+	// que el correo había salido).
+	EmailFicha *string `json:"emailFicha"`
+	// PedidosCancelados son los pedidos que salieron de este presupuesto y
+	// se cancelaron (M3S3-031): sin ellos no se sabía que ya se convirtió.
+	PedidosCancelados []RefPedidoCancelado `json:"pedidosCancelados"`
+}
+
+// ArmadoEnElPanel: el presupuesto lo cargó alguien del local (mostrador o
+// teléfono), no llegó del sitio ni del bot.
+func ArmadoEnElPanel(origen string) bool { return origen == "mostrador" || origen == "telefono" }
+
+// RefPedidoCancelado es un pedido cancelado que salió del presupuesto.
+type RefPedidoCancelado struct {
+	ID     string `json:"id"`
+	Numero string `json:"numero"`
 }
 
 // Presupuesto es la ficha, o nil si no existe.
@@ -279,7 +314,7 @@ func (s *Servicio) Presupuesto(ctx context.Context, id string) (*FichaDePresupue
 		       q.estado::text, q.origen::text, q.subtotal::text, q.total::text, q.notas, q.asesor, q.valido_hasta, q.created_at,
 		       (SELECT o.id FROM orders o WHERE o.quote_id = q.id AND o.estado <> 'cancelado' ORDER BY o.created_at LIMIT 1),
 		       (SELECT o.numero FROM orders o WHERE o.quote_id = q.id AND o.estado <> 'cancelado' ORDER BY o.created_at LIMIT 1),
-		       q.motivo_rechazo
+		       q.motivo_rechazo, c.email
 		FROM quotes q
 		LEFT JOIN customers c ON c.id = q.customer_id
 		LEFT JOIN branches b ON b.id = q.branch_id
@@ -287,7 +322,7 @@ func (s *Servicio) Presupuesto(ctx context.Context, id string) (*FichaDePresupue
 		WHERE q.id = $1`, id).Scan(&p.ID, &p.Numero, &p.Cliente, &p.Email, &p.Telefono, &p.Empresa, &p.CustomerID,
 		&p.ClienteCodigo, &p.ClienteCuit, &p.ClienteCondicionIva, &p.ClienteDireccion, &p.Sucursal, &p.SucursalSlug, &p.Vendedor,
 		&p.Estado, &p.Origen, &p.Subtotal, &p.Total, &p.Notas, &p.Asesor, &p.ValidoHasta, &p.CreatedAt, &p.PedidoID, &p.NumeroPedido,
-		&p.MotivoRechazo)
+		&p.MotivoRechazo, &p.EmailFicha)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -329,6 +364,40 @@ func (s *Servicio) Presupuesto(ctx context.Context, id string) (*FichaDePresupue
 	if err != nil {
 		return nil, err
 	}
+	for i := range p.Items {
+		p.Items[i].Disponible = []DisponibleEnSucursal{}
+	}
+	disp, err := s.pool.Query(ctx, `
+		SELECT i.id, b.slug, b.name, greatest(coalesce(inv.qty, 0) - coalesce(inv.reservado, 0), 0)::float8
+		FROM quote_items i
+		JOIN product_variants v ON v.id = i.variant_id
+		JOIN products pr ON pr.id = v.product_id
+		CROSS JOIN branches b
+		LEFT JOIN inventory inv ON inv.variant_id = v.id AND inv.branch_id = b.id
+		WHERE i.quote_id = $1 AND b.active AND i.presentacion IS NULL AND i.unidad = pr.unit::text AND NOT pr.a_pedido
+		ORDER BY b.sort_order, b.name`, id)
+	if err != nil {
+		return nil, err
+	}
+	porItem := map[string][]DisponibleEnSucursal{}
+	for disp.Next() {
+		var item string
+		var d DisponibleEnSucursal
+		if err := disp.Scan(&item, &d.Sucursal, &d.Nombre, &d.Disponible); err != nil {
+			disp.Close()
+			return nil, err
+		}
+		porItem[item] = append(porItem[item], d)
+	}
+	disp.Close()
+	if err := disp.Err(); err != nil {
+		return nil, err
+	}
+	for i := range p.Items {
+		if d, ok := porItem[p.Items[i].ID]; ok {
+			p.Items[i].Disponible = d
+		}
+	}
 	for i, it := range p.Items {
 		if it.VariantID != nil && !p.Items[i].ConPresentacion {
 			p.Items[i].BajoCosto = precios.BajoCosto(jsmath.Numero(it.PrecioUnitario), pisos[*it.VariantID])
@@ -337,8 +406,25 @@ func (s *Servicio) Presupuesto(ctx context.Context, id string) (*FichaDePresupue
 			}
 		}
 	}
+	p.PedidosCancelados = []RefPedidoCancelado{}
+	cancelados, err := s.pool.Query(ctx, `SELECT id, numero FROM orders WHERE quote_id = $1 AND estado = 'cancelado' ORDER BY created_at`, id)
+	if err != nil {
+		return nil, err
+	}
+	for cancelados.Next() {
+		var r RefPedidoCancelado
+		if err := cancelados.Scan(&r.ID, &r.Numero); err != nil {
+			cancelados.Close()
+			return nil, err
+		}
+		p.PedidosCancelados = append(p.PedidosCancelados, r)
+	}
+	cancelados.Close()
+	if err := cancelados.Err(); err != nil {
+		return nil, err
+	}
 	if p.CustomerID == nil {
-		if p.FichaPorCorreo, err = s.fichaConElCorreo(ctx, p.Email); err != nil {
+		if p.FichaPorCorreo, err = s.fichaConElCorreo(ctx, p.Email, ArmadoEnElPanel(p.Origen)); err != nil {
 			return nil, err
 		}
 		if p.FichaPorCorreo != nil {
@@ -455,6 +541,23 @@ type PedidoListado struct {
 	Facturado bool `json:"facturado"`
 	// Acopio: se retira de a partes (sqlAcopio).
 	Acopio bool `json:"acopio"`
+	// ALlevar es lo que falta llevar de un envío sin entregar: la tarjeta
+	// del reparto decía solo el total, y para saber qué cargar había que
+	// entrar al pedido (mes simulado 2). Vacío en un retiro.
+	ALlevar []PorEntregar `json:"aLlevar,omitempty"`
+	// EnElCamion son los remitos de envío sin firmar, con lo que lleva cada
+	// uno: la tarjeta «En camino» mostraba lo que quedó en el galpón.
+	EnElCamion []RemitoEnElCamion `json:"enElCamion,omitempty"`
+	// FleteACotizar: un envío a una zona «a cotizar» sin flete cargado (se
+	// despachaba y se entregaba sin que nadie lo cotizara).
+	FleteACotizar bool `json:"fleteACotizar,omitempty"`
+}
+
+// RemitoEnElCamion es un remito de envío que salió y no se firmó.
+type RemitoEnElCamion struct {
+	Numero     string        `json:"numero"`
+	FirmaToken string        `json:"firmaToken"`
+	Lineas     []PorEntregar `json:"lineas"`
 }
 
 // sqlAcopio: el pedido `o` es un acopio en curso, de los que se retiran de
@@ -477,6 +580,9 @@ type PorEntregar struct {
 // en parte: son pocos, y el saldo es la misma cuenta de la ficha
 // (entregas.SaldoDeAcopio).
 func (s *Servicio) completarListado(ctx context.Context, out []PedidoListado, enParte map[string]bool) error {
+	if err := s.completarEnvios(ctx, out); err != nil {
+		return err
+	}
 	for i := range out {
 		out[i].PorEntregar = []PorEntregar{}
 		if !enParte[out[i].ID] {
@@ -497,6 +603,77 @@ func (s *Servicio) completarListado(ctx context.Context, out []PedidoListado, en
 		}
 	}
 	return nil
+}
+
+// completarEnvios suma a cada envío sin entregar lo que falta llevar, lo
+// que va en el camión y si el flete está por cotizar (el reparto).
+func (s *Servicio) completarEnvios(ctx context.Context, out []PedidoListado) error {
+	var ids []string
+	donde := map[string]int{}
+	for i, p := range out {
+		if p.TipoEntrega == "envio" && p.Estado != "entregado" && p.Estado != "cancelado" {
+			ids = append(ids, p.ID)
+			donde[p.ID] = i
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	for _, id := range ids {
+		saldo, err := entregas.SaldoDeAcopio(ctx, s.pool, id)
+		if err != nil {
+			return err
+		}
+		i := donde[id]
+		out[i].ALlevar = []PorEntregar{}
+		for _, r := range entregas.SoloPendientes(saldo) {
+			out[i].ALlevar = append(out[i].ALlevar, PorEntregar{Descripcion: r.Descripcion, Unidad: r.Unidad, Pendiente: r.Pendiente})
+		}
+	}
+	filas, err := s.pool.Query(ctx, `
+		SELECT d.order_id::text, d.numero, coalesce(d.firma_token, ''), oi.descripcion, oi.unidad, di.cantidad::float8
+		FROM deliveries d JOIN delivery_items di ON di.delivery_id = d.id JOIN order_items oi ON oi.id = di.order_item_id
+		WHERE d.order_id = ANY($1::uuid[]) AND d.tipo = 'envio' AND d.estado = 'preparada'
+		ORDER BY d.created_at, di.orden`, ids)
+	if err != nil {
+		return err
+	}
+	for filas.Next() {
+		var pedido, numero, token string
+		var l PorEntregar
+		if err := filas.Scan(&pedido, &numero, &token, &l.Descripcion, &l.Unidad, &l.Pendiente); err != nil {
+			filas.Close()
+			return err
+		}
+		i := donde[pedido]
+		n := len(out[i].EnElCamion)
+		if n == 0 || out[i].EnElCamion[n-1].Numero != numero {
+			out[i].EnElCamion = append(out[i].EnElCamion, RemitoEnElCamion{Numero: numero, FirmaToken: token})
+			n++
+		}
+		out[i].EnElCamion[n-1].Lineas = append(out[i].EnElCamion[n-1].Lineas, l)
+	}
+	filas.Close()
+	if err := filas.Err(); err != nil {
+		return err
+	}
+	filas, err = s.pool.Query(ctx, `
+		SELECT o.id::text FROM orders o
+		WHERE o.id = ANY($1::uuid[]) AND o.costo_envio = 0 AND NOT o.flete_sin_cargo AND (o.zona_envio ~* 'a cotizar'
+		  OR EXISTS (SELECT 1 FROM shipping_zones z WHERE z.a_cotizar AND lower(z.nombre) = lower(trim(o.zona_envio))))`, ids)
+	if err != nil {
+		return err
+	}
+	for filas.Next() {
+		var id string
+		if err := filas.Scan(&id); err != nil {
+			filas.Close()
+			return err
+		}
+		out[donde[id]].FleteACotizar = true
+	}
+	filas.Close()
+	return filas.Err()
 }
 
 // EstadoSinCobrar es el filtro del historial que lleva el renglón «N
@@ -632,6 +809,32 @@ type ItemDePedido struct {
 	CostoUnitario  *string `json:"costoUnitario"`
 	AlicuotaIva    *string `json:"alicuotaIva"`
 	Orden          int     `json:"orden"`
+	// Devuelto es lo que volvió de este renglón (mes simulado 2, M2S1-082:
+	// la ficha seguía mostrando las 3 placas con una devuelta).
+	Devuelto float64 `json:"devuelto"`
+}
+
+// DevolucionEnLaFicha es una devolución del pedido, con su nota de crédito
+// si la tuvo (M2S1-082, M3S2-049: la ficha no la mostraba y no había cómo
+// llegar a la nota).
+type DevolucionEnLaFicha struct {
+	ID        string    `json:"id"`
+	Importe   float64   `json:"importe"`
+	Destino   string    `json:"destino"`
+	Motivo    string    `json:"motivo"`
+	NotaID    *string   `json:"notaId"`
+	Nota      *string   `json:"nota"`
+	Quien     *string   `json:"quien"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+// ComprobanteDelPedido es una factura o nota del pedido, para quien no entra
+// a Facturación (M2S3-027: el vendedor no veía ni el número de la factura).
+type ComprobanteDelPedido struct {
+	ID       string `json:"id"`
+	Etiqueta string `json:"etiqueta"`
+	Tipo     string `json:"tipo"`
+	Estado   string `json:"estado"`
 }
 
 // PasoDelPedido es una fila de order_status_history.
@@ -717,6 +920,16 @@ type FichaDePedido struct {
 	// Facturado: tiene una factura viva (no se corrige ni se devuelve desde
 	// el pedido: va por la factura).
 	Facturado bool `json:"facturado"`
+	// EfectivoRecibido: con cuánto pagó en efectivo en el mostrador (00350):
+	// el ticket dice el vuelto (mes simulado, M3S1-061).
+	EfectivoRecibido *float64 `json:"efectivoRecibido"`
+	// FacturaID: la factura viva de la venta, si tiene: el papel que vale es
+	// ese y no el ticket (M2S1-083).
+	FacturaID *string `json:"facturaId"`
+	// FleteSinCargo: el envío se pasó a pedido con «Sin cargo» a propósito.
+	FleteSinCargo bool                   `json:"fleteSinCargo"`
+	Devoluciones  []DevolucionEnLaFicha  `json:"devoluciones"`
+	Comprobantes  []ComprobanteDelPedido `json:"comprobantes"`
 }
 
 // ReciboDelPedido es un recibo que cobró el pedido.
@@ -737,14 +950,16 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 	err := s.pool.QueryRow(ctx, `
 		SELECT o.id, o.numero, o.numero_provisorio, o.contacto_nombre, o.contacto_email, o.contacto_telefono, c.razon_social,
 		       o.branch_id, o.customer_id, b.name, o.estado::text, o.origen::text, o.tipo_entrega::text, o.direccion_entrega,
-		       o.zona_envio, o.costo_envio::text, o.subtotal::text, o.descuento::text, o.descuento_motivo, o.total::text,
+		       o.zona_envio, o.costo_envio::text, o.subtotal::text, o.descuento::text, `+fragmentos.MotivoDelDescuento+`, o.total::text,
 		       o.medio_pago::text, o.estado_pago::text, o.notas, o.created_at, o.quote_id, q.numero,
 		       CASE WHEN o.customer_id IS NULL THEN NULL
 		            ELSE (SELECT coalesce(sum(monto), 0)::float8 FROM account_movements WHERE customer_id = o.customer_id) END,
 		       to_char(o.entregar_el, 'YYYY-MM-DD'), `+fragmentos.SinCobrarDelPedido+`::float8,
 		       `+fragmentos.CobradoDelPedido+`::float8, `+fragmentos.ACobrarDelPedido+`::float8, o.comprobante, `+sqlAcopio+`,
 		       EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id AND f.estado NOT IN ('anulada', 'borrador') AND f.tipo::text LIKE 'factura%'),
-		       o.a_cuenta::float8
+		       o.a_cuenta::float8, o.efectivo_recibido::float8,
+		       (SELECT f.id::text FROM invoices f WHERE f.order_id = o.id AND f.estado NOT IN ('anulada', 'borrador') AND f.tipo::text LIKE 'factura%'
+		        ORDER BY f.created_at LIMIT 1), o.flete_sin_cargo
 		FROM orders o
 		LEFT JOIN customers c ON c.id = o.customer_id
 		LEFT JOIN branches b ON b.id = o.branch_id
@@ -753,7 +968,8 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 		&p.BranchID, &p.CustomerID, &p.Sucursal, &p.Estado, &p.Origen, &p.TipoEntrega, &p.DireccionEntrega,
 		&p.ZonaEnvio, &p.CostoEnvio, &p.Subtotal, &p.Descuento, &p.DescuentoMotivo, &p.Total,
 		&p.MedioPago, &p.EstadoPago, &p.Notas, &p.CreatedAt, &p.QuoteID, &p.NumeroPresupuesto, &p.SaldoCliente, &p.EntregarEl, &p.SinCobrar,
-		&p.Cobrado, &p.ACobrar, &p.Comprobante, &p.Acopio, &p.Facturado, &p.ACuenta)
+		&p.Cobrado, &p.ACobrar, &p.Comprobante, &p.Acopio, &p.Facturado, &p.ACuenta, &p.EfectivoRecibido, &p.FacturaID, &p.FleteSinCargo)
+
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -863,6 +1079,83 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 	filas.Close()
 	if err := filas.Err(); err != nil {
 		return nil, err
+	}
+
+	filas, err = s.pool.Query(ctx, `
+		SELECT d.id::text, d.importe::float8, d.destino, d.motivo, n.id::text, n.tipo::text, n.punto_venta::int8, n.numero::int8,
+		       u.name, d.created_at
+		FROM devoluciones d LEFT JOIN invoices n ON n.id = d.nota_id LEFT JOIN "user" u ON u.id = d.created_by_user_id
+		WHERE d.order_id = $1 ORDER BY d.created_at, d.id`, id)
+	if err != nil {
+		return nil, err
+	}
+	p.Devoluciones = []DevolucionEnLaFicha{}
+	for filas.Next() {
+		var d DevolucionEnLaFicha
+		var tipo *string
+		var pv, n *int64
+		if err := filas.Scan(&d.ID, &d.Importe, &d.Destino, &d.Motivo, &d.NotaID, &tipo, &pv, &n, &d.Quien, &d.CreatedAt); err != nil {
+			filas.Close()
+			return nil, err
+		}
+		if tipo != nil && pv != nil && n != nil {
+			x := fiscal.NombreComprobante(*tipo) + " " + fiscal.NumeroFormateado(*pv, *n)
+			d.Nota = &x
+		}
+		p.Devoluciones = append(p.Devoluciones, d)
+	}
+	filas.Close()
+	if err := filas.Err(); err != nil {
+		return nil, err
+	}
+
+	filas, err = s.pool.Query(ctx, `
+		SELECT id::text, tipo::text, punto_venta, numero, estado::text FROM invoices
+		WHERE order_id = $1 AND estado <> 'borrador' ORDER BY created_at, id`, id)
+	if err != nil {
+		return nil, err
+	}
+	p.Comprobantes = []ComprobanteDelPedido{}
+	for filas.Next() {
+		var c ComprobanteDelPedido
+		var pv, n int64
+		if err := filas.Scan(&c.ID, &c.Tipo, &pv, &n, &c.Estado); err != nil {
+			filas.Close()
+			return nil, err
+		}
+		c.Etiqueta = fiscal.NombreComprobante(c.Tipo) + " " + fiscal.NumeroFormateado(pv, n)
+		p.Comprobantes = append(p.Comprobantes, c)
+	}
+	filas.Close()
+	if err := filas.Err(); err != nil {
+		return nil, err
+	}
+
+	{
+		devueltos := map[string]float64{}
+		filas, err = s.pool.Query(ctx, `
+			SELECT di.order_item_id::text, sum(di.cantidad)::float8
+			FROM devolucion_items di JOIN devoluciones d ON d.id = di.devolucion_id
+			WHERE d.order_id = $1 AND di.order_item_id IS NOT NULL GROUP BY di.order_item_id`, id)
+		if err != nil {
+			return nil, err
+		}
+		for filas.Next() {
+			var item string
+			var c float64
+			if err := filas.Scan(&item, &c); err != nil {
+				filas.Close()
+				return nil, err
+			}
+			devueltos[item] = c
+		}
+		filas.Close()
+		if err := filas.Err(); err != nil {
+			return nil, err
+		}
+		for i := range p.Items {
+			p.Items[i].Devuelto = devueltos[p.Items[i].ID]
+		}
 	}
 
 	if conMargen {

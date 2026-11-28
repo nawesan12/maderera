@@ -2,6 +2,7 @@
 
 import { useActionState, useId, useState } from "react";
 import { Check, ExternalLink, Loader2, RefreshCw, X } from "lucide-react";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -55,7 +56,15 @@ export function AccionesCobro({
   const [resultado, conciliar, conciliando] = useActionState(
     async (previo: EstadoAccionPago, formData: FormData) => {
       const r = await conciliarTransferencia(previo, formData);
-      if (r.ok) setRechazando(false);
+      /*
+       * Al decidir, el renglón se muda de grupo (Rechazados, Acreditados) y
+       * este componente se vuelve a montar en otro lado: el mensaje escrito
+       * acá se perdía con él (M2S1-053). La confirmación va en un aviso.
+       */
+      if (r.ok) {
+        setRechazando(false);
+        toast.success(r.ok);
+      }
       return r;
     },
     inicial,
@@ -65,8 +74,9 @@ export function AccionesCobro({
     inicial,
   );
 
-  const mensaje = resultado.error ?? resultado.ok ?? consulta.error ?? consulta.ok;
-  const esError = Boolean(resultado.error ?? consulta.error);
+  const errorFuera = rechazando ? undefined : resultado.error;
+  const mensaje = errorFuera ?? consulta.error ?? consulta.ok;
+  const esError = Boolean(errorFuera ?? consulta.error);
 
   return (
     <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">

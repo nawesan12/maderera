@@ -584,6 +584,8 @@ export interface components {
             asignadoAUserId: string | null;
             asignadoNombre: string | null;
             baja: boolean;
+            /** @description lo último es del cliente y el bot no contesta porque la atiende una persona */
+            paraContestar: boolean;
         };
         Campo: {
             clave: string;
@@ -683,6 +685,8 @@ export interface components {
              * @enum {string}
              */
             botEstado: "activo" | "derivada";
+            /** @description Por qué el bot la pasó a una persona */
+            botMotivo: string | null;
             clienteNombre: string | null;
             clienteTipo: string | null;
             /** @description La lista de precios propia; null si es la general */
@@ -691,6 +695,7 @@ export interface components {
             clienteEmail: string | null;
             clienteLimite: string | null;
             clienteEstado: string | null;
+            clienteBloqueado: boolean;
             conocidos: {
                 [key: string]: string;
             };
@@ -737,7 +742,7 @@ export interface components {
         };
         Bandeja: {
             /** @enum {string} */
-            filtro: "todas" | "sin-leer" | "mias" | "sin-asignar" | "resueltas";
+            filtro: "todas" | "sin-leer" | "mias" | "sin-asignar" | "derivadas" | "resueltas";
             conversaciones: components["schemas"]["ConversacionListada"][];
             contadores: {
                 sinLeer: number;
@@ -880,7 +885,7 @@ export interface components {
         };
         Historia: {
             /** @enum {string} */
-            canal: "whatsapp" | "whatsapp_manual" | "email";
+            canal: "whatsapp" | "whatsapp_manual" | "email" | "whatsapp_pdf";
             estado: string;
             texto: string;
             atencion: boolean;

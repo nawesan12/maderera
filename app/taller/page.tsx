@@ -57,7 +57,6 @@ export default async function TallerPage({
   const pendientes = (todos ?? cortes).filter((c) =>
     ["en-cola", "en-proceso"].includes(c.estado),
   );
-  const superficie = pendientes.reduce((s, c) => s + c.metrosCuadrados, 0);
 
   // El aserradero es el único rol que no tiene el panel detrás, así que para
   // los demás dejamos la puerta de vuelta.
@@ -70,9 +69,11 @@ export default async function TallerPage({
         <AvisoSinAcceso />
       </Suspense>
       {/* El mismo encabezado que el panel —claro, con textura—. En una línea a
-          cualquier ancho: lo que no entra se va primero (el nombre, después
-          los m²) y los botones quedan como íconos hasta que hay lugar para su
-          texto (H120). */}
+          cualquier ancho: lo que no entra se va primero (el nombre) y los
+          botones quedan como íconos hasta que hay lugar para su texto (H120).
+          Los m² los dice cada columna: «11,81 m² por cortar» arriba, cola y
+          máquina juntas, al lado de «En cola 9,77 m²» parecían dos cuentas
+          (mes 23, también M2S3-066). */}
       <header className="textura flex h-[60px] min-w-0 shrink-0 items-center gap-3 border-b border-linea bg-background px-4 lg:px-7">
         <Marca tamano="panel" etiqueta="Taller" />
 
@@ -87,16 +88,12 @@ export default async function TallerPage({
 
         <span aria-hidden className="ml-auto" />
 
-        <span className="tabular hidden whitespace-nowrap text-base text-texto-2 md:block">
-          {Math.round(superficie)} m² por cortar
-        </span>
-
         <span className="hidden min-w-0 max-w-48 truncate text-base text-texto-2 xl:block">{usuario.name}</span>
 
         {/* La guía, acá: el aserradero no tiene panel detrás, así que este
             encabezado es todo lo que tiene. */}
         <Link
-          href="/admin/ayuda/cortes-y-whatsapp"
+          href="/admin/ayuda/cortes-y-whatsapp#la-pantalla-del-taller"
           aria-label="Cómo se usa"
           className="inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-[9px] border border-linea bg-card px-3 text-base font-medium transition-colors hover:bg-hundida"
         >
@@ -122,14 +119,8 @@ export default async function TallerPage({
       <main className="flex-1 px-4 pb-8 pt-4 lg:px-7">
         <h1 className="sr-only">Cola de corte</h1>
 
-        {!busqueda && (
-          <p className="mb-3 text-base text-texto-2">
-            {pendientes.length > 0
-              ? `${plural(pendientes.length, "trabajo")} por hacer`
-              : "No hay trabajos pendientes."}
-          </p>
-        )}
-
+        {/* Cuántos hay lo dice la insignia del encabezado; el vacío, la
+            columna de la cola (mes simulado, M2S4-040). */}
         <BuscadorCortes
           busquedaActual={busqueda}
           ruta="/taller"

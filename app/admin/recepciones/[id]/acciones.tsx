@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Loader2 } from "lucide-react";
-import { formatearMonto, importeDelCampo, importeIlegible, importeParaElCampo } from "@/lib/formato";
+import { formatearMonto, importeDelCampo, importeIlegible, importeParaElCampo, unidadConcordada } from "@/lib/formato";
 import { CampoImporte } from "@/components/admin/campo-importe";
 import { anularRecepcion, confirmarRecepcion, editarRecepcion, type EstadoRecepcion } from "../actions";
 
@@ -13,6 +13,9 @@ interface Renglon {
   sku: string | null;
   cantidad: number;
   costoUnitario: number;
+  /** Lo que faltaba de la orden en este renglón; null sin orden. */
+  pendiente?: number | null;
+  unidad?: string | null;
 }
 
 const texto = (n: number) => (n ? String(n).replace(".", ",") : "0");
@@ -90,15 +93,26 @@ export function BorradorDeRecepcion({
                   {r.sku && <p className="codigo text-sm text-muted-foreground">{r.sku}</p>}
                 </div>
                 <div className="flex flex-wrap items-end gap-2">
+                  {/* «Vino» arriba del campo y lo que se pidió al lado: se
+                      leía «Vino [30]» pegado al borde, sin saber de cuánto
+                      (M2S1-077, M2S2-123). */}
                   <label className="block">
-                    <span className="text-sm text-muted-foreground">Vino</span>
-                    <input
-                      inputMode="decimal"
-                      value={cantidades[r.id]}
-                      aria-invalid={!(cant(r) >= 0) || undefined}
-                      onChange={(e) => setCantidades((p) => ({ ...p, [r.id]: e.target.value }))}
-                      className="tabular mt-0.5 h-11 w-24 rounded-lg border border-linea bg-background px-2 text-right text-base"
-                    />
+                    <span className="block text-sm text-muted-foreground">Vino</span>
+                    <span className="mt-0.5 flex items-baseline gap-2">
+                      <input
+                        inputMode="decimal"
+                        value={cantidades[r.id]}
+                        aria-label={`Cuánto vino de ${r.descripcion}`}
+                        aria-invalid={!(cant(r) >= 0) || undefined}
+                        onChange={(e) => setCantidades((p) => ({ ...p, [r.id]: e.target.value }))}
+                        className="tabular h-11 w-24 rounded-lg border border-linea bg-background px-2 text-right text-base"
+                      />
+                      {r.pendiente != null && (
+                        <span className="tabular whitespace-nowrap text-base text-muted-foreground">
+                          de {texto(r.pendiente)} {unidadConcordada(r.pendiente, r.unidad ?? null, r.descripcion)}
+                        </span>
+                      )}
+                    </span>
                   </label>
                   {veCostos && (
                     <label className="block">
@@ -178,7 +192,7 @@ export function BorradorDeRecepcion({
                 onClick={() => setSeguro(false)}
                 className="h-12 flex-1 rounded-xl border border-linea px-4 text-base sm:flex-none"
               >
-                Mejor no
+                Volver
               </button>
             </div>
           </div>

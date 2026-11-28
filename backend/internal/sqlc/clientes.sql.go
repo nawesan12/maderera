@@ -8,6 +8,8 @@ package sqlc
 import (
 	"context"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const alternarVendedor = `-- name: AlternarVendedor :exec
@@ -271,8 +273,8 @@ func (q *Queries) MoverGestion(ctx context.Context, arg MoverGestionParams) erro
 }
 
 const movimientoManual = `-- name: MovimientoManual :exec
-INSERT INTO account_movements (customer_id, tipo, monto, detalle, created_by_user_id)
-VALUES ($1, $2, $5::text::numeric, $3, $4)
+INSERT INTO account_movements (customer_id, tipo, monto, detalle, created_by_user_id, created_at)
+VALUES ($1, $2, $5::text::numeric, $3, $4, coalesce($6::timestamptz, now()))
 `
 
 type MovimientoManualParams struct {
@@ -281,8 +283,10 @@ type MovimientoManualParams struct {
 	Detalle         *string              `json:"detalle"`
 	CreatedByUserID *string              `json:"createdByUserId"`
 	Monto           string               `json:"monto"`
+	Fecha           pgtype.Timestamptz   `json:"fecha"`
 }
 
+// La fecha, si es de otro día (una deuda vieja que se carga hoy, M3S3-017).
 func (q *Queries) MovimientoManual(ctx context.Context, arg MovimientoManualParams) error {
 	_, err := q.db.Exec(ctx, movimientoManual,
 		arg.CustomerID,
@@ -290,6 +294,7 @@ func (q *Queries) MovimientoManual(ctx context.Context, arg MovimientoManualPara
 		arg.Detalle,
 		arg.CreatedByUserID,
 		arg.Monto,
+		arg.Fecha,
 	)
 	return err
 }

@@ -9,6 +9,7 @@ import {
   ScrollText,
 } from "lucide-react";
 import { TarjetaPedido } from "@/components/cuenta/tarjeta-pedido";
+import { misMovimientos } from "@/lib/dal/historial-cliente";
 import {
   clienteDeLaSesion,
   miCuentaCorriente,
@@ -51,8 +52,15 @@ export default async function ResumenCuentaPage() {
 
   // Lo último que movió el saldo y cuánto es de pedidos sin entregar: sin
   // eso el saldo subía o bajaba sin decir por qué (H303, H082).
-  const cuenta = operaACuenta ? await miCuentaCorriente() : null;
+  const [cuenta, recientes] = operaACuenta
+    ? await Promise.all([miCuentaCorriente(), misMovimientos({ periodo: "3m", filtro: "todo" })])
+    : [null, null];
   const ultimo = cuenta?.movimientos[0];
+  // Lo informado que se está verificando, como en la cuenta corriente: el
+  // resumen decía «Pendiente de pago» sin mencionarlo (M2S2-117).
+  const enRevision = (recientes?.movimientos ?? [])
+    .filter((m) => m.clase === "pago_en_revision" || m.clase === "cheque_por_recibir")
+    .reduce((t, m) => t + Math.abs(m.importeInformativo ?? 0), 0);
 
   return (
     <div className="space-y-8">
@@ -149,6 +157,12 @@ export default async function ResumenCuentaPage() {
                     de pedidos sin entregar
                   </>
                 )}
+                {resumen.saldo > 0 && enRevision > 0 && (
+                  <>
+                    {" · "}
+                    <span className="tabular">{formatearMonto(enRevision)}</span> en revisión
+                  </>
+                )}
               </p>
               {ultimo && <UltimoMovimiento movimiento={ultimo} />}
             </div>
@@ -162,7 +176,11 @@ export default async function ResumenCuentaPage() {
             </Link>
           </div>
 
-          {resumen.limiteCredito > 0 && (
+          {/* Bloqueada, no se ofrece lo disponible (M3S1-017). */}
+          {resumen.limiteCredito > 0 && resumen.cuentaPausada && (
+            <p className="border-t bg-sitio-alt px-5 py-4 text-sm font-medium text-saldo-debe">Cuenta corriente pausada</p>
+          )}
+          {resumen.limiteCredito > 0 && !resumen.cuentaPausada && (
             <MedidorCredito
               saldo={resumen.saldo}
               limite={resumen.limiteCredito}
@@ -339,15 +357,27 @@ function UltimoMovimiento({
 }: {
   movimiento: MovimientoConSaldo;
 }) {
-  const chequeRechazado =
-    m.tipo === "nota_debito" && /rechazado/i.test(m.detalle ?? "");
+  const cheque =
+    m.tipo !== "nota_debito"
+      ? null
+      : /devuelto al cliente/i.test(m.detalle ?? "")
+        ? "Cheque devuelto"
+        : /rechazado/i.test(m.detalle ?? "")
+          ? "Cheque rechazado"
+          : null;
   return (
     <p className="mt-2 flex flex-wrap items-baseline gap-x-2 text-sm">
       <span className="text-muted-foreground">
         {fechaCorta.format(m.createdAt)}
       </span>
+      {/* El ajuste dice qué fue («Anulación del recibo REC-0006»): solo
+          «Ajuste +$ 1.000» no decía nada (M2S1-153). */}
       <span className="font-medium">
-        {chequeRechazado ? "Cheque rechazado" : estiloDeEstado(m.tipo).etiqueta}
+        {cheque
+          ? cheque
+          : m.tipo === "ajuste" && m.detalle
+            ? m.detalle
+            : estiloDeEstado(m.tipo).etiqueta}
       </span>
       <span className={`tabular ${m.monto < 0 ? "text-saldo-favor" : ""}`}>
         {m.monto > 0 ? "+" : "−"}

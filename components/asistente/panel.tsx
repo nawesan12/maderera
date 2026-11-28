@@ -30,6 +30,7 @@ import { formatearPrecio } from "@/lib/formato";
 import { useCarrito } from "@/lib/carrito-context";
 import { useTienda } from "@/lib/tienda-context";
 import { ETIQUETA_ASISTENTE, EVENTO_ABRIR_ASISTENTE } from "@/lib/asistente/abrir";
+import { mensajeDesdeElAsistente } from "@/lib/asistente/lenguaje";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
 import { MuestraDePlaca } from "@/components/catalogo/placa-de-producto";
 
@@ -94,6 +95,12 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
   }>({ sugerencias: [], aPersona: false });
   /** Lo último que se buscó en el catálogo, para la pregunta que sigue. */
   const [ultimaConsulta, setUltimaConsulta] = useState<string | null>(null);
+  /**
+   * Lo último que la persona escribió: viaja en el mensaje de WhatsApp. Se
+   * derivaba con «quería consultar por...» y había que volver a escribirlo
+   * (mes simulado, M2S1-105).
+   */
+  const [ultimoEscrito, setUltimoEscrito] = useState<string | null>(null);
 
   const finRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -270,6 +277,7 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
     if (escrito.length < 1 || trabajando) return;
 
     decir([{ tipo: "persona", texto: escrito }]);
+    setUltimoEscrito(escrito);
     setTexto("");
     setTrabajando(true);
 
@@ -438,7 +446,14 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
         )}
 
         {aWhatsapp && (
-          <BotonWhatsapp enlace={enlaceWhatsapp} className="w-full">
+          <BotonWhatsapp
+            enlace={
+              ultimoEscrito
+                ? `${enlaceWhatsapp.split("?")[0]}?text=${encodeURIComponent(mensajeDesdeElAsistente(ultimoEscrito))}`
+                : enlaceWhatsapp
+            }
+            className="w-full"
+          >
             Escribir por WhatsApp
           </BotonWhatsapp>
         )}
@@ -592,7 +607,7 @@ function AgregarAlPresupuesto({ producto }: { producto: ProductoDelAsistente }) 
         });
         setPuesto(true);
       }}
-      aria-label={`Agregar ${producto.nombre} al presupuesto`}
+      aria-label={`Agregar ${producto.nombre} al carrito`}
       className={`flex w-11 shrink-0 items-center justify-center rounded-xl shadow-sm transition-colors ${
         puesto
           ? "bg-brand-green/15 text-brand-green"

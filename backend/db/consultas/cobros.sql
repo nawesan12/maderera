@@ -122,10 +122,16 @@ LIMIT $2;
 -- El recibo, si la compra se cobró después con uno (una transferencia
 -- conciliada): no fue «pagada en el momento» (H305). Del pedido partido
 -- (H047), el resto: la parte a cuenta es su «compra» en el libro.
+-- El recibo que cobró la factura del pedido (invoice_payments) también
+-- cuenta: no lleva order_id ni pasa por el libro, y sin esto no quedaba
+-- ningún renglón suyo en la ficha (el buscador llevaba a un ancla que no
+-- existía, mes 23, M2S1-096).
 SELECT o.id, o.created_at, o.numero, (o.total - coalesce(o.a_cuenta, 0))::float8 AS total, o.estado_pago::text AS estado_pago,
   r.id AS recibo_id, r.numero AS recibo_numero, r.estado AS recibo_estado
 FROM orders o
-LEFT JOIN receipts r ON r.id = (SELECT x.id FROM receipts x WHERE x.order_id = o.id AND x.estado <> 'anulado'
+LEFT JOIN receipts r ON r.id = (SELECT x.id FROM receipts x WHERE x.estado <> 'anulado'
+  AND (x.order_id = o.id OR x.id IN (SELECT ip.receipt_id FROM invoice_payments ip JOIN invoices fi ON fi.id = ip.invoice_id
+    WHERE fi.order_id = o.id AND ip.receipt_id IS NOT NULL))
   ORDER BY x.created_at DESC LIMIT 1)
 WHERE o.customer_id = $1 AND (o.medio_pago IS NULL OR o.medio_pago <> 'cuenta_corriente') AND o.estado <> 'cancelado'
   AND (sqlc.narg(desde)::timestamptz IS NULL OR o.created_at >= sqlc.narg(desde))
@@ -139,18 +145,33 @@ WHERE customer_id = $1 AND tipo = 'deuda' AND estado IN ('en_revision', 'rechaza
   AND (sqlc.narg(desde)::timestamptz IS NULL OR created_at >= sqlc.narg(desde))
 ORDER BY created_at DESC;
 
+-- name: DevolucionesFueraDeLaCuenta :many
+-- Las devoluciones de lo que se pagó de contado: el reintegro no pasa por
+-- la cuenta y Movimientos no las mostraba, ni con «Notas y ajustes» (mes
+-- simulado, M2S3-030). Las que van a la cuenta ya están en el libro.
+SELECT d.id, d.created_at, d.importe::float8 AS importe, o.id AS pedido_id, o.numero AS pedido_numero,
+       coalesce(i.tipo::text, '')::text AS nota_tipo, i.punto_venta AS nota_pv, i.numero AS nota_numero
+FROM devoluciones d
+JOIN orders o ON o.id = d.order_id
+LEFT JOIN invoices i ON i.id = d.nota_id
+WHERE o.customer_id = $1 AND d.account_movement_id IS NULL
+  AND (sqlc.narg(desde)::timestamptz IS NULL OR d.created_at >= sqlc.narg(desde))
+ORDER BY d.created_at DESC;
+
 -- name: ChequesSueltos :many
 -- Los cheques que no tienen recibo: los informados, los rechazados al
 -- recibirlos y los que se entregaron con una venta del mostrador (mes
 -- simulado: esos no figuraban en ningún lado de la ficha, ni rebotados).
-SELECT id, updated_at, tipo::text AS tipo, numero, banco, importe::float8 AS importe, estado::text AS estado, fecha_pago, motivo_rechazo,
-       (order_payment_id IS NOT NULL)::boolean AS de_una_venta
-FROM cheques
-WHERE customer_id = $1 AND sentido = 'recibido'
-  AND (estado = 'informado' OR (estado = 'rechazado' AND receipt_id IS NULL)
-       OR (order_payment_id IS NOT NULL AND receipt_id IS NULL AND estado <> 'anulado'))
-  AND (sqlc.narg(desde)::timestamptz IS NULL OR created_at >= sqlc.narg(desde))
-ORDER BY fecha_pago;
+-- con_nota_de_debito: el rechazo ya volvió a la cuenta con su nota de débito.
+SELECT c.id, c.updated_at, c.tipo::text AS tipo, c.numero, c.banco, c.importe::float8 AS importe, c.estado::text AS estado, c.fecha_pago,
+       c.motivo_rechazo, (c.order_payment_id IS NOT NULL)::boolean AS de_una_venta,
+       (SELECT count(*) > 0 FROM account_movements am WHERE am.cheque_id = c.id AND am.tipo = 'nota_debito')::boolean AS con_nota_de_debito
+FROM cheques c
+WHERE c.customer_id = $1 AND c.sentido = 'recibido'
+  AND (c.estado = 'informado' OR (c.estado = 'rechazado' AND c.receipt_id IS NULL)
+       OR (c.order_payment_id IS NOT NULL AND c.receipt_id IS NULL AND c.estado <> 'anulado'))
+  AND (sqlc.narg(desde)::timestamptz IS NULL OR c.created_at >= sqlc.narg(desde))
+ORDER BY c.fecha_pago;
 
 -- name: ChequesDeRecibos :many
 -- Los cheques que entraron con un recibo y el banco todavía puede devolver:
@@ -166,9 +187,11 @@ ORDER BY c.fecha_pago;
 
 -- name: PartesDeRecibos :many
 SELECT p.receipt_id, p.medio::text AS medio, p.importe::float8 AS importe, c.banco, c.numero, c.tipo,
-       c.id AS cheque_id, c.estado AS cheque_estado,
-       (pay.estado IS NOT DISTINCT FROM 'aprobado' AND pay.proveedor IS NOT DISTINCT FROM 'mercado_pago')::boolean AS por_mercado_pago
+       c.id AS cheque_id, c.estado AS cheque_estado, c.fecha_pago AS cheque_fecha_pago,
+       (pay.estado IS NOT DISTINCT FROM 'aprobado' AND pay.proveedor IS NOT DISTINCT FROM 'mercado_pago')::boolean AS por_mercado_pago,
+       ret.impuesto AS retencion_impuesto, ret.numero AS retencion_certificado
 FROM receipt_parts p LEFT JOIN cheques c ON c.id = p.cheque_id
 LEFT JOIN payments pay ON pay.id = p.payment_id
+LEFT JOIN retenciones_sufridas ret ON p.medio = 'retencion' AND ret.receipt_id = p.receipt_id AND ret.numero = p.referencia
 WHERE p.receipt_id = ANY(sqlc.arg(recibos)::uuid[])
 ORDER BY p.orden;

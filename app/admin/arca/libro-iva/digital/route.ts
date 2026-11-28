@@ -17,10 +17,13 @@ export async function GET(request: NextRequest) {
     return new NextResponse("No se pudo armar el archivo.", { status: r.response.status === 403 ? 403 : 500 });
   }
   const periodo = leerPeriodoMensual(crudo, new Date());
+  // El nombre lo pone Go: «-solo-compras» si no hay ventas autorizadas.
+  const disposicion =
+    r.response.headers.get("Content-Disposition") ?? `attachment; filename="libro-iva-digital-${periodo.clave}.zip"`;
   return new NextResponse(r.data, {
     headers: {
       "Content-Type": "application/zip",
-      "Content-Disposition": `attachment; filename="libro-iva-digital-${periodo.clave}.zip"`,
+      "Content-Disposition": disposicion,
       "Cache-Control": "private, no-store",
     },
   });

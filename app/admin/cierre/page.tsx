@@ -1,7 +1,6 @@
-import { Download } from "lucide-react";
+import { AlertTriangle, ChevronDown, Download } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { AlertTriangle } from "lucide-react";
 import { requireStaffRole } from "@/lib/dal/session";
 import {
   asientosDelPeriodo,
@@ -10,10 +9,11 @@ import {
   resumenDelMes,
 } from "@/lib/dal/admin/cierre-mensual";
 import { leerPeriodoMensual } from "@/lib/periodos";
-import { fechaCorta, formatearMonto, hoyEnArgentina, plural } from "@/lib/formato";
+import { fechaCorta, formatearMontoContable as formatearMonto, hoyEnArgentina, plural } from "@/lib/formato";
 import { ExportarAsientos } from "./exportar-asientos";
 import { SelectorDeMes } from "@/components/admin/selector-de-mes";
 import { CerrarMes } from "./cerrar-mes";
+import { LiquidarTarjetas } from "./liquidar-tarjetas";
 import { nombreDelCircuito } from "@/lib/dal/circuito";
 import { etiquetasDelCircuito, rotuloDelCircuito } from "@/lib/circuito";
 
@@ -75,7 +75,7 @@ export default async function CierrePage({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <SelectorDeMes actual={periodo.clave} etiqueta="Mes del cierre" />
+          <SelectorDeMes actual={periodo.clave} etiqueta="Mes del cierre" desde={resumen.primerMes || undefined} />
 
           <CerrarMes
             periodo={periodo.clave}
@@ -87,6 +87,7 @@ export default async function CierrePage({
                 : null
             }
             terminado={periodo.clave < hoyEnArgentina().slice(0, 7)}
+            pendientes={pendientes.length}
           />
           <ExportarAsientos
             periodo={periodo.clave}
@@ -153,34 +154,6 @@ export default async function CierrePage({
         </section>
       )}
 
-      {pendientes.length > 0 && (
-        <section className="tarjeta overflow-hidden border-[var(--estado-borde)]">
-          <header className="estado-espera border-b border-linea bg-[var(--estado-fondo)] px-5 py-3.5">
-            <h2 className="text-base font-semibold">
-              Antes de cerrar conviene resolver esto
-            </h2>
-          </header>
-          <ul className="divide-y divide-linea">
-            {pendientes.map((p) => (
-              <li key={p.clave} className="flex flex-wrap items-center gap-3 px-5 py-3.5">
-                <div className="min-w-0 flex-1">
-                  <p className="text-base font-semibold">
-                    {p.cantidad} · {p.titulo}
-                  </p>
-                  <p className="text-sm text-muted-foreground">{p.detalle}</p>
-                </div>
-                <Link
-                  href={p.donde}
-                  className="inline-flex h-10 shrink-0 items-center rounded-lg border border-linea px-3.5 text-sm font-medium hover:bg-hundida"
-                >
-                  Resolver
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
       {/*
         El resultado del mes junto a la posición de IVA: son las dos
         preguntas del dueño al cerrar —cuánto gané y cuánto tengo que pagar—.
@@ -226,40 +199,45 @@ export default async function CierrePage({
             </p>
           )}
           <dl className="mt-4 space-y-1.5 text-base">
+            {/* Lo vendido con costo, que es lo que entra al resultado: lo
+                vendido sin costo cargado va al lado, en gris y con su enlace,
+                y no como un renglón en rojo que se leía como una pérdida
+                (mes simulado, M3S1-020). Abajo, la misma cifra según su
+                factura, con la palabra de la regla para el circuito sin
+                factura (M2S1-062). */}
             <Linea
               titulo={resultado.actual.conDescuento ? "Vendido sin IVA ni descuentos" : "Vendido sin IVA"}
-              valor={resultado.actual.ventasNetas}
+              valor={resultado.actual.ventasNetas - resultado.actual.ventasSinCosto}
             />
-            {resumen.vendido.total !== 0 && (
+            {(resumen.vendido.total !== 0 || resultado.actual.ventasSinCosto > 0) && (
               <div className="pl-3 text-sm text-muted-foreground">
                 <dt className="sr-only">Según su factura</dt>
-                <dd className="flex flex-wrap gap-x-3 [font-variant-numeric:tabular-nums]">
-                {resumen.vendido.facturado.cantidad > 0 && (
-                  <span>con factura {formatearMonto(resumen.vendido.facturado.total)}</span>
-                )}
-                {resumen.vendido.sinCae.cantidad > 0 && (
-                  <span className="estado-espera font-medium">
-                    sin CAE {formatearMonto(resumen.vendido.sinCae.total)}
-                  </span>
-                )}
-                {resumen.vendido.interno.cantidad > 0 && (
-                  <span>interno {formatearMonto(resumen.vendido.interno.total)}</span>
-                )}
-                {resumen.vendido.sinFactura.cantidad > 0 && (
-                  <span className="estado-problema font-medium">
-                    sin factura {formatearMonto(resumen.vendido.sinFactura.total)}
-                  </span>
-                )}
+                <dd className="flex flex-wrap gap-x-3 gap-y-0.5 [font-variant-numeric:tabular-nums]">
+                  {resumen.vendido.facturado.cantidad > 0 && (
+                    <span className="whitespace-nowrap">con CAE {formatearMonto(resumen.vendido.facturado.total)}</span>
+                  )}
+                  {resumen.vendido.sinCae.cantidad > 0 && (
+                    <span className="estado-espera whitespace-nowrap font-medium">
+                      sin CAE {formatearMonto(resumen.vendido.sinCae.total)}
+                    </span>
+                  )}
+                  {resumen.vendido.interno.cantidad + resumen.vendido.sinFactura.cantidad > 0 && (
+                    <span className="whitespace-nowrap">
+                      {etiquetasDelCircuito(circuito).negro}{" "}
+                      {formatearMonto(resumen.vendido.interno.total + resumen.vendido.sinFactura.total)}
+                    </span>
+                  )}
+                  {resultado.actual.ventasSinCosto > 0 && (
+                    <Link
+                      href="/admin/reportes?corte=producto#ventas"
+                      className="whitespace-nowrap underline decoration-current/30 underline-offset-4 hover:decoration-current"
+                    >
+                      {plural(resultado.actual.lineasSinCosto, "renglón", "renglones")} sin costo{" "}
+                      {formatearMonto(resultado.actual.ventasSinCosto)}
+                    </Link>
+                  )}
                 </dd>
               </div>
-            )}
-            {resultado.actual.ventasSinCosto > 0 && (
-              <Linea
-                titulo={`Sin costo cargado · ${plural(resultado.actual.lineasSinCosto, "renglón", "renglones")}`}
-                valor={-resultado.actual.ventasSinCosto}
-                href="/admin/reportes?corte=producto#ventas"
-                problema
-              />
             )}
             <Linea titulo="Costo de lo vendido" valor={-resultado.actual.costo} />
             {resultado.actual.envios > 0 && (
@@ -309,7 +287,7 @@ export default async function CierrePage({
               </p>
             </>
           )}
-          <dl className="tabular mt-4 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-sm text-muted-foreground">
+          <dl className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
             {(
               [
                 ["Débito", resumen.iva.debito],
@@ -324,29 +302,90 @@ export default async function CierrePage({
               .map(([k, v]) => (
                 <div key={k} className="contents">
                   <dt>{k}</dt>
-                  <dd className="text-right">{formatearMonto(v)}</dd>
+                  <dd className="tabular text-right">{formatearMonto(v)}</dd>
                 </div>
               ))}
-            {/* Lo que queda a favor va con el mismo signo que el crédito de
-                arriba y dice a favor de quién: en positivo se leía como IVA a
-                pagar (H239). */}
+            {/* Lo que queda a favor dice a favor de quién en el rótulo y en
+                el color: el importe va sin signo. Con el menos además del «a
+                favor» era un doble negativo (mes simulado, M2S1-139). */}
             {resumen.iva.saldoTecnico > 0.005 && (
               <div className="contents font-medium text-saldo-favor">
                 <dt>Saldo técnico a favor</dt>
-                <dd className="text-right">{formatearMonto(-resumen.iva.saldoTecnico)}</dd>
+                <dd className="tabular text-right">{formatearMonto(resumen.iva.saldoTecnico)}</dd>
               </div>
             )}
             {resumen.iva.saldoLibre > 0.005 && (
               <div className="contents font-medium text-saldo-favor">
                 <dt>Libre disponibilidad a favor</dt>
-                <dd className="text-right">{formatearMonto(-resumen.iva.saldoLibre)}</dd>
+                <dd className="tabular text-right">{formatearMonto(resumen.iva.saldoLibre)}</dd>
               </div>
             )}
           </dl>
         </article>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-3">
+      {/* Lo que conviene mirar antes de cerrar, después de las dos cifras
+          del mes y plegado en un renglón por aviso: cada uno abre su
+          detalle y sus casos uno por uno, con el importe y el enlace a
+          cada uno (mes simulado, M2S4-013 y M2S3-045). */}
+      {pendientes.length > 0 && (
+        <details className="tarjeta group/pendientes overflow-hidden border-[var(--estado-borde)]">
+          <summary className="estado-espera flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 bg-[var(--estado-fondo)] px-5 py-3 [&::-webkit-details-marker]:hidden">
+            <h2 className="text-base font-semibold">
+              {pendientes.length === 1 ? "1 aviso antes de cerrar" : `${pendientes.length} avisos antes de cerrar`}
+            </h2>
+            <ChevronDown className="h-5 w-5 shrink-0 transition-transform group-open/pendientes:rotate-180" aria-hidden />
+          </summary>
+          <ul className="divide-y divide-linea border-t border-linea">
+            {pendientes.map((p) => (
+              <li key={p.clave} className="flex items-start gap-3 px-5 py-3">
+                <details className="group/aviso min-w-0 flex-1">
+                  <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
+                    <span className="tabular inline-flex min-w-7 justify-center rounded-md bg-hundida px-1.5 text-sm font-semibold">
+                      {p.cantidad}
+                    </span>
+                    <span className="min-w-0 text-base font-semibold">{p.titulo}</span>
+                    <ChevronDown
+                      className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open/aviso:rotate-180"
+                      aria-hidden
+                    />
+                  </summary>
+                  {p.detalle && <p className="mt-1 text-sm text-muted-foreground">{p.detalle}</p>}
+                  {p.casos && p.casos.length > 0 && (
+                    <ul className="mt-2 space-y-0.5">
+                      {p.casos.map((c, i) => (
+                        <li key={`${c.donde}-${i}`}>
+                          <Link
+                            href={c.donde}
+                            className="flex min-h-9 items-center justify-between gap-3 rounded-lg px-2 text-sm hover:bg-hundida"
+                          >
+                            <span className="min-w-0 truncate">{c.nombre}</span>
+                            {c.importe !== undefined && (
+                              <span className="tabular shrink-0 font-medium">{formatearMonto(c.importe)}</span>
+                            )}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </details>
+                {/* Un «Resolver» que vuelve a esta misma pantalla no
+                    resuelve nada: sin otro lugar, el aviso queda solo. */}
+                {p.donde.split("?")[0] !== "/admin/cierre" && (
+                  <Link
+                    href={p.donde}
+                    className="inline-flex h-10 shrink-0 items-center rounded-lg border border-linea px-3.5 text-sm font-medium hover:bg-hundida"
+                  >
+                    Resolver
+                  </Link>
+                )}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {/* Lo facturado, no lo vendido: con el mismo nombre que el
             «Vendido sin IVA» de arriba, «Ventas netas $0» parecía un error.
             Lo vendido sin factura va arriba, partiendo lo vendido: acá se
@@ -369,6 +408,7 @@ export default async function CierrePage({
           detalle={`${resumen.gastos.cantidad} anotados`}
           href={`/admin/compras/gastos?periodo=${periodo.clave}`}
         />
+        <LiquidarTarjetas saldo={resumen.tarjetasSinLiquidar} hoy={hoyEnArgentina()} />
       </section>
 
       <section className="tarjeta overflow-hidden">
@@ -418,8 +458,19 @@ export default async function CierrePage({
         <section className="tarjeta-hundida flex flex-wrap items-center justify-between gap-3 rounded-xl px-5 py-4">
           <div>
             <h2 className="text-base font-semibold">{rotuloDelCircuito(circuito)}</h2>
-            <p className="tabular text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {asientosB.length === 1 ? "1 asiento" : `${asientosB.length} asientos`}
+              {resumen.gastosB.cantidad > 0 && (
+                <>
+                  {" · "}
+                  <Link
+                    href={`/admin/compras/gastos?periodo=${periodo.clave}`}
+                    className="underline decoration-current/30 underline-offset-4 hover:decoration-current"
+                  >
+                    Gastos <span className="tabular">{formatearMonto(resumen.gastosB.total)}</span>
+                  </Link>
+                </>
+              )}
             </p>
           </div>
           <a
@@ -427,7 +478,7 @@ export default async function CierrePage({
             className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-linea px-4 text-base font-medium transition-colors hover:bg-background"
           >
             <Download className="h-4 w-4" />
-            Asientos {circuito === "b" ? "B" : etiquetasDelCircuito(circuito).negro.toLowerCase()}
+            {circuito === "sin_factura" ? "Asientos sin factura" : `Asientos ${etiquetasDelCircuito(circuito).negro}`}
           </a>
         </section>
       )}

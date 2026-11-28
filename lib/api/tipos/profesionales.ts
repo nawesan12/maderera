@@ -149,6 +149,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/eventos/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Borra un borrador sin anotados */
+        delete: operations["BorrarEvento"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/eventos/{id}/recordatorio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Manda el recordatorio a los anotados de un evento que todavía no lo recibieron */
+        post: operations["RecordarEvento"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/eventos/{id}/asistentes": {
         parameters: {
             query?: never;
@@ -321,6 +359,16 @@ export interface components {
             } | null;
         };
         EventoAdmin: {
+            /** @description los marcados «vino» */
+            asistieron: number;
+            /** @description los que tienen el lugar y todavía no se marcó si vinieron */
+            sinMarcar: number;
+            /** @description ya empezó (desde ahí se toma asistencia) */
+            empezo: boolean;
+            /** @description empieza mañana */
+            manana: boolean;
+            /** @description los anotados que todavía no recibieron el recordatorio */
+            porRecordar: number;
             id: string;
             slug: string;
             titulo: string;
@@ -582,6 +630,36 @@ export interface operations {
                 "application/json": components["schemas"]["FormularioLibre"];
             };
         };
+        responses: {
+            200: components["responses"]["Listo"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    BorrarEvento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Listo"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    RecordarEvento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: components["responses"]["Listo"];
             422: components["responses"]["Problema"];

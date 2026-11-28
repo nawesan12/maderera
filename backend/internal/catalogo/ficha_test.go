@@ -24,8 +24,8 @@ func TestFichaConUsosYDocumentos(t *testing.T) {
 	ex(`update products set usos = '  Encofrados y muebles de exterior. ', cuidados = '' where slug = 'fenolico'`)
 	doc := func(titulo string, reservado bool) string {
 		var id string
-		if err := e.pool.QueryRow(ctx, `insert into technical_documents (titulo, categoria, url, formato, solo_profesionales, activo)
-			values ($1, 'fichas', 'privado/x.pdf', 'pdf', $2, true) returning id`, titulo, reservado).Scan(&id); err != nil {
+		if err := e.pool.QueryRow(ctx, `insert into technical_documents (titulo, categoria, url, formato, solo_profesionales, activo, tamano_bytes)
+			values ($1, 'fichas', 'privado/x.pdf', 'pdf', $2, true, 100) returning id`, titulo, reservado).Scan(&id); err != nil {
 			t.Fatal(err)
 		}
 		return id
@@ -47,5 +47,18 @@ func TestFichaConUsosYDocumentos(t *testing.T) {
 	}
 	if len(p.Documentos) > 0 && p.Documentos[0].URL != "/api/v1/contenido/documentos/"+p.Documentos[0].ID+"/archivo" {
 		t.Errorf("url: %s", p.Documentos[0].URL)
+	}
+	// M3S1-022: el id del reservado (sin su título) para que el profesional
+	// lo baje desde la ficha.
+	if len(p.Reservados) != 1 || p.Reservados[0] != reservado {
+		t.Errorf("los ids de los reservados: %v", p.Reservados)
+	}
+	// M2S1-025: sin archivo subido no se lista ni se cuenta.
+	ex(`update technical_documents set tamano_bytes = null where id = $1`, reservado)
+	_, b = pedir(t, &http.Client{}, e.srv.URL+"/api/v1/catalogo/productos/fenolico?publico=true")
+	p = ProductoDetalle{}
+	_ = json.Unmarshal([]byte(b), &p)
+	if p.DocumentosReservados != 0 || len(p.Reservados) != 0 {
+		t.Errorf("un reservado sin archivo: %s", b)
 	}
 }

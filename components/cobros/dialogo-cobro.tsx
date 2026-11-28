@@ -23,6 +23,17 @@ import { abrirCaja } from "@/app/mostrador/actions";
 import { claveAlAbrir } from "@/lib/cobros/clave";
 import type { MedioDeCobro } from "@/lib/cobros/partes";
 
+const MEDIOS_CON_RETENCION: MedioDeCobro[] = [
+  "efectivo",
+  "transferencia",
+  "deposito",
+  "cheque",
+  "echeq",
+  "tarjeta_debito",
+  "tarjeta_credito",
+  "retencion",
+];
+
 /**
  * «Registrar cobro»: lo que pagó un cliente, con su recibo.
  *
@@ -50,6 +61,7 @@ export function DialogoCobro({
   alCambiarAbierto,
   sinBoton = false,
   medio = "efectivo",
+  conRetencion = false,
 }: {
   customerId?: string | null;
   nombre: string;
@@ -73,6 +85,8 @@ export function DialogoCobro({
    * ahí. Un pedido por transferencia abría en Efectivo (mes simulado).
    */
   medio?: MedioDeCobro;
+  /** Ofrece la retención sufrida como un medio más (regla retencion_en_el_cobro). */
+  conRetencion?: boolean;
 }) {
   const router = useRouter();
   const [abiertoAdentro, setAbiertoAdentro] = useState(false);
@@ -93,6 +107,10 @@ export function DialogoCobro({
    */
   const [previa, setPrevia] = useState<Pick<EstadoCobro, "sinCaja" | "fondoBase" | "sucursales">>({});
   const [conEfectivo, setConEfectivo] = useState(medio === "efectivo");
+  // Lo que suman los medios: por encima de lo que debe, el botón dice cuánto
+  // queda a favor (M2S4-025: el recibo salía con $ 300.000 de más sin que
+  // nadie lo confirmara).
+  const [suma, setSuma] = useState(0);
 
   // Cada vez que se abre, de su botón o de afuera («Cobrar y entregar»),
   // nace una clave nueva y se olvida la caja del cobro anterior.
@@ -193,6 +211,8 @@ export function DialogoCobro({
     });
   }
 
+  const aFavor = aCobrar > 0 ? Math.round((suma - aCobrar) * 100) / 100 : 0;
+
   const titulo = pedido
     ? `Cobrar ${pedido.numero}`
     : numeroPedido
@@ -213,7 +233,9 @@ export function DialogoCobro({
         </DialogTrigger>
       )}
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl" aria-describedby={undefined}>
-        <DialogHeader>
+        {/* Fijo arriba: a 375 px, con dos cheques cargados, lo que debe se
+            iba de la pantalla (M2S4-025). */}
+        <DialogHeader className="sticky top-0 z-10 bg-popover pr-12">
           <DialogTitle>
             {titulo}
             {aCobrar > 0 && (
@@ -232,7 +254,13 @@ export function DialogoCobro({
           {pedido && <input type="hidden" name="pedidoId" value={pedido.id} />}
           {orderId && <input type="hidden" name="orderId" value={orderId} />}
 
-          <CobroMultimedio aCobrar={Math.max(aCobrar, 0)} medioInicial={medio} onEfectivo={setConEfectivo} />
+          <CobroMultimedio
+            aCobrar={Math.max(aCobrar, 0)}
+            medios={conRetencion ? MEDIOS_CON_RETENCION : undefined}
+            medioInicial={medio}
+            onEfectivo={setConEfectivo}
+            onTotal={setSuma}
+          />
 
           {!orderId && !pedido && (
             <label className="block text-sm text-muted-foreground">
@@ -317,7 +345,7 @@ export function DialogoCobro({
             className="boton-accion inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg text-base font-semibold disabled:opacity-60"
           >
             {pendiente && <Loader2 className="h-5 w-5 animate-spin" />}
-            Registrar y emitir recibo
+            {aFavor > 0 ? `Dejar ${formatearMonto(aFavor)} a favor y emitir recibo` : "Registrar y emitir recibo"}
           </button>
         </form>
       </DialogContent>

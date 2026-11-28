@@ -448,7 +448,7 @@ components:
         topeAlcanzado: { type: boolean }
     VarianteDetalle:
       type: object
-      required: [id, sku, label, material, color, terminacion, calidad, largoMm, anchoMm, espesorMm, precio, stock, stockCentral, stockAserradero, disponibles]
+      required: [id, sku, label, material, color, terminacion, calidad, largoMm, anchoMm, espesorMm, precio, precioAnterior, stock, stockCentral, stockAserradero, disponibles]
       properties:
         id: { type: string }
         sku: { type: string }
@@ -461,6 +461,7 @@ components:
         anchoMm: { type: integer, nullable: true }
         espesorMm: { type: integer, nullable: true }
         precio: { type: string, nullable: true }
+        precioAnterior: { type: string, nullable: true, description: "en oferta: el precio de antes" }
         stock:
           type: array
           items: { $ref: "#/components/schemas/StockDeSucursal" }
@@ -493,6 +494,7 @@ components:
         cuidados: { type: string, nullable: true }
         documentos: { type: array, items: { $ref: "#/components/schemas/DocumentoDeFicha" } }
         documentosReservados: { type: integer }
+        reservados: { type: array, items: { type: string }, description: Los ids de los reservados, sin título }
     DocumentoDeFicha:
       type: object
       required: [id, titulo, descripcion, url, formato, tamanoBytes]

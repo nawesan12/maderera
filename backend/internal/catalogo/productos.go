@@ -16,6 +16,7 @@ import (
 	"golang.org/x/text/language"
 	"golang.org/x/text/unicode/norm"
 
+	"mjbj/internal/busqueda"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/sqlc"
 )
@@ -91,6 +92,10 @@ type ProductoListado struct {
 	StockCentral    NivelStock        `json:"stockCentral"`
 	StockAserradero NivelStock        `json:"stockAserradero"`
 	HayStock        bool              `json:"hayStock"`
+	// StockPorMedida son, por etiqueta de la medida, las sucursales con
+	// stock de esa medida. No viaja: lo usa el bot de WhatsApp, que dice
+	// dónde hay de la medida que le pidieron y no del producto entero.
+	StockPorMedida map[string][]string `json:"-"`
 }
 
 // StockDeSucursal es el nivel de stock de una sucursal activa.
@@ -336,6 +341,14 @@ func (s *Servicio) claves(ctx context.Context, f Filtros, l listaParaConsulta) (
 	if terminos := terminosDeBusqueda(f.Busqueda); len(terminos) > 0 {
 		var porTermino []string
 		for _, t := range terminos {
+			// «2x4» es una medida: está en el nombre o en una medida como
+			// «2" x 4"» (el bot buscaba «pino 2x4», no encontraba nada y
+			// caía a todo el pino, con el machimbre primero).
+			if re, ok := busqueda.MedidaPorPor(t); ok {
+				r := arg(re)
+				porTermino = append(porTermino, "(p.name ~* "+r+" OR EXISTS (SELECT 1 FROM product_variants mv WHERE mv.product_id = p.id AND mv.active AND mv.label ~* "+r+"))")
+				continue
+			}
 			patron := arg("%" + t + "%")
 			var col []string
 			for _, c := range []string{"p.name", "p.description", "p.subcategory", "p.brand", "c.name"} {
@@ -403,8 +416,14 @@ func (s *Servicio) claves(ctx context.Context, f Filtros, l listaParaConsulta) (
 			hayAnterior      bool
 		}
 		p.Labels = []string{}
+		p.StockPorMedida = map[string][]string{}
 		for _, v := range propias {
 			p.Labels = append(p.Labels, v.label)
+			for _, b := range sucursales {
+				if n, ok := v.stock[b.slug]; ok && n != SinStock {
+					p.StockPorMedida[v.label] = append(p.StockPorMedida[v.label], b.nombre)
+				}
+			}
 			precio := 0.0
 			if v.precio != nil {
 				precio = numero(*v.precio)
@@ -749,6 +768,8 @@ type VarianteDetalle struct {
 	AnchoMm     *int32  `json:"anchoMm"`
 	EspesorMm   *int32  `json:"espesorMm"`
 	Precio      *string `json:"precio"`
+	// PrecioAnterior es el de antes de la oferta vigente; nil sin oferta.
+	PrecioAnterior *string `json:"precioAnterior"`
 	// Stock es el nivel en cada sucursal activa, como en ProductoListado.
 	Stock           []StockDeSucursal `json:"stock"`
 	StockCentral    NivelStock        `json:"stockCentral"`
@@ -788,6 +809,8 @@ type ProductoDetalle struct {
 	// vista de cualquiera. De los reservados va la cantidad.
 	Documentos           []DocumentoDeFicha `json:"documentos"`
 	DocumentosReservados int                `json:"documentosReservados"`
+	// Reservados son los ids de esos documentos, sin título.
+	Reservados []string `json:"reservados"`
 }
 
 // DocumentoDeFicha es un documento técnico en la ficha del producto.
@@ -868,6 +891,10 @@ func (s *Servicio) Producto(ctx context.Context, slug string, lista Lista) (*Pro
 		SELECT v.id, v.sku, v.label, v.material, v.color, v.terminacion, v.calidad,
 		       v.largo_mm, v.ancho_mm, v.espesor_mm,
 		       coalesce(pr.price, round((g.price * $3::numeric)::numeric, 2))::text,
+		       (CASE WHEN pr.price IS NOT NULL
+		             THEN CASE WHEN pr.oferta_hasta IS NULL OR pr.oferta_hasta > now() THEN pr.precio_anterior END
+		             WHEN g.oferta_hasta IS NULL OR g.oferta_hasta > now() THEN round((g.precio_anterior * $3::numeric)::numeric, 2)
+		        END)::text,
 		       b.slug, i.qty, i.reservado, i.min_qty
 		FROM product_variants v
 		LEFT JOIN price_list_items pr ON pr.variant_id = v.id AND pr.price_list_id = $1::uuid
@@ -885,10 +912,10 @@ func (s *Servicio) Producto(ctx context.Context, slug string, lista Lista) (*Pro
 	niveles := map[string]map[string]NivelStock{}
 	for filas.Next() {
 		var v VarianteDetalle
-		var precio, sucursal *string
+		var precio, anterior, sucursal *string
 		var qty, reservado, minQty *jsmath.Num
 		if err := filas.Scan(&v.ID, &v.Sku, &v.Label, &v.Material, &v.Color, &v.Terminacion, &v.Calidad,
-			&v.LargoMm, &v.AnchoMm, &v.EspesorMm, &precio, &sucursal, &qty, &reservado, &minQty); err != nil {
+			&v.LargoMm, &v.AnchoMm, &v.EspesorMm, &precio, &anterior, &sucursal, &qty, &reservado, &minQty); err != nil {
 			return nil, err
 		}
 		i, ok := indice[v.ID]
@@ -901,6 +928,11 @@ func (s *Servicio) Producto(ctx context.Context, slug string, lista Lista) (*Pro
 		actual := &p.Variantes[i]
 		if precio != nil {
 			actual.Precio = precio
+		}
+		// La oferta de la medida, vigente: la ficha la muestra tachada como
+		// la tarjeta del listado (M2S2-030).
+		if anterior != nil {
+			actual.PrecioAnterior = anterior
 		}
 		if sucursal != nil && activa[*sucursal] && qty != nil && minQty != nil {
 			res := 0.0
@@ -972,10 +1004,11 @@ func quitarTildes(s string) string {
 // reservados a profesionales.
 func (s *Servicio) documentosDeFicha(ctx context.Context, p *ProductoDetalle, categoriaID string) error {
 	p.Documentos = []DocumentoDeFicha{}
+	p.Reservados = []string{}
 	filas, err := s.pool.Query(ctx, `
 		SELECT d.id::text, d.titulo, d.descripcion, d.url, d.formato, d.tamano_bytes, d.solo_profesionales
 		FROM technical_documents d
-		WHERE d.activo AND EXISTS (
+		WHERE d.activo AND d.tamano_bytes IS NOT NULL AND EXISTS (
 			SELECT 1 FROM technical_document_targets t
 			WHERE t.document_id = d.id AND (t.product_id = $1 OR t.category_id = $2::uuid))
 		ORDER BY d.orden, d.titulo`, p.ID, categoriaID)
@@ -994,7 +1027,10 @@ func (s *Servicio) documentosDeFicha(ctx context.Context, p *ProductoDetalle, ca
 		// archivo se sirve por la API, que decide quién lo puede bajar.
 		d.URL = "/api/v1/contenido/documentos/" + d.ID + "/archivo"
 		if reservado {
+			// El id solo: quien es profesional lo baja desde la ficha
+			// (la API mira la sesión); el título no va a la caché compartida.
 			p.DocumentosReservados++
+			p.Reservados = append(p.Reservados, d.ID)
 			continue
 		}
 		p.Documentos = append(p.Documentos, d)

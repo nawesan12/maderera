@@ -28,8 +28,11 @@ export function FormularioResena({ item }: { item: ProductoResenable }) {
   if (estado.ok) {
     return (
       <p className="flex items-center justify-between gap-3 rounded-[12px] bg-hundida px-4 py-3 text-[15px] text-texto-2">
-        <span className="min-w-0">{item.nombre}</span>
-        <span className="estado-ok inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)]">
+        <span className="min-w-0">
+          {item.nombre}
+          {item.medida && <span> · {item.medida}</span>}
+        </span>
+        <span className="estado-espera inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)]">
           <Check className="h-3.5 w-3.5" />
           Enviada
         </span>
@@ -43,7 +46,13 @@ export function FormularioResena({ item }: { item: ProductoResenable }) {
       <input type="hidden" name="orderId" value={item.orderId} />
       <input type="hidden" name="estrellas" value={estrellas} />
 
-      <p className="text-[15px] font-semibold">{item.nombre}</p>
+      {/* Con la medida y el pedido: «Fenólico» solo no decía cuál
+          (M3S4-032). */}
+      <p className="text-[15px] font-semibold">
+        {item.nombre}
+        {item.medida && <span className="font-normal text-texto-2"> · {item.medida}</span>}
+      </p>
+      <p className="tabular text-sm text-texto-3">{item.numeroPedido}</p>
 
       <div
         className="mt-1 -ml-2 flex items-center"

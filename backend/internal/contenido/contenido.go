@@ -245,6 +245,19 @@ func (s *Servicio) DejarResena(ctx context.Context, ses *auth.Sesion, r NuevaRes
 
 // --- el panel ---
 
+// enOtraPantalla son los ajustes que se cambian donde se usan, con su control
+// propio: en «Textos del sitio» salían como un campo para escribir «no» o un
+// número (mes simulado, M2S1-043 y M2S2-093). El bot y el número humano están
+// en la configuración de WhatsApp, y el umbral de candidatos a baja, en
+// Candidatos a dar de baja. Los dos de la tienda siguen viniendo: la tarjeta
+// «Qué muestra el sitio» de Contenido los lee de acá, y sin ellos los daba
+// por encendidos y solo ofrecía «Apagar» (mes 23).
+var enOtraPantalla = map[string]bool{
+	"whatsapp_bot":                   true,
+	"whatsapp_numero_humano":         true,
+	"catalogo.meses_sin_vender_baja": true,
+}
+
 // interruptores son los ajustes de la tienda (migración 00093): valen «si» o
 // «no», y la descripción es la de la bitácora.
 var interruptores = map[string]string{
@@ -284,6 +297,60 @@ var numericos = map[string]bool{
 
 // GuardarAjuste cambia un texto del sitio.
 func (s *Servicio) GuardarAjuste(ctx context.Context, clave, valor string) error {
+	_, err := s.GuardarAjusteNormalizado(ctx, clave, valor)
+	return err
+}
+
+// numerosDeWhatsApp son los ajustes que son un número de WhatsApp: el de los
+// botones del sitio y el de la persona que atiende cuando el bot deriva. Se
+// aceptaba «abc» y los botones quedaban rotos (mes 23). El humano puede ir
+// vacío (sin derivación).
+var numerosDeWhatsApp = map[string]bool{"whatsapp_principal": false, "whatsapp_numero_humano": true}
+
+// NumeroDeWhatsApp lleva lo escrito a la forma de wa.me: «223 590-3118» o
+// «0223 5903118» quedan con el 54 adelante, y uno con código de país
+// («+54 9 223 590-3118»), en dígitos. Vacío, "" y true; lo que no es un
+// número, false.
+func NumeroDeWhatsApp(v string) (string, bool) {
+	d := strings.Map(func(r rune) rune {
+		switch r {
+		case ' ', '-', '(', ')', '.', '+', '\u00a0':
+			return -1
+		}
+		return r
+	}, v)
+	if d == "" {
+		return "", true
+	}
+	for _, r := range d {
+		if r < '0' || r > '9' {
+			return "", false
+		}
+	}
+	switch {
+	case len(d) == 11 && strings.HasPrefix(d, "0"):
+		return "54" + d[1:], true
+	case len(d) == 10:
+		return "54" + d, true
+	case len(d) >= 12 && len(d) <= 15:
+		return d, true
+	}
+	return "", false
+}
+
+// GuardarAjusteNormalizado guarda el ajuste y devuelve cómo quedó escrito.
+func (s *Servicio) GuardarAjusteNormalizado(ctx context.Context, clave, valor string) (string, error) {
+	if vacioVale, ok := numerosDeWhatsApp[clave]; ok {
+		n, bien := NumeroDeWhatsApp(valor)
+		if !bien || (n == "" && !vacioVale) {
+			return "", plataforma.Invalido(map[string]string{"valor": "Poné el número con la característica, por ejemplo 223 590-3118."})
+		}
+		valor = n
+	}
+	return valor, s.guardarAjuste(ctx, clave, valor)
+}
+
+func (s *Servicio) guardarAjuste(ctx context.Context, clave, valor string) error {
 	if clave == "" || utf8.RuneCountInString(clave) > 60 || utf8.RuneCountInString(valor) > 500 {
 		return plataforma.Invalido(map[string]string{"valor": "No se pudo guardar: el texto no puede pasar de 500 letras."})
 	}
@@ -333,6 +400,19 @@ func (s *Servicio) Moderar(ctx context.Context, ses *auth.Sesion, id, estado, mo
 		return "", err
 	}
 	slug, _ := s.q.SlugDeProducto(ctx, productID)
+	// La moderación de una reseña de producto queda en la bitácora, como la
+	// del negocio (mes simulado, M2S3-017).
+	var producto string
+	_ = s.pool.QueryRow(ctx, `SELECT name FROM products WHERE id = $1`, productID).Scan(&producto)
+	que := map[string]string{"publicada": "Publicó", "rechazada": "Rechazó", "pendiente": "Volvió a pendiente"}[estado]
+	if que == "" {
+		que = "Cambió"
+	}
+	desc := que + " una reseña de " + producto
+	if motivoRechazo != nil {
+		desc += ": " + *motivoRechazo
+	}
+	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCambiarEstado, "resena_producto", id, desc, nil)
 	return slug, nil
 }
 
@@ -415,7 +495,7 @@ func (s *Servicio) GuardarBanner(ctx context.Context, ses *auth.Sesion, f FormBa
 		return plataforma.Invalido(map[string]string{"orden": "El orden va de 0 a 99."})
 	}
 	desde, err1 := fechaDelFormulario(f.Desde, 0, 0, 0)
-	hasta, err2 := fechaDelFormulario(f.Hasta, 0, 0, 0)
+	hasta, err2 := fechaDelFormulario(f.Hasta, 23, 59, 59)
 	if err1 != nil || err2 != nil {
 		return plataforma.Invalido(map[string]string{"desde": "Revisá la fecha."})
 	}

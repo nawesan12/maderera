@@ -48,7 +48,7 @@ func (s *Servicio) AnularPago(ctx context.Context, ses *auth.Sesion, id, motivo 
 	var total jsmath.Num
 	var fecha time.Time
 	var referencia *string
-	var certificados []string
+	var certificados, posteriores []string
 	var aCartera, anulados int
 	var devuelto float64
 	var sinCaja string
@@ -121,7 +121,19 @@ func (s *Servicio) AnularPago(ctx context.Context, ses *auth.Sesion, id, motivo 
 			}
 		}
 
+		// Lo que cubría, para que la ficha del pago anulado lo siga diciendo
+		// (tachado) en vez de «A cuenta, sin aplicar» (M2S2-078).
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO supplier_payment_anulado_items (payment_id, purchase_invoice_id, cheque_id, movement_id, importe)
+			SELECT payment_id, purchase_invoice_id, NULL::uuid, NULL::uuid, importe FROM supplier_payment_allocations WHERE payment_id = $1
+			UNION ALL SELECT payment_id, NULL, cheque_id, NULL, importe FROM supplier_payment_cheques WHERE payment_id = $1
+			UNION ALL SELECT payment_id, NULL, NULL, movement_id, importe FROM supplier_payment_ajustes WHERE payment_id = $1`, id); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, `DELETE FROM supplier_payment_cheques WHERE payment_id = $1`, id); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM supplier_payment_ajustes WHERE payment_id = $1`, id); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM supplier_payment_allocations WHERE payment_id = $1`, id); err != nil {
@@ -133,6 +145,20 @@ func (s *Servicio) AnularPago(ctx context.Context, ses *auth.Sesion, id, motivo 
 			return err
 		}
 		certificados, err = pgx.CollectRows(filas, pgx.RowTo[string])
+		if err != nil {
+			return err
+		}
+		// Si un certificado posterior del mismo mes ya contó la base de este
+		// pago en su acumulado, se avisa: quedó calculado de más (M2S2-013).
+		filas, err = tx.Query(ctx, `
+			SELECT DISTINCT r.numero FROM retenciones_practicadas r
+			JOIN bases_de_retencion b ON b.payment_id = $1 AND b.codigo_regimen = r.codigo_regimen
+			WHERE r.supplier_id = $2 AND r.payment_id <> $1 AND r.anulada_at IS NULL AND r.fecha > $3
+			  AND r.fecha >= $4 AND r.fecha < $5 ORDER BY r.numero`, id, proveedor, fecha, inicioDeMes(fecha), inicioDeMes(fecha).AddDate(0, 1, 0))
+		if err != nil {
+			return err
+		}
+		posteriores, err = pgx.CollectRows(filas, pgx.RowTo[string])
 		if err != nil {
 			return err
 		}
@@ -183,6 +209,11 @@ func (s *Servicio) AnularPago(ctx context.Context, ses *auth.Sesion, id, motivo 
 	if len(certificados) > 0 {
 		desc += "; certificados anulados: " + strings.Join(certificados, ", ")
 	}
+	// El aviso de la pantalla se pierde al salir de la ficha: la bitácora lo
+	// guarda (M2S2-013).
+	if len(posteriores) > 0 {
+		desc += "; a revisar, calculados con este pago en el acumulado: " + strings.Join(posteriores, ", ")
+	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaAnular, "pago_proveedor", id, desc, struct {
 		Motivo       string   `json:"motivo"`
 		Certificados []string `json:"certificados"`
@@ -196,6 +227,9 @@ func (s *Servicio) AnularPago(ctx context.Context, ses *auth.Sesion, id, motivo 
 	}
 	if anulados > 0 {
 		ok += cuantos(anulados, " El cheque propio quedó anulado.", " %d cheques propios quedaron anulados.")
+	}
+	if len(posteriores) > 0 {
+		ok += " " + strings.Join(posteriores, ", ") + cuantos(len(posteriores), " se calculó con este pago en el acumulado: revisalo.", " se calcularon con este pago en el acumulado: revisalos.")
 	}
 	switch {
 	case sinCaja != "":

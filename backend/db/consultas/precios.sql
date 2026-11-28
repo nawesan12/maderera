@@ -31,9 +31,11 @@ WHERE s.active ORDER BY s.sort_order, s.name;
 SELECT price::text AS price FROM price_list_items WHERE variant_id = $1 AND price_list_id = $2;
 
 -- name: FijarPrecio :exec
+-- Un precio nuevo termina la oferta que hubiera: si no, al vencer volvía el
+-- precio de antes de la oferta y pisaba el que se cargó (M2S2-030).
 INSERT INTO price_list_items (variant_id, price_list_id, price, updated_at)
 VALUES ($1, $2, sqlc.arg(price)::text::numeric, now())
-ON CONFLICT (price_list_id, variant_id) DO UPDATE SET price = excluded.price, updated_at = now();
+ON CONFLICT (price_list_id, variant_id) DO UPDATE SET price = excluded.price, precio_anterior = NULL, oferta_hasta = NULL, updated_at = now();
 
 -- name: AnotarPrecio :exec
 INSERT INTO price_history (variant_id, price_list_id, precio_anterior, precio_nuevo, origen, motivo, lote_id, created_by_user_id)
@@ -46,7 +48,10 @@ JOIN products p ON p.id = v.product_id
 JOIN categories c ON c.id = p.category_id
 LEFT JOIN subcategories s ON s.id = p.subcategory_id
 LEFT JOIN variant_costs vc ON vc.variant_id = v.id
-WHERE p.active AND v.active
+-- También los productos apagados (M2S4-023): uno de temporada que estaba
+-- inactivo en un aumento general volvía al catálogo con el precio viejo.
+-- La planilla los toma igual. Las medidas dadas de baja, no.
+WHERE v.active
   AND (sqlc.narg(categoria)::text IS NULL OR c.slug = sqlc.narg(categoria))
   AND (sqlc.narg(rubro)::text IS NULL OR s.slug = sqlc.narg(rubro))
   -- Lo que trae un proveedor: el aumento llega por proveedor, no por rubro.

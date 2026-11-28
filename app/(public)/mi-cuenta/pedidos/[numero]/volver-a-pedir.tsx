@@ -1,49 +1,50 @@
 "use client";
 
-import { useActionState } from "react";
-import Link from "next/link";
-import { AlertCircle, Check, Loader2, RotateCcw } from "lucide-react";
+import { useActionState, useState } from "react";
+import { AlertCircle, Loader2, RotateCcw } from "lucide-react";
 import { repetirPedido, type EstadoAccion } from "../../actions";
 
 const estadoInicial: EstadoAccion = {};
 
-/** Carga en el presupuesto lo mismo que tenía este pedido. */
-export function VolverAPedir({ numero }: { numero: string }) {
+/**
+ * Carga en el carrito lo mismo que tenía este pedido y lleva al carrito.
+ * Con algo ya en el carrito, el primer toque pregunta: reemplazarlo o sumar
+ * (M2S4-015).
+ */
+export function VolverAPedir({ numero, carritoConCosas }: { numero: string; carritoConCosas: boolean }) {
   const [estado, accion, pendiente] = useActionState(
     repetirPedido,
     estadoInicial,
   );
-
-  if (estado.ok) {
-    return (
-      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 estado-ok rounded-lg bg-[var(--estado-fondo)] px-3.5 py-2.5 text-sm">
-        <Check className="h-4 w-4 shrink-0" />
-        {estado.ok}
-        <Link
-          href="/carrito"
-          className="font-medium underline underline-offset-2"
-        >
-          Ver el presupuesto
-        </Link>
-      </p>
-    );
-  }
+  const [eligiendo, setEligiendo] = useState(false);
+  const icono = pendiente ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />;
+  const boton =
+    "inline-flex h-11 items-center gap-2 rounded-lg border bg-card px-4 font-medium transition-colors hover:bg-muted disabled:opacity-60";
 
   return (
     <form action={accion}>
       <input type="hidden" name="numero" value={numero} />
-      <button
-        type="submit"
-        disabled={pendiente}
-        className="inline-flex h-11 items-center gap-2 rounded-lg border bg-card px-4 font-medium transition-colors hover:bg-muted disabled:opacity-60"
-      >
-        {pendiente ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <RotateCcw className="h-4 w-4" />
-        )}
-        Volver a pedir lo mismo
-      </button>
+      {carritoConCosas && eligiendo ? (
+        <div className="flex flex-wrap gap-2">
+          <button type="submit" name="modo" value="reemplazar" disabled={pendiente} className={boton}>
+            {icono}
+            Reemplazar el carrito
+          </button>
+          <button type="submit" name="modo" value="sumar" disabled={pendiente} className={boton}>
+            Sumar al carrito
+          </button>
+        </div>
+      ) : (
+        <button
+          type={carritoConCosas ? "button" : "submit"}
+          onClick={carritoConCosas ? () => setEligiendo(true) : undefined}
+          disabled={pendiente}
+          className={boton}
+        >
+          {icono}
+          Volver a pedir lo mismo
+        </button>
+      )}
 
       {estado.error && (
         <p

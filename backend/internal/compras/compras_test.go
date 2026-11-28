@@ -313,6 +313,8 @@ func TestRecepcionesSimultaneasNoPierdenLaMezcla(t *testing.T) {
 	adm := e.staff(t, "admin@prueba.test", "admin")
 	ctx := context.Background()
 	_, _ = e.pool.Exec(ctx, `insert into variant_costs (variant_id, cantidad_base, costo_promedio) values ($1, 10, 100)`, e.placa)
+	// El promedio se pondera contra el stock (M3S2-007): las 10 a 100 están en el galpón.
+	_, _ = e.pool.Exec(ctx, `insert into inventory (variant_id, branch_id, qty) values ($1, $2, 10)`, e.placa, e.central)
 	crear := func(sucursal string, costo float64) string {
 		_, b := pedir(t, adm, "POST", e.u+"recepciones", map[string]any{"supplierId": e.proveedor, "branchId": sucursal,
 			"lineas": []any{map[string]any{"variantId": e.placa, "cantidad": 10, "costoUnitario": costo, "alicuotaIva": 21}}})
@@ -423,10 +425,10 @@ func TestPagoConRetencionesYCheques(t *testing.T) {
 		t.Errorf("acumulado: %s", b)
 	}
 	numero := fmt.Sprintf("IIB-%d-000001", time.Now().UTC().Year())
-	if _, b := pedir(t, adm, "GET", e.u+"compras/certificados/"+numero, nil); !strings.Contains(b, `"importe":"15.00"`) || !strings.Contains(b, `"pagoReferencia":"TR-9"`) {
+	if _, b := pedir(t, adm, "GET", e.u+"compras/certificados/"+numero, nil); !strings.Contains(b, `"importe":"15.00"`) || !strings.Contains(b, `"pagoMedio":"cheque 12345678 y transferencia"`) || !strings.Contains(b, `"pagoReferencia":"TR-9"`) {
 		t.Errorf("certificado: %s", b)
 	}
-	if c, b := pedir(t, adm, "GET", e.u+"compras/pagos/retenciones-csv", nil); c != 200 || !strings.Contains(b, `"`+numero+`";"iibb";"IIBB-MI"`) || !strings.Contains(b, "1000,00;1000,00;1000,00;1,500;0,00;15,00") {
+	if c, b := pedir(t, adm, "GET", e.u+"compras/pagos/retenciones-csv", nil); c != 200 || !strings.Contains(b, `"`+numero+`";"IIBB";"IIBB-MI"`) || !strings.Contains(b, "1000,00;1000,00;1000,00;1,500;0,00;15,00") {
 		t.Errorf("csv: %d %s", c, b)
 	}
 	// E-Cheq por el circuito B: no.
@@ -447,7 +449,7 @@ func TestPagoConRetencionesYCheques(t *testing.T) {
 	// Las partes tienen que sumar el neto.
 	c, b = pedir(t, adm, "POST", e.u+"compras/pagos", map[string]any{"supplierId": e.proveedor, "total": 100, "medio": "transferencia", "retenciones": []any{},
 		"partes": []any{map[string]any{"medio": "transferencia", "importe": 90}}})
-	if c != 422 || !strings.Contains(b, "Las partes del pago suman $90.00 y el neto a pagar es $100.00.") {
+	if c != 422 || !strings.Contains(b, "Los medios suman $\u00a090 y salen $\u00a0100: faltan $\u00a010.") {
 		t.Errorf("partes: %d %s", c, b)
 	}
 	// Y el libro IVA compras con la factura.
@@ -596,11 +598,16 @@ func TestListaDeProveedor(t *testing.T) {
 	if c, _ := pedir(t, ven, "POST", e.u+"compras/lista-proveedor/aplicar", aplicar); c != 403 {
 		t.Errorf("el vendedor no aplica precios: %d", c)
 	}
-	if c, b := pedir(t, adm, "POST", e.u+"compras/lista-proveedor/aplicar", aplicar); c != 200 || !strings.Contains(b, "Listo: 1 precios actualizados.") {
+	if c, b := pedir(t, adm, "POST", e.u+"compras/lista-proveedor/aplicar", aplicar); c != 200 || !strings.Contains(b, "Listo: 1 precio actualizado.") {
 		t.Fatalf("aplicar: %d %s", c, b)
 	}
 	if p := e.numero(t, `select price::float8 from price_list_items where variant_id = $1`, e.placa); p != 1573 {
 		t.Errorf("precio: %v", p)
+	}
+	// Queda en el historial de precios con el antes y el después (M2S2-005).
+	if n := e.numero(t, `select count(*) from price_history where variant_id = $1 and precio_anterior = 1000 and precio_nuevo = 1573
+		and origen = 'importacion' and motivo like 'Lista de %'`, e.placa); n != 1 {
+		t.Errorf("historial de precios: %v", n)
 	}
 	if _, b := pedir(t, adm, "GET", e.u+"proveedores/"+e.proveedor+"/perfil-lista", nil); !strings.Contains(b, `"margenPorcentaje":"30.00"`) {
 		t.Errorf("perfil: %s", b)
@@ -729,6 +736,17 @@ func TestFacturaDeUnaRecepcionNoDuplicaLaDeuda(t *testing.T) {
 	}
 	if s := e.saldo(t); s != 1210+1331+121 {
 		t.Errorf("factura suelta: %v", s)
+	}
+	// Al anularla, la bitácora nombra la recepción por su remito, no por el
+	// uuid (mes 23).
+	var f1, d string
+	_ = e.pool.QueryRow(context.Background(), `select id::text from purchase_invoices where receipt_id = $1`, r1).Scan(&f1)
+	if c, b := pedir(t, adm, "POST", e.u+"compras/facturas/"+f1+"/anular", map[string]string{"motivo": "error"}); c != 200 {
+		t.Fatalf("anular: %d %s", c, b)
+	}
+	_ = e.pool.QueryRow(context.Background(), `select descripcion from audit_log where entidad = 'factura_compra' and entidad_id = $1 and accion = 'anular'`, f1).Scan(&d)
+	if !strings.Contains(d, "cubría la recepción del remito R-1 (") || strings.Contains(d, r1) {
+		t.Errorf("bitácora: %s", d)
 	}
 }
 

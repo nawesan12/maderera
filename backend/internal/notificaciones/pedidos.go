@@ -14,6 +14,7 @@ import (
 	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/pdf"
+	"mjbj/internal/pedidos"
 	"mjbj/internal/push"
 	"mjbj/internal/whatsapp"
 )
@@ -106,11 +107,57 @@ func (s *Servicio) PedidoRecibido(ctx context.Context, id string) error {
 // CambioDeEstado es avisarCambioDePedido + notificarCambioDeEstado: el
 // WhatsApp y el correo de un pedido que avanzó. El evento es el estado.
 func (s *Servicio) CambioDeEstado(ctx context.Context, id, estado string) error {
-	s.wa.AvisarCambioDePedido(ctx, id, estado)
-	var numero, token, nombre string
+	// Un envío listo no se va a retirar (mes simulado 2: le decía «listo para
+	// retirar» a quien esperaba el camión): el WhatsApp, que solo tiene ese
+	// texto, no sale; el correo dice que sale para la entrega (M2S1-074).
+	avisarPorWhatsapp := true
+	if estado == "listo" {
+		var envio bool
+		if err := s.pool.QueryRow(ctx, `SELECT tipo_entrega = 'envio' FROM orders WHERE id = $1`, id).Scan(&envio); err == nil && envio {
+			avisarPorWhatsapp = false
+		}
+	}
+	if estado == "entregado" {
+		// El retiro con el remito sin firmar todavía no está entregado: el
+		// aviso sale con la firma (entregas.RegistrarFirma lo vuelve a
+		// encolar). Salían juntos «Firmá el remito» y «Tu pedido fue
+		// entregado» (mes simulado, M2S1-071). Y una sola vez por pedido.
+		var esperaFirma, yaSalio bool
+		if err := s.pool.QueryRow(ctx, `SELECT
+			  EXISTS (SELECT 1 FROM deliveries WHERE order_id = $1 AND estado = 'preparada' AND tipo = 'retiro'),
+			  EXISTS (SELECT 1 FROM notifications_log WHERE entidad_id = $1 AND evento = 'entregado' AND estado IN ('enviada', 'simulada'))`,
+			id).Scan(&esperaFirma, &yaSalio); err != nil {
+			return err
+		}
+		if esperaFirma || yaSalio {
+			return nil
+		}
+	}
+	// Un envío que vuelve a salir (se anuló el remito y se hizo otro) no
+	// repite «Tu pedido salió para la entrega» por ningún canal: el correo
+	// ya lo cuidaba y el WhatsApp salía de nuevo (mes simulado, M3S1-055).
+	if estado == "en-camino" {
+		var salio bool
+		if err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM notifications_log
+			  WHERE entidad_tipo = 'order' AND entidad_id = $1 AND evento = 'en-camino' AND estado IN ('enviada', 'simulada'))`,
+			id).Scan(&salio); err != nil {
+			return err
+		}
+		if salio {
+			return nil
+		}
+	}
+	if avisarPorWhatsapp {
+		s.wa.AvisarCambioDePedido(ctx, id, estado)
+	}
+	var numero, token, nombre, tipoEntrega string
 	var correo *string
-	err := s.pool.QueryRow(ctx, `SELECT numero, public_token::text, contacto_nombre, contacto_email FROM orders WHERE id = $1`, id).
-		Scan(&numero, &token, &nombre, &correo)
+	var yaSalio bool
+	err := s.pool.QueryRow(ctx, `SELECT numero, public_token::text, contacto_nombre, contacto_email, tipo_entrega::text,
+		  EXISTS (SELECT 1 FROM notifications_log n WHERE n.entidad_tipo = 'order' AND n.entidad_id = o.id AND n.evento = $2
+		    AND n.canal = 'email' AND n.estado IN ('enviada', 'simulada'))
+		FROM orders o WHERE id = $1`, id, estado).
+		Scan(&numero, &token, &nombre, &correo, &tipoEntrega, &yaSalio)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
@@ -118,6 +165,11 @@ func (s *Servicio) CambioDeEstado(ctx context.Context, id, estado string) error 
 		return err
 	}
 	if vacio(correo) {
+		return nil
+	}
+	// Un envío que vuelve a salir (se anuló el remito y se hizo otro) no
+	// repite «Tu pedido salió para la entrega» (mes simulado, M3S1-055).
+	if estado == "en-camino" && yaSalio {
 		return nil
 	}
 	var asunto string
@@ -130,10 +182,17 @@ func (s *Servicio) CambioDeEstado(ctx context.Context, id, estado string) error 
 	if encabezado != nil {
 		enc = *encabezado
 	}
-	s.correo.Despachar(ctx, avisos.Despacho{
+	despacho := avisos.Despacho{
 		Evento: estado, Para: *correo, EntidadTipo: "order", EntidadID: id,
 		Correo: avisos.PedidoCambioDeEstado(s.sitio, primerNombre(nombre), numero, token, estado, asunto, enc),
-	})
+	}
+	// El listo de un envío no es «para retirar» (M2S1-074): el asunto y el
+	// texto son los del envío, salvo un encabezado escrito a mano.
+	if estado == "listo" && tipoEntrega == "envio" {
+		despacho.Correo = avisos.PedidoCambioDeEstado(s.sitio, primerNombre(nombre), numero, token, "listo-envio", "", enc)
+		despacho.AsuntoPropio = true
+	}
+	s.correo.Despachar(ctx, despacho)
 	return nil
 }
 
@@ -144,6 +203,10 @@ type CargaResultadoDePago struct {
 	Tipo       string  `json:"tipo"`
 	Detalle    string  `json:"detalle"`
 	ReceiptID  *string `json:"receiptId"`
+	// De un rechazo en la conciliación: el pago, su importe y el motivo.
+	PagoID  *string  `json:"pagoId"`
+	Importe *float64 `json:"importe"`
+	Motivo  *string  `json:"motivo"`
 }
 
 // pagoDe es el cobro que se muestra en el correo. El TS tomaba cualquiera
@@ -164,6 +227,34 @@ func (s *Servicio) pagoDe(ctx context.Context, columna, id string) (medio, monto
 // lugar); un pedido avisa al panel y al cliente; un pago de deuda manda el
 // recibo.
 func (s *Servicio) ResultadoDePago(ctx context.Context, c CargaResultadoDePago) error {
+	// La transferencia de la cuenta que no se acreditó: se le avisa con el
+	// motivo, como al cheque no aceptado (M2S1-053). La de un pedido, con
+	// su enlace (pagoRechazado, M3S2-014).
+	if c.Detalle == "rechazado" && c.OrderID == nil && c.CustomerID != nil {
+		cl, err := s.cliente(ctx, *c.CustomerID)
+		if err != nil || cl == nil || vacio(cl.email) {
+			return err
+		}
+		importe, motivo := 0.0, ""
+		if c.Importe != nil {
+			importe = *c.Importe
+		}
+		if c.Motivo != nil {
+			motivo = *c.Motivo
+		}
+		entidad := *c.CustomerID
+		if c.PagoID != nil {
+			entidad = *c.PagoID
+		}
+		s.correo.Despachar(ctx, avisos.Despacho{
+			Evento: "transferencia_rechazada", Para: *cl.email, EntidadTipo: "payment", EntidadID: entidad,
+			Correo: avisos.TransferenciaRechazada(s.sitio, primerNombre(cl.nombre), importe, motivo),
+		})
+		return nil
+	}
+	if c.Detalle == "rechazado" {
+		return s.pagoRechazado(ctx, c)
+	}
 	if c.Detalle != "aprobado" {
 		return nil
 	}
@@ -240,6 +331,34 @@ func (s *Servicio) ResultadoDePago(ctx context.Context, c CargaResultadoDePago) 
 	return nil
 }
 
+// pagoRechazado avisa al cliente que la transferencia que informó de un
+// pedido no se aceptó, con el motivo y el enlace para subir otro
+// comprobante (M3S2-014).
+func (s *Servicio) pagoRechazado(ctx context.Context, c CargaResultadoDePago) error {
+	if c.OrderID == nil {
+		return nil
+	}
+	var numero, token, nombre string
+	var correo *string
+	err := s.pool.QueryRow(ctx, `SELECT numero, public_token::text, contacto_nombre, contacto_email FROM orders WHERE id = $1`, *c.OrderID).
+		Scan(&numero, &token, &nombre, &correo)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && vacio(correo)) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	motivo := ""
+	if c.Motivo != nil {
+		motivo = *c.Motivo
+	}
+	s.correo.Despachar(ctx, avisos.Despacho{
+		Evento: "pago_rechazado", Para: *correo, EntidadTipo: "order", EntidadID: *c.OrderID,
+		Correo: avisos.PagoRechazado(s.sitio, primerNombre(nombre), numero, token, motivo),
+	})
+	return nil
+}
+
 // PresupuestoRecibido es notificarPresupuestoRecibido: el acuse de un
 // pedido de presupuesto del sitio.
 func (s *Servicio) PresupuestoRecibido(ctx context.Context, id string) error {
@@ -311,6 +430,34 @@ func (s *Servicio) PresupuestoEnviado(ctx context.Context, id string) error {
 		s.wa.AvisarPorWhatsapp(ctx, aviso)
 	}
 
+	return s.correoDelPresupuesto(ctx, p, correoCliente)
+}
+
+// PresupuestoPorCorreo es solo el correo de un presupuesto que ya salió
+// (pedidos.TrabajoPresupuestoPorCorreo, M2S1-098).
+func (s *Servicio) PresupuestoPorCorreo(ctx context.Context, id string) error {
+	p, err := s.pedidos.Presupuesto(ctx, id)
+	if err != nil || p == nil || p.Estado == "rechazado" {
+		return err
+	}
+	var correoCliente *string
+	if p.CustomerID != nil {
+		c, err := s.cliente(ctx, *p.CustomerID)
+		if err != nil {
+			return err
+		}
+		if c != nil {
+			correoCliente = c.email
+		}
+	}
+	return s.correoDelPresupuesto(ctx, p, correoCliente)
+}
+
+// correoDelPresupuesto manda el correo con el detalle y el PDF: al del
+// presupuesto o, si no tiene, al de la ficha.
+func (s *Servicio) correoDelPresupuesto(ctx context.Context, p *pedidos.FichaDePresupuesto, correoCliente *string) error {
+	id := p.ID
+	total := jsmath.Numero(p.Total)
 	correo := p.Email
 	if vacio(correo) {
 		correo = correoCliente
@@ -323,9 +470,16 @@ func (s *Servicio) PresupuestoEnviado(ctx context.Context, id string) error {
 		unidad, sub := it.Unidad, it.Subtotal
 		lineas = append(lineas, avisos.LineaDeCorreo(it.Descripcion, jsmath.Numero(it.Cantidad), &unidad, &sub))
 	}
+	// Con el PDF adjunto (M2S1-195): el cliente lo reenvía a quien le paga la
+	// obra. Es el mismo que va por WhatsApp y se descarga del panel.
+	archivo, err := s.pedidos.PresupuestoPdf(ctx, p)
+	if err != nil {
+		return err
+	}
 	s.correo.Despachar(ctx, avisos.Despacho{
 		Evento: "presupuesto_listo", Para: *correo, EntidadTipo: "quote", EntidadID: id,
-		Correo: avisos.PresupuestoListo(s.sitio, primerNombre(p.Cliente), p.Numero, total, p.ValidoHasta, lineas),
+		Correo:   avisos.PresupuestoListo(s.sitio, primerNombre(p.Cliente), p.Numero, total, p.ValidoHasta, lineas),
+		Adjuntos: []email.Adjunto{{Nombre: p.Numero + ".pdf", Contenido: archivo, Tipo: "application/pdf"}},
 	})
 	return nil
 }
@@ -337,13 +491,26 @@ func (s *Servicio) RemitoParaFirmar(ctx context.Context, id string) error {
 	if errors.Is(err, entregas.ErrNoEsta) {
 		return nil
 	}
-	if err != nil || vacio(d.FirmaToken) || vacio(d.Email) {
+	// El remito firmado en el mostrador o en la puerta no se vuelve a pedir
+	// firmar (mes simulado, M2S2-113: dos «Firmá…» por remitos firmados).
+	if err != nil || vacio(d.FirmaToken) || vacio(d.Email) || d.Firmado {
 		return err
 	}
-	s.correo.Despachar(ctx, avisos.Despacho{
+	// Anulado o ya firmado (en el mostrador) antes de que saliera: no se
+	// pide la firma (entregas.EsperaDelPedidoDeFirma).
+	if d.EstadoRemito != "" && d.EstadoRemito != "preparada" {
+		return nil
+	}
+	url := strings.TrimSuffix(s.sitio, "/") + "/firmar/" + *d.FirmaToken
+	despacho := avisos.Despacho{
 		Evento: "remito_para_firmar", Para: *d.Email, EntidadTipo: "delivery", EntidadID: id,
-		Correo: avisos.PedidoParaFirmar(s.sitio, primerNombre(d.Nombre), d.PedidoNumero, d.Numero, strings.TrimSuffix(s.sitio, "/")+"/firmar/"+*d.FirmaToken),
-	})
+		Correo: avisos.PedidoParaFirmar(s.sitio, primerNombre(d.Nombre), d.PedidoNumero, d.Numero, url),
+	}
+	if d.Tipo == "envio" {
+		despacho.Correo = avisos.PedidoParaFirmarLaEntrega(s.sitio, primerNombre(d.Nombre), d.PedidoNumero, d.Numero, url)
+		despacho.AsuntoPropio = true
+	}
+	s.correo.Despachar(ctx, despacho)
 	return nil
 }
 

@@ -83,3 +83,19 @@ export async function marcarAsistencia(_previo: EstadoEvento, formData: FormData
 export async function mandarRecordatorios(_previo: EstadoEvento): Promise<EstadoEvento> {
   return resultado(await (await api()).POST("/api/v1/admin/eventos/recordatorios"));
 }
+
+/** Borra un borrador sin anotados (M2S1-119). */
+export async function borrarEvento(_previo: EstadoEvento, formData: FormData): Promise<EstadoEvento> {
+  return resultado(
+    await (await api()).DELETE("/api/v1/admin/eventos/{id}", {
+      params: { path: { id: String(formData.get("id") ?? "") } },
+    }),
+  );
+}
+
+/** El recordatorio de un evento, desde su tarjeta (M2S1-130). */
+export async function recordarEvento(id: string, _previo: EstadoEvento): Promise<EstadoEvento> {
+  return resultado(
+    await (await api()).POST("/api/v1/admin/eventos/{id}/recordatorio", { params: { path: { id } } }),
+  );
+}

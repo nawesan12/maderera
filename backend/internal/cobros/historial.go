@@ -2,6 +2,8 @@ package cobros
 
 import (
 	"context"
+	"fmt"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -38,6 +40,16 @@ type RefCheque struct {
 	ID      string  `json:"id"`
 	Nombre  string  `json:"nombre"`
 	Importe float64 `json:"importe"`
+	// Devolver: está en la cartera, venza o no; el banco no lo vio. La
+	// ficha ofrece «Devolver al cliente», no «Marcar rechazado» (M3S3-010,
+	// M2S3-069, M2S3-088): con uno vencido decía «rechazado» y CambiarEstado
+	// lo anotaba devuelto.
+	Devolver bool `json:"devolver"`
+}
+
+// refCheque arma el cheque rechazable de un renglón.
+func refCheque(id, nombre string, importe float64, estado string, fechaPago *time.Time) RefCheque {
+	return RefCheque{ID: id, Nombre: nombre, Importe: importe, Devolver: estado == "cartera"}
 }
 
 // RefPedido es el pedido de un renglón.
@@ -59,6 +71,9 @@ type RefRecibo struct {
 	// la cuenta con una nota de débito. El recibo emitido no cambia (lo
 	// emitido no se edita), pero el pago no puede verse entero (H303).
 	ChequeRechazado bool `json:"chequeRechazado,omitempty"`
+	// ChequeDevuelto: el que volvió estaba en la cartera y se le devolvió al
+	// cliente; el banco no lo rechazó (mes 23).
+	ChequeDevuelto bool `json:"chequeDevuelto,omitempty"`
 }
 
 // DetalleParaElCliente saca de un asiento lo que se escribió para la casa.
@@ -68,8 +83,15 @@ type RefRecibo struct {
 // guarda igual («Cancelación del pedido PED-1219: se cargó a la
 // Constructora…», tercera prueba). El motivo sigue en el pedido y en la
 // bitácora.
+//
+// La anulación de un recibo también: el cliente leía «Anulación del recibo
+// REC-0006: Sim: se cargó por error» (mes simulado, M2S1-153). Y la
+// devolución de un pedido, el cheque que se le devolvió y el que no se tomó
+// («… devuelto al cliente: El cliente lo pidió de vuelta», «No lo pudimos
+// tomar: No recibimos el cheque físico», mes 23). El rechazo del banco sí
+// conserva el suyo («Sin fondos»): es lo que el cliente tiene que resolver.
 func DetalleParaElCliente(detalle *string) *string {
-	if detalle == nil || !(strings.HasPrefix(*detalle, "Anulación de la venta ") || strings.HasPrefix(*detalle, "Cancelación del pedido ")) {
+	if detalle == nil || !conMotivoDeLaCasa(*detalle) {
 		return detalle
 	}
 	if i := strings.Index(*detalle, ": "); i > 0 {
@@ -79,12 +101,62 @@ func DetalleParaElCliente(detalle *string) *string {
 	return detalle
 }
 
-// HistorialParaElCliente es el historial como lo lee el cliente en Mi cuenta.
-func HistorialParaElCliente(movs []MovimientoDelCliente) []MovimientoDelCliente {
-	for i := range movs {
-		movs[i].Detalle = DetalleParaElCliente(movs[i].Detalle)
+// prefijosConMotivoDeLaCasa son los asientos cuyo «: …» lo escribió alguien
+// de la casa para la casa.
+// La devolución de una venta facturada (la nota de crédito) también: el
+// cliente leía «Devolución de la venta PED-1121: No la usó» (mes 23).
+var prefijosConMotivoDeLaCasa = []string{"Anulación de la venta ", "Cancelación del pedido ", PrefijoAnulacionDeRecibo,
+	"Devolución del pedido ", "Devolución de la venta ", DetalleChequeNoTomado}
+
+func conMotivoDeLaCasa(d string) bool {
+	for _, p := range prefijosConMotivoDeLaCasa {
+		if strings.HasPrefix(d, p) {
+			return true
+		}
 	}
-	return movs
+	i := strings.Index(d, ": ")
+	return i > 0 && strings.HasSuffix(d[:i], SufijoChequeDevuelto)
+}
+
+// SufijoChequeDevuelto cierra el asiento del cheque de la cartera que se le
+// devolvió al cliente (CambiarEstado).
+const SufijoChequeDevuelto = " devuelto al cliente"
+
+// DetalleChequeNoTomado es el renglón del cheque que no se tomó.
+const DetalleChequeNoTomado = "No lo pudimos tomar"
+
+// PrefijoAnulacionDeRecibo es cómo empieza el asiento que deshace un recibo.
+const PrefijoAnulacionDeRecibo = "Anulación del recibo "
+
+// HistorialParaElCliente es el historial como lo lee el cliente en Mi cuenta.
+//
+// El pago de un recibo anulado y el ajuste que lo deshace se compensan: al
+// cliente le queda un solo renglón, «Recibo REC-0006 anulado», sin importe
+// que sume (M2S1-153). El panel los sigue viendo por separado.
+func HistorialParaElCliente(movs []MovimientoDelCliente) []MovimientoDelCliente {
+	anulados := map[string]bool{}
+	for _, m := range movs {
+		if m.Clase == "pago" && m.Recibo != nil && m.Recibo.Anulado && m.Recibo.Numero != "" {
+			anulados[m.Recibo.Numero] = true
+		}
+	}
+	out := movs[:0]
+	for _, m := range movs {
+		m.Detalle = DetalleParaElCliente(m.Detalle)
+		if m.Clase != "pago" && m.Detalle != nil && strings.HasPrefix(*m.Detalle, PrefijoAnulacionDeRecibo) &&
+			anulados[strings.TrimPrefix(*m.Detalle, PrefijoAnulacionDeRecibo)] {
+			continue
+		}
+		if m.Clase == "pago" && m.Recibo != nil && anulados[m.Recibo.Numero] {
+			m.Titulo = "Recibo " + m.Recibo.Numero + " anulado"
+			m.Detalle = nil
+			m.ImporteInformativo = m.Importe
+			m.Importe = nil
+			m.Cheques = nil
+		}
+		out = append(out, m)
+	}
+	return out
 }
 
 // ClasesPorFiltro son las clases que muestra cada filtro (nil: todas).
@@ -92,7 +164,7 @@ var ClasesPorFiltro = map[string][]string{
 	"todo":    nil,
 	"compras": {"compra", "compra_contado"},
 	"pagos":   {"pago", "pago_en_revision", "pago_rechazado"},
-	"cheques": {"cheque_por_recibir", "cheque", "cheque_rechazado", "nota_debito"},
+	"cheques": {"cheque_por_recibir", "cheque", "cheque_rechazado", "cheque_no_tomado", "nota_debito"},
 	"ajustes": {"ajuste", "nota_credito", "nota_debito"},
 }
 
@@ -117,9 +189,19 @@ func conceptoDelPago(detalle, recibo *string) string {
 		s = strings.Replace(s, "Recibo "+*recibo, "", 1)
 	}
 	if t := strings.TrimSpace(s); t != "" {
-		return t
+		return conImpuestoEscrito(t)
 	}
 	return "Pago"
+}
+
+var reRetencionVieja = regexp.MustCompile(`Retención de (ganancias|iva|suss|iibb)\b`)
+
+// conImpuestoEscrito arregla el impuesto de las retenciones cargadas antes
+// (M2S3-061): «Retención de iibb» es «Retención de IIBB».
+func conImpuestoEscrito(s string) string {
+	return reRetencionVieja.ReplaceAllStringFunc(s, func(m string) string {
+		return "Retención de " + NombreDelImpuesto[strings.TrimPrefix(m, "Retención de ")]
+	})
 }
 
 // Historial es historialDelCliente: desde una fecha (o todo), con un filtro
@@ -148,6 +230,10 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 		return nil, false, err
 	}
 	sueltos, err := q.ChequesSueltos(ctx, sqlc.ChequesSueltosParams{CustomerID: &cliente, Desde: d})
+	if err != nil {
+		return nil, false, err
+	}
+	devueltas, err := q.DevolucionesFueraDeLaCuenta(ctx, sqlc.DevolucionesFueraDeLaCuentaParams{CustomerID: &cliente, Desde: d})
 	if err != nil {
 		return nil, false, err
 	}
@@ -182,8 +268,12 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 				}
 				t = NombreDelCheque(tipo, p.Banco, *p.Numero) + " " + formato.Importe(p.Importe)
 				if p.ChequeID != nil && p.ChequeEstado != nil && slices.Contains(RechazablesDesdeLaFicha, Estado(string(*p.ChequeEstado))) {
-					chequesDe[p.ReceiptID] = append(chequesDe[p.ReceiptID], RefCheque{*p.ChequeID, NombreDelCheque(tipo, p.Banco, *p.Numero), p.Importe})
+					chequesDe[p.ReceiptID] = append(chequesDe[p.ReceiptID], refCheque(*p.ChequeID, NombreDelCheque(tipo, p.Banco, *p.Numero), p.Importe,
+						string(*p.ChequeEstado), p.ChequeFechaPago))
 				}
+			} else if p.RetencionImpuesto != nil {
+				// «Retención $ X» no decía de qué impuesto (mes 23).
+				t = "Retención de " + NombreDelImpuesto[string(*p.RetencionImpuesto)] + " " + formato.Importe(p.Importe)
 			} else {
 				t = NombreDelMedio[Medio(p.Medio)] + " " + formato.Importe(p.Importe)
 			}
@@ -197,10 +287,16 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 
 	// Los recibos con un cheque que rebotó: la nota de débito lleva el
 	// recibo con el que había entrado.
-	rebotados := map[string]bool{}
+	rebotados, devueltos := map[string]bool{}, map[string]bool{}
 	for _, m := range libro {
 		if m.Tipo == "nota_debito" && m.ReciboID != nil {
-			rebotados[*m.ReciboID] = true
+			// CambiarEstado escribe «… devuelto al cliente» o «… rechazado
+			// por el banco» en la nota de débito.
+			if m.Detalle != nil && strings.Contains(*m.Detalle, SufijoChequeDevuelto) {
+				devueltos[*m.ReciboID] = true
+			} else {
+				rebotados[*m.ReciboID] = true
+			}
 		}
 	}
 
@@ -228,7 +324,7 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 		}
 		if m.ReciboID != nil {
 			x.Recibo = &RefRecibo{*m.ReciboID, deref(m.ReciboNumero), m.ReciboEstado != nil && *m.ReciboEstado == sqlc.EstadoReciboAnulado, porMP[*m.ReciboID],
-				rebotados[*m.ReciboID]}
+				rebotados[*m.ReciboID], devueltos[*m.ReciboID] && !rebotados[*m.ReciboID]}
 			if m.Tipo == "pago" && !x.Recibo.Anulado {
 				x.Cheques = chequesDe[*m.ReciboID]
 			}
@@ -265,7 +361,12 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 				titulo = t
 			}
 		}
-		movs = append(movs, MovimientoDelCliente{ID: p.ID, Fecha: p.CreatedAt, Clase: clase, Titulo: titulo + " informada",
+		// «Depósito informado», no «informada» (M2S1-157).
+		informado := " informada"
+		if titulo == "Depósito" {
+			informado = " informado"
+		}
+		movs = append(movs, MovimientoDelCliente{ID: p.ID, Fecha: p.CreatedAt, Clase: clase, Titulo: titulo + informado,
 			Detalle: &detalle, ImporteInformativo: f64(p.Monto)})
 	}
 	if filtro == "cheques" {
@@ -279,13 +380,34 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 			movs = append(movs, MovimientoDelCliente{ID: c.ID, Fecha: c.UpdatedAt, Clase: "cheque", Titulo: titulo,
 				Detalle: &detalle, ImporteInformativo: f64(c.Importe),
 				Recibo:  &RefRecibo{ID: c.ReciboID, Numero: c.ReciboNumero},
-				Cheques: []RefCheque{{c.ID, titulo, c.Importe}}})
+				Cheques: []RefCheque{refCheque(c.ID, titulo, c.Importe, c.Estado, &c.FechaPago)}})
 		}
 	}
+	// Las devoluciones de lo pagado de contado: no mueven la cuenta (el
+	// reintegro fue aparte), pero el cliente las tiene que ver (M2S3-030).
+	for _, v := range devueltas {
+		var detalle *string
+		if v.NotaTipo != "" && v.NotaPv != nil && v.NotaNumero != nil {
+			letra := strings.ToUpper(v.NotaTipo[len(v.NotaTipo)-1:])
+			t := fmt.Sprintf("Nota de crédito %s %04d-%08d", letra, *v.NotaPv, *v.NotaNumero)
+			detalle = &t
+		}
+		movs = append(movs, MovimientoDelCliente{ID: v.ID, Fecha: v.CreatedAt.Time, Clase: "nota_credito", Titulo: "Devolución",
+			Detalle: detalle, ImporteInformativo: f64(-v.Importe), Pedido: &RefPedido{v.PedidoID, v.PedidoNumero}})
+	}
 	for _, c := range sueltos {
-		clase := "cheque_rechazado"
-		detalle := "No lo pudimos tomar"
+		// El que rebotó y volvió a la cuenta ya está en la nota de débito que
+		// lo vuelve a cobrar: un segundo renglón con el mismo importe
+		// confundía el resumen (M3S3-081).
+		if c.Estado == "rechazado" && c.ConNotaDeDebito {
+			continue
+		}
+		// El que no se tomó (no mueve la cuenta) no es el que rebotó en el
+		// banco: llevaban el mismo «Cheque rechazado» (M3S2-052).
+		clase := "cheque_no_tomado"
+		detalle := DetalleChequeNoTomado
 		if c.DeUnaVenta {
+			clase = "cheque_rechazado"
 			// Se tomó con la venta y después lo rechazó el banco: la nota de
 			// débito del renglón de al lado es la que lo vuelve a cobrar.
 			detalle = "Rechazado por el banco"
@@ -303,7 +425,7 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 		x := MovimientoDelCliente{ID: c.ID, Fecha: c.UpdatedAt, Clase: clase, Titulo: NombreDelCheque(c.Tipo, c.Banco, c.Numero),
 			Detalle: &detalle, ImporteInformativo: f64(c.Importe)}
 		if slices.Contains(RechazablesDesdeLaFicha, Estado(c.Estado)) {
-			x.Cheques = []RefCheque{{c.ID, x.Titulo, c.Importe}}
+			x.Cheques = []RefCheque{refCheque(c.ID, x.Titulo, c.Importe, c.Estado, &c.FechaPago)}
 		}
 		movs = append(movs, x)
 	}

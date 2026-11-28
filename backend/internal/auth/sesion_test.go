@@ -165,6 +165,20 @@ func TestEntrarRegistrarSalir(t *testing.T) {
 	if issuer != "local:credential" || cuenta != nuevo.UserID {
 		t.Errorf("la cuenta no quedó como la deja better-auth: issuer=%q account_id=%q", issuer, cuenta)
 	}
+	// M2S2-050: sin tildar las novedades, arranca dado de baja de las
+	// campañas; tildándolas, no.
+	var deBaja bool
+	_ = pool.QueryRow(ctx, `select exists(select 1 from bajas_de_correo where email = 'ana@prueba.test')`).Scan(&deBaja)
+	if !deBaja {
+		t.Error("el registro sin tildar las novedades lo suscribió a las campañas")
+	}
+	if _, err := s.Registrar(ctx, httptest.NewRecorder(), Alta{Nombre: "Bea", Correo: "bea@prueba.test", Clave: "una clave larga", Novedades: true}, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	_ = pool.QueryRow(ctx, `select exists(select 1 from bajas_de_correo where email = 'bea@prueba.test')`).Scan(&deBaja)
+	if deBaja {
+		t.Error("tildó las novedades y quedó de baja")
+	}
 	if _, err := s.Registrar(ctx, httptest.NewRecorder(), Alta{Nombre: "Otra", Correo: "ANA@prueba.test", Clave: "otra clave larga"}, "", ""); !errors.Is(err, ErrCorreoUsado) {
 		t.Errorf("registró dos veces el mismo correo: %v", err)
 	}

@@ -11,6 +11,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/autorizacion"
 	"mjbj/internal/caja"
+	"mjbj/internal/entregas"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/reservas"
@@ -34,7 +35,10 @@ type ResultadoAnulacion struct {
 	// AutorizadoPor: el admin que la autorizó (con su PIN o su sesión).
 	AutorizadoPor string
 	Total         float64
+	// Cortes son los que quedaron en la cola sin venta (Rehacer).
+	Cortes []string
 	// PorAfuera es lo que falta devolver por el posnet o el banco: lo cobrado
+
 	// con tarjeta o transferencia menos lo que ya devolvieron las
 	// devoluciones por afuera. El cheque en cartera vuelve en mano.
 	PorAfuera float64
@@ -47,6 +51,11 @@ type PedidoDeAnulacion struct {
 	// (antes volvía siempre, y el faltante aparecía recién en el inventario).
 	VolvioLaMercaderia bool
 	PIN, Ficha         string
+	// Rehacer: se anula para volver a cobrarla. El corte que no se terminó
+	// no se cae: queda en la cola sin venta y la venta rehecha lo ata (había
+	// que volver a tipear el despiece, y el taller recibía otro corte; mes
+	// simulado, M2S3-047).
+	Rehacer bool
 }
 
 // minutosParaCorregir: una venta propia recién hecha con tarjeta o
@@ -95,7 +104,7 @@ func (s *Servicio) Anular(ctx context.Context, ses *auth.Sesion, pedido string, 
 	var r ResultadoAnulacion
 	err = plataforma.EnTransaccion(ctx, s.pool, func(tx pgx.Tx) error {
 		var err error
-		r, err = anularEnTransaccion(ctx, tx, pedido, motivo, ses.UserID, a.VolvioLaMercaderia, autorizadoPor)
+		r, err = anularEnTransaccion(ctx, tx, pedido, motivo, ses.UserID, a.VolvioLaMercaderia, autorizadoPor, a.Rehacer)
 		if err == nil && !r.Ok {
 			return errSinEscribir
 		}
@@ -135,11 +144,11 @@ func (s *Servicio) firmaParaAnular(ctx context.Context, ses *auth.Sesion, pedido
 		noSeAnula bool
 	}
 	err := s.pool.QueryRow(ctx, `
-		SELECT o.total, o.branch_id, o.created_by_user_id, o.created_at,
+		SELECT o.total, coalesce(o.caja_branch_id, o.branch_id), o.created_by_user_id, o.created_at,
 		       coalesce((SELECT sum(importe) FROM order_payments WHERE order_id = o.id AND medio IN ('efectivo', 'cuenta_corriente')), 0) > 0
 		         OR (NOT EXISTS (SELECT 1 FROM order_payments WHERE order_id = o.id)
 		             AND (o.medio_pago IS NULL OR o.medio_pago IN ('efectivo', 'cuenta_corriente'))),
-		       EXISTS (SELECT 1 FROM cash_sessions cs WHERE cs.branch_id = o.branch_id AND cs.estado = 'abierta' AND cs.abierta_at <= o.created_at),
+		       EXISTS (SELECT 1 FROM cash_sessions cs WHERE cs.branch_id = coalesce(o.caja_branch_id, o.branch_id) AND cs.estado = 'abierta' AND cs.abierta_at <= o.created_at),
 		       o.estado = 'cancelado' OR o.origen <> 'mostrador'
 		FROM orders o WHERE o.id::text = $1`, pedido).
 		Scan(&p.total, &p.sucursal, &p.vendio, &p.creada, &p.cajonODeuda, &p.enElTurno, &p.noSeAnula)
@@ -178,7 +187,7 @@ func (s *Servicio) firmaParaAnular(ctx context.Context, ses *auth.Sesion, pedido
 	return firma, nil, err
 }
 
-func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario string, volvio bool, autorizadoPor *string) (ResultadoAnulacion, error) {
+func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario string, volvio bool, autorizadoPor *string, rehacer bool) (ResultadoAnulacion, error) {
 	// El candado es por pedido: dos toques no revierten dos veces.
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1::text))`, id); err != nil {
 		return ResultadoAnulacion{}, err
@@ -192,7 +201,7 @@ func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario str
 		cliente, notas         *string
 	}
 	err := tx.QueryRow(ctx, `
-		SELECT numero, origen::text, estado::text, total, medio_pago::text, branch_id, customer_id, notas
+		SELECT numero, origen::text, estado::text, total, medio_pago::text, coalesce(caja_branch_id, branch_id), customer_id, notas
 		FROM orders WHERE id::text = $1 LIMIT 1 FOR UPDATE`, id).
 		Scan(&p.numero, &p.origen, &p.estado, &p.total, &p.medio, &p.sucursal, &p.cliente, &p.notas)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -314,12 +323,19 @@ func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario str
 		return ResultadoAnulacion{}, err
 	}
 
+	// El remito que la venta a cuenta hizo sola (entregas.ConstanciaParaFirmar,
+	// sin firmar) no es un retiro aparte: se anula con la venta.
 	var conRetiro bool
-	if err := tx.QueryRow(ctx, `SELECT exists(SELECT 1 FROM deliveries WHERE order_id = $1 AND estado <> 'anulada')`, id).Scan(&conRetiro); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT exists(SELECT 1 FROM deliveries WHERE order_id = $1 AND estado <> 'anulada'
+		AND NOT (estado = 'preparada' AND notas IS NOT DISTINCT FROM $2))`, id, entregas.NotaConstanciaACuenta).Scan(&conRetiro); err != nil {
 		return ResultadoAnulacion{}, err
 	}
 	if conRetiro {
 		return no("Esta venta ya tiene retiros con remito. Anulá o revisá las entregas desde la ficha del pedido.")
+	}
+	if _, err := tx.Exec(ctx, `UPDATE deliveries SET estado = 'anulada', updated_at = now()
+		WHERE order_id = $1 AND estado = 'preparada' AND notas IS NOT DISTINCT FROM $2`, id, entregas.NotaConstanciaACuenta); err != nil {
+		return ResultadoAnulacion{}, err
 	}
 
 	var sesion *string
@@ -400,8 +416,33 @@ func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario str
 		return ResultadoAnulacion{}, err
 	}
 
-	// El trabajo de corte que todavía no se cortó se cae con la venta.
-	if _, err := tx.Exec(ctx, `UPDATE cutting_orders SET estado = 'cancelado', updated_at = now() WHERE order_id = $1 AND estado IN ('en-cola', 'en-proceso')`, id); err != nil {
+	// El trabajo de corte que todavía no se cortó se cae con la venta; si se
+	// rehace, queda sin venta para atarlo a la nueva. El que no empezó queda
+	// cancelado con la venta de la que salió (rehacer_de): atarlo lo vuelve a
+	// la cola, y si el rehacer se abandona (Esc en el corte, el carrito
+	// vaciado) el taller no lo corta sin cobrar (mes 23, CRT-12 y CRT-15).
+	// El que ya está en la máquina sigue: se está cortando.
+	var cortesSueltos []string
+	if rehacer {
+		filas, err := tx.Query(ctx, `UPDATE cutting_orders SET order_id = NULL, rehacer_de = $1,
+			estado = CASE WHEN estado = 'en-cola' THEN 'cancelado'::estado_corte ELSE estado END, updated_at = now()
+			WHERE order_id = $1 AND estado IN ('en-cola', 'en-proceso') RETURNING id::text`, id)
+		if err != nil {
+			return ResultadoAnulacion{}, err
+		}
+		for filas.Next() {
+			var c string
+			if err := filas.Scan(&c); err != nil {
+				filas.Close()
+				return ResultadoAnulacion{}, err
+			}
+			cortesSueltos = append(cortesSueltos, c)
+		}
+		filas.Close()
+		if err := filas.Err(); err != nil {
+			return ResultadoAnulacion{}, err
+		}
+	} else if _, err := tx.Exec(ctx, `UPDATE cutting_orders SET estado = 'cancelado', updated_at = now() WHERE order_id = $1 AND estado IN ('en-cola', 'en-proceso')`, id); err != nil {
 		return ResultadoAnulacion{}, err
 	}
 
@@ -411,7 +452,7 @@ func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario str
 		sinCAE bool
 	}
 	err = tx.QueryRow(ctx, `SELECT id, estado::text, cae IS NULL FROM invoices WHERE order_id = $1 LIMIT 1`, id).Scan(&factura.id, &factura.estado, &factura.sinCAE)
-	r := ResultadoAnulacion{Ok: true, Numero: p.numero, Total: total, PorAfuera: jsmath.Redondear2(max(0, porAfuera))}
+	r := ResultadoAnulacion{Ok: true, Numero: p.numero, Total: total, PorAfuera: jsmath.Redondear2(max(0, porAfuera)), Cortes: cortesSueltos}
 	if err == nil && factura.estado != "anulada" {
 		r.FacturaPendiente = &factura.id
 		r.FacturaSinCAE = factura.sinCAE

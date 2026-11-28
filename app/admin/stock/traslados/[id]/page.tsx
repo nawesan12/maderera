@@ -22,6 +22,9 @@ export default async function TrasladoPage({ params }: { params: Promise<{ id: s
   if (!esUuid(id)) notFound();
   const t = await verTraslado(id);
   if (!t) notFound();
+  // Recibido con diferencias: la columna de lo que llegó (M2S4-021).
+  const conDiferencias = t.renglones.some((r) => r.recibido !== null && r.recibido !== r.cantidad);
+  const unidad = (n: number, r: (typeof t.renglones)[number]) => unidadConcordada(n, r.unidad, `${r.producto} ${r.medida}`);
 
   return (
     <div className="hoja-sola mx-auto max-w-3xl space-y-6">
@@ -52,7 +55,22 @@ export default async function TrasladoPage({ params }: { params: Promise<{ id: s
         <EtiquetaEstado estado={t.estado} />
       </header>
 
-      <AccionesDelTraslado id={t.id} enCamino={t.estado === "en-camino"} destino={t.destino} />
+      <AccionesDelTraslado
+        id={t.id}
+        codigo={t.codigo}
+        enCamino={t.estado === "en-camino"}
+        origenId={t.origenId}
+        origen={t.origen}
+        destino={t.destino}
+        renglones={t.renglones.filter((r) => r.cantidad > 0)}
+      />
+
+      {t.estado === "anulado" && t.anuladoAt && (
+        <p className="tarjeta-hundida tabular px-4 py-3 text-base">
+          Anulado {fechaHora.format(t.anuladoAt)}
+          {t.anuladoPor && ` · ${t.anuladoPor}`}
+        </p>
+      )}
 
       <section className="tarjeta overflow-hidden">
         <table className="w-full text-base">
@@ -60,7 +78,8 @@ export default async function TrasladoPage({ params }: { params: Promise<{ id: s
             <tr className="border-b text-left text-sm text-muted-foreground">
               <th className="px-4 py-3 font-medium">Producto</th>
               <th className="px-4 py-3 font-medium">Código</th>
-              <th className="px-4 py-3 text-right font-medium">Cantidad</th>
+              <th className="px-4 py-3 text-right font-medium">{conDiferencias ? "Mandado" : "Cantidad"}</th>
+              {conDiferencias && <th className="px-4 py-3 text-right font-medium">Llegó</th>}
             </tr>
           </thead>
           <tbody>
@@ -73,10 +92,25 @@ export default async function TrasladoPage({ params }: { params: Promise<{ id: s
                 <td className="tabular px-4 py-3 text-muted-foreground">{r.sku}</td>
                 <td className="tabular px-4 py-3 text-right text-lg font-semibold">
                   {formatearCantidad(r.cantidad)}{" "}
-                  <span className="text-base font-normal text-muted-foreground">
-                    {unidadConcordada(r.cantidad, r.unidad, `${r.producto} ${r.medida}`)}
-                  </span>
+                  <span className="text-base font-normal text-muted-foreground">{unidad(r.cantidad, r)}</span>
                 </td>
+                {conDiferencias && (
+                  <td
+                    className={`tabular px-4 py-3 text-right text-lg font-semibold ${
+                      r.recibido !== null && r.recibido < r.cantidad ? "text-saldo-debe" : ""
+                    }`}
+                  >
+                    {formatearCantidad(r.recibido ?? 0)}{" "}
+                    <span className="text-base font-normal text-muted-foreground">{unidad(r.recibido ?? 0, r)}</span>
+                    {/* Mezclado (una medida se perdió y otra volvió), lo dice
+                        cada renglón; si no, la línea de abajo. */}
+                    {!t.faltante && r.faltante && (
+                      <span className="block text-sm font-normal text-muted-foreground">
+                        {r.faltante === "perdido" ? "se perdió" : `volvió a ${t.origen}`}
+                      </span>
+                    )}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -84,32 +118,42 @@ export default async function TrasladoPage({ params }: { params: Promise<{ id: s
       </section>
 
       {t.nota && <p className="text-base">{t.nota}</p>}
+      {conDiferencias && t.faltante && (
+        <p className="text-base">Lo que no llegó: {t.faltante === "perdido" ? "se perdió" : `volvió a ${t.origen}`}.</p>
+      )}
 
       {/* Las dos firmas: la del que despacha y la del que recibe. */}
-      <section className="grid gap-6 pt-6 sm:grid-cols-2">
-        {[
-          { quien: "Entregó", sucursal: t.origen, nombre: t.creadoPor, cuando: t.createdAt },
-          {
-            quien: "Recibió",
-            sucursal: t.destino,
-            nombre: t.recibidoPor,
-            cuando: t.recibidoAt,
-          },
-        ].map((f) => (
-          <div key={f.quien}>
-            <div className="h-16 border-b border-foreground/40" aria-hidden="true" />
-            <p className="mt-2 text-base font-medium">
-              {f.quien} · {f.sucursal}
-            </p>
-            {f.cuando && (
-              <p className="tabular text-sm text-muted-foreground">
-                {f.nombre && `${f.nombre} · `}
-                {fechaHora.format(f.cuando)}
+      {t.estado !== "anulado" && (
+        <section className="grid gap-6 pt-6 sm:grid-cols-2">
+          {[
+            {
+              quien: "Entregó",
+              sucursal: t.origen,
+              nombre: t.creadoPor,
+              cuando: t.createdAt,
+            },
+            {
+              quien: "Recibió",
+              sucursal: t.destino,
+              nombre: t.recibidoPor,
+              cuando: t.recibidoAt,
+            },
+          ].map((f) => (
+            <div key={f.quien}>
+              <div className="h-16 border-b border-foreground/40" aria-hidden="true" />
+              <p className="mt-2 text-base font-medium">
+                {f.quien} · {f.sucursal}
               </p>
-            )}
-          </div>
-        ))}
-      </section>
+              {f.cuando && (
+                <p className="tabular text-sm text-muted-foreground">
+                  {f.nombre && `${f.nombre} · `}
+                  {fechaHora.format(f.cuando)}
+                </p>
+              )}
+            </div>
+          ))}
+        </section>
+      )}
     </div>
   );
 }

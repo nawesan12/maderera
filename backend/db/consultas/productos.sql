@@ -38,12 +38,16 @@ SELECT id, slug, name FROM categories ORDER BY sort_order;
 SELECT id, category_id, slug, name, active FROM subcategories ORDER BY sort_order, name;
 
 -- name: ConteoPorRubro :many
-SELECT subcategory_id, count(*)::int AS cuantos FROM products WHERE active GROUP BY subcategory_id;
+-- Los apagados también: un rubro con un producto inactivo decía «sin
+-- productos» (mes simulado, M3S2-065).
+SELECT subcategory_id, (count(*) FILTER (WHERE active))::int AS cuantos,
+  (count(*) FILTER (WHERE NOT active))::int AS inactivos
+FROM products GROUP BY subcategory_id;
 
 -- name: SueltosPorTexto :many
 -- Los que nombran un rubro como texto y no lo tienen asignado.
 SELECT category_id, lower(unaccent(subcategory))::text AS texto, count(*)::int AS cuantos
-FROM products WHERE active AND subcategory_id IS NULL AND subcategory IS NOT NULL
+FROM products WHERE subcategory_id IS NULL AND subcategory IS NOT NULL
 GROUP BY category_id, 2;
 
 -- name: CategoriasOrdenadas :many
@@ -185,7 +189,7 @@ WHERE category_id = sqlc.arg(categoria) AND subcategory_id IS NULL
   AND lower(unaccent(subcategory)) = lower(unaccent(sqlc.arg(nombre)::text));
 
 -- name: CandidatosDeBaja :many
-SELECT p.id, p.name AS nombre, p.slug, c.name AS categoria, p.created_at AS creado,
+SELECT p.id, p.name AS nombre, p.slug, c.name AS categoria, p.created_at AS creado, p.a_pedido,
   (SELECT count(*) FROM product_variants v WHERE v.product_id = p.id AND v.active)::int AS variantes,
   coalesce((SELECT sum(greatest(i.qty - i.reservado, 0)) FROM inventory i
             JOIN product_variants pv ON pv.id = i.variant_id
@@ -193,7 +197,10 @@ SELECT p.id, p.name AS nombre, p.slug, c.name AS categoria, p.created_at AS crea
   (SELECT count(*) FROM product_variants pv WHERE pv.product_id = p.id AND pv.active
      AND NOT EXISTS (SELECT 1 FROM price_list_items pli WHERE pli.variant_id = pv.id AND pli.price > 0))::int AS variantes_sin_precio,
   (SELECT max(o.created_at) FROM order_items oi JOIN orders o ON o.id = oi.order_id
-     JOIN product_variants pv ON pv.id = oi.variant_id WHERE pv.product_id = p.id)::timestamptz AS ultima_venta
+     JOIN product_variants pv ON pv.id = oi.variant_id WHERE pv.product_id = p.id)::timestamptz AS ultima_venta,
+  (SELECT max(gr.confirmada_at) FROM goods_receipt_items gi JOIN goods_receipts gr ON gr.id = gi.receipt_id
+     JOIN product_variants pv ON pv.id = gi.variant_id
+     WHERE pv.product_id = p.id AND gr.estado = 'confirmada')::timestamptz AS ultima_compra
 FROM products p JOIN categories c ON c.id = p.category_id
 WHERE p.active
 ORDER BY p.name;

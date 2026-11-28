@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import { PlacaDeProducto } from "@/components/catalogo/placa-de-producto";
+import { MuestraDePlaca } from "@/components/catalogo/placa-de-producto";
 import { useMedidaElegida } from "@/components/catalogo/medida-elegida";
 
 /**
@@ -20,18 +20,14 @@ export function GaleriaProducto({
   imagenes,
   fotoDeMedida = {},
   nombre,
-  rubro,
   categoria,
-  marca,
 }: {
   imagenes: string[];
   /** Por id de medida, la posición de su foto en `imagenes`. */
   fotoDeMedida?: Record<string, number>;
   nombre: string;
-  /** Para la placa, cuando no hay foto: lo que se estampa y el tono. */
-  rubro: string;
+  /** Para la placa, cuando no hay foto: el tono de la madera. */
   categoria: string;
-  marca?: string | null;
 }) {
   const [activa, setActiva] = useState(0);
   const medida = useMedidaElegida()?.id ?? null;
@@ -47,10 +43,14 @@ export function GaleriaProducto({
   // Sin foto, la placa del rubro (hallazgo 25): «Sin foto todavía» con un
   // ícono de imagen rota era lo primero que se veía de la ficha. Es una
   // imagen para el lector de pantalla, con el nombre del producto.
+  //
+  // En la ficha, sin el rubro escrito (ya va arriba del nombre) y, en el
+  // teléfono, un bloque bajo: la banda de media pantalla con «DECKS» bajaba
+  // el nombre a la mitad de la primera pantalla (mes simulado, M2S4-055).
   if (imagenes.length === 0) {
     return (
-      <div role="img" aria-label={nombre} className="relative -mx-6 aspect-[4/3] overflow-hidden shadow-sm sm:mx-0 sm:rounded-2xl">
-        <PlacaDeProducto rubro={rubro} categoria={categoria} marca={marca} tamano="ficha" />
+      <div role="img" aria-label={nombre} className="relative -mx-6 h-20 overflow-hidden shadow-sm sm:mx-0 sm:rounded-2xl lg:h-auto lg:aspect-[4/3]">
+        <MuestraDePlaca categoria={categoria} className="absolute inset-0" />
       </div>
     );
   }

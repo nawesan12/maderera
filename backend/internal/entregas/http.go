@@ -113,7 +113,10 @@ func (a *API) SaldoDeAcopio(ctx context.Context, r entregasapi.SaldoDeAcopioRequ
 	if err != nil {
 		return nil, err
 	}
-	v, err = ConGalpon(ctx, a.pool, r.Id, v)
+	if v, err = ConGalpon(ctx, a.pool, r.Id, v); err != nil {
+		return nil, err
+	}
+	v, err = ConCortes(ctx, a.pool, r.Id, v)
 	return ok(v), err
 }
 
@@ -143,6 +146,15 @@ func (a *API) PrepararRemito(ctx context.Context, r entregasapi.PrepararRemitoRe
 	f, campo, msj := LeerRemito(*r.Body)
 	if msj != "" {
 		return nil, invalido(campo, msj)
+	}
+	if msj := RevisarDocumento(f.ReceptorDocumento); msj != "" {
+		return nil, invalido("receptorDocumento", msj)
+	}
+	if v, ok := (*r.Body)["pin"].(string); ok {
+		f.SinCobrar.PIN = v
+	}
+	if v, ok := (*r.Body)["ficha"].(string); ok {
+		f.SinCobrar.Ficha = v
 	}
 	e, err := a.s.CrearEntrega(ctx, ses, f)
 	if err != nil {

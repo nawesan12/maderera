@@ -23,7 +23,9 @@ import (
 	"encoding/base64"
 	"errors"
 	"log/slog"
+	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -34,6 +36,7 @@ import (
 	"mjbj/internal/autorizacion"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/cola"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/numeracion"
 	"mjbj/internal/plataforma"
@@ -41,6 +44,7 @@ import (
 	"mjbj/internal/reservas"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas"
+	"mjbj/internal/ventas/fragmentos"
 	"mjbj/internal/zodjs"
 )
 
@@ -48,7 +52,13 @@ import (
 // misma transacción (los manda el worker, internal/notificaciones).
 const (
 	TrabajoRemitoParaFirmar = "remito.para-firmar"
-	TrabajoRemitoFirmado    = "remito.firmado"
+	// EsperaDelPedidoDeFirma: el correo «Firmá el remito» sale unos minutos
+	// después de prepararlo, y solo si sigue sin firmar: el remito que se
+	// anuló por un error, o que se firmó ahí mismo en el mostrador, no le
+	// mandaba al cliente un pedido de firma (y después otro), sin avisar de
+	// la anulación (mes simulado 2).
+	EsperaDelPedidoDeFirma = 3 * time.Minute
+	TrabajoRemitoFirmado   = "remito.firmado"
 )
 
 // Servicio son las entregas.
@@ -232,9 +242,13 @@ func ConGalpon(ctx context.Context, db consultor, pedido string, renglones []Ren
 		return nil, err
 	}
 	galpon := map[string]float64{}
+	enStock := map[string]float64{}
 	var id string
 	var factor, n float64
 	if _, err := pgx.ForEachRow(filas, []any{&id, &factor, &n}, func() error {
+		if factor > 0 && factor != 1 {
+			enStock[id] = jsmath.Round(n*1000) / 1000
+		}
 		if factor > 0 {
 			n = n / factor
 		}
@@ -246,6 +260,9 @@ func ConGalpon(ctx context.Context, db consultor, pedido string, renglones []Ren
 	for i := range renglones {
 		if g, ok := galpon[renglones[i].OrderItemID]; ok {
 			renglones[i].EnElGalpon = &g
+		}
+		if g, ok := enStock[renglones[i].OrderItemID]; ok {
+			renglones[i].GalponEnStock = &g
 		}
 	}
 	return renglones, nil
@@ -422,6 +439,17 @@ func (s *Servicio) CrearEntrega(ctx context.Context, ses *auth.Sesion, f FormRem
 			var visita *string
 			if i > 0 {
 				visita = &out.ID
+				// Lo de otro pedido sale solo si está cobrado (o a cuenta) y
+				// armado: el remito ofrecía sumar un pedido sin preparar y
+				// sin cobrar, sin ninguna marca (mes simulado 2).
+				if ok, err := otroAcopioSale(ctx, tx, parte.OrderID); err != nil {
+					return err
+				} else if !ok {
+					return ErrorDeEntrega("Lo de otro pedido sale junto si está listo y cobrado.")
+				}
+			}
+			if _, err := AutorizarSinCobrar(ctx, tx, s.aut, ses, parte.OrderID, f.SinCobrar); err != nil {
+				return err
 			}
 			creada, delCliente, err := crearEnTransaccion(ctx, tx, parte, usuario, visita)
 			if err != nil {
@@ -442,6 +470,52 @@ func (s *Servicio) CrearEntrega(ctx context.Context, ses *auth.Sesion, f FormRem
 	})
 	return out, err
 }
+
+// alcanzaElGalpon: el remito no saca más de lo que hay en el galpón (mes
+// simulado 2: con 0 tirantes se firmó un remito por 6 y el stock quedó en
+// negativo; «Marcar listo» frenaba el pedido y el remito lo despachaba
+// igual). Es la misma cuenta que «Marcar listo» (ConGalpon, en la unidad
+// del renglón), con el candado de la serie de remitos tomado.
+func alcanzaElGalpon(ctx context.Context, tx pgx.Tx, pedido string, pendientes []Renglon, lineas []LineaAEntregar) error {
+	conGalpon, err := ConGalpon(ctx, tx, pedido, append([]Renglon(nil), pendientes...))
+	if err != nil {
+		return err
+	}
+	lleva := map[string]float64{}
+	for _, l := range lineas {
+		lleva[l.OrderItemID] += l.Cantidad
+	}
+	for _, r := range conGalpon {
+		n := lleva[r.OrderItemID]
+		if r.EnElGalpon == nil || n <= 0.0005 {
+			continue
+		}
+		if *r.EnElGalpon+0.0005 < n {
+			return ErrorDeEntrega("No alcanza: " + r.Descripcion + " lleva " + formato.Cantidad(n) +
+				" y en el galpón hay " + formato.Cantidad(math.Max(*r.EnElGalpon, 0)) + ".")
+		}
+	}
+	return nil
+}
+
+// otroAcopioSale: lo de otro pedido del cliente sale en la misma visita si
+// está listo o ya en acopio, y no debe nada fuera de la cuenta corriente.
+func otroAcopioSale(ctx context.Context, tx pgx.Tx, pedido string) (bool, error) {
+	var ok bool
+	err := tx.QueryRow(ctx, `SELECT `+condicionOtroAcopio+` FROM orders o WHERE o.id = $1`, pedido).Scan(&ok)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return ok, err
+}
+
+// condicionOtroAcopio es, sobre la fila `o`, si lo de ese pedido puede
+// salir junto con el de otro: armado (listo, o ya se retiró algo) y sin
+// nada por cobrar fuera de la cuenta. Un pedido web sin preparar figuraba
+// como «1 renglón más en acopio» (mes simulado 2).
+const condicionOtroAcopio = `(o.estado NOT IN ('entregado', 'cancelado') AND (o.estado = 'listo' OR o.origen = 'mostrador'
+	OR EXISTS (SELECT 1 FROM deliveries d WHERE d.order_id = o.id AND d.estado <> 'anulada'))
+	AND ` + fragmentos.SinCobrarDelPedido + ` IS NULL)`
 
 func conAlgo(ls []LineaAEntregar) bool {
 	for _, l := range ls {
@@ -465,6 +539,21 @@ func crearEnTransaccion(ctx context.Context, tx pgx.Tx, f FormRemito, usuario, v
 	}
 	if msj := RevisarEnteros(pendientes, control.Lineas); msj != "" {
 		return nil, nil, ErrorDeEntrega(msj)
+	}
+	// Lo que espera un corte no sale: las piezas todavía no existen
+	// (M2S3-020).
+	conCortes, err := ConCortes(ctx, tx, f.OrderID, append([]Renglon(nil), pendientes...))
+	if err != nil {
+		return nil, nil, err
+	}
+	lleva := map[string]float64{}
+	for _, l := range control.Lineas {
+		lleva[l.OrderItemID] += l.Cantidad
+	}
+	for _, r := range conCortes {
+		if r.EnCorteCantidad != nil && lleva[r.OrderItemID] > r.Pendiente-*r.EnCorteCantidad+0.0005 {
+			return nil, nil, ErrorDeEntrega(r.Descripcion + " espera el corte " + r.EnCorte + ".")
+		}
 	}
 	pedido, err := pedidoBloqueado(ctx, tx, f.OrderID)
 	if err != nil {
@@ -523,6 +612,9 @@ func crearEnTransaccion(ctx context.Context, tx pgx.Tx, f FormRemito, usuario, v
 		}
 	}
 	if !yaSalio {
+		if err := alcanzaElGalpon(ctx, tx, f.OrderID, pendientes, control.Lineas); err != nil {
+			return nil, nil, err
+		}
 		if err := sacarDelDeposito(ctx, tx, f.OrderID, salida, numero, usuario, control.Lineas, pendientes); err != nil {
 			return nil, nil, err
 		}
@@ -562,12 +654,19 @@ func crearEnTransaccion(ctx context.Context, tx pgx.Tx, f FormRemito, usuario, v
 			if err := pasarA(ctx, tx, f.OrderID, "listo", "Remito "+numero+": se retiró una parte", usuario, false); err != nil {
 				return nil, nil, err
 			}
+		} else if pedido.estado == "pendiente" {
+			// Pero ya no está «Sin preparar»: salió una parte y lo que
+			// queda espera el corte (mes simulado, PED-1153: quedaba «Sin
+			// preparar», con una entrega firmada y sin «Preparar»).
+			if err := pasarA(ctx, tx, f.OrderID, "preparando", "Remito "+numero+": se retiró una parte", usuario, false); err != nil {
+				return nil, nil, err
+			}
 		}
 	}
 	// El enlace para firmar desde el celular: el de la visita va con el
 	// primero, que lleva todo.
 	if visitaDe == nil {
-		if _, err := cola.Encolar(ctx, sqlc.New(tx), TrabajoRemitoParaFirmar, map[string]string{"deliveryId": id}, time.Time{}); err != nil {
+		if _, err := cola.Encolar(ctx, sqlc.New(tx), TrabajoRemitoParaFirmar, map[string]string{"deliveryId": id}, time.Now().Add(EsperaDelPedidoDeFirma)); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -608,20 +707,23 @@ func RemitoPorLoQueQueda(ctx context.Context, tx pgx.Tx, pedidoID string, sucurs
 	if tipo != "envio" {
 		tipo = "retiro"
 	}
-	nota := "Entregado desde el tablero de pedidos"
-	if tipo == "envio" {
-		nota = "Despachado desde el tablero de pedidos"
-	}
+	// Sin nota: «Entregado desde el tablero de pedidos» salía impreso en el
+	// papel del cliente (mes simulado 2). El historial ya dice cómo salió.
 	token := tokenDeFirma()
 	var nombre, documento *string
 	if tipo == "retiro" {
 		nombre, documento = quien.Nombre, quien.Documento
 	}
-	id, err := insertarRemito(ctx, tx, numero, pedidoID, salida, tipo, "preparada", nombre, documento, &nota, token, usuario, lineas)
+	yaSalio, err := SalioConLaVenta(ctx, tx, pedidoID)
 	if err != nil {
 		return nil, err
 	}
-	yaSalio, err := SalioConLaVenta(ctx, tx, pedidoID)
+	if !yaSalio {
+		if err := alcanzaElGalpon(ctx, tx, pedidoID, pendientes, lineas); err != nil {
+			return nil, err
+		}
+	}
+	id, err := insertarRemito(ctx, tx, numero, pedidoID, salida, tipo, "preparada", nombre, documento, nil, token, usuario, lineas)
 	if err != nil {
 		return nil, err
 	}
@@ -629,6 +731,46 @@ func RemitoPorLoQueQueda(ctx context.Context, tx pgx.Tx, pedidoID string, sucurs
 		if err := sacarDelDeposito(ctx, tx, pedidoID, salida, numero, usuario, lineas, pendientes); err != nil {
 			return nil, err
 		}
+	}
+	if _, err := cola.Encolar(ctx, sqlc.New(tx), TrabajoRemitoParaFirmar, map[string]string{"deliveryId": id}, time.Now().Add(EsperaDelPedidoDeFirma)); err != nil {
+		return nil, err
+	}
+	return &EntregaCreada{ID: id, Numero: numero, FirmaToken: token, PedidoCompleto: true}, nil
+}
+
+// ConstanciaParaFirmar es el remito de una venta del mostrador a cuenta
+// corriente que se lleva en el acto: la mercadería sale fiada, y el cliente
+// la veía «Retirado 4 de 4» sin ningún remito ni constancia (mes simulado,
+// M2S1-073). Como el de constancia, no toca el inventario (el stock bajó al
+// vender); queda «preparada», con su enlace para que firme quien se la llevó.
+// Va en la transacción de la venta: el pedido es nuevo y nadie más lo tiene,
+// así que el candado de la serie después del pedido no se cruza con otro.
+// Sin nada por retirar no hace nada (nil).
+// NotaConstanciaACuenta marca el remito de ConstanciaParaFirmar: anular la
+// venta lo anula con ella (no es un retiro que haya que revisar aparte).
+const NotaConstanciaACuenta = "Venta del mostrador a cuenta corriente"
+
+func ConstanciaParaFirmar(ctx context.Context, tx pgx.Tx, pedidoID string, sucursal *string, usuario *string) (*EntregaCreada, error) {
+	if err := numeracion.BloquearRemitos(ctx, tx); err != nil {
+		return nil, err
+	}
+	pendientes, err := SaldoDeAcopio(ctx, tx, pedidoID)
+	if err != nil {
+		return nil, err
+	}
+	lineas := LineasDeConstancia(pendientes)
+	if len(lineas) == 0 {
+		return nil, nil
+	}
+	numero, err := numeracion.Remito(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	token := tokenDeFirma()
+	nota := NotaConstanciaACuenta
+	id, err := insertarRemito(ctx, tx, numero, pedidoID, sucursal, "retiro", "preparada", nil, nil, &nota, token, usuario, lineas)
+	if err != nil {
+		return nil, err
 	}
 	if _, err := cola.Encolar(ctx, sqlc.New(tx), TrabajoRemitoParaFirmar, map[string]string{"deliveryId": id}, time.Time{}); err != nil {
 		return nil, err
@@ -762,10 +904,27 @@ func (s *Servicio) RegistrarFirma(ctx context.Context, f FormFirma, ip *string) 
 	var r FirmaRegistrada
 	firmo := false
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		// Un retiro sin documento guardado lo pide en la firma: el remito de
+		// la reposición nace sin quien retira y el DNI salía «opcional»,
+		// cuando en un retiro es obligatorio (mes simulado).
+		if strings.TrimSpace(deTexto(f.ReceptorDocumento)) == "" {
+			var falta bool
+			err := tx.QueryRow(ctx, `
+				SELECT tipo = 'retiro' AND nullif(trim(coalesce(receptor_documento, '')), '') IS NULL
+				FROM deliveries WHERE firma_token = $1 AND estado = 'preparada' FOR UPDATE`, f.Token).Scan(&falta)
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+			if falta {
+				return invalido("receptorDocumento", MsjFaltaDocumento)
+			}
+		}
 		var pedido, tipo string
 		err := tx.QueryRow(ctx, `
 			UPDATE deliveries SET estado = 'entregada', firma_url = $2, firmado_at = now(), firmado_ip = $3,
-			  receptor_nombre = $4, receptor_documento = coalesce(nullif($5, ''), receptor_documento),
+			  receptor_nombre = $4, receptor_documento = CASE WHEN nullif($5, '') IS NOT NULL THEN $5
+			    WHEN coalesce(trim(receptor_nombre), '') = '' OR starts_with(lower(trim($4)), lower(trim(receptor_nombre)))
+			      OR starts_with(lower(trim(receptor_nombre)), lower(trim($4))) THEN receptor_documento END,
 			  entregado_at = now(), updated_at = now()
 			WHERE firma_token = $1 AND estado = 'preparada'
 			RETURNING id, numero, order_id, tipo::text`, f.Token, f.Firma, ip, f.ReceptorNombre, textoONulo(f.ReceptorDocumento)).
@@ -788,7 +947,9 @@ func (s *Servicio) RegistrarFirma(ctx context.Context, f FormFirma, ip *string) 
 		// Los remitos de la misma visita se firman con el primero.
 		if _, err := tx.Exec(ctx, `
 			UPDATE deliveries SET estado = 'entregada', firma_url = $2, firmado_at = now(), firmado_ip = $3,
-			  receptor_nombre = $4, receptor_documento = coalesce(nullif($5, ''), receptor_documento),
+			  receptor_nombre = $4, receptor_documento = CASE WHEN nullif($5, '') IS NOT NULL THEN $5
+			    WHEN coalesce(trim(receptor_nombre), '') = '' OR starts_with(lower(trim($4)), lower(trim(receptor_nombre)))
+			      OR starts_with(lower(trim(receptor_nombre)), lower(trim($4))) THEN receptor_documento END,
 			  entregado_at = now(), updated_at = now()
 			WHERE visita_de = $1 AND estado = 'preparada'`, r.DeliveryID, f.Firma, ip, f.ReceptorNombre, textoONulo(f.ReceptorDocumento)); err != nil {
 			return err
@@ -800,6 +961,21 @@ func (s *Servicio) RegistrarFirma(ctx context.Context, f FormFirma, ip *string) 
 			}
 			if err := VueltaDelViaje(ctx, tx, pedido, r.DeliveryID, r.Numero, nil, true); err != nil {
 				return err
+			}
+		}
+		// El retiro ya figuraba entregado: el aviso «entregado» esperaba la
+		// firma (notificaciones.CambioDeEstado) y sale ahora (M2S1-071).
+		if tipo != "envio" {
+			var avisar bool
+			if err := tx.QueryRow(ctx, `SELECT o.estado = 'entregado' AND NOT EXISTS (
+				  SELECT 1 FROM deliveries d WHERE d.order_id = o.id AND d.estado = 'preparada')
+				FROM orders o WHERE o.id = $1`, pedido).Scan(&avisar); err != nil {
+				return err
+			}
+			if avisar {
+				if _, err := cola.Encolar(ctx, sqlc.New(tx), TrabajoPedidoEstado, map[string]string{"orderId": pedido, "estado": "entregado"}, time.Time{}); err != nil {
+					return err
+				}
 			}
 		}
 		// La constancia de lo que se retiró, por correo.
@@ -877,10 +1053,16 @@ func (s *Servicio) AnularEntregaCon(ctx context.Context, ses *auth.Sesion, id st
 		// pedido vuelve a «listo», es un solo renglón con el cambio de
 		// estado: eran dos, y el del motivo salía con el chip «Entregado»
 		// (mes simulado).
+		// Sin firmar también queda por qué (mes simulado 2: el historial no
+		// decía por qué se anuló).
 		notaFirma := ""
-		if firmado != nil && pedido != nil {
-			notaFirma = "Remito " + numero + " firmado, anulado: " + zodjs.TrimJS(a.Motivo) + " · autorizó " + autorizo
+		motivo := zodjs.TrimJS(a.Motivo)
+		switch {
+		case firmado != nil && pedido != nil:
+			notaFirma = "Remito " + numero + " firmado, anulado: " + motivo + " · autorizó " + autorizo
 			bitacora.Anotar(ctx, s.q.WithTx(tx), s.log, ses, sqlc.AccionAuditoriaAnular, "remito", id, notaFirma, nil)
+		case pedido != nil && motivo != "":
+			notaFirma = "Remito " + numero + " anulado: " + motivo
 		}
 		anotarFirma := func() error {
 			if notaFirma == "" {
@@ -977,14 +1159,11 @@ func (s *Servicio) AnularEntregaCon(ctx context.Context, ses *auth.Sesion, id st
 		if _, err := tx.Exec(ctx, `UPDATE orders SET estado = 'listo', updated_at = now() WHERE id = $1`, pedidoID); err != nil {
 			return err
 		}
-		// Un envío no tiene acopio: lo que vuelve queda por llevar.
-		queda := "vuelve a quedar mercadería en acopio"
-		if pedido.tipoEntrega == "envio" {
-			queda = "vuelve a quedar mercadería por llevar"
-		}
-		nota := "Remito " + numero + " anulado: " + queda
+		// «Listo» ya dice lo que falta: la nota no habla de acopio (lo decía
+		// de un pedido web de un tirante, mes simulado 2).
+		nota := "Remito " + numero + " anulado"
 		if notaFirma != "" {
-			nota = notaFirma + " · " + queda
+			nota = notaFirma
 		}
 		_, err = tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, 'listo', $2, $3)`,
 			pedidoID, nota, ses.UserID)
@@ -1013,6 +1192,9 @@ type RemitoListado struct {
 	Parcial bool `json:"parcial"`
 	// Reposicion es el corte de una reposición sin cargo (H321).
 	Reposicion *string `json:"reposicion"`
+	// Final: completa un pedido que ya había salido en parte (decía
+	// «Entrega total» con 2 juegos, mes simulado 2).
+	Final bool `json:"final"`
 }
 
 // RemitosDelPedido son los remitos de un pedido, los más nuevos primero.
@@ -1026,7 +1208,7 @@ func (s *Servicio) RemitosDelPedido(ctx context.Context, pedido string) ([]Remit
 		  s.transportista, s.numero_seguimiento,
 		  CASE WHEN d.cutting_order_id IS NULL THEN (SELECT count(*) FROM delivery_items di WHERE di.delivery_id = d.id)
 		       ELSE (SELECT count(*) FROM cutting_items ci WHERE ci.cutting_order_id = d.cutting_order_id) END::int,
-		  co.numero
+		  CASE WHEN co.sin_cargo THEN co.numero END
 		FROM deliveries d LEFT JOIN shipments s ON s.delivery_id = d.id
 		LEFT JOIN cutting_orders co ON co.id = d.cutting_order_id
 		WHERE d.order_id = $1 ORDER BY d.created_at DESC`, pedido)
@@ -1056,6 +1238,14 @@ func (s *Servicio) RemitosDelPedido(ctx context.Context, pedido string) ([]Remit
 			return nil, err
 		}
 		out[i].Parcial = len(quedaba) > 0
+		if !out[i].Parcial {
+			for _, antes := range out[i+1:] {
+				if antes.Reposicion == nil && antes.Estado != "anulada" {
+					out[i].Final = true
+					break
+				}
+			}
+		}
 	}
 	return out, nil
 }
@@ -1078,7 +1268,7 @@ func (s *Servicio) OtrosAcopios(ctx context.Context, pedido string) ([]OtroAcopi
 	filas, err := s.pool.Query(ctx, `
 		SELECT o.id::text, o.numero FROM orders o
 		WHERE o.customer_id = (SELECT customer_id FROM orders WHERE id = $1) AND o.id <> $1
-		  AND o.tipo_entrega = 'retiro' AND o.estado NOT IN ('entregado', 'cancelado')
+		  AND o.tipo_entrega = 'retiro' AND `+condicionOtroAcopio+`
 		ORDER BY o.created_at`, pedido)
 	if err != nil {
 		return nil, err
@@ -1118,6 +1308,10 @@ type RemitoDelPortal struct {
 	ReceptorNombre *string    `json:"receptorNombre"`
 	FirmadoAt      *time.Time `json:"firmadoAt"`
 	CreatedAt      time.Time  `json:"createdAt"`
+	// FirmaToken: del remito preparado que espera la firma, para firmarlo
+	// desde el pedido (solo el link del correo lo hacía; M2S1-071). El
+	// pedido es del cliente de la sesión: el mismo token le llega por correo.
+	FirmaToken *string `json:"firmaToken"`
 }
 
 // EntregasDelPortal son los retiros y el acopio de un pedido del cliente de
@@ -1140,14 +1334,15 @@ func (s *Servicio) DelPortal(ctx context.Context, ses *auth.Sesion, pedido strin
 	}
 	out := &EntregasDelPortal{Entregas: []RemitoDelPortal{}}
 	filas, err := s.pool.Query(ctx, `
-		SELECT id, numero, tipo::text, estado::text, receptor_nombre, firmado_at, created_at
+		SELECT id, numero, tipo::text, estado::text, receptor_nombre, firmado_at, created_at,
+		  CASE WHEN estado = 'preparada' THEN firma_token END
 		FROM deliveries WHERE order_id = $1 ORDER BY created_at DESC`, pedido)
 	if err != nil {
 		return nil, err
 	}
 	for filas.Next() {
 		var r RemitoDelPortal
-		if err := filas.Scan(&r.ID, &r.Numero, &r.Tipo, &r.Estado, &r.ReceptorNombre, &r.FirmadoAt, &r.CreatedAt); err != nil {
+		if err := filas.Scan(&r.ID, &r.Numero, &r.Tipo, &r.Estado, &r.ReceptorNombre, &r.FirmadoAt, &r.CreatedAt, &r.FirmaToken); err != nil {
 			filas.Close()
 			return nil, err
 		}

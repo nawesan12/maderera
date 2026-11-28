@@ -124,8 +124,13 @@ export const conversaciones = pgTable(
     botConsulta: text(),
     botDerivadaAt: timestamp({ withTimezone: true }),
     botEstado: text().notNull().default("activo"),
+    /** Por qué el bot la pasó a una persona (00457). */
+    botMotivo: text(),
     botFallos: integer().notNull().default(0),
     botPendiente: jsonb(),
+    botDevueltoAt: timestamp({ withTimezone: true }),
+    botDerivacionToken: text(),
+    botDerivacionTexto: text(),
   },
   (t) => [
     uniqueIndex("whatsapp_conversaciones_jid_idx").on(t.waJid),

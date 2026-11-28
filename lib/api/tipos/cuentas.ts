@@ -128,6 +128,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/clientes/{id}/invitacion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Le abre la cuenta web a un cliente cargado en el panel, con el correo
+         *     de la ficha, y le manda el link de activación (M2S1-097).
+         */
+        post: operations["InvitarAlPortal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/clientes/{id}/bloqueo": {
         parameters: {
             query?: never;
@@ -728,7 +750,7 @@ export interface components {
             /** Format: date-time */
             fecha: string;
             /** @enum {string} */
-            clase: "compra" | "pago" | "nota_credito" | "nota_debito" | "ajuste" | "compra_contado" | "pago_en_revision" | "pago_rechazado" | "cheque_por_recibir" | "cheque" | "cheque_rechazado";
+            clase: "compra" | "pago" | "nota_credito" | "nota_debito" | "ajuste" | "compra_contado" | "pago_en_revision" | "pago_rechazado" | "cheque_por_recibir" | "cheque" | "cheque_rechazado" | "cheque_no_tomado";
             titulo: string;
             detalle: string | null;
             /** Format: double */
@@ -746,6 +768,8 @@ export interface components {
                 /** @description Una parte es un cobro de Mercado Pago aprobado; no se anula desde el panel */
                 porMercadoPago: boolean;
                 chequeRechazado?: boolean;
+                /** @description el cheque que volvió estaba en la cartera y se le devolvió al cliente */
+                chequeDevuelto?: boolean;
             } | null;
             /** @description Los cheques del renglón que el banco todavía puede rechazar (H272) */
             cheques?: {
@@ -753,6 +777,8 @@ export interface components {
                 nombre: string;
                 /** Format: double */
                 importe: number;
+                /** @description En la cartera y sin vencer */
+                devolver: boolean;
             }[];
         };
         Historial: {
@@ -887,6 +913,14 @@ export interface components {
              * @description lo que debe hoy el cliente (solo en los informados)
              */
             saldoCliente: number | null;
+            /** @description rechazado sin haberse aceptado (era informado) */
+            noAceptado?: boolean;
+            /** @description rechazado desde la cartera */
+            devuelto?: boolean;
+            /** @description de una venta con su factura esperando el CAE */
+            esperaCae?: boolean;
+            /** @description la razón social del cliente */
+            clienteRazonSocial?: string | null;
         };
         Gestion: {
             id: string;
@@ -898,9 +932,17 @@ export interface components {
             notas: string | null;
             /** Format: date-time */
             proximaAccionAt: string | null;
+            /** @description la próxima acción es de un día argentino que ya pasó */
             vencida: boolean;
+            /** @description la próxima acción es de hoy (día argentino) */
+            paraHoy: boolean;
             /** Format: date-time */
             createdAt: string;
+            /**
+             * Format: double
+             * @description lo que debe el cliente en la cuenta (positivo, debe)
+             */
+            saldo?: number;
         };
     };
     responses: {
@@ -1092,6 +1134,8 @@ export interface operations {
                     tipo: string;
                     monto: string;
                     detalle?: string;
+                    /** @description AAAA-MM-DD, si es de otro día; vacío es hoy */
+                    fecha?: string;
                 };
             };
         };
@@ -1118,6 +1162,32 @@ export interface operations {
         };
         responses: {
             200: components["responses"]["Ok"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    InvitarAlPortal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Lo que pasó y el link, para mandarlo también por WhatsApp */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok: string;
+                        url: string;
+                    };
+                };
+            };
             422: components["responses"]["Problema"];
         };
     };
@@ -1455,6 +1525,10 @@ export interface operations {
                         cliente: string | null;
                         /** @enum {string} */
                         circuito: "blanco" | "negro";
+                        /** @description de una venta con su factura esperando el CAE */
+                        esperaCae?: boolean;
+                        /** @description espera el CAE y la regla endoso_espera_cae no deja endosarlo */
+                        trabado?: boolean;
                     }[];
                 };
             };

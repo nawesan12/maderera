@@ -9,11 +9,13 @@ import (
 	"mime/multipart"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"mjbj/internal/api/contenidoapi"
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/email"
+	"mjbj/internal/formato"
 	"mjbj/internal/limites"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
@@ -206,7 +208,7 @@ func (a *API) AdminAjustes(ctx context.Context, _ contenidoapi.AdminAjustesReque
 	// del sitio para escribir a mano.
 	v := todos[:0]
 	for _, f := range todos {
-		if !EsRegla(f.Clave) && !numericos[f.Clave] {
+		if !EsRegla(f.Clave) && !numericos[f.Clave] && !enOtraPantalla[f.Clave] {
 			v = append(v, f)
 		}
 	}
@@ -218,27 +220,44 @@ func (a *API) GuardarAjuste(ctx context.Context, r contenidoapi.GuardarAjusteReq
 	if err != nil {
 		return nil, err
 	}
-	var antes string
-	regla := EsRegla(r.Clave)
-	if regla {
-		_ = a.s.pool.QueryRow(ctx, `SELECT valor FROM site_settings WHERE clave = $1`, r.Clave).Scan(&antes)
-	}
-	if err := a.s.GuardarAjuste(ctx, r.Clave, r.Body.Valor); err != nil {
+	var antes, descripcion string
+	_ = a.s.pool.QueryRow(ctx, `SELECT valor, coalesce(descripcion, '') FROM site_settings WHERE clave = $1`, r.Clave).Scan(&antes, &descripcion)
+	valor, err := a.s.GuardarAjusteNormalizado(ctx, r.Clave, r.Body.Valor)
+	if err != nil {
 		return nil, err
 	}
-	// Una regla del negocio cambia cómo se calcula la plata: queda anotado
-	// quién la cambió, de qué a qué.
-	if regla && antes != r.Body.Valor {
-		bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaEditar, "regla", r.Clave,
-			"Regla «"+r.Clave+"»: "+antes+" → "+r.Body.Valor, map[string]string{"antes": antes, "despues": r.Body.Valor})
+	r.Body.Valor = valor
+	// Guardar lo mismo no deja renglón (mes simulado, M2S4-053).
+	if antes == r.Body.Valor {
+		return listo(), nil
 	}
-	// Prender o apagar la tienda cambia qué ve todo el mundo: queda anotado.
-	if desc, ok := interruptores[r.Clave]; ok {
+	cambio := map[string]string{"antes": antes, "despues": r.Body.Valor}
+	switch desc, interruptor := interruptores[r.Clave]; {
+	// Una regla del negocio cambia cómo se calcula la plata: queda anotado
+	// quién la cambió, de qué a qué, con las palabras de la pantalla.
+	case EsRegla(r.Clave):
+		bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaEditar, "regla", r.Clave,
+			DescripcionDeRegla(r.Clave, antes, r.Body.Valor), cambio)
+	// Prender o apagar la tienda o el bot cambia qué ve todo el mundo.
+	case interruptor:
 		estado := "Apagó"
 		if r.Body.Valor == "si" {
 			estado = "Encendió"
 		}
-		bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaEditar, "tienda", r.Clave, estado+" "+desc, nil)
+		entidad := "tienda"
+		if strings.HasPrefix(r.Clave, "whatsapp") {
+			entidad = "whatsapp"
+		}
+		bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaEditar, entidad, r.Clave, estado+" "+desc, nil)
+	// El tope de mensajes y el número humano del bot: el tope en cero deja
+	// al bot sin contestar (mes simulado, M2S1-047 y M2S3-036).
+	case strings.HasPrefix(r.Clave, "whatsapp"):
+		bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaEditar, "whatsapp", r.Clave,
+			NombreDelAjuste(r.Clave, descripcion)+": "+vacio(telefonoDelAjuste(r.Clave, antes))+" → "+vacio(telefonoDelAjuste(r.Clave, r.Body.Valor)), cambio)
+	// Los textos del sitio (la franja de arriba, los datos del negocio).
+	default:
+		bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaEditar, "sitio", r.Clave,
+			"Cambió «"+NombreDelAjuste(r.Clave, descripcion)+"»: "+vacio(resumirTexto(r.Body.Valor, 80)), cambio)
 	}
 	return listo(), nil
 }
@@ -654,7 +673,7 @@ func (a *API) DestinosDeDocumento(ctx context.Context, r contenidoapi.DestinosDe
 // técnico, que es un PDF o una planilla y no JSON.
 func (a *API) Rutas(m *http.ServeMux) {
 	m.HandleFunc("GET /api/v1/contenido/documentos/{id}/archivo", func(w http.ResponseWriter, r *http.Request) {
-		datos, tipo, publico, err := a.s.ArchivoDeDocumento(r.Context(), auth.DeContexto(r.Context()), r.PathValue("id"))
+		datos, tipo, publico, nombre, err := a.s.ArchivoDeDocumento(r.Context(), auth.DeContexto(r.Context()), r.PathValue("id"))
 		if err != nil {
 			a.s.log.Error("no se pudo leer el documento", "error", err)
 			plataforma.EscribirProblema(w, plataforma.NuevoProblema(http.StatusInternalServerError, "No pudimos abrir el documento."))
@@ -668,7 +687,7 @@ func (a *API) Rutas(m *http.ServeMux) {
 		if publico {
 			cache = "public, max-age=3600"
 		}
-		subidas.Entregar(w, datos, tipo, cache)
+		subidas.EntregarComo(w, datos, tipo, cache, nombre)
 	})
 }
 
@@ -709,4 +728,45 @@ func (a *API) ActivarDocumento(ctx context.Context, r contenidoapi.ActivarDocume
 		return nil, err
 	}
 	return listo(), a.s.ActivarDocumento(ctx, ses, r.Id.String(), r.Body.Activo)
+}
+
+// NombreDelAjuste es cómo se llama un ajuste del sitio en la bitácora: su
+// descripción, o la clave sin guiones.
+func NombreDelAjuste(clave, descripcion string) string {
+	switch clave {
+	case "whatsapp_tope_mensajes":
+		return "Tope de mensajes del bot de WhatsApp"
+	case "whatsapp_numero_humano":
+		return "Número de WhatsApp de una persona"
+	case "whatsapp_principal":
+		return "Número de WhatsApp del sitio"
+	}
+	if descripcion != "" {
+		return descripcion
+	}
+	return strings.ReplaceAll(clave, "_", " ")
+}
+
+// telefonoDelAjuste escribe un número de WhatsApp como se lee («223
+// 590-3118»); el resto de los ajustes, como está.
+func telefonoDelAjuste(clave, v string) string {
+	if _, ok := numerosDeWhatsApp[clave]; ok {
+		return formato.Telefono(v)
+	}
+	return v
+}
+
+func vacio(v string) string {
+	if strings.TrimSpace(v) == "" {
+		return "(vacío)"
+	}
+	return v
+}
+
+func resumirTexto(v string, n int) string {
+	r := []rune(v)
+	if len(r) <= n {
+		return v
+	}
+	return string(r[:n]) + "…"
 }

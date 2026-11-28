@@ -167,7 +167,9 @@ function Lista({
         <label htmlFor={`buscar-${tipo}`} className="sr-only">
           Buscar un producto para sugerir
         </label>
-        <div className="flex gap-2">
+        {/* A 375 «Agregar» va debajo, a todo el ancho: al lado se salía de la
+            tarjeta (mes simulado, M2S2-033). */}
+        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
           <input
             id={`buscar-${tipo}`}
             type="search"
@@ -178,12 +180,12 @@ function Lista({
               setBusqueda(e.target.value);
             }}
             placeholder="Escribí el nombre de un producto…"
-            className="h-10 flex-1 rounded-lg border bg-background px-3 text-base"
+            className="h-10 w-full min-w-0 rounded-lg border bg-background px-3 text-base"
           />
           <button
             type="submit"
             disabled={!elegido || agregando}
-            className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted disabled:opacity-50"
+            className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted disabled:opacity-50"
           >
             {agregando ? (
               <Loader2 className="h-4 w-4 animate-spin" />

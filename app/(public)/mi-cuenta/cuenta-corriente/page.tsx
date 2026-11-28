@@ -3,7 +3,7 @@ import { connection } from "next/server";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
 import { Printer, Receipt } from "lucide-react";
-import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
+import { estiloDeEstado } from "@/components/admin/etiqueta-estado";
 import { clienteDeLaSesion, miCuentaCorriente } from "@/lib/dal/cuenta";
 import { datosParaTransferir } from "@/lib/dal/pagos";
 import { tienda } from "@/lib/dal/contenido";
@@ -14,6 +14,9 @@ import { misMovimientos } from "@/lib/dal/historial-cliente";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
 
 export const metadata: Metadata = { title: "Cuenta corriente" };
+
+/** Cuántos renglones del libro se ven acá; el resto, en Movimientos. */
+const ULTIMOS_DEL_LIBRO = 10;
 
 export default async function CuentaCorrientePage({
   searchParams,
@@ -36,6 +39,7 @@ export default async function CuentaCorrientePage({
     tienda(),
   ]);
   const enCamino = recientes.movimientos.filter((m) => m.clase === "pago_en_revision" || m.clase === "cheque_por_recibir");
+  const enRevision = enCamino.reduce((t, m) => t + Math.abs(m.importeInformativo ?? 0), 0);
 
   if (cuenta.movimientos.length === 0 && cuenta.limiteCredito === 0) {
     return (
@@ -199,10 +203,8 @@ export default async function CuentaCorrientePage({
 
       <PagarDeuda
         saldo={cuenta.saldo}
-        propuesto={importeAInformar(
-          cuenta.saldo,
-          enCamino.reduce((t, m) => t + Math.abs(m.importeInformativo ?? 0), 0),
-        )}
+        propuesto={importeAInformar(cuenta.saldo, enRevision)}
+        enRevision={enRevision}
         banco={banco}
       />
 
@@ -252,7 +254,11 @@ export default async function CuentaCorrientePage({
                 </span>
               </li>
             ))}
-            {cuenta.movimientos.map((m) => {
+            {/* Los últimos, en filas de un renglón: fecha y concepto a la
+                izquierda, importe y saldo a la derecha. Una tarjeta alta por
+                movimiento hacía un libro de 9.500 px a 375 (M3S4-033); el
+                resto está en «Todos tus movimientos». */}
+            {cuenta.movimientos.slice(0, ULTIMOS_DEL_LIBRO).map((m) => {
               const rechazo = m.tipo === "nota_debito" && /rechazado/i.test(m.detalle ?? "");
               // El recibo va como enlace abajo: «— recibo REC-0002» en el
               // concepto lo repetía.
@@ -262,45 +268,49 @@ export default async function CuentaCorrientePage({
                   ? m.detalle.replace(` — recibo ${recibo}`, "").trim()
                   : m.detalle;
               return (
-                <li key={m.id} className="flex items-start gap-3 px-5 py-3.5">
+                <li key={m.id} className="flex items-center gap-3 px-5 py-2.5">
                   <div className="min-w-0 flex-1">
-                    <p className="tabular text-sm text-muted-foreground">{fechaCorta.format(m.createdAt)}</p>
-                    <p className="mt-0.5 flex flex-wrap items-center gap-2">
-                      {rechazo ? (
-                        <span className="estado-problema rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)]">
-                          Cheque rechazado
-                        </span>
-                      ) : (
-                        <EtiquetaEstado estado={m.tipo} />
-                      )}
-                      {concepto && (
-                        <span className="min-w-0 text-sm [overflow-wrap:anywhere]">
+                    <p className="flex min-w-0 items-baseline gap-2 text-[15px]">
+                      <span className="tabular shrink-0 text-sm text-muted-foreground">{fechaCorta.format(m.createdAt)}</span>
+                      {/* Parte en dos renglones antes que cortar: a 375 se
+                          perdía el número («Factura A 00…», mes 23). */}
+                      <span className="min-w-0 [overflow-wrap:anywhere]">
+                        {rechazo ? (
+                          <span className="font-medium text-saldo-debe">Cheque rechazado</span>
+                        ) : concepto ? (
                           <ConEnlace texto={concepto} referencia={m.referencia} />
-                        </span>
-                      )}
+                        ) : (
+                          estiloDeEstado(m.tipo).etiqueta
+                        )}
+                      </span>
                     </p>
-                    {m.referencia && !m.receiptId && !m.detalle?.includes(m.referencia) && (
-                      <PedidoRelacionado referencia={m.referencia} />
-                    )}
                     {/* El pago con recibo lleva el papel a un toque, con el
                         número del recibo, no el del cheque (H303). */}
-                    {m.receiptId && (
+                    {m.receiptId ? (
                       <a
                         href={`/api/recibos/${m.receiptId}/pdf`}
                         target="_blank"
                         rel="noopener"
-                        className="tabular -my-1.5 inline-flex min-h-11 items-center text-sm text-acento-texto hover:underline"
+                        className="tabular text-sm text-acento-texto hover:underline"
                       >
                         Recibo {m.reciboNumero ?? m.referencia}
                       </a>
+                    ) : (
+                      m.referencia &&
+                      !m.detalle?.includes(m.referencia) && <PedidoRelacionado referencia={m.referencia} />
                     )}
                   </div>
-                  <div className="shrink-0 pt-5 text-right">
+                  <div className="shrink-0 text-right">
                     <p className={`tabular font-semibold ${m.monto > 0 ? "" : "text-saldo-favor"}`}>
                       {m.monto > 0 ? "+" : "−"}
                       {formatearMonto(Math.abs(m.monto))}
                     </p>
-                    <p className="tabular text-sm text-muted-foreground">{formatearMonto(m.saldoDespues)}</p>
+                    {/* El mismo signo que el importe: «−» y no el guion
+                        (M2S1-156). */}
+                    <p className="tabular text-sm text-muted-foreground">
+                      {m.saldoDespues < 0 ? "−" : ""}
+                      {formatearMonto(Math.abs(m.saldoDespues))}
+                    </p>
                   </div>
                 </li>
               );
@@ -367,7 +377,7 @@ function PedidoRelacionado({ referencia }: { referencia: string }) {
   return (
     <Link
       href={`/mi-cuenta/pedidos/${referencia}`}
-      className="tabular -my-1.5 inline-flex min-h-11 items-center text-sm text-acento-texto hover:underline"
+      className="tabular text-sm text-acento-texto hover:underline"
     >
       {referencia}
     </Link>

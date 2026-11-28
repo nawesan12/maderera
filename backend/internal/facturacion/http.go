@@ -253,9 +253,12 @@ func (a *API) ListarComprobantesPagina(ctx context.Context, r facturacionapi.Lis
 		return nil, err
 	}
 	p := r.Params
-	f := Filtros{Estado: texto2(p.Estado), Desde: p.Desde, Hasta: p.Hasta, Busqueda: texto2(p.Busqueda)}
+	f := Filtros{Estado: texto2(p.Estado), Desde: p.Desde, Hasta: p.Hasta, Busqueda: texto2(p.Busqueda), ConSaldo: p.ConSaldo != nil && *p.ConSaldo}
 	if p.Cobro != nil {
 		f.Cobro = string(*p.Cobro)
+	}
+	if p.Cliente != nil {
+		f.Cliente = p.Cliente.String()
 	}
 	limite, desplazamiento := 50, 0
 	if p.Limite != nil {
@@ -407,11 +410,24 @@ func (a *API) LibroIvaDigital(ctx context.Context, r facturacionapi.LibroIvaDigi
 	if err != nil {
 		return nil, err
 	}
+	// Lo emitido en el mes sin CAE no se informa: se dice en el archivo,
+	// para quien recibe solo el .zip (M2S4-045).
+	var sinCae int
+	if err := a.s.pool.QueryRow(ctx, `SELECT count(*)::int FROM invoices WHERE cae IS NULL AND estado IN ('emitida', 'rechazada')
+		AND fecha_emision >= $1 AND fecha_emision <= $2`, p.Desde, p.Hasta).Scan(&sinCae); err != nil {
+		return nil, err
+	}
+	if sinCae > 0 {
+		omitidos = append([]string{fmt.Sprintf("Ventas sin CAE, que no se informan hasta autorizarlas: %d.", sinCae)}, omitidos...)
+	}
 	zip, err := fiscal.ZipLibroIva(p.Clave, fiscal.EscribirLibroIva(ventas, compras), omitidos)
 	if err != nil {
 		return nil, err
 	}
 	nombre := "libro-iva-digital-" + p.Clave + ".zip"
+	if len(ventas) == 0 {
+		nombre = "libro-iva-digital-" + p.Clave + "-solo-compras.zip"
+	}
 	bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaExportar, "libro_iva", "", "Exportó el Libro IVA Digital de "+p.Clave, nil)
 	return respuesta{datos: zip, tipo: "application/zip", disposicion: `attachment; filename="` + nombre + `"`}, nil
 }
@@ -514,8 +530,17 @@ func (a *API) CorregirReceptorYReintentar(ctx context.Context, r facturacionapi.
 		return nil, err
 	}
 	id := r.Id.String()
+	var estado string
+	_ = a.s.pool.QueryRow(ctx, `SELECT estado::text FROM invoices WHERE id = $1`, id).Scan(&estado)
 	if err := a.s.CorregirReceptor(ctx, id, *r.Body); err != nil {
 		return nil, comoProblema(err)
+	}
+	// El emitido sin CAE no fue a ARCA: se corrige y queda esperando su
+	// turno, sin pedir el CAE (FLUJO-F092).
+	if estado == "emitida" {
+		bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaEditar, "factura", id,
+			"Corrigió los datos del receptor de un comprobante sin CAE", nil)
+		return mensaje("Datos corregidos."), nil
 	}
 	bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaEditar, "factura", id,
 		"Corrigió los datos del receptor de un comprobante rechazado por ARCA", nil)
@@ -878,7 +903,11 @@ func (a *API) DevolverDesdeElPedido(ctx context.Context, r facturacionapi.Devolv
 		return nil, err
 	}
 	b := r.Body
-	d, err := a.s.DevolverDesdeElPedido(ctx, ses.UserID, r.Id.String(), b.Clave, b.Motivo, renglonesDelPedido(b.Renglones), b.Importe)
+	plata := ""
+	if b.Destino != nil {
+		plata = string(*b.Destino)
+	}
+	d, err := a.s.DevolverDesdeElPedidoPor(ctx, ses.UserID, r.Id.String(), b.Clave, b.Motivo, renglonesDelPedido(b.Renglones), b.Importe, plata)
 	if err != nil {
 		return nil, comoProblema(err)
 	}

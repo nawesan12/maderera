@@ -63,7 +63,7 @@ export default async function CandidatosPage() {
                 key={c.id}
                 className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3"
               >
-                <div className="min-w-[14rem] flex-1">
+                <div className="min-w-0 flex-[1_1_14rem]">
                   <Link
                     href={`/admin/productos/${c.id}`}
                     className="text-base font-medium transition-colors hover:text-brand-orange"
@@ -93,7 +93,7 @@ export default async function CandidatosPage() {
                   {c.stock} en stock
                 </span>
 
-                <AlternarBaja id={c.id} nombre={c.nombre} />
+                <AlternarBaja id={c.id} nombre={c.nombre} stock={c.stock} />
               </li>
             ))}
           </ul>

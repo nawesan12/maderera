@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, useTransition, type FormEvent } from "react";
+import { useActionState, useTransition, type FormEvent } from "react";
 import { sinRomper } from "@/lib/acciones/sin-romper";
 import { CampoArchivo } from "@/components/campo-archivo";
 import {
@@ -8,7 +8,6 @@ import {
   Banknote,
   Check,
   Clock,
-  Copy,
   CreditCard,
   Loader2,
   Upload,
@@ -23,6 +22,8 @@ import {
   type EstadoPago,
 } from "@/app/(public)/pago-actions";
 import type { DatosParaTransferir } from "@/lib/dal/pagos";
+import { DatosBancarios } from "@/components/pagos/datos-bancarios";
+import { caminoDelPago } from "@/lib/pagos/camino";
 
 /**
  * El bloque de pago de la pantalla de confirmación del pedido.
@@ -48,11 +49,22 @@ interface Props {
   /** Token del pedido: es lo que autoriza a pagarlo o a subirle un comprobante. */
   token: string;
   total: number;
+  /**
+   * Lo que falta cobrar fuera de la cuenta corriente (`sinCobrar` de Go). Un
+   * pedido cobrado en el mostrador o con un recibo queda en cero aunque el
+   * pago en línea no exista: pedirle que transfiera era cobrarle dos veces
+   * (mes simulado, M2S3-010).
+   */
+  saldo: number;
+  /** La etapa del pedido: «Ya estamos preparando» no se le dice a uno entregado. */
+  estadoPedido: string;
   medioPago: string | null;
   estadoPago: string;
   cobro: EstadoDelPago | null;
   banco: DatosParaTransferir | null;
   enVivo: boolean;
+  /** Hay con qué cobrar en línea: sin eso no se ofrece «Pagar» (M2S2-002). */
+  disponible: boolean;
 }
 
 const inicial: EstadoPago = {};
@@ -64,13 +76,25 @@ export function BloquePago({
   numero,
   token,
   total,
+  saldo,
+  estadoPedido,
   medioPago,
   estadoPago,
   cobro,
   banco,
   enVivo,
+  disponible,
 }: Props) {
-  if (estadoPago === "pagado") {
+  const enCurso = estadoPedido === "pendiente" || estadoPedido === "preparando";
+  const rechazado = cobro?.estado === "rechazado";
+  const motivo = cobro?.motivoRechazo ?? null;
+  // Lo que se pide transferir es lo que falta: una parte ya cobrada no se
+  // vuelve a pedir.
+  const aPagar = saldo > 0.009 && saldo < total ? saldo : total;
+  if (
+    estadoPago === "pagado" ||
+    (saldo <= 0.009 && cobro?.estado !== "en_revision" && medioPago !== "cuenta_corriente")
+  ) {
     return (
       <Card className="border-0 bg-brand-green/5 shadow-sm">
         <CardContent className="flex items-start gap-3 p-5">
@@ -80,8 +104,8 @@ export function BloquePago({
           <div className="text-sm">
             <p className="font-semibold">Pago acreditado</p>
             <p className="text-muted-foreground">
-              Recibimos {formatearPrecio(cobro?.monto ?? total)}. Ya estamos
-              preparando tu pedido.
+              Recibimos {formatearPrecio(cobro?.estado === "aprobado" ? cobro.monto : total)}.
+              {enCurso && " Ya estamos preparando tu pedido."}
             </p>
           </div>
         </CardContent>
@@ -96,9 +120,12 @@ export function BloquePago({
           <Clock className="mt-0.5 h-5 w-5 shrink-0 text-brand-orange" />
           <div className="text-sm">
             <p className="font-semibold">Estamos verificando tu pago</p>
+            {/* Al que ya retiró no se le promete «arrancamos con el
+                pedido» (mes 23): paga lo que se llevó. */}
             <p className="text-muted-foreground">
-              Recibimos el comprobante. Apenas lo vemos en la cuenta te
-              confirmamos y arrancamos con el pedido.
+              {enCurso
+                ? "Recibimos el comprobante. Apenas lo vemos en la cuenta te confirmamos y arrancamos con el pedido."
+                : "Recibimos el comprobante. Apenas lo vemos en la cuenta te confirmamos."}
             </p>
           </div>
         </CardContent>
@@ -113,9 +140,10 @@ export function BloquePago({
           <Banknote className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
           <div className="text-sm">
             <p className="font-semibold">Cargado a tu cuenta corriente</p>
+            {/* Prometía «podés cancelarlo cuando quieras desde el portal», y
+                el portal no cancela (mes simulado, M2S3-032). */}
             <p className="text-muted-foreground">
-              Lo ves reflejado en el saldo de tu cuenta. Podés cancelarlo cuando
-              quieras desde el portal.
+              Lo ves reflejado en el saldo de tu cuenta.
             </p>
           </div>
         </CardContent>
@@ -123,7 +151,10 @@ export function BloquePago({
     );
   }
 
-  if (medioPago === "efectivo") {
+  // Solo Mercado Pago con con qué cobrar ofrece «Pagar»: débito, crédito y
+  // efectivo se pagan al retirar (M2S3-051, ver `caminoDelPago`).
+  const camino = caminoDelPago(medioPago, disponible, banco !== null);
+  if (camino === "al_retirar") {
     return (
       <Card className="border-0 shadow-sm">
         <CardContent className="flex items-start gap-3 p-5">
@@ -136,13 +167,15 @@ export function BloquePago({
     );
   }
 
-  if (medioPago === "transferencia") {
+  if (camino === "transferencia") {
     return (
       <TransferenciaBancaria
         numero={numero}
         token={token}
-        total={total}
+        total={aPagar}
         banco={banco}
+        rechazado={rechazado}
+        motivo={motivo}
       />
     );
   }
@@ -151,10 +184,10 @@ export function BloquePago({
     <PagoOnline
       numero={numero}
       token={token}
-      total={total}
+      total={aPagar}
       enVivo={enVivo}
-      rechazado={cobro?.estado === "rechazado"}
-      motivo={cobro?.motivoRechazo ?? null}
+      rechazado={rechazado}
+      motivo={motivo}
     />
   );
 }
@@ -226,7 +259,7 @@ function PagoOnline({
           </Button>
         </form>
 
-        {!enVivo && (
+        {!enVivo && !estado.error && (
           <p className="mt-3 text-xs text-muted-foreground">
             Los cobros están en modo de prueba: todavía no se cargaron las
             credenciales de Mercado Pago, así que no se mueve plata.
@@ -242,15 +275,18 @@ function TransferenciaBancaria({
   token,
   total,
   banco,
+  rechazado,
+  motivo,
 }: {
   numero: string;
   token: string;
   total: number;
   banco: DatosParaTransferir | null;
+  rechazado: boolean;
+  motivo: string | null;
 }) {
   const [estado, accion] = useActionState(subir, inicial);
   const [pendiente, empezar] = useTransition();
-  const [copiado, setCopiado] = useState<string | null>(null);
 
   // Con `onSubmit` y no con `action`: con `action`, React vacía el formulario
   // al volver, y un error se llevaba el archivo elegido (H076).
@@ -258,16 +294,6 @@ function TransferenciaBancaria({
     e.preventDefault();
     const datos = new FormData(e.currentTarget);
     empezar(() => accion(datos));
-  }
-
-  async function copiar(valor: string, etiqueta: string) {
-    try {
-      await navigator.clipboard.writeText(valor);
-      setCopiado(etiqueta);
-      setTimeout(() => setCopiado(null), 2000);
-    } catch {
-      // Sin portapapeles disponible, el dato igual está visible para copiarlo a mano.
-    }
   }
 
   return (
@@ -285,34 +311,19 @@ function TransferenciaBancaria({
           </div>
         </div>
 
-        {banco ? (
-          <dl className="mb-4 space-y-2 rounded-lg bg-brand-cream/60 p-4 text-sm">
-            <Dato etiqueta="Titular" valor={banco.titular} />
-            <Dato etiqueta="Banco" valor={banco.banco} />
-            <Dato etiqueta="CUIT" valor={banco.cuit} />
-            <Dato
-              etiqueta="CBU"
-              valor={banco.cbu}
-              onCopiar={() => copiar(banco.cbu, "CBU")}
-              copiado={copiado === "CBU"}
-            />
-            <Dato
-              etiqueta="Alias"
-              valor={banco.alias}
-              onCopiar={() => copiar(banco.alias, "Alias")}
-              copiado={copiado === "Alias"}
-            />
-            {banco.instrucciones && (
-              <p className="pt-1 text-xs text-muted-foreground">
-                {banco.instrucciones}
-              </p>
-            )}
-          </dl>
-        ) : (
-          <p className="mb-4 rounded-lg bg-muted p-4 text-sm text-muted-foreground">
-            Escribinos por WhatsApp y te pasamos los datos para transferir.
+        {/* El comprobante que no se aceptó, con el motivo (M3S2-014). */}
+        {rechazado && !estado.ok && (
+          <p role="alert" className="mb-4 flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              No pudimos acreditar el pago{motivo ? `: ${motivo}` : ""}.
+            </span>
           </p>
         )}
+
+        {banco ? (
+          <DatosBancarios banco={banco} className="mb-4" />
+        ) : null}
 
         {estado.ok ? (
           <p className="flex items-start gap-2 rounded-lg bg-brand-green/10 p-3 text-sm">
@@ -369,42 +380,5 @@ function TransferenciaBancaria({
         )}
       </CardContent>
     </Card>
-  );
-}
-
-function Dato({
-  etiqueta,
-  valor,
-  onCopiar,
-  copiado,
-}: {
-  etiqueta: string;
-  valor: string;
-  onCopiar?: () => void;
-  copiado?: boolean;
-}) {
-  if (!valor) return null;
-
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <dt className="text-muted-foreground">{etiqueta}</dt>
-      <dd className="flex items-center gap-2 font-medium tabular">
-        {valor}
-        {onCopiar && (
-          <button
-            type="button"
-            onClick={onCopiar}
-            aria-label={`Copiar ${etiqueta}`}
-            className="rounded p-1 text-muted-foreground transition-colors hover:bg-black/5 hover:text-foreground"
-          >
-            {copiado ? (
-              <Check className="h-3.5 w-3.5 text-brand-green" />
-            ) : (
-              <Copy className="h-3.5 w-3.5" />
-            )}
-          </button>
-        )}
-      </dd>
-    </div>
   );
 }

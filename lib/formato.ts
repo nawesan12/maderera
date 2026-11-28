@@ -52,6 +52,36 @@ export function formatearMonto(valor: string | number | null): string {
 }
 
 /**
+ * El precio unitario de un renglón, con los decimales que hagan falta (de
+ * dos a seis) para que cantidad × unitario dé el subtotal, a centavos. Con el
+ * unitario redondeado no cerraba: «13 cortes × $ 823» daba 10.699 y el
+ * renglón decía 10.701 (mes simulado, M3S2-063). Gemelo de
+ * pdf.UnitarioQueCierra en Go.
+ */
+export function unitarioQueCierra(subtotal: number, cantidad: number): string {
+  if (!(cantidad > 0) || !Number.isFinite(subtotal)) return formatearMonto(subtotal);
+  const objetivo = Math.round(subtotal * 100);
+  const exacto = subtotal / cantidad;
+  for (let d = 2; d <= 6; d++) {
+    const f = 10 ** d;
+    const u = Math.round(exacto * f) / f;
+    if (Math.round(u * cantidad * 100) === objetivo) {
+      return d === 2 ? formatearMonto(u) : conDecimales(u, d);
+    }
+  }
+  return conDecimales(Math.round(exacto * 1e6) / 1e6, 6);
+}
+
+function conDecimales(valor: number, decimales: number): string {
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: decimales,
+  }).format(valor);
+}
+
+/**
  * La plata de la caja: los pesos enteros como `formatearMonto` y los
  * centavos solo cuando los hay («$ 50.000», «-$ 0,40»). El efectivo con el
  * descuento del 10 % deja centavos, y redondeados a pesos el arqueo escondía
@@ -65,6 +95,20 @@ export function formatearImporte(valor: string | number | null): string {
   const centavos = Math.round(numero * 100);
   if (centavos === 0) return moneda.format(0);
   return centavos % 100 === 0 ? moneda.format(centavos / 100) : monedaConCentavos.format(centavos / 100);
+}
+
+/**
+ * Un importe contable: siempre con centavos («$ 1.744.020,00»), como los
+ * archivos para el estudio y los avisos del cierre. En una columna de cifras
+ * del cierre, unas con ,00 y otras sin, quedaban desalineadas (mes simulado,
+ * M3S3-034 y M2S4-013). Lo que redondea a cero es «$ 0,00», nunca «-$ 0,00».
+ */
+export function formatearMontoContable(valor: string | number | null): string {
+  if (valor === null) return "—";
+  const numero = typeof valor === "string" ? Number(valor) : valor;
+  if (!Number.isFinite(numero)) return "—";
+  const centavos = Math.round(numero * 100);
+  return monedaConCentavos.format(centavos === 0 ? 0 : centavos / 100);
 }
 
 const monedaConCentavos = new Intl.NumberFormat("es-AR", {
@@ -182,7 +226,36 @@ function fechaSegunTipo(opciones: Intl.DateTimeFormatOptions) {
 
 export const fechaCorta = fechaSegunTipo({ day: "2-digit", month: "2-digit", year: "2-digit" });
 
+/** «26/11» de un instante, en hora argentina (los movimientos de la cuenta). */
+export const diaYMesAR = fechaSegunTipo({ day: "2-digit", month: "2-digit" });
+
+/** «noviembre de 2026» de un instante, en hora argentina. */
+export const mesYAnioAR = fechaSegunTipo({ month: "long", year: "numeric" });
+
+/**
+ * La clave del mes argentino de un instante («2026-10»): lo de las 22 h del
+ * 30/11 es de noviembre, no de diciembre (M2S2-023). El servidor corre en UTC
+ * y `getMonth()` daba el mes siguiente.
+ */
+export function claveDeMesAR(fecha: Date): string {
+  return mesYAnioAR.format(fecha);
+}
+
 export const fechaLarga = fechaSegunTipo({ day: "numeric", month: "long", year: "numeric" });
+
+/** «30/11»: la fecha prometida de una orden decía «29/11» en Stock (M3S2-025). */
+export const diaCorto = fechaSegunTipo({ day: "2-digit", month: "2-digit" });
+
+const diaDeLaSemana = fechaSegunTipo({ weekday: "short" });
+
+/**
+ * «lun 30/11»: el día de la semana y el día con barra, como el resto del
+ * panel. Pedido junto, Intl de es-AR escribe «lun 30-11» (mes 23, el
+ * reparto).
+ */
+export const diaConSemana = {
+  format: (fecha: Date | number) => `${diaDeLaSemana.format(fecha)} ${diaCorto.format(fecha)}`,
+};
 
 export const fechaHora = new Intl.DateTimeFormat("es-AR", {
   timeZone: ZONA,
@@ -309,6 +382,7 @@ export function formatearUnidad(unidad: string | null): string {
 
 /** La unidad en plural: «placas», «rollos», «pares»; lo abreviado no cambia. */
 export function unidadEnPlural(unidad: string): string {
+  if (unidad === "media placa") return "medias placas";
   if (/[.²\s]/.test(unidad) || unidad.length <= 2 || /s$/i.test(unidad)) return unidad;
   return /[aeiouáéíóú]$/i.test(unidad) ? `${unidad}s` : `${unidad}es`;
 }
@@ -326,6 +400,10 @@ export function unidadDeVenta(unidad: string | null, descripcion: string | null 
   if ((unidad === "litro" || unidad === "kg") && /\d\s*(l|lts?|litros?|kg|kilos?)\b/i.test(descripcion ?? "")) {
     return "unidad";
   }
+  // La media placa se cuenta en medias: el remito firmado decía «1 placa» de
+  // una media (mes simulado 2). La descripción la nombra
+  // (ventas.DescripcionConPresentacion).
+  if (unidad === "placa" && /\bmedia placa\b/i.test(descripcion ?? "")) return "media_placa";
   return unidad;
 }
 
@@ -334,6 +412,8 @@ export function unidadDeVenta(unidad: string | null, descripcion: string | null 
  * «2,5 m²». Se leía «Quedan 25 placa» y «4 rollo» en las entregas y «3 placa»
  * en el papel del cliente (mes simulado, H095). Sin unidad, la cifra sola.
  */
+const MEDIA_PLACA = /media placa/i;
+
 export function cantidadConUnidad(cantidad: number, unidad: string | null, descripcion = ""): string {
   const n = cantidadLegible.format(cantidad);
   unidad = unidadDeVenta(unidad, descripcion);
@@ -342,6 +422,12 @@ export function cantidadConUnidad(cantidad: number, unidad: string | null, descr
   // cliente es «4 cortes», al lado de «Corte a medida · 3 piezas»: la
   // cantidad sola no se entendía (simulación del mes, H145).
   if (unidad === "pasada") return `${n} ${cantidad === 1 ? "corte" : "cortes"}`;
+  // La media placa se cuenta por medias: «1 media», no «1 placa» al lado de
+  // «— Media placa, al largo» (mes simulado, M2S3-096). unidadDeVenta ya la
+  // pasó a «media_placa»; como UnidadPara en Go.
+  if (unidad === "media_placa" || (unidad === "placa" && MEDIA_PLACA.test(descripcion))) {
+    return `${n} ${cantidad === 1 ? "media" : "medias"}`;
+  }
   const u = formatearUnidad(unidad);
   return `${n} ${cantidad === 1 ? u : unidadEnPlural(u)}`;
 }
@@ -361,6 +447,11 @@ export function plural(
   pluralForma?: string,
 ): string {
   return `${cantidad} ${cantidad === 1 ? singular : (pluralForma ?? singular + "s")}`;
+}
+
+/** `plural` con el número con puntos de miles: «1 creado», «1.250 creados». */
+export function contar(cantidad: number, singular: string, pluralForma?: string): string {
+  return `${cantidad.toLocaleString("es-AR")} ${cantidad === 1 ? singular : (pluralForma ?? singular + "s")}`;
 }
 
 /**
@@ -528,6 +619,23 @@ export function primerNombre(nombre: string): string {
  */
 export function telefonoParaMarcar(telefono: string): string {
   return telefono.replace(/[^\d+]/g, "");
+}
+
+/**
+ * Un teléfono argentino como se lee: «5492235903118» → «223 590-3118». El
+ * WhatsApp del ticket salía como lo guarda `wa.me`, con el 54 y el 9 (mes
+ * simulado, M2S1-186). Sin el 54 y el 9, el área es de tres cifras salvo la
+ * de Buenos Aires (11); lo que no tiene diez cifras queda como vino.
+ */
+export function telefonoLegible(telefono: string): string {
+  let d = telefono.replace(/\D/g, "");
+  if (d.startsWith("54")) d = d.slice(2);
+  if (d.startsWith("9") && d.length === 11) d = d.slice(1);
+  if (d.startsWith("0")) d = d.slice(1);
+  if (d.length !== 10) return telefono.trim();
+  const area = d.startsWith("11") ? 2 : 3;
+  const resto = d.slice(area);
+  return `${d.slice(0, area)} ${resto.slice(0, resto.length - 4)}-${resto.slice(-4)}`;
 }
 
 /**

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
 import type { Autorizacion } from "@/components/autorizacion/campo-pin";
 
@@ -55,6 +56,7 @@ export async function prepararRemito(
       transportista: (formData.get("transportista") as string) || undefined,
       numeroSeguimiento: (formData.get("numeroSeguimiento") as string) || undefined,
       notas: (formData.get("notas") as string) || undefined,
+      ...(formData.get("pin") ? { pin: String(formData.get("pin")) } : {}),
       cantidades,
       ...(otros.size > 0 ? { otros: [...otros].map(([id, c]) => ({ orderId: id, cantidades: c })) } : {}),
     },
@@ -62,6 +64,10 @@ export async function prepararRemito(
 
   if (!r.data) {
     if (r.response.status >= 500) console.error(`prepararRemito: la API respondió ${r.response.status}`);
+    // Soltar lo que no se cobró: el depósito (o quien vende, según la
+    // regla) pide el PIN de un admin (entregas.AutorizarSinCobrar).
+    const autorizacion = autorizacionSinCobrar(r.error as Problema | undefined);
+    if (autorizacion) return autorizacion;
     return {
       error: r.response.status >= 500 ? "No pudimos preparar el remito." : mensajeDe(r.error as Problema | undefined),
     };
@@ -74,7 +80,33 @@ export async function prepararRemito(
   revalidatePath("/admin/reparto");
   revalidatePath("/admin/stock");
 
-  return { ok: entrega.ok, numero: entrega.numero, linkFirma: `/firmar/${entrega.firmaToken}` };
+  const linkFirma = `/firmar/${entrega.firmaToken}`;
+  // En un retiro quien se lleva la mercadería está en el mostrador: lo que
+  // sigue es la firma. Se navega desde acá y no desde el formulario: al
+  // entregar todo, la ficha revalidada ya no tiene acopio, el formulario se
+  // desmonta antes de su efecto y la pantalla quedaba en «Sin firmar» (mes
+  // simulado 2, M2S1-163).
+  if (String(formData.get("tipo") ?? "retiro") !== "envio" && entrega.firmaToken) {
+    redirect(`${linkFirma}?volver=${encodeURIComponent(`/admin/pedidos/${orderId}`)}`);
+  }
+  return { ok: entrega.ok, numero: entrega.numero, linkFirma };
+}
+
+/** El 422 del PIN para soltar lo que no se cobró, o null. */
+function autorizacionSinCobrar(p: Problema | undefined): EstadoEntrega | null {
+  const e = p?.errores;
+  if (!e?.pin || e.pinMotivo !== "sin_cobrar") return null;
+  return {
+    error: e.pin,
+    autorizacion: {
+      motivo: "sin_cobrar",
+      monto: Number(e.pinMonto ?? 0),
+      pinIncorrecto: e.pinIncorrecto === "si",
+      sinAdmins: e.pinSinAdmins === "si" || undefined,
+      conClave: e.pinConClave === "si" || undefined,
+      bloqueadoHasta: e.pinHasta,
+    },
+  };
 }
 
 /** Anula un remito y devuelve la mercadería al stock. */

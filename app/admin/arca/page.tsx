@@ -92,10 +92,14 @@ export default async function ArcaPage({
     .reduce((s, f) => s + f.iva21 + f.iva105 + f.iva27, 0);
   const posicion = debito - credito;
   const conMes = (ruta: string) => `${ruta}?periodo=${periodo.clave}`;
+  // Qué mes es el que se ve: abre en el que se declara (el anterior), y el
+  // crédito en $ 0 de un mes vacío se leía como el de noviembre (M2S1-122).
+  const hoy = hoyEnArgentina().slice(0, 7);
+  const queMes = periodo.clave === mesADeclarar() ? " · a declarar" : periodo.clave === hoy ? " · en curso" : "";
 
   return (
     <div className="space-y-6">
-      <EncabezadoPanel titulo="Impuestos del mes" resumen={etiqueta}>
+      <EncabezadoPanel titulo="Impuestos del mes" resumen={etiqueta + queMes}>
         <SelectorDeMes actual={periodo.clave} />
         <Link
           href="/admin/arca/configuracion"

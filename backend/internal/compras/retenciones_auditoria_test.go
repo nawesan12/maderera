@@ -157,6 +157,30 @@ func TestLosMinimosDelRegimenSeEditan(t *testing.T) {
 	}
 }
 
+// Un régimen nuevo se da de alta desde la pantalla (solo se podían editar
+// los sembrados, M2S1-031), con su código único.
+func TestAltaDeUnRegimen(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	alta := map[string]string{"codigo": "IIBB-ARBA", "nombre": "Ingresos Brutos · ARBA", "impuesto": "iibb", "jurisdiccion": "Buenos Aires",
+		"alicuota": "1.75", "alicuotaNoInscripto": "3.5", "minimoNoImponible": "0", "minimoRetencion": "400", "activo": "on"}
+	if c, b := pedir(t, adm, "POST", e.u+"compras/regimenes", alta); c != 200 {
+		t.Fatalf("alta: %d %s", c, b)
+	}
+	var fila string
+	if err := e.pool.QueryRow(context.Background(), `select impuesto::text || ' ' || coalesce(jurisdiccion, '') || ' ' || alicuota::text || ' ' || minimo_retencion::text || ' ' || activo::text
+		from regimenes_retencion where codigo = 'IIBB-ARBA'`).Scan(&fila); err != nil || fila != "iibb Buenos Aires 1.750 400.00 true" {
+		t.Fatalf("régimen: %q %v", fila, err)
+	}
+	if c, b := pedir(t, adm, "POST", e.u+"compras/regimenes", alta); c != 422 || !strings.Contains(b, "Ya hay un régimen con ese código") {
+		t.Errorf("repetido: %d %s", c, b)
+	}
+	alta["codigo"] = ""
+	if c, b := pedir(t, adm, "POST", e.u+"compras/regimenes", alta); c != 422 || !strings.Contains(b, "código") {
+		t.Errorf("sin código: %d %s", c, b)
+	}
+}
+
 // Anular un pago a proveedor no existía: un pago cargado por error quedaba
 // para siempre, con su certificado contando en el acumulado del mes.
 func TestAnularUnPagoAProveedor(t *testing.T) {

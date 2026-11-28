@@ -6,10 +6,13 @@ import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { fechaLarga, hora, moneda } from "@/lib/formato";
 import { asistentesDe, listarEventos } from "@/lib/dal/admin/eventos";
 import { CrearEvento } from "./crear";
-import { AccionesEvento, Recordatorios } from "./acciones";
+import { AccionesEvento, RecordarEvento, Recordatorios } from "./acciones";
 import { Asistentes } from "./asistentes";
 
 export const metadata: Metadata = { title: "Eventos" };
+
+/** Los eventos pasados que muestran sus anotados para tomar asistencia. */
+const PASADOS_CON_ASISTENTES = 10;
 
 /**
  * Capacitaciones y eventos (cláusula 1.7).
@@ -22,20 +25,28 @@ export const metadata: Metadata = { title: "Eventos" };
 export default async function EventosAdminPage() {
   const eventos = await listarEventos();
 
-  const proximos = eventos.filter((e) => e.proximo);
+  // El más cercano arriba: el de mañana quedaba último (M2S2-092).
+  const proximos = eventos
+    .filter((e) => e.proximo)
+    .sort((a, b) => a.inicia.getTime() - b.inicia.getTime());
   const pasados = eventos.filter((e) => !e.proximo);
+  // Los que ya pasaron conservan sus anotados y «Editar»: es cuando se toma
+  // asistencia, y una fecha mal cargada se tiene que poder corregir
+  // (M3S2-010). Los más recientes, para no pedir todos.
+  const recientes = pasados.slice(0, PASADOS_CON_ASISTENTES);
 
   const asistentes = await Promise.all(
-    proximos.map(async (e) => [e.id, await asistentesDe(e.id)] as const),
+    [...proximos, ...recientes].map(async (e) => [e.id, await asistentesDe(e.id)] as const),
   );
   const porEvento = new Map(asistentes);
+  const porRecordarManana = proximos.filter((e) => e.manana).reduce((n, e) => n + e.porRecordar, 0);
 
   return (
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Eventos y capacitaciones"
       >
-        <Recordatorios />
+        <Recordatorios porRecordar={porRecordarManana} />
       </EncabezadoPanel>
 
       <CrearEvento />
@@ -97,8 +108,13 @@ export default async function EventosAdminPage() {
                 </div>
 
                 <div className="flex flex-col items-end gap-2">
-                  <AccionesEvento id={evento.id} estado={evento.estado} />
-                  <CrearEvento evento={evento} />
+                  <AccionesEvento id={evento.id} titulo={evento.titulo} estado={evento.estado} anotados={evento.inscriptos} />
+                  <div className="flex flex-wrap justify-end gap-2">
+                    {evento.estado === "publicado" && (
+                      <RecordarEvento id={evento.id} titulo={evento.titulo} porRecordar={evento.porRecordar} />
+                    )}
+                    <CrearEvento evento={evento} />
+                  </div>
                   {evento.estado === "publicado" && (
                     <Link
                       href={`/eventos/${evento.slug}`}
@@ -111,7 +127,7 @@ export default async function EventosAdminPage() {
                 </div>
               </div>
 
-              <Asistentes asistentes={porEvento.get(evento.id) ?? []} />
+              <Asistentes asistentes={porEvento.get(evento.id) ?? []} empezo={evento.empezo} />
             </section>
           ))}
 
@@ -121,27 +137,36 @@ export default async function EventosAdminPage() {
                 <h2 className="text-base font-medium">Ya pasaron</h2>
               </div>
               <ul className="divide-y">
-                {pasados.map((evento) => (
-                  <li
-                    key={evento.id}
-                    className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-5 py-3"
-                  >
-                    <span className="min-w-[14rem] flex-1 text-base">
-                      {evento.titulo}
-                      <span className="block text-muted-foreground">
-                        {fechaLarga.format(evento.inicia)}
+                {pasados.map((evento) => {
+                  const lista = porEvento.get(evento.id);
+                  return (
+                  <li key={evento.id}>
+                    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 py-3">
+                      <span className="min-w-[14rem] flex-1 text-base">
+                        {evento.titulo}
+                        <span className="block text-muted-foreground">
+                          {fechaLarga.format(evento.inicia)}
+                        </span>
                       </span>
-                    </span>
-                    <span className="text-base text-muted-foreground">
-                      {evento.confirmados} asistentes
-                    </span>
-                    {evento.precio > 0 && (
-                      <span className="tabular text-base">
-                        {moneda.format(evento.recaudado)}
-                      </span>
-                    )}
+                      {/* Con la asistencia sin tomar, la cuenta la dice la
+                          lista de abajo («1 anotado»): decía «1 asistente»
+                          con el anotado todavía «Confirmado» (mes 23). */}
+                      {evento.sinMarcar === 0 && (
+                        <span className="text-base text-muted-foreground">
+                          {evento.asistieron === 1 ? "1 asistente" : `${evento.asistieron} asistentes`}
+                        </span>
+                      )}
+                      {evento.precio > 0 && (
+                        <span className="tabular text-base">
+                          {moneda.format(evento.recaudado)}
+                        </span>
+                      )}
+                      <CrearEvento evento={evento} />
+                    </div>
+                    {lista && <Asistentes asistentes={lista} empezo />}
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             </section>
           )}

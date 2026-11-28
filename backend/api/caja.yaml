@@ -54,6 +54,7 @@ paths:
                 properties:
                   filas: { type: array, items: { $ref: "#/components/schemas/TurnoCerrado" } }
                   total: { type: integer }
+                  primerMes: { type: string, nullable: true, description: "aaaa-mm del primer mes con algo en la caja" }
   /api/v1/admin/caja/cajas-fisicas:
     get:
       operationId: ListarCajasFisicas
@@ -101,6 +102,51 @@ paths:
           content:
             application/json:
               schema: { type: array, items: { $ref: "#/components/schemas/CajaFueraDeCaja" } }
+  /api/v1/admin/caja/fuera-de-caja/recibos/{id}/asignar:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: AsignarReciboAlTurno
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId]
+              additionalProperties: false
+              properties:
+                sessionId: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/CajaHecho" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/caja/cajas-fuertes:
+    get:
+      operationId: CajasFuertes
+      responses:
+        "200":
+          description: Lo que tiene la caja fuerte de cada sucursal activa
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/CajaFuerte" } }
+  /api/v1/admin/caja/cajas-fuertes/{id}/deposito:
+    parameters: [{ name: id, in: path, required: true, description: La sucursal, schema: { type: string } }]
+    post:
+      operationId: DepositarDeLaCajaFuerte
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [monto, clave]
+              additionalProperties: false
+              properties:
+                monto: { type: number, format: double }
+                motivo: { type: string }
+                clave: { type: string, description: Una por intento }
+      responses:
+        "200": { $ref: "#/components/responses/CajaHecho" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/caja/ventas-sueltas/{id}/asignar:
     parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
     post:
@@ -134,12 +180,26 @@ paths:
       operationId: EmitidoPorCaja
       parameters:
         - { name: periodo, in: query, description: aaaa-mm (si falta, el mes en curso; hora argentina), schema: { type: string } }
+        - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 500 } }
+        - { name: desplazamiento, in: query, schema: { type: integer, minimum: 0 } }
       responses:
         "200":
-          description: Lo emitido en el mostrador en el mes, lo más nuevo primero (hasta 200)
+          description: Lo emitido en el mostrador en el mes, lo más nuevo primero, de a 200 si no se dice, con los totales del mes
           content:
             application/json:
-              schema: { type: array, items: { $ref: "#/components/schemas/CajaEmitido" } }
+              schema:
+                type: object
+                required: [filas, resumen]
+                properties:
+                  filas: { type: array, items: { $ref: "#/components/schemas/CajaEmitido" } }
+                  resumen:
+                    type: object
+                    required: [cantidad, importe, anuladas, importeAnuladas]
+                    properties:
+                      cantidad: { type: integer }
+                      importe: { type: number, format: double, description: Lo vendido, sin las anuladas }
+                      anuladas: { type: integer }
+                      importeAnuladas: { type: number, format: double }
   /api/v1/admin/caja/anulaciones:
     get:
       operationId: AnulacionesPorPersona
@@ -204,11 +264,13 @@ components:
         cantidad: { type: integer }
         total: { type: number, format: double, description: En negativo si es una devolución }
         devolucion: { type: boolean, description: Ventas anuladas o devoluciones parciales durante el turno (la venta queda en el Z de su turno) }
-        quien: { type: string, nullable: true, description: Quién hizo las devoluciones parciales del renglón }
-        cobranza: { type: boolean, description: "lo cobrado por recibos de cuenta en el mostrador durante el turno" }
+        quien: { type: string, nullable: true, description: Quién cobró el recibo si no es quien abrió el turno }
+        cobranza: { type: boolean, description: "lo cobrado por recibos durante el turno (los del mostrador, y el efectivo de los del panel que entró a este cajón)" }
+        dePedido: { type: boolean, description: "el cobro es de un pedido, no de la cuenta" }
+        pedidos: { type: string, nullable: true, description: "los pedidos de las devoluciones parciales, o los recibos que cobró otra persona" }
     TurnoCerrado:
       type: object
-      required: [id, sucursal, abiertaAt, cerradaAt, contado, notas, abiertaPor, esperado, tardios, tardiosMonto, bajoLista, bajoListaMonto, creditoSinAutorizar, creditoSinAutorizarMonto, cierre, fondo, ventas, otrosIngresos, retiros, devoluciones, gastos, puesto]
+      required: [id, sucursal, abiertaAt, cerradaAt, contado, notas, abiertaPor, esperado, tardios, tardiosMonto, bajoLista, bajoListaMonto, creditoSinAutorizar, creditoSinAutorizarMonto, cierre, fondo, ventas, otrosIngresos, retiros, devoluciones, gastos, puesto, movimientos]
       properties:
         id: { type: string }
         sucursal: { type: string }
@@ -232,14 +294,42 @@ components:
         devoluciones: { type: number, format: double, description: En negativo }
         gastos: { type: number, format: double, description: En negativo }
         puesto: { type: string, nullable: true, description: La caja física desde la que se abrió }
+        movimientos: { type: array, items: { $ref: "#/components/schemas/CajaMovimiento" }, description: "Los ingresos, retiros, gastos y devoluciones del turno" }
+        contadoCorregido: { type: number, format: double, nullable: true, description: "Lo que había, corregido al abrir el turno siguiente" }
+        correccionMotivo: { type: string, nullable: true }
+        corregidoPor: { type: string, nullable: true }
+        corregidoAt: { type: string, format: date-time, nullable: true }
+    CajaMovimiento:
+      type: object
+      required: [id, tipo, monto, motivo, orderId, createdAt, quien, destino, anulado, otroPuesto]
+      properties:
+        id: { type: string }
+        tipo: { type: string }
+        monto: { type: number, format: double }
+        motivo: { type: string, nullable: true }
+        orderId: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        quien: { type: string, nullable: true }
+        destino: { type: string, nullable: true }
+        anulado: { type: boolean }
+        otroPuesto: { type: boolean }
+    CajaFuerte:
+      type: object
+      required: [branchId, sucursal, saldo, ultimoDeposito]
+      properties:
+        branchId: { type: string }
+        sucursal: { type: string }
+        saldo: { type: number, format: double }
+        ultimoDeposito: { type: string, format: date-time, nullable: true }
     CajaFueraDeCaja:
       type: object
-      required: [tipo, id, detalle, sucursal, monto, fecha]
+      required: [tipo, id, detalle, sucursal, branchId, monto, fecha]
       properties:
         tipo: { type: string, enum: [recibo, gasto, pago] }
         id: { type: string }
         detalle: { type: string }
         sucursal: { type: string, nullable: true }
+        branchId: { type: string, nullable: true }
         monto: { type: number, format: double, description: "con signo: el recibo entra, el gasto sale" }
         fecha: { type: string, format: date-time }
     CajaFisica:

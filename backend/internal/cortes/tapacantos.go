@@ -144,3 +144,44 @@ func MedidaEnOrden(etiqueta string, largo, ancho int32) string {
 		return m
 	})
 }
+
+// MaterialEnOrden es el material de un corte del catálogo con la medida
+// escrita como la da el sitio («Melamina Blanca — 2600 × 1830 mm — 18mm»):
+// el panel guardaba la etiqueta de la variante («1830 x 2600mm») y el sitio
+// la medida en orden, así que la misma placa salía con dos nombres en la
+// cola, el archivo de la máquina y los materiales del PTX (mes simulado,
+// M2S1-063). Se arregla al leer: lo guardado antes también sale igual.
+//
+// Sin variante —la placa la trae el cliente, o el corte es de antes— la
+// etiqueta se copió igual del buscador («MDF — 1830 x 2600mm — 18mm») y
+// salía distinta de la misma placa del catálogo (M2S3-067): la primera
+// medida se escribe con el lado largo primero, que es el orden del sitio.
+func MaterialEnOrden(material string, largo, ancho *int32) string {
+	if largo != nil && ancho != nil && *largo > 0 && *ancho > 0 {
+		l, a := strconv.Itoa(int(*largo)), strconv.Itoa(int(*ancho))
+		for _, p := range reMedidaDePlaca.FindAllStringSubmatch(material, -1) {
+			if (p[1] == l && p[2] == a) || (p[1] == a && p[2] == l) {
+				return MedidaEnOrden(material, *largo, *ancho)
+			}
+		}
+	}
+	return LadoLargoPrimero(material)
+}
+
+// LadoLargoPrimero reescribe la primera medida de placa de la etiqueta como
+// «largo × ancho mm», el lado mayor primero.
+func LadoLargoPrimero(etiqueta string) string {
+	p := reMedidaDePlaca.FindStringSubmatch(etiqueta)
+	if p == nil {
+		return etiqueta
+	}
+	a, errA := strconv.Atoi(p[1])
+	b, errB := strconv.Atoi(p[2])
+	if errA != nil || errB != nil {
+		return etiqueta
+	}
+	if b > a {
+		a, b = b, a
+	}
+	return MedidaEnOrden(etiqueta, int32(a), int32(b))
+}

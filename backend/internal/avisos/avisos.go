@@ -63,6 +63,13 @@ type Despacho struct {
 	// Adjuntos: el PDF del recibo o del comprobante. Si el correo rebota
 	// temporalmente, viajan con el reintento.
 	Adjuntos []email.Adjunto
+	// AsuntoPropio deja el asunto del correo aunque /admin/avisos tenga uno
+	// editado para el evento: lo usan las variantes que el asunto configurado
+	// no describe. El de «cheque_rechazado» dice que lo rechazó el banco, y al
+	// cliente de un cheque no aceptado le llegaba «Un cheque tuyo fue
+	// rechazado» (M2S4-017); el envío llevaba el asunto «listo para retirar»
+	// (M2S1-074).
+	AsuntoPropio bool
 }
 
 // Reintento es la carga de `email.reintento` (ReintentoDeEmail del TS).
@@ -92,7 +99,7 @@ func nulo(s string) *string {
 }
 
 // conLinkDeAcceso son los eventos cuyo correo lleva un link de entrar.
-var conLinkDeAcceso = map[string]bool{"enlace_ingreso": true, "profesional_aprobado": true}
+var conLinkDeAcceso = map[string]bool{"enlace_ingreso": true, "profesional_aprobado": true, "invitacion_portal": true}
 
 // Despachar manda un correo y lo registra. No falla nunca: un aviso que no
 // sale queda anotado y la operación que lo originó sigue.
@@ -117,7 +124,7 @@ func (s *Servicio) Despachar(ctx context.Context, d Despacho) {
 		s.registrar(ctx, d.Evento, d.Para, asunto, d.EntidadTipo, d.EntidadID, sqlc.EstadoNotificacionOmitida, "", "El aviso está apagado en /admin/avisos.")
 		return
 	}
-	if hayConfig && asuntoConfig != "" {
+	if hayConfig && asuntoConfig != "" && !d.AsuntoPropio {
 		asunto = asuntoConfig
 	}
 	r := s.envio.Enviar(ctx, email.Mensaje{Para: d.Para, Asunto: asunto, HTML: d.Correo.HTML, Texto: d.Correo.Texto, Adjuntos: d.Adjuntos})

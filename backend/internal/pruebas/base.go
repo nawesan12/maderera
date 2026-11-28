@@ -111,8 +111,13 @@ func migrarPlantilla(ctx context.Context, servidor, nombre string, migraciones f
 	// Las pruebas arman sus propias sucursales (casa-central, aserradero y
 	// las que necesiten, con sus ids y su orden): las dos que siembra la
 	// 00204 para una base nueva chocarían con el slug único. La 00204 se
-	// prueba aparte (migrar.TestLasDosSucursales).
-	_, err = sqlDB.ExecContext(ctx, `DELETE FROM branches`)
+	// prueba aparte (migrar.TestLasDosSucursales). Lo mismo los regímenes de
+	// retención que siembra la 00361 (db.TestMigracion00361): las pruebas
+	// arman los suyos con sus códigos.
+	if _, err = sqlDB.ExecContext(ctx, `DELETE FROM branches`); err != nil {
+		return err
+	}
+	_, err = sqlDB.ExecContext(ctx, `DELETE FROM regimenes_retencion WHERE NOT EXISTS (SELECT 1 FROM retenciones_practicadas p WHERE p.regimen_id = regimenes_retencion.id)`)
 	return err
 }
 

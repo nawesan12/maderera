@@ -363,9 +363,19 @@ func TestAgenteYArchivos(t *testing.T) {
 	if code != 200 || !strings.Contains(b, `"numero":"CRT-1"`) || !strings.Contains(b, `"piezas":2`) {
 		t.Fatalf("pendientes: %d %s", code, b)
 	}
+	// Lo que está en la máquina va aparte: el agente conserva su archivo y
+	// saca los que no están ni en la cola ni ahí (M2S4-004).
+	if !strings.Contains(b, `"enProceso":[]`) {
+		t.Errorf("sin nada en la máquina: %s", b)
+	}
+	_, _ = e.pool.Exec(context.Background(), `update cutting_orders set estado = 'en-proceso' where id = $1`, id)
+	if _, b := pedir(t, http.DefaultClient, "GET", u+"/api/cortes/pendientes", nil, "Authorization", "Bearer "+tokenAgente); !strings.Contains(b, `"enProceso":["`+id+`"]`) || !strings.Contains(b, `"cortes":[]`) {
+		t.Errorf("en la máquina: %s", b)
+	}
+	_, _ = e.pool.Exec(context.Background(), `update cutting_orders set estado = 'en-cola' where id = $1`, id)
 	// La lista: con el genérico, BOM y CRLF.
 	code, b = pedir(t, http.DefaultClient, "GET", u+"/api/cortes/"+id+"/lista", nil, "Authorization", "Bearer "+tokenAgente)
-	quiere := "\xef\xbb\xbfLargo;Ancho;Cantidad;Material;Etiqueta;Veta;Canto largo;Canto ancho\r\n1229;600;2;\"Melamina 18mm; blanca\";Lateral;No;2;No\r\n"
+	quiere := "\xef\xbb\xbfLargo;Ancho;Cantidad;Material;Etiqueta;Veta;Canto largo;Canto ancho\r\n1229;600;2;\"Melamina 18mm; blanca\";Lateral;No;2;0\r\n"
 	if code != 200 || b != quiere {
 		t.Errorf("lista: %d %q", code, b)
 	}
@@ -414,6 +424,18 @@ func TestTarifasParametrosYSierra(t *testing.T) {
 	}
 	if code, b := pedir(t, adm, "POST", u+"admin/cortes/tarifas", map[string]any{"material": "Tableros de madera", "precioPorPasada": "1.400", "activo": true}); code != 204 {
 		t.Fatalf("tarifa: %d %s", code, b)
+	}
+	// Guardarla igual no deja otro renglón en la bitácora (mes 23).
+	var tarifa string
+	var antes, despues int
+	_ = e.pool.QueryRow(context.Background(), `select id::text from cutting_rates where material = 'Tableros de madera'`).Scan(&tarifa)
+	_ = e.pool.QueryRow(context.Background(), `select count(*) from audit_log where entidad = 'tarifa_corte'`).Scan(&antes)
+	if code, b := pedir(t, adm, "POST", u+"admin/cortes/tarifas", map[string]any{"id": tarifa, "material": "Tableros de madera", "precioPorPasada": "1.400", "activo": true}); code != 204 {
+		t.Fatalf("tarifa sin cambios: %d %s", code, b)
+	}
+	_ = e.pool.QueryRow(context.Background(), `select count(*) from audit_log where entidad = 'tarifa_corte'`).Scan(&despues)
+	if despues != antes {
+		t.Errorf("guardar sin cambios dejó renglón: %d → %d", antes, despues)
 	}
 	if code, b := pedir(t, adm, "POST", u+"admin/cortes/tarifas", map[string]any{"material": "Placas", "precioPorPasada": "1000", "activo": true}); code != 422 || !strings.Contains(b, `Ya hay una tarifa de \"Placas\"`) {
 		t.Errorf("repetida: %d %s", code, b)

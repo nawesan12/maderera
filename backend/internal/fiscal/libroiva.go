@@ -322,6 +322,12 @@ func ZipLibroIva(clave string, a ArchivosLibroIva, omitidos []string) ([]byte, e
 	var buf bytes.Buffer
 	z := zip.NewWriter(&buf)
 	for _, f := range archivos {
+		// Un archivo vacío no va: el de ventas de un mes sin nada autorizado
+		// bajaba en 0 bytes y quien recibía el .zip no sabía por qué
+		// (M2S4-045). Lo que no se informó está en OMITIDOS.txt.
+		if f[1] == "" {
+			continue
+		}
 		w, err := z.Create(f[0])
 		if err != nil {
 			return nil, err

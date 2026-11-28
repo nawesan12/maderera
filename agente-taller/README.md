@@ -28,8 +28,13 @@ Sin esa variable la integración está apagada y los endpoints responden 404.
 MJBJ_URL=https://mjbj.com.ar \
 MJBJ_TOKEN=<el mismo token> \
 MJBJ_CARPETA="C:/CutRite/Entrada" \
+MJBJ_SUCURSAL="Aserradero" \
 node agente.mjs
 ```
+
+`MJBJ_SUCURSAL` es el taller de esa PC (el nombre de la sucursal, como figura
+en el panel, o su id): baja solo los cortes que se cortan ahí. Sin ella baja
+los de todas las sucursales.
 
 `MJBJ_INTERVALO` cambia cada cuántos segundos pregunta (por omisión, 60).
 
@@ -42,7 +47,11 @@ disparador "al iniciar sesión"; en Linux, un servicio de systemd.
 - Escribe con nombre temporal y renombra, para que el optimizador nunca lea un
   archivo a medio escribir.
 - Vuelve a escribir un corte si le cambiaron las piezas después de bajarlo: en
-  el mostrador se corrigen medidas y el archivo viejo cortaría mal.
+  el mostrador se corrigen medidas y el archivo viejo cortaría mal. Si cambió
+  la fecha pero no el contenido (empezar y deshacer en el taller), no lo toca.
+- **En la carpeta queda solo lo que se puede cortar.** El archivo de un corte
+  que salió de la cola —terminado, anulado o reemplazado por uno corregido—
+  pasa a la subcarpeta `fuera-de-cola`. El que está en la máquina se queda.
 - **No marca nada del lado del servidor.** Lleva su registro en `estado.json`,
   al lado del script. Si se reinstala, lo peor que pasa es que reescriba
   archivos que ya estaban; nunca que un corte quede como enviado sin haber

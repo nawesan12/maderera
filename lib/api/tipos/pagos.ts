@@ -395,6 +395,8 @@ export interface operations {
                 content: {
                     "application/json": {
                         enVivo: boolean;
+                        /** @description hay con qué cobrar en línea (Mercado Pago o el demo) */
+                        disponible: boolean;
                     };
                 };
             };
@@ -464,6 +466,7 @@ export interface operations {
                     "application/json": {
                         cobro: components["schemas"]["CobroDelPedido"];
                         enVivo: boolean;
+                        disponible: boolean;
                     };
                 };
             };

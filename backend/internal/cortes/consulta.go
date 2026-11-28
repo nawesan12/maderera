@@ -165,7 +165,10 @@ func (s *Servicio) GuardarConsulta(ctx context.Context, m map[string]any, ip str
 		} else if n > 1 {
 			return "", cual(i, fmt.Sprintf("Hay %d piezas que no entran en la placa. Revisá esas medidas.", n))
 		}
-		if canto != nil && *canto == "" {
+		// Sin ninguna pieza con canto no hay tapacanto que nombrar: la
+		// consulta decía «Tapacanto: Blanco 22 mm» con 0 m de canto (mes
+		// simulado, M2S2-145 y M2S2-044).
+		if canto != nil && (*canto == "" || !algunaConCanto(piezas)) {
 			canto = nil
 		}
 		crudas, err := json.Marshal(piezas)
@@ -285,4 +288,69 @@ func (s *Servicio) Consulta(ctx context.Context, token string) (*ConsultaDeCorte
 	p := c.Grupos[0]
 	c.PlacaLargoMm, c.PlacaAnchoMm, c.Piezas, c.Plano, c.MetrosCanto = p.PlacaLargoMm, p.PlacaAnchoMm, p.Piezas, p.Plano, p.MetrosCanto
 	return &c, nil
+}
+
+// algunaConCanto dice si alguna pieza lleva canto en algún lado.
+func algunaConCanto(piezas []PiezaAcortar) bool {
+	for _, p := range piezas {
+		if p.CantoLargo > 0 || p.CantoAncho > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// ContactoDeConsulta es quien mandó una consulta por WhatsApp.
+type ContactoDeConsulta struct {
+	ClienteID *string `json:"clienteId"`
+	Nombre    *string `json:"nombre"`
+	Telefono  *string `json:"telefono"`
+	Chat      *string `json:"chat"`
+}
+
+// ContactoDeLaConsulta lee el cliente, el nombre y el teléfono de la
+// conversación de donde salió la consulta (la ata el bot, migración 00410):
+// «Pasar a corte» los traía vacíos y había que buscarlos (M2S3-024). Sin
+// conversación, todo nulo. El teléfono es el de la ficha, o el del chat
+// escrito como lo escribe la gente (223 555-0312).
+func (s *Servicio) ContactoDeLaConsulta(ctx context.Context, token string) (ContactoDeConsulta, error) {
+	var c ContactoDeConsulta
+	var jid *string
+	err := s.pool.QueryRow(ctx, `
+		SELECT w.id::text, w.customer_id::text, coalesce(cu.nombre, w.display_name), cu.telefono, w.wa_jid
+		FROM consultas_corte k
+		JOIN whatsapp_conversaciones w ON w.id = k.whatsapp_conversacion_id
+		LEFT JOIN customers cu ON cu.id = w.customer_id
+		WHERE k.token = $1`, token).Scan(&c.Chat, &c.ClienteID, &c.Nombre, &c.Telefono, &jid)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return c, nil
+	}
+	if err != nil {
+		return c, err
+	}
+	if (c.Telefono == nil || *c.Telefono == "") && jid != nil {
+		if t := telefonoDelJid(*jid); t != "" {
+			c.Telefono = &t
+		}
+	}
+	return c, nil
+}
+
+// telefonoDelJid pasa «5492235550312» a «223 555-0312»; otro formato, como
+// viene.
+func telefonoDelJid(jid string) string {
+	n := jid
+	if i := strings.IndexByte(n, '@'); i >= 0 {
+		n = n[:i]
+	}
+	for _, r := range n {
+		if r < '0' || r > '9' {
+			return ""
+		}
+	}
+	if strings.HasPrefix(n, "549") && len(n) == 13 {
+		n = n[3:]
+		return n[:3] + " " + n[3:6] + "-" + n[6:]
+	}
+	return n
 }

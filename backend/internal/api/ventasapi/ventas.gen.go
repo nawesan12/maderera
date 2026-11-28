@@ -25,6 +25,30 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for DevolucionEnLaFichaDestino.
+const (
+	DevolucionEnLaFichaDestinoAfuera DevolucionEnLaFichaDestino = "afuera"
+	DevolucionEnLaFichaDestinoCaja   DevolucionEnLaFichaDestino = "caja"
+	DevolucionEnLaFichaDestinoCuenta DevolucionEnLaFichaDestino = "cuenta"
+	DevolucionEnLaFichaDestinoDeuda  DevolucionEnLaFichaDestino = "deuda"
+)
+
+// Valid indicates whether the value is a known member of the DevolucionEnLaFichaDestino enum.
+func (e DevolucionEnLaFichaDestino) Valid() bool {
+	switch e {
+	case DevolucionEnLaFichaDestinoAfuera:
+		return true
+	case DevolucionEnLaFichaDestinoCaja:
+		return true
+	case DevolucionEnLaFichaDestinoCuenta:
+		return true
+	case DevolucionEnLaFichaDestinoDeuda:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for FichaDePedidoComprobante.
 const (
 	FichaDePedidoComprobanteFiscal      FichaDePedidoComprobante = "fiscal"
@@ -115,6 +139,42 @@ func (e ListarPedidosParamsVista) Valid() bool {
 	}
 }
 
+// Defines values for CorregirPedidoJSONBodyEntrega.
+const (
+	CorregirPedidoJSONBodyEntregaEnvio  CorregirPedidoJSONBodyEntrega = "envio"
+	CorregirPedidoJSONBodyEntregaRetiro CorregirPedidoJSONBodyEntrega = "retiro"
+)
+
+// Valid indicates whether the value is a known member of the CorregirPedidoJSONBodyEntrega enum.
+func (e CorregirPedidoJSONBodyEntrega) Valid() bool {
+	switch e {
+	case CorregirPedidoJSONBodyEntregaEnvio:
+		return true
+	case CorregirPedidoJSONBodyEntregaRetiro:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DevolverPedidoJSONBodyDestino.
+const (
+	DevolverPedidoJSONBodyDestinoAfuera DevolverPedidoJSONBodyDestino = "afuera"
+	DevolverPedidoJSONBodyDestinoCaja   DevolverPedidoJSONBodyDestino = "caja"
+)
+
+// Valid indicates whether the value is a known member of the DevolverPedidoJSONBodyDestino enum.
+func (e DevolverPedidoJSONBodyDestino) Valid() bool {
+	switch e {
+	case DevolverPedidoJSONBodyDestinoAfuera:
+		return true
+	case DevolverPedidoJSONBodyDestinoCaja:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ConvertirPresupuestoEnPedidoJSONBodyPrecios.
 const (
 	Actualizar ConvertirPresupuestoEnPedidoJSONBodyPrecios = "actualizar"
@@ -135,21 +195,46 @@ func (e ConvertirPresupuestoEnPedidoJSONBodyPrecios) Valid() bool {
 
 // Defines values for ConvertirPresupuestoEnPedidoJSONBodyTipoEntrega.
 const (
-	Envio  ConvertirPresupuestoEnPedidoJSONBodyTipoEntrega = "envio"
-	Retiro ConvertirPresupuestoEnPedidoJSONBodyTipoEntrega = "retiro"
+	ConvertirPresupuestoEnPedidoJSONBodyTipoEntregaEnvio  ConvertirPresupuestoEnPedidoJSONBodyTipoEntrega = "envio"
+	ConvertirPresupuestoEnPedidoJSONBodyTipoEntregaRetiro ConvertirPresupuestoEnPedidoJSONBodyTipoEntrega = "retiro"
 )
 
 // Valid indicates whether the value is a known member of the ConvertirPresupuestoEnPedidoJSONBodyTipoEntrega enum.
 func (e ConvertirPresupuestoEnPedidoJSONBodyTipoEntrega) Valid() bool {
 	switch e {
-	case Envio:
+	case ConvertirPresupuestoEnPedidoJSONBodyTipoEntregaEnvio:
 		return true
-	case Retiro:
+	case ConvertirPresupuestoEnPedidoJSONBodyTipoEntregaRetiro:
 		return true
 	default:
 		return false
 	}
 }
+
+// ComprobanteDelPedido defines model for ComprobanteDelPedido.
+type ComprobanteDelPedido struct {
+	Estado   string `json:"estado"`
+	Etiqueta string `json:"etiqueta"`
+	Id       string `json:"id"`
+	Tipo     string `json:"tipo"`
+}
+
+// DevolucionEnLaFicha defines model for DevolucionEnLaFicha.
+type DevolucionEnLaFicha struct {
+	CreatedAt time.Time                  `json:"createdAt"`
+	Destino   DevolucionEnLaFichaDestino `json:"destino"`
+	Id        string                     `json:"id"`
+	Importe   float64                    `json:"importe"`
+	Motivo    string                     `json:"motivo"`
+
+	// Nota «Nota de crédito B 0015-00000003»
+	Nota   *string `json:"nota"`
+	NotaId *string `json:"notaId"`
+	Quien  *string `json:"quien"`
+}
+
+// DevolucionEnLaFichaDestino defines model for DevolucionEnLaFicha.Destino.
+type DevolucionEnLaFichaDestino string
 
 // FichaDePedido defines model for FichaDePedido.
 type FichaDePedido struct {
@@ -167,28 +252,39 @@ type FichaDePedido struct {
 	// Cobrado Lo cobrado con recibos y en línea
 	Cobrado          float64                   `json:"cobrado"`
 	Comprobante      *FichaDePedidoComprobante `json:"comprobante"`
+	Comprobantes     []ComprobanteDelPedido    `json:"comprobantes"`
 	CostoEnvio       string                    `json:"costoEnvio"`
 	CreatedAt        time.Time                 `json:"createdAt"`
 	CustomerId       *string                   `json:"customerId"`
 	Descuento        string                    `json:"descuento"`
 	DescuentoMotivo  *string                   `json:"descuentoMotivo"`
+	Devoluciones     []DevolucionEnLaFicha     `json:"devoluciones"`
 	DireccionEntrega *string                   `json:"direccionEntrega"`
-	Email            *string                   `json:"email"`
-	Empresa          *string                   `json:"empresa"`
+
+	// EfectivoRecibido con cuánto pagó en efectivo en el mostrador (el vuelto del ticket)
+	EfectivoRecibido *float64 `json:"efectivoRecibido,omitempty"`
+	Email            *string  `json:"email"`
+	Empresa          *string  `json:"empresa"`
 
 	// EntregarEl AAAA-MM-DD
 	EntregarEl *string `json:"entregarEl"`
 	Estado     string  `json:"estado"`
 	EstadoPago string  `json:"estadoPago"`
 
+	// FacturaId la factura viva de la venta: el papel que vale
+	FacturaId *string `json:"facturaId,omitempty"`
+
 	// Facturado Tiene una factura viva
 	Facturado bool `json:"facturado"`
 
 	// FichaPorCorreo Sin cliente, la ficha con el correo del contacto (para unirlo a mano)
-	FichaPorCorreo *FichaParaUnir  `json:"fichaPorCorreo,omitempty"`
-	Historial      []PasoDelPedido `json:"historial"`
-	Id             string          `json:"id"`
-	Items          []ItemDePedido  `json:"items"`
+	FichaPorCorreo *FichaParaUnir `json:"fichaPorCorreo,omitempty"`
+
+	// FleteSinCargo el envío se pasó a pedido con «Sin cargo» a propósito
+	FleteSinCargo *bool           `json:"fleteSinCargo,omitempty"`
+	Historial     []PasoDelPedido `json:"historial"`
+	Id            string          `json:"id"`
+	Items         []ItemDePedido  `json:"items"`
 
 	// Margen Solo para el admin, y solo si alguna línea tiene costo congelado
 	Margen            *MargenDelPedido  `json:"margen"`
@@ -229,8 +325,11 @@ type FichaDePresupuesto struct {
 	CreatedAt           time.Time `json:"createdAt"`
 	CustomerId          *string   `json:"customerId"`
 	Email               *string   `json:"email"`
-	Empresa             *string   `json:"empresa"`
-	Estado              string    `json:"estado"`
+
+	// EmailFicha el correo de la ficha del cliente
+	EmailFicha *string `json:"emailFicha,omitempty"`
+	Empresa    *string `json:"empresa"`
+	Estado     string  `json:"estado"`
 
 	// FichaPorCorreo Sin cliente, la ficha con el correo del contacto (para unirlo a mano)
 	FichaPorCorreo *FichaParaUnir      `json:"fichaPorCorreo,omitempty"`
@@ -245,7 +344,13 @@ type FichaDePresupuesto struct {
 	Origen        string  `json:"origen"`
 
 	// PedidoId El pedido en que se convirtió
-	PedidoId     *string `json:"pedidoId"`
+	PedidoId *string `json:"pedidoId"`
+
+	// PedidosCancelados Los pedidos que salieron de él y se cancelaron
+	PedidosCancelados *[]struct {
+		Id     string `json:"id"`
+		Numero string `json:"numero"`
+	} `json:"pedidosCancelados,omitempty"`
 	Subtotal     string  `json:"subtotal"`
 	Sucursal     *string `json:"sucursal"`
 	SucursalSlug *string `json:"sucursalSlug"`
@@ -275,19 +380,22 @@ type FichaParaUnir struct {
 
 // ItemDePedido defines model for ItemDePedido.
 type ItemDePedido struct {
-	AlicuotaIva    *string `json:"alicuotaIva"`
-	Cantidad       string  `json:"cantidad"`
-	CostoUnitario  *string `json:"costoUnitario"`
-	Descripcion    string  `json:"descripcion"`
-	Id             string  `json:"id"`
-	Orden          int     `json:"orden"`
-	OrderId        string  `json:"orderId"`
-	PrecioUnitario string  `json:"precioUnitario"`
-	Presentacion   *string `json:"presentacion"`
-	StockPorUnidad float64 `json:"stockPorUnidad"`
-	Subtotal       string  `json:"subtotal"`
-	Unidad         string  `json:"unidad"`
-	VariantId      *string `json:"variantId"`
+	AlicuotaIva   *string `json:"alicuotaIva"`
+	Cantidad      string  `json:"cantidad"`
+	CostoUnitario *string `json:"costoUnitario"`
+	Descripcion   string  `json:"descripcion"`
+
+	// Devuelto Lo que volvió de este renglón
+	Devuelto       *float64 `json:"devuelto,omitempty"`
+	Id             string   `json:"id"`
+	Orden          int      `json:"orden"`
+	OrderId        string   `json:"orderId"`
+	PrecioUnitario string   `json:"precioUnitario"`
+	Presentacion   *string  `json:"presentacion"`
+	StockPorUnidad float64  `json:"stockPorUnidad"`
+	Subtotal       string   `json:"subtotal"`
+	Unidad         string   `json:"unidad"`
+	VariantId      *string  `json:"variantId"`
 }
 
 // ItemDePresupuesto defines model for ItemDePresupuesto.
@@ -298,8 +406,15 @@ type ItemDePresupuesto struct {
 	BajoCosto   *bool  `json:"bajoCosto,omitempty"`
 	Cantidad    string `json:"cantidad"`
 	Descripcion string `json:"descripcion"`
-	Id          string `json:"id"`
-	Orden       int    `json:"orden"`
+
+	// Disponible Lo que hay para vender en cada sucursal activa
+	Disponible *[]struct {
+		Disponible float64 `json:"disponible"`
+		Nombre     string  `json:"nombre"`
+		Sucursal   string  `json:"sucursal"`
+	} `json:"disponible,omitempty"`
+	Id    string `json:"id"`
+	Orden int    `json:"orden"`
 
 	// Piso el precio final que apenas cubre el costo (precios.PisoDeCosto); null sin costo cargado o en una presentación
 	Piso           *float64 `json:"piso,omitempty"`
@@ -346,6 +461,9 @@ type PedidoListado struct {
 	// ACuenta lo que un pedido partido cargó a la cuenta corriente (H047)
 	ACuenta *float64 `json:"aCuenta,omitempty"`
 
+	// ALlevar Lo que falta llevar de un envío sin entregar (vacío en un retiro)
+	ALlevar *[]PorEntregar `json:"aLlevar,omitempty"`
+
 	// Acopio Se retira de a partes (ya salió algo
 	Acopio  bool   `json:"acopio"`
 	Cliente string `json:"cliente"`
@@ -360,6 +478,13 @@ type PedidoListado struct {
 	DireccionEntrega  *string   `json:"direccionEntrega"`
 	Empresa           *string   `json:"empresa"`
 
+	// EnElCamion Los remitos de envío sin firmar, con lo que lleva cada uno
+	EnElCamion *[]struct {
+		FirmaToken string        `json:"firmaToken"`
+		Lineas     []PorEntregar `json:"lineas"`
+		Numero     string        `json:"numero"`
+	} `json:"enElCamion,omitempty"`
+
 	// EntregadoAt El último paso a entregado del historial
 	EntregadoAt *time.Time `json:"entregadoAt"`
 
@@ -369,11 +494,14 @@ type PedidoListado struct {
 	EstadoPago string  `json:"estadoPago"`
 
 	// Facturado Tiene una factura viva
-	Facturado bool    `json:"facturado"`
-	Id        string  `json:"id"`
-	Items     int     `json:"items"`
-	MedioPago *string `json:"medioPago"`
-	Numero    string  `json:"numero"`
+	Facturado bool `json:"facturado"`
+
+	// FleteACotizar Un envío a una zona a cotizar sin flete cargado
+	FleteACotizar *bool   `json:"fleteACotizar,omitempty"`
+	Id            string  `json:"id"`
+	Items         int     `json:"items"`
+	MedioPago     *string `json:"medioPago"`
+	Numero        string  `json:"numero"`
 
 	// PagoEnRevision Una transferencia informada que nadie verificó todavía
 	PagoEnRevision bool `json:"pagoEnRevision"`
@@ -485,6 +613,9 @@ type ResultadoDeVenta struct {
 	// Estado El estado al que llegó el pedido
 	Estado *string `json:"estado,omitempty"`
 
+	// FirmaToken El enlace de firma del remito que salió al avanzar
+	FirmaToken *string `json:"firmaToken,omitempty"`
+
 	// Id El pedido creado (o el presupuesto
 	Id     *string `json:"id,omitempty"`
 	Numero *string `json:"numero,omitempty"`
@@ -517,6 +648,10 @@ type ListarPedidosParamsVista string
 
 // AvanzarPedidoJSONBody defines parameters for AvanzarPedido.
 type AvanzarPedidoJSONBody struct {
+	Ficha *string `json:"ficha,omitempty"`
+
+	// Pin el PIN de un admin para soltar lo que no se cobró (422 en pin)
+	Pin               *string `json:"pin,omitempty"`
 	ReceptorDocumento *string `json:"receptorDocumento,omitempty"`
 	ReceptorNombre    *string `json:"receptorNombre,omitempty"`
 }
@@ -546,26 +681,50 @@ type CobrarPedidoJSONBody struct {
 // CorregirPedidoJSONBody defines parameters for CorregirPedido.
 type CorregirPedidoJSONBody struct {
 	CostoEnvio *float64 `json:"costoEnvio,omitempty"`
-	Ficha      *string  `json:"ficha,omitempty"`
-	Motivo     string   `json:"motivo"`
-	Pin        *string  `json:"pin,omitempty"`
-	Renglones  []struct {
+	Direccion  *string  `json:"direccion,omitempty"`
+
+	// Entrega para cambiar cómo se entrega (antes de que salga algo)
+	Entrega *CorregirPedidoJSONBodyEntrega `json:"entrega,omitempty"`
+	Ficha   *string                        `json:"ficha,omitempty"`
+	Motivo  string                         `json:"motivo"`
+
+	// Nuevos Los renglones que se suman
+	Nuevos *[]struct {
+		Cantidad       float64 `json:"cantidad"`
+		Descripcion    string  `json:"descripcion"`
+		PrecioUnitario float64 `json:"precioUnitario"`
+		Unidad         *string `json:"unidad,omitempty"`
+		VariantId      string  `json:"variantId"`
+	} `json:"nuevos,omitempty"`
+	Pin       *string `json:"pin,omitempty"`
+	Renglones []struct {
 		Cantidad       float64 `json:"cantidad"`
 		OrderItemId    string  `json:"orderItemId"`
 		PrecioUnitario float64 `json:"precioUnitario"`
 	} `json:"renglones"`
+	SinCargo *bool   `json:"sinCargo,omitempty"`
+	Zona     *string `json:"zona,omitempty"`
 }
+
+// CorregirPedidoJSONBodyEntrega defines parameters for CorregirPedido.
+type CorregirPedidoJSONBodyEntrega string
 
 // DevolverPedidoJSONBody defines parameters for DevolverPedido.
 type DevolverPedidoJSONBody struct {
 	// Clave la del intento: un reintento devuelve la misma devolución
-	Clave     string `json:"clave"`
-	Motivo    string `json:"motivo"`
+	Clave string `json:"clave"`
+
+	// Destino lo ya cobrado vuelve por la caja o por afuera; sin él, baja lo que falta cobrar o va a la cuenta
+	Destino   *DevolverPedidoJSONBodyDestino `json:"destino,omitempty"`
+	Motivo    string                         `json:"motivo"`
 	Renglones []struct {
 		Cantidad    float64 `json:"cantidad"`
 		OrderItemId string  `json:"orderItemId"`
 	} `json:"renglones"`
 }
+
+// DevolverPedidoJSONBodyDestino defines parameters for DevolverPedido.
+type DevolverPedidoJSONBodyDestino string
 
 // CambiarEntregaDelPedidoJSONBody defines parameters for CambiarEntregaDelPedido.
 type CambiarEntregaDelPedidoJSONBody struct {
@@ -633,7 +792,10 @@ type ConvertirPresupuestoEnPedidoJSONBody struct {
 	Precios *ConvertirPresupuestoEnPedidoJSONBodyPrecios `json:"precios,omitempty"`
 
 	// SinCargo el envío va sin flete; un envío sin flete ni sinCargo no sale
-	SinCargo    *bool                                            `json:"sinCargo,omitempty"`
+	SinCargo *bool `json:"sinCargo,omitempty"`
+
+	// Sucursal el slug de la sucursal de donde sale, si no es la del presupuesto
+	Sucursal    *string                                          `json:"sucursal,omitempty"`
 	TipoEntrega *ConvertirPresupuestoEnPedidoJSONBodyTipoEntrega `json:"tipoEntrega,omitempty"`
 	Zona        *string                                          `json:"zona,omitempty"`
 }
@@ -703,6 +865,9 @@ type ServerInterface interface {
 	// CorregirPedido Corrige los renglones y el flete de un pedido sin factura ni cobro; un precio bajo la lista pasado lo libre pide el PIN de un admin (422 en `pin`).
 	// (POST /api/v1/admin/pedidos/{id}/correccion)
 	CorregirPedido(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// DatosDeDevolucionDelPedido Lo que queda por devolver de cada renglón y por dónde puede volver la plata.
+	// (GET /api/v1/admin/pedidos/{id}/devolucion)
+	DatosDeDevolucionDelPedido(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// DevolverPedido La devolución de un pedido sin factura: baja lo que falta cobrar (o la cuenta corriente) y lo que vuelve al stock queda atado a ella. Con factura, se devuelve desde la factura.
 	// (POST /api/v1/admin/pedidos/{id}/devolucion)
 	DevolverPedido(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
@@ -1024,6 +1189,32 @@ func (siw *ServerInterfaceWrapper) CorregirPedido(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CorregirPedido(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DatosDeDevolucionDelPedido operation middleware
+func (siw *ServerInterfaceWrapper) DatosDeDevolucionDelPedido(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DatosDeDevolucionDelPedido(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1519,6 +1710,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/pedidos/{id}/avanzar", wrapper.AvanzarPedido)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/pedidos/{id}/cancelar", wrapper.CancelarPedido)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/admin/pedidos/{id}/entrega", wrapper.CambiarEntregaDelPedido)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/pedidos/{id}/devolucion", wrapper.DatosDeDevolucionDelPedido)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/pedidos/{id}/devolucion", wrapper.DevolverPedido)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/pedidos/{id}/correccion", wrapper.CorregirPedido)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/pedidos/{id}/cobro", wrapper.CajaDelCobro)
@@ -2073,6 +2265,84 @@ func (response CorregirPedido422ApplicationProblemPlusJSONResponse) VisitCorregi
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DatosDeDevolucionDelPedidoRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type DatosDeDevolucionDelPedidoResponseObject interface {
+	VisitDatosDeDevolucionDelPedidoResponse(w http.ResponseWriter) error
+}
+
+type DatosDeDevolucionDelPedido200JSONResponse struct {
+	ACuenta     bool    `json:"aCuenta"`
+	Afuera      float64 `json:"afuera"`
+	Caja        float64 `json:"caja"`
+	CajaAbierta bool    `json:"cajaAbierta"`
+	Deuda       float64 `json:"deuda"`
+	Renglones   []struct {
+		// Neto La plata de devolver todo lo que queda, neta del descuento del pedido
+		Neto        float64 `json:"neto"`
+		OrderItemId string  `json:"orderItemId"`
+		Queda       float64 `json:"queda"`
+	} `json:"renglones"`
+}
+
+func (response DatosDeDevolucionDelPedido200JSONResponse) VisitDatosDeDevolucionDelPedidoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DatosDeDevolucionDelPedido401ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response DatosDeDevolucionDelPedido401ApplicationProblemPlusJSONResponse) VisitDatosDeDevolucionDelPedidoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DatosDeDevolucionDelPedido403ApplicationProblemPlusJSONResponse Problema
+
+func (response DatosDeDevolucionDelPedido403ApplicationProblemPlusJSONResponse) VisitDatosDeDevolucionDelPedidoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DatosDeDevolucionDelPedido404ApplicationProblemPlusJSONResponse Problema
+
+func (response DatosDeDevolucionDelPedido404ApplicationProblemPlusJSONResponse) VisitDatosDeDevolucionDelPedidoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -2958,6 +3228,9 @@ type StrictServerInterface interface {
 	// CorregirPedido Corrige los renglones y el flete de un pedido sin factura ni cobro; un precio bajo la lista pasado lo libre pide el PIN de un admin (422 en `pin`).
 	// (POST /api/v1/admin/pedidos/{id}/correccion)
 	CorregirPedido(ctx context.Context, request CorregirPedidoRequestObject) (CorregirPedidoResponseObject, error)
+	// DatosDeDevolucionDelPedido Lo que queda por devolver de cada renglón y por dónde puede volver la plata.
+	// (GET /api/v1/admin/pedidos/{id}/devolucion)
+	DatosDeDevolucionDelPedido(ctx context.Context, request DatosDeDevolucionDelPedidoRequestObject) (DatosDeDevolucionDelPedidoResponseObject, error)
 	// DevolverPedido La devolución de un pedido sin factura: baja lo que falta cobrar (o la cuenta corriente) y lo que vuelve al stock queda atado a ella. Con factura, se devuelve desde la factura.
 	// (POST /api/v1/admin/pedidos/{id}/devolucion)
 	DevolverPedido(ctx context.Context, request DevolverPedidoRequestObject) (DevolverPedidoResponseObject, error)
@@ -3245,6 +3518,32 @@ func (sh *strictHandler) CorregirPedido(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CorregirPedidoResponseObject); ok {
 		if err := validResponse.VisitCorregirPedidoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DatosDeDevolucionDelPedido operation middleware
+func (sh *strictHandler) DatosDeDevolucionDelPedido(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request DatosDeDevolucionDelPedidoRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DatosDeDevolucionDelPedido(ctx, request.(DatosDeDevolucionDelPedidoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DatosDeDevolucionDelPedido")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DatosDeDevolucionDelPedidoResponseObject); ok {
+		if err := validResponse.VisitDatosDeDevolucionDelPedidoResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -3626,103 +3925,118 @@ func (sh *strictHandler) PresupuestoPdf(w http.ResponseWriter, r *http.Request, 
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

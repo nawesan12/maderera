@@ -69,14 +69,23 @@ func TestCierreCobrosDeFacturasSinCae(t *testing.T) {
 	rec := e.recibir(t, &ferreyra, "REC-0005", "2026-10-07T15:00:00Z", [2]any{"efectivo", 3150.0})
 	e.exec(t, `insert into invoice_payments (invoice_id, medio, monto, receipt_id) values ($1, 'efectivo', 3150, $2)`, factura, rec)
 
+	// Una seña de verdad: el pedido de Gómez sigue abierto y sin factura.
+	gomez := e.id(t, `insert into customers (nombre) values ('Gómez') returning id`)
+	senado := e.pedido(t, "PED-1190", e.central, "pendiente", "mostrador", time.Date(2026, 10, 8, 12, 0, 0, 0, Argentina), &gomez)
+	e.exec(t, `update orders set total = 700 where id = $1`, senado)
+	e.exec(t, `insert into order_status_history (order_id, estado, created_at) values ($1, 'pendiente', '2026-10-08T15:00:00Z')`, senado)
+	e.recibir(t, &gomez, "REC-0006", "2026-10-09T15:00:00Z", [2]any{"efectivo", 200.0})
+
 	_, cuerpo, _ := pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-10")
 	p := pendientesDe(t, cuerpo)
+	// La seña de Herrera ya tiene su Factura B esperando el CAE: es el cobro
+	// de esa factura, no una seña sin factura (mes simulado, M2S1-059).
 	cobro, ok := p["cobros-sin-cae"]
-	if !ok || cobro.Cantidad != 2 || !strings.Contains(cobro.Detalle, "4.360") || !strings.Contains(cobro.Donde, "/admin/facturacion") {
+	if !ok || cobro.Cantidad != 3 || !strings.Contains(cobro.Detalle, "4.860") || !strings.Contains(cobro.Donde, "/admin/facturacion") {
 		t.Fatalf("cobros de facturas sin CAE: %s", cuerpo)
 	}
-	if s, ok := p["senas-del-mes"]; !ok || s.Cantidad != 1 || s.Donde != "/admin/clientes/"+herrera {
-		t.Fatalf("la seña de Herrera es la única seña, con su ficha: %s", cuerpo)
+	if s, ok := p["senas-del-mes"]; !ok || s.Cantidad != 1 || s.Donde != "/admin/clientes/"+gomez {
+		t.Fatalf("la seña de Gómez es la única seña, con su ficha: %s", cuerpo)
 	}
 	if _, ok := p["anticipos-sin-aplicar"]; ok {
 		t.Fatalf("la seña de un pedido con la factura esperando el CAE no está sin aplicar: %s", cuerpo)
@@ -148,7 +157,20 @@ func TestBajoElMinimoEnLasTresPantallas(t *testing.T) {
 			dePlaca = &r.Filas[i]
 		}
 	}
-	if sugeridos[placa] != 12 || sugeridos[tirante] != 5 || dePlaca == nil ||
+	// La placa queda por encima del mínimo (21, no 20: justo en el mínimo
+	// se volvía a pedir; M2S1-032): faltan 13, se traen los 5 del Aserradero
+	// y se compran 8. El tirante no se compra: Central tiene de sobra y se
+	// traen 6 al Aserradero (M2S1-029).
+	var deTirante *FilaDeReposicion
+	for i := range r.Filas {
+		if r.Filas[i].VariantID == tirante {
+			deTirante = &r.Filas[i]
+		}
+	}
+	if deTirante == nil || deTirante.TrasladoAAserradero != 6 || deTirante.ComprarAserradero != 0 {
+		t.Fatalf("el traslado: %+v", deTirante)
+	}
+	if sugeridos[placa] != 8 || sugeridos[tirante] != 0 || dePlaca == nil || dePlaca.TrasladoACentral != 5 ||
 		dePlaca.ProveedorID == nil || *dePlaca.ProveedorID != prov || *dePlaca.Proveedor != "Placas del Sur" {
 		t.Fatalf("reposición: %v %s", sugeridos, b)
 	}
@@ -161,7 +183,7 @@ func TestBajoElMinimoEnLasTresPantallas(t *testing.T) {
 	r = ReporteDeReposicion{}
 	_ = json.Unmarshal([]byte(b), &r)
 	for _, f := range r.Filas {
-		if f.VariantID == placa && f.Sugerido != 12+30 {
+		if f.VariantID == placa && (f.Sugerido != 13+30 || !f.Negativo || r.Filas[0].VariantID != placa) {
 			t.Fatalf("lo vendido de más: %v %s", f.Sugerido, b)
 		}
 	}
@@ -206,9 +228,10 @@ func TestCierreAvisaGastosRepetidos(t *testing.T) {
 func TestCerrarElMes(t *testing.T) {
 	e := armar(t)
 	adm := e.staff(t, "admin@prueba.test", "admin")
+	motivo := ""
 	cerrar := func(mes string, cerrado bool) (int, string) {
 		t.Helper()
-		cuerpo, _ := json.Marshal(map[string]any{"periodo": mes, "cerrado": cerrado})
+		cuerpo, _ := json.Marshal(map[string]any{"periodo": mes, "cerrado": cerrado, "motivo": motivo})
 		req, _ := http.NewRequest("POST", e.u+"cierre/cerrado", bytes.NewReader(cuerpo))
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := adm.Do(req)
@@ -245,8 +268,19 @@ func TestCerrarElMes(t *testing.T) {
 	if _, err := e.pool.Exec(ctx, `update receipts set estado = 'anulado', anulado_at = now() where id = $1`, recibo); !esMesCerrado(err) {
 		t.Fatalf("anular el recibo de septiembre: %v", err)
 	}
+	// Reabrir pide por qué (M2S1-056), y queda en la bitácora con el mes por
+	// su nombre.
+	if st, _ := cerrar("2026-09", false); st != 422 {
+		t.Fatal("reabrir sin motivo")
+	}
+	motivo = "Falta una factura de Placas del Sur"
 	if st, _ := cerrar("2026-09", false); st != 200 {
 		t.Fatal("reabrir")
+	}
+	var texto string
+	if err := e.pool.QueryRow(ctx, `select descripcion from audit_log where entidad = 'cierre' order by created_at desc limit 1`).Scan(&texto); err != nil ||
+		texto != "Reabrió septiembre de 2026: Falta una factura de Placas del Sur" {
+		t.Fatalf("bitácora: %q %v", texto, err)
 	}
 	if _, err := e.pool.Exec(ctx, `insert into expenses (fecha, descripcion, importe) values ('2026-09-10', 'Luz', 100)`); err != nil {
 		t.Fatalf("gasto de septiembre, reabierto: %v", err)
@@ -305,15 +339,15 @@ func TestCierreRecibosConParteEnB(t *testing.T) {
 
 	_, cuerpo, _ := pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-10")
 	p := pendientesDe(t, cuerpo)
-	if f, ok := p["b-facturadas-despues"]; !ok || f.Cantidad != 1 || !strings.Contains(f.Detalle, "824.440") || f.Donde != "/admin/clientes/"+paz {
+	// El cobro de Paz pasó al archivo del estudio con la factura (mes
+	// simulado, M2S1-011): ni queda en el B ni se avisa.
+	if _, ok := p["b-facturadas-despues"]; ok {
 		t.Fatalf("cobro en el B de una venta facturada después: %s", cuerpo)
 	}
 	if f, ok := p["recibos-partidos"]; !ok || f.Cantidad != 1 || !strings.Contains(f.Detalle, "13.000") || f.Donde != "/admin/clientes/"+cons {
 		t.Fatalf("recibo partido: %s", cuerpo)
 	}
-	// La transferencia de Paz quedó en el B: «Resolver» lleva a las
-	// cobranzas del mes (H378).
-	if b, ok := p["banco-b"]; !ok || b.Donde != "/admin/pagos" {
-		t.Fatalf("banco en el B: %s", cuerpo)
+	if _, ok := p["banco-b"]; ok {
+		t.Fatalf("la transferencia de Paz ya no está en el B: %s", cuerpo)
 	}
 }

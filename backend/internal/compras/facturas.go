@@ -15,6 +15,7 @@ import (
 	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/reglas"
 	"mjbj/internal/sqlc"
 )
 
@@ -236,6 +237,12 @@ type FichaDeFactura struct {
 	Pagos     []PagoDeLaFactura    `json:"pagos"`
 	Creditos  []CreditoDeLaFactura `json:"creditos"`
 	Renglones []RenglonDeLaFactura `json:"renglones"`
+	// Flete es el de las recepciones que cubre: con él y la diferencia
+	// pasada al costo, la tabla de mercadería suma el neto (M2S1-123).
+	Flete float64 `json:"flete"`
+	// Devolucion es que los renglones son lo que devolvió una nota de
+	// crédito, no lo que llegó (M3S2-016).
+	Devolucion bool `json:"devolucion"`
 }
 
 // ObtenerFactura es la ficha de /admin/compras/facturas/[id]; nil si no está.
@@ -324,7 +331,34 @@ func (s *Servicio) ObtenerFactura(ctx context.Context, id string) (*FichaDeFactu
 		if err != nil {
 			return nil, err
 		}
+		var flete jsmath.Num
+		if err := s.pool.QueryRow(ctx, `SELECT coalesce(sum(g.gastos), 0) FROM purchase_invoice_receipts x JOIN goods_receipts g ON g.id = x.goods_receipt_id
+			WHERE x.purchase_invoice_id = $1`, f.ID).Scan(&flete); err != nil {
+			return nil, err
+		}
+		f.Flete = float64(flete)
+		return &f, nil
 	}
+	// Lo que devolvió una nota de crédito.
+	filas, err = s.pool.Query(ctx, `
+		SELECT p.name, v.label, d.cantidad, d.costo_unitario, i.alicuota_iva
+		FROM purchase_return_items d JOIN goods_receipt_items i ON i.id = d.goods_receipt_item_id
+		LEFT JOIN product_variants v ON v.id = d.variant_id LEFT JOIN products p ON p.id = v.product_id
+		WHERE d.purchase_invoice_id = $1 ORDER BY d.created_at, p.name`, f.ID)
+	if err != nil {
+		return nil, err
+	}
+	f.Renglones, err = pgx.CollectRows(filas, func(r pgx.CollectableRow) (RenglonDeLaFactura, error) {
+		var x RenglonDeLaFactura
+		var cantidad, costo, alicuota jsmath.Num
+		err := r.Scan(&x.Producto, &x.Variante, &cantidad, &costo, &alicuota)
+		x.Cantidad, x.CostoUnitario, x.AlicuotaIva = float64(cantidad), float64(costo), float64(alicuota)
+		return x, err
+	})
+	if err != nil {
+		return nil, err
+	}
+	f.Devolucion = len(f.Renglones) > 0
 	return &f, nil
 }
 
@@ -334,10 +368,12 @@ func (s *Servicio) ObtenerFactura(ctx context.Context, id string) (*FichaDeFactu
 // movimiento, el monto y el detalle.
 func cargoDeFactura(tipo string, total float64, conRecepcion bool, yaCargado float64) (string, float64, string) {
 	mov, monto, detalle := "factura", total, "Factura de compra"
+	// La nota se nombra como nota: el renglón decía «Nota de crédito ·
+	// Factura de compra» (mes 23).
 	if strings.HasPrefix(tipo, "nota_credito") {
-		mov, monto = "nota_credito", -total
+		mov, monto, detalle = "nota_credito", -total, "Nota de crédito de compra"
 	} else if strings.HasPrefix(tipo, "nota_debito") {
-		mov = "nota_debito"
+		mov, detalle = "nota_debito", "Nota de débito de compra"
 	}
 	if conRecepcion {
 		// Si la factura vino por menos, la diferencia baja la deuda.
@@ -377,6 +413,46 @@ func vencimientoDe(d FormFactura, emision time.Time, dias int) (time.Time, error
 // totalDeFactura es la suma de las partes: el total no se tipea.
 func totalDeFactura(d FormFactura) float64 {
 	return d.Neto + d.Iva21 + d.Iva105 + d.Iva27 + d.Exento + d.Percepciones
+}
+
+// revisarCae controla el CAE de un comprobante de compra antes de guardarlo:
+// que sea un CAE (14 números), que no esté ya en otro comprobante (ARCA no
+// da dos veces el mismo: el libro IVA compras tenía el mismo CAE en facturas
+// de tres proveedores, M2S2-039 y M3S1-051) y, si la regla cae_en_compras
+// lo exige, que esté en la que da crédito fiscal. excluir es el comprobante
+// que se corrige. Devuelve el CAE limpio.
+func revisarCae(ctx context.Context, tx pgx.Tx, tipo string, cae *string, excluir string) (*string, error) {
+	limpio := ""
+	if cae != nil {
+		limpio = strings.TrimSpace(*cae)
+	}
+	if limpio == "" {
+		if DaCreditoFiscal(tipo) && reglas.Es(ctx, tx, reglas.CaeEnCompras, "exigido") {
+			return nil, plataforma.Invalido(map[string]string{"cae": "Poné el CAE: sin él no da crédito fiscal."})
+		}
+		return nil, nil
+	}
+	for _, r := range limpio {
+		if r < '0' || r > '9' {
+			return nil, plataforma.Invalido(map[string]string{"cae": "El CAE son 14 números."})
+		}
+	}
+	if len(limpio) != 14 {
+		return nil, plataforma.Invalido(map[string]string{"cae": "El CAE son 14 números."})
+	}
+	var tipoOtro, proveedor string
+	var pv, numero int64
+	err := tx.QueryRow(ctx, `SELECT f.tipo::text, f.punto_venta, f.numero, coalesce(s.nombre, '') FROM purchase_invoices f
+		LEFT JOIN suppliers s ON s.id = f.supplier_id
+		WHERE f.cae = $1 AND f.anulada_at IS NULL AND ($2 = '' OR f.id::text <> $2) LIMIT 1`, limpio, excluir).Scan(&tipoOtro, &pv, &numero, &proveedor)
+	if err == nil {
+		return nil, plataforma.Invalido(map[string]string{"cae": "Ese CAE ya está en " + NombreComprobanteCompra(tipoOtro) + " " +
+			NumeroDeCompra(pv, numero) + " de " + proveedor + "."})
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+	return &limpio, nil
 }
 
 // errorDeFactura traduce los índices únicos a lo que se le dice a quien carga.
@@ -434,9 +510,21 @@ func (s *Servicio) CargarFactura(ctx context.Context, ses *auth.Sesion, m map[st
 	if d.AplicaA != nil && !esCredito {
 		return "", "", fallo("Solo una nota de crédito se aplica a otra factura.")
 	}
+	devoluciones, err := leerDevoluciones(m)
+	if err != nil {
+		return "", "", err
+	}
+	if len(devoluciones) > 0 && !esCredito {
+		return "", "", fallo("Solo una nota de crédito devuelve mercadería.")
+	}
 	var id string
 	var ajuste ajusteDeCosto
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		cae, err := revisarCae(ctx, tx, d.Tipo, d.Cae, "")
+		if err != nil {
+			return err
+		}
+		d.Cae = cae
 		var yaCargado float64
 		netoRecibido := 0.0
 		if len(recepciones) > 0 && (esCredito || strings.HasPrefix(d.Tipo, "nota_debito")) {
@@ -508,9 +596,27 @@ func (s *Servicio) CargarFactura(ctx context.Context, ses *auth.Sesion, m map[st
 				return err
 			}
 		}
+		if len(devoluciones) > 0 {
+			if err := devolverAlProveedor(ctx, tx, ses, id, d.SupplierID, NumeroDeCompra(int64(d.PuntoVenta), int64(d.Numero)), devoluciones); err != nil {
+				return err
+			}
+		}
 		// La factura vino distinta de lo recibido y quien la carga aceptó la
 		// diferencia: el costo de la mercadería pasa a lo facturado.
 		if d.AjustarCosto && len(recepciones) > 0 {
+			// Si la diferencia es justo lo que de la orden no llegó, cobra
+			// mercadería que no entró: pasarla al costo subiría el de lo que
+			// sí entró (M3S3-009). Se reclama o se compensa con una nota.
+			var faltante jsmath.Num
+			if err := tx.QueryRow(ctx, `
+				SELECT coalesce(sum((i.cantidad - i.cantidad_recibida) * i.costo_unitario), 0)
+				FROM purchase_order_items i WHERE i.cantidad_recibida < i.cantidad
+				  AND i.purchase_order_id IN (SELECT purchase_order_id FROM goods_receipts WHERE id = ANY($1::uuid[]))`, recepciones).Scan(&faltante); err != nil {
+				return err
+			}
+			if dif := jsmath.Redondear2(d.Neto - netoRecibido); faltante.F() > 0 && math.Abs(dif-faltante.F()) < 1 {
+				return fallo("La diferencia es mercadería que no llegó: no se pasa al costo.")
+			}
 			ajuste, err = pasarDiferenciaAlCosto(ctx, tx, ses, id, recepciones, jsmath.Redondear2(d.Neto-netoRecibido))
 			if err != nil {
 				return err
@@ -529,7 +635,10 @@ func (s *Servicio) CargarFactura(ctx context.Context, ses *auth.Sesion, m map[st
 	if err != nil {
 		return "", "", errorDeFactura(err)
 	}
-	desc := "Cargó una factura de compra por " + formato.Importe(total)
+	// Con el comprobante y el proveedor adelante, como lo busca el que audita
+	// (mes simulado, M2S4-010): la nota de crédito decía «factura».
+	desc := NombreComprobanteCompra(d.Tipo) + " " + NumeroDeCompra(int64(d.PuntoVenta), int64(d.Numero)) + " · " +
+		s.nombreDelProveedor(ctx, d.SupplierID) + ": cargó " + formato.Importe(total)
 	if ajuste.variantes > 0 {
 		desc += "; pasó " + Monto(ajuste.diferencia) + " de diferencia al costo de " + formato.Cuantos(ajuste.variantes, "producto", "productos")
 	}
@@ -797,6 +906,11 @@ func (s *Servicio) CorregirFactura(ctx context.Context, ses *auth.Sesion, id str
 		if f.pagado-total > 0.01 {
 			return fallo("Ya se le pagaron " + Monto(f.pagado) + " a esta factura: el total no puede quedar por debajo.")
 		}
+		cae, err := revisarCae(ctx, tx, d.Tipo, d.Cae, id)
+		if err != nil {
+			return err
+		}
+		d.Cae = cae
 		cargado, err := loQueCargo(ctx, tx, id, f)
 		if err != nil {
 			return err
@@ -923,6 +1037,10 @@ func (s *Servicio) AnularFactura(ctx context.Context, ses *auth.Sesion, id, moti
 		if _, err := tx.Exec(ctx, `DELETE FROM purchase_invoice_receipts WHERE purchase_invoice_id = $1`, id); err != nil {
 			return err
 		}
+		// Lo que devolvía una nota de crédito vuelve al stock.
+		if err := deshacerDevolucion(ctx, tx, ses, id, motivo); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, `UPDATE purchase_invoices SET aplica_a_id = NULL, updated_at = now() WHERE aplica_a_id = $1`, id); err != nil {
 			return err
 		}
@@ -937,8 +1055,16 @@ func (s *Servicio) AnularFactura(ctx context.Context, ses *auth.Sesion, id, moti
 	}
 	numero := NumeroDeCompra(int64(f.puntoVenta), int64(f.numero))
 	desc := "Anuló la factura " + numero + " de " + f.proveedor + " por " + Monto(f.total) + " (" + motivo + ")"
+	// La recepción con lo que se lee: el remito y el día, no el uuid crudo
+	// (mes 23). El id va en los datos de la bitácora.
 	if f.receiptID != nil {
-		desc += "; cubría la recepción " + *f.receiptID
+		var rotulo string
+		if err := s.pool.QueryRow(ctx, `SELECT CASE WHEN coalesce(trim(numero_remito), '') <> ''
+			  THEN 'del remito ' || trim(numero_remito) || ' (' || to_char(fecha AT TIME ZONE 'America/Argentina/Buenos_Aires', 'DD/MM/YYYY') || ')'
+			  ELSE 'del ' || to_char(fecha AT TIME ZONE 'America/Argentina/Buenos_Aires', 'DD/MM/YYYY') END
+			FROM goods_receipts WHERE id = $1`, *f.receiptID).Scan(&rotulo); err == nil {
+			desc += "; cubría la recepción " + rotulo
+		}
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaAnular, "factura_compra", id, desc, struct {
 		Motivo    string  `json:"motivo"`
@@ -962,3 +1088,10 @@ func (s *Servicio) AnularFactura(ctx context.Context, ses *auth.Sesion, id, moti
 
 // diaArgentino es el aaaa-mm-dd argentino de un instante.
 func diaArgentino(t time.Time) string { return t.In(fiscal.Argentina).Format("2006-01-02") }
+
+// nombreDelProveedor es el nombre para la bitácora («» si no está).
+func (s *Servicio) nombreDelProveedor(ctx context.Context, id string) string {
+	var nombre string
+	_ = s.pool.QueryRow(ctx, `SELECT nombre FROM suppliers WHERE id::text = $1`, id).Scan(&nombre)
+	return nombre
+}

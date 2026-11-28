@@ -25,7 +25,7 @@ import (
 //     cierre asienta el reintegro con el reparto del recibo: Deudores
 //     cierra en cero.
 //   - Cobrado con recibo por transferencia: la caja no paga; vuelve por
-//     afuera y el reintegro sale del banco.
+//     afuera y el reintegro va a Movimientos a imputar.
 func TestDevolucionDeUnPedidoCobradoConRecibo(t *testing.T) {
 	e := armar(t)
 	e.staff(t, "admin@prueba.test", "admin")
@@ -37,7 +37,7 @@ func TestDevolucionDeUnPedidoCobradoConRecibo(t *testing.T) {
 	if _, err := fac.ObtenerEmisor(ctx); err != nil {
 		t.Fatal(err)
 	}
-	e.exec(t, `update configuracion_fiscal set cuit = '30589445259', condicion_iva = 'responsable_inscripto'`)
+	e.exec(t, `update configuracion_fiscal set cuit = '30589445259', condicion_iva = 'responsable_inscripto', ingresos_brutos = '901-123456-7', inicio_actividades = '1981-03-01'`)
 	e.exec(t, `insert into puntos_venta (numero, nombre, numero_inicial) values (3, 'Mostrador', 0)`)
 	e.exec(t, `insert into cash_sessions (branch_id, abierta_por, abierta_at) values ($1, $2, now() - interval '1 hour')`, e.central, usuario)
 	cob := cobros.Nuevo(e.pool, silencio)
@@ -165,8 +165,13 @@ func TestDevolucionDeUnPedidoCobradoConRecibo(t *testing.T) {
 	if c := cuenta(blanco, Cuentas.Caja); c != 605 {
 		t.Errorf("Caja: %v", c)
 	}
-	if b := cuenta(blanco, Cuentas.Banco); b != 605 {
+	// Lo devuelto «por otro medio» no se sabe de dónde salió: va a
+	// Movimientos a imputar, no al Banco (mes simulado, M3S1-052).
+	if b := cuenta(blanco, Cuentas.Banco); b != 1210 {
 		t.Errorf("Banco: %v", b)
+	}
+	if b := cuenta(blanco, Cuentas.MovimientosAImputar); b != -605 {
+		t.Errorf("Movimientos a imputar: %v", b)
 	}
 	if len(DelCircuito(asientos, CircuitoNegro)) != 0 {
 		t.Errorf("nada va al B")

@@ -8,13 +8,13 @@ import { Button } from "@/components/ui/button";
 import { DisponibilidadPorSucursal } from "@/components/catalogo/disponibilidad";
 import { useCarrito } from "@/lib/carrito-context";
 import { useTienda } from "@/lib/tienda-context";
-import { formatearPrecio, formatearUnidad } from "@/lib/formato";
+import { formatearPrecio, formatearUnidad, unidadDeVenta } from "@/lib/formato";
 import { PrecioSecundario } from "@/components/precio";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
 import { useEstado } from "@/lib/estado-context";
 import { mensajeDeConsulta, quienConsulta } from "@/lib/cuenta/portal";
 import { cantidadDeConsulta, enlaceDeConsulta, problemaDeCantidad, textoDeConsulta } from "@/lib/catalogo/consulta";
-import { presentarPrecio, type VistaDePrecio } from "@/lib/precios/vista";
+import { presentarComparado, presentarPrecio, type VistaDePrecio } from "@/lib/precios/vista";
 import type { PreciosDeFicha } from "@/lib/dal/visitante";
 import type { VarianteDetalle } from "@/lib/dal/catalog";
 import {
@@ -107,9 +107,13 @@ export function SelectorVariante({
   const conMedia = admiteMedia(producto);
   const porM2 = seVendePorM2(producto);
   const unidadVendida = unidadDeLinea(producto);
-  // Metros y m² se piden con decimales; placas, tablas y bisagras, enteras.
-  const fraccionable = admiteDecimales(unidadVendida) && unidadVendida !== "placa";
-  const paso = fraccionable ? pasoDeCantidad(unidadVendida) : 1;
+  // La lata de 4 L se vende y se cuenta por lata: la ficha decía «por l» y el
+  // contador «l», y el carrito ya decía «u.» (mes 23). La misma regla del
+  // carrito, el remito y el stock.
+  const unidadMostrada = unidadDeVenta(unidadVendida, `${productName} ${medida?.label ?? ""}`) ?? unidadVendida;
+  // Metros y m² se piden con decimales; placas, tablas, latas y bisagras, enteras.
+  const fraccionable = admiteDecimales(unidadMostrada) && unidadMostrada !== "placa";
+  const paso = fraccionable ? pasoDeCantidad(unidadMostrada) : 1;
 
   function fijarCantidad(n: number) {
     const valor = Math.max(paso, Math.round(n * 100) / 100);
@@ -132,7 +136,8 @@ export function SelectorVariante({
   const vistaVigente = precios?.vista ?? vista;
 
   const conPrecioPropio = (v: VarianteDetalle): VarianteDetalle =>
-    propios[v.id] ? { ...v, precio: propios[v.id] } : v;
+    // La oferta tachada es de la lista de público: con precio propio no va.
+    propios[v.id] ? { ...v, precio: propios[v.id], precioAnterior: null } : v;
 
   const elegida = medida ? conPrecioPropio(medida) : medida;
   // La galería de la ficha pasa a la foto de la medida elegida.
@@ -149,6 +154,14 @@ export function SelectorVariante({
     conMedia ? presentacion : null,
   );
   const mostrado = presentarPrecio(precioElegido, alicuota, vistaVigente);
+  const anterior =
+    elegida?.precioAnterior && Number(elegida.precioAnterior) > precioElegido
+      ? presentarComparado(
+          precioDeLinea(Number(elegida.precioAnterior), producto, conMedia ? presentacion : null),
+          alicuota,
+          vistaVigente,
+        )
+      : null;
   const area = porM2 ? areaDePlacaM2(elegida?.largoMm, elegida?.anchoMm) : null;
 
   if (!elegida) {
@@ -255,7 +268,7 @@ export function SelectorVariante({
           productName={productName}
           medida={elegida}
           presentacion={conMedia ? presentacion : null}
-          unidad={unidadVendida}
+          unidad={unidadMostrada}
           area={area}
           aPedido={aPedido}
           stockVisible={tienda.stockVisible}
@@ -268,8 +281,12 @@ export function SelectorVariante({
         <>
           {/* Precio de la medida elegida */}
           <div className="rounded-[14px] superficie px-[22px] py-5 shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
-            <p className="flex items-baseline gap-2">
-              <span className="tabular text-4xl font-bold leading-none tracking-[-0.03em]">
+            <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <span
+                className={`tabular text-4xl font-bold leading-none tracking-[-0.03em] ${
+                  anterior ? "text-rojo-oferta" : ""
+                }`}
+              >
                 {formatearPrecio(String(mostrado.principal))}
               </span>
               {mostrado.sufijo && (
@@ -277,11 +294,16 @@ export function SelectorVariante({
                   {mostrado.sufijo}
                 </span>
               )}
+              {anterior !== null && (
+                <s className="tabular text-lg leading-none text-texto-3">
+                  {formatearPrecio(String(anterior))}
+                </s>
+              )}
             </p>
             <p className="mt-1.5 text-[14.5px] text-texto-2">
               {conMedia && presentacion
                 ? nombreDePresentacion(presentacion)?.toLowerCase()
-                : `por ${formatearUnidad(unidadVendida)}`}
+                : `por ${formatearUnidad(unidadMostrada)}`}
               {vistaVigente === "final" && " · IVA incluido"}
               {elegida.material && ` · ${elegida.material}`}
               {elegida.color && ` · ${elegida.color}`}
@@ -333,7 +355,7 @@ export function SelectorVariante({
                           producto: productName,
                           medida: elegida.label,
                           como: conMedia && presentacion ? nombreDePresentacion(presentacion)?.toLowerCase() : null,
-                          unidad: unidadVendida,
+                          unidad: unidadMostrada,
                           codigo: elegida.sku,
                         }),
                       )
@@ -360,7 +382,7 @@ export function SelectorVariante({
                     <input
                       value={cantidadTexto}
                       inputMode="decimal"
-                      aria-label={`Cantidad, en ${formatearUnidad(unidadVendida)}`}
+                      aria-label={`Cantidad, en ${formatearUnidad(unidadMostrada)}`}
                       onChange={(e) => {
                         setCantidadTexto(e.target.value);
                         const n = leerCantidad(e.target.value);
@@ -383,7 +405,7 @@ export function SelectorVariante({
                   </button>
                   {fraccionable && (
                     <span className="pr-3 text-[14.5px] text-texto-2">
-                      {formatearUnidad(unidadVendida)}
+                      {formatearUnidad(unidadMostrada)}
                     </span>
                   )}
                 </div>
@@ -407,7 +429,9 @@ export function SelectorVariante({
                   ) : (
                     <Plus className="h-4 w-4" />
                   )}
-                  Agregar al presupuesto
+                  {/* Con la tienda prendida se compra: es el carrito, no un
+                      presupuesto (M2S2-140). */}
+                  Agregar al carrito
                 </Button>
               </div>
 
@@ -419,6 +443,31 @@ export function SelectorVariante({
                   </span>
                 </p>
               )}
+
+              {/* La consulta lleva la medida, la forma y el código elegidos,
+                  como con la tienda apagada: quedaba fijo en «Me interesa:
+                  MDF» aunque se cambiara la medida (M2S4-028). */}
+              <BotonWhatsapp
+                variante="secundario"
+                tamano="grande"
+                className="w-full"
+                enlace={
+                  numeroWhatsapp
+                    ? enlaceDeConsulta(
+                        numeroWhatsapp,
+                        textoDeConsulta({
+                          producto: productName,
+                          medida: elegida.label,
+                          como: conMedia && presentacion ? nombreDePresentacion(presentacion)?.toLowerCase() : null,
+                          unidad: unidadMostrada,
+                          codigo: elegida.sku,
+                        }),
+                      )
+                    : whatsapp
+                }
+              >
+                Consultar por WhatsApp
+              </BotonWhatsapp>
             </>
           )}
         </>

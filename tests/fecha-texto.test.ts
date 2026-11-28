@@ -24,5 +24,8 @@ describe("fecha escrita dd/mm/aaaa", () => {
     expect(sinImposibles("32")).toBe("3");
     expect(conBarras("3113")).toBe("31/1");
     expect(conBarras("ab12-03/2026")).toBe("12/03/2026");
+    // Pegada como aaaa-mm-dd (M2S4-036): antes quedaba «20/2».
+    expect(conBarras("2026-12-30")).toBe("30/12/2026");
+    expect(conBarras("2026-1-5")).toBe("05/01/2026");
   });
 });

@@ -131,8 +131,9 @@ export async function cortePdf(
 
   const cifras: [string, string][] = [
     [String(plano.placas.length), plano.placas.length === 1 ? "placa" : "placas"],
-    [String(plano.totalPiezas), "piezas"],
-    [String(plano.pasadas), "pasadas"],
+    // En singular con uno, como Go (mes simulado, CRT-904).
+    [String(plano.totalPiezas), plano.totalPiezas === 1 ? "pieza" : "piezas"],
+    [String(plano.pasadas), plano.pasadas === 1 ? "pasada" : "pasadas"],
     [`${Math.round(plano.aprovechadoTotal * 100)}%`, "aprovechado"],
     [formatearSierra(plano.anchoSierra), "se lleva la sierra"],
     [`${metros(corte.metrosCanto)} m`, "de tapacanto"],
@@ -226,7 +227,7 @@ export async function cortePdf(
 
   escribirParrafo(
     hoja,
-    `De lo comprado, el ${Math.round(plano.aprovechadoTotal * 100)}% sale en piezas. La sierra se come ${metros(sierra / 1_000_000)} m² en ${plano.pasadas} ${plano.pasadas === 1 ? "pasada" : "pasadas"} de ${formatearSierra(plano.anchoSierra)}, y el resto queda en los sobrantes de la tabla. De una placa que se vende entera el recorte es del cliente y se va con él; de una que se cobró por corte, vuelve al stock.`,
+    `El ${Math.round(plano.aprovechadoTotal * 100)}% sale en piezas. La sierra se come ${metros(sierra / 1_000_000)} m² en ${plano.pasadas} ${plano.pasadas === 1 ? "pasada" : "pasadas"} de ${formatearSierra(plano.anchoSierra)}, y el resto queda en los sobrantes de la tabla. De una placa que se vende entera el recorte es del cliente y se va con él; de una que se cobró por corte, vuelve al stock.`,
     { x: MARGEN, y, ancho: anchoUtil, tamano: 8, color: TINTA_SUAVE },
   );
 

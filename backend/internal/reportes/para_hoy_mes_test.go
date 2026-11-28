@@ -115,7 +115,12 @@ func TestParaHoyDelMesSimulado(t *testing.T) {
 	if !por["presupuestos-enviados"].Urgente || por["cortes"].Urgente || !por["cortes-hoy"].Urgente {
 		t.Errorf("vendedor: %+v", por)
 	}
-	for _, no := range []string{"pin", "ordenes-atrasadas", "transferencias", "cheques-rechazados", "sin-cae"} {
+	// El cheque rechazado sí lo ve, para reclamarlo desde el seguimiento
+	// del cliente (M2S4-026).
+	if por["cheques-rechazados"].Href != "/admin/clientes/seguimiento" {
+		t.Errorf("rechazado del vendedor: %+v", por["cheques-rechazados"])
+	}
+	for _, no := range []string{"pin", "ordenes-atrasadas", "transferencias", "sin-cae"} {
 		if _, hay := por[no]; hay {
 			t.Errorf("el vendedor no ve %s", no)
 		}

@@ -206,7 +206,7 @@ func TestRemitoDeLaReposicion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Reposicion == nil || *r.Reposicion != "CRT-1" || len(r.Lineas) != 1 || r.Lineas[0].Descripcion != "Melamina Blanca — 450 × 400 mm" ||
+	if r.Reposicion == nil || *r.Reposicion != "CRT-1" || len(r.Lineas) != 1 || r.Lineas[0].Descripcion != "450 × 400 mm — Melamina Blanca" ||
 		r.Lineas[0].Cantidad != 2 || r.Lineas[0].Unidad != "pieza" || len(r.Pendientes) != 0 || r.SinCobrar != nil || r.PedidoNumero != "PED-1068" {
 		t.Errorf("el remito: %+v", r)
 	}
@@ -225,8 +225,12 @@ func TestRemitoDeLaReposicion(t *testing.T) {
 	if len(listado) != 1 || listado[0].Reposicion == nil || listado[0].Parcial || listado[0].CantidadLineas != 1 {
 		t.Errorf("en la ficha del pedido: %+v", listado)
 	}
-	// La firma cierra el reclamo.
-	if _, err := ent.RegistrarFirma(ctx, entregas.FormFirma{Token: rem["firmaToken"].(string), ReceptorNombre: "Gómez", Firma: "subidas/firma.png"}, nil); err != nil {
+	// La firma cierra el reclamo. Es un retiro: sin DNI no se firma.
+	if _, err := ent.RegistrarFirma(ctx, entregas.FormFirma{Token: rem["firmaToken"].(string), ReceptorNombre: "Gómez", Firma: "subidas/firma.png"}, nil); err == nil {
+		t.Error("firmó sin DNI")
+	}
+	dni := "30123456"
+	if _, err := ent.RegistrarFirma(ctx, entregas.FormFirma{Token: rem["firmaToken"].(string), ReceptorNombre: "Gómez", ReceptorDocumento: &dni, Firma: "subidas/firma.png"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if n := e.txt(t, `select count(*)::text from order_status_history where order_id = $1 and nota = 'Reposición sin cargo CRT-1 firmada por Gómez en el remito REM-0001: reclamo cerrado'`, pedido); n != "1" {

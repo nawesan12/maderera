@@ -16,13 +16,16 @@ import (
 	"mjbj/internal/jsmath"
 	"mjbj/internal/precios"
 	"mjbj/internal/sqlc"
+	"mjbj/internal/ventas/fragmentos"
 )
 
 // medioDeFactura es MEDIO_DE_FACTURA: cómo se anota cada medio del recibo en
 // los cobros de la factura (que tienen su propia lista, más corta).
 var medioDeFactura = map[cobros.Medio]string{
-	"efectivo": "efectivo", "transferencia": "transferencia", "deposito": "transferencia", "cheque": "cheque", "echeq": "cheque",
-	"tarjeta_debito": "tarjeta", "tarjeta_credito": "tarjeta", "mercado_pago": "mercado_pago", "retencion": "transferencia",
+	// El depósito, el e-Cheq y la retención con su nombre (00360): la factura
+	// decía «Transferencia» de un depósito (M3S2-039).
+	"efectivo": "efectivo", "transferencia": "transferencia", "deposito": "deposito", "cheque": "cheque", "echeq": "echeq",
+	"tarjeta_debito": "tarjeta", "tarjeta_credito": "tarjeta", "mercado_pago": "mercado_pago", "retencion": "retencion",
 }
 
 // ResultadoDeCobro es el EstadoFactura del cobro.
@@ -59,8 +62,7 @@ func (s *Servicio) Cobrar(ctx context.Context, ses *auth.Sesion, id, modo, monto
 	var saldo jsmath.Num
 	var anulado, enCuenta bool
 	if err := s.pool.QueryRow(ctx, `SELECT `+SaldoDeFactura+`, coalesce(o.estado = 'cancelado', false), `+EnCuentaDeFactura+`
-		FROM invoices i LEFT JOIN (SELECT invoice_id, sum(monto) AS cobrado, sum(monto) FILTER (WHERE medio <> 'cuenta_corriente') AS cobrado_contado FROM invoice_payments WHERE invoice_id = $1 GROUP BY invoice_id) c
-		  ON c.invoice_id = i.id
+		FROM invoices i LEFT JOIN `+CobrosDeFacturas+` c ON c.invoice_id = i.id
 		LEFT JOIN orders o ON o.id = i.order_id WHERE i.id = $1`, c.id).Scan(&saldo, &anulado, &enCuenta); err != nil {
 		return ResultadoDeCobro{}, err
 	}
@@ -112,8 +114,20 @@ func (s *Servicio) Cobrar(ctx context.Context, ses *auth.Sesion, id, modo, monto
 	var r cobros.ReciboEmitido
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var err error
-		r, err = cobrarConRecibo(ctx, tx, ses, c.id, c.cliente, c.receptor, c.sucursal, et, partes)
-		return err
+		// La factura de un pedido de contado: la deuda no está en la cuenta,
+		// y el pago tampoco (dejaba un saldo a favor igual a lo cobrado y el
+		// pedido «Sin cobrar», mes simulado 2, M2S2-010).
+		fuera := false
+		if c.pedido != nil && !enCuenta {
+			if err := tx.QueryRow(ctx, `SELECT `+fragmentos.DeudaFueraDeLaCuenta+` FROM orders o WHERE o.id = $1`, *c.pedido).Scan(&fuera); err != nil {
+				return err
+			}
+		}
+		r, err = cobrarConRecibo(ctx, tx, ses, c.id, c.cliente, c.receptor, c.sucursal, et, partes, fuera)
+		if err != nil || c.pedido == nil {
+			return err
+		}
+		return cobros.CerrarElPedidoCobrado(ctx, tx, *c.pedido)
 	})
 	if err != nil {
 		var ec *cobros.ErrorDeCobro
@@ -137,10 +151,11 @@ func (s *Servicio) Cobrar(ctx context.Context, ses *auth.Sesion, id, modo, monto
 // aviso al cliente. Lo usan el cobro desde la ficha y la factura manual de
 // contado.
 func cobrarConRecibo(ctx context.Context, tx pgx.Tx, ses *auth.Sesion, factura string, cliente *string, receptor string,
-	sucursal *string, et string, partes []cobros.Parte) (cobros.ReciboEmitido, error) {
+	sucursal *string, et string, partes []cobros.Parte, fueraDeLaCuenta bool) (cobros.ReciboEmitido, error) {
 	concepto := "Cobro de " + et
 	r, err := cobros.EmitirRecibo(ctx, tx, cobros.Cobro{CustomerID: cliente, RecibidoDe: receptor, BranchID: sucursal,
-		Origen: "factura", Concepto: &concepto, Partes: partes, Caja: &cobros.Caja{Buscar: true}, UsuarioID: &ses.UserID})
+		Origen: "factura", Concepto: &concepto, Partes: partes, Caja: &cobros.Caja{Buscar: true}, UsuarioID: &ses.UserID,
+		FueraDeLaCuenta: fueraDeLaCuenta})
 	if err != nil {
 		return r, err
 	}
@@ -158,12 +173,13 @@ func cobrarConRecibo(ctx context.Context, tx pgx.Tx, ses *auth.Sesion, factura s
 	if err := tx.SendBatch(ctx, lote).Close(); err != nil {
 		return r, err
 	}
-	// Sin cliente, el reparto entre los circuitos sale de la factura que
-	// cobra: recién ahora el recibo está atado a ella.
-	if cliente == nil {
-		if _, err := cobros.FijarReparto(ctx, tx, r.ReceiptID); err != nil {
-			return r, err
-		}
+	// El reparto entre los circuitos se vuelve a fijar ahora que el recibo
+	// está atado a la factura que cobra: sin cliente, la cuenta sale de ella;
+	// con cliente, lo que cobra de una factura que espera el CAE va a
+	// Anticipos atado a esa factura (cobros.RepartoDeRecibo), y no a cancelar
+	// otra deuda abierta (mes simulado, M2S4-002).
+	if _, err := cobros.FijarReparto(ctx, tx, r.ReceiptID); err != nil {
+		return r, err
 	}
 	// El aviso al cliente sale solo si el cobro se confirma.
 	_, err = cola.Encolar(ctx, sqlc.New(tx), cobros.TrabajoAvisoDeRecibo, map[string]string{"receiptId": r.ReceiptID}, time.Time{})

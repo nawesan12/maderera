@@ -13,15 +13,22 @@ export interface QuienSeQueda {
   sinCargo?: boolean;
   /** El trabajo sale de media placa. */
   media?: boolean;
+  /**
+   * La placa la trae el cliente (escrita a mano, sin catálogo): lo que sobra
+   * es suyo, no va al stock (mes simulado, M3S2-009).
+   */
+  placaDelCliente?: boolean;
 }
 
 export function sobraDelCliente(seVendeEntera: boolean, q: QuienSeQueda): boolean {
+  if (q.placaDelCliente) return true;
   return seVendeEntera && !q.sinCargo;
 }
 
 /** El rótulo corto de la placa: «Se vende entera», «Sin cargo»… */
 export function queSeHaceConLaPlaca(seVendeEntera: boolean, q: QuienSeQueda): string {
   if (q.sinCargo) return "Sin cargo";
+  if (q.placaDelCliente) return "Placa del cliente";
   if (!seVendeEntera) return "Se cobra el corte";
   return q.media ? "Se vende la media" : "Se vende entera";
 }

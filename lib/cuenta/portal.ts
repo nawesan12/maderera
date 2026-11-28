@@ -44,6 +44,42 @@ export function importeAInformar(saldo: number, enRevision: number): number | nu
   return resto > 0.005 ? resto : null;
 }
 
+/**
+ * El estado que el portal muestra. Un retiro con su remito preparado y sin
+ * firmar todavía no está entregado: el pedido figuraba «Entregado» con el
+ * remito sin firmar (mes simulado, M2S1-071 y M2S2-115). Queda «Para firmar»
+ * hasta la firma: «Listo para retirar» se lo decía al que ya se lo había
+ * llevado (mes 23, PED-1150). Go manda lo mismo (fragmentos.EstadoParaElCliente).
+ */
+export function estadoVisibleDelPedido(
+  estado: string,
+  remitos: { estado: string; tipo: string }[],
+): string {
+  if (estado !== "entregado") return estado;
+  return remitos.some((r) => r.estado === "preparada" && r.tipo === "retiro") ? "por-firmar" : estado;
+}
+
+/**
+ * El paso de la barra de etapas para el estado que se muestra: el retiro con
+ * el remito sin firmar queda en «Listo para retirar» hasta la firma. Decía
+ * «Retirado · 4 de 4» con la pastilla en «Para firmar» (mes 23, M2S1-071).
+ */
+export function etapaDelPedido(estadoVisible: string): string {
+  return estadoVisible === "por-firmar" ? "listo" : estadoVisible;
+}
+
+/**
+ * El título de los remitos de un pedido, sin los anulados: un envío no es un
+ * retiro («1 retiro» con «Te lo llevamos a», M2S1-155).
+ */
+export function tituloDeRemitos(remitos: { tipo: string }[]): string {
+  const envios = remitos.filter((r) => r.tipo === "envio").length;
+  const n = remitos.length;
+  if (envios === n) return n === 1 ? "1 envío" : `${n} envíos`;
+  if (envios === 0) return n === 1 ? "1 retiro" : `${n} retiros`;
+  return `${n} remitos`;
+}
+
 /** El contador de pedidos abiertos: «en curso», nunca «en camino» (H083, H313). */
 export function pedidosEnCurso(n: number): string {
   return `${n} en curso`;
@@ -77,7 +113,6 @@ export interface EstadoDelPago {
 
 const ABONA_AL_RETIRAR: Record<string, string> = {
   efectivo: "Abonás al retirar o cuando te lo entregamos.",
-  mercado_pago: "Te mandamos el enlace para pagar por WhatsApp.",
 };
 
 /**
@@ -91,7 +126,8 @@ const ABONA_AL_RETIRAR: Record<string, string> = {
  *   se debe, sin la frase de «al retirar».
  */
 export function estadoDelPago(p: PagoDelPedido): EstadoDelPago | null {
-  const entregado = p.estado === "entregado";
+  // El que falta firmar ya se lo llevó: no es «Abonás al retirar».
+  const entregado = p.estado === "entregado" || p.estado === "por-firmar";
   if (p.estado === "cancelado") {
     // Cancelado sin plata de por medio, no hay nada que decir del pago: «Sin
     // cobrar» se leía como una deuda (H310).
@@ -183,14 +219,18 @@ export function conPunto(frase: string): string {
  * alguno, queda reseñado. Conserva el orden en que llegan, así al publicar la
  * tarjeta no salta de lugar.
  */
-export function unaPorProducto<T extends { productId: string; yaResenado: boolean }>(items: T[]): T[] {
-  const reseñados = new Set(items.filter((i) => i.yaResenado).map((i) => i.productId));
+export function unaPorProducto<T extends { productId: string; yaResenado: boolean; estadoResena?: string }>(items: T[]): T[] {
+  // La reseña de cada producto, con su estado: el renglón que queda dice si
+  // se publicó o no (M2S3-077).
+  const reseñados = new Map<string, T>();
+  for (const i of items) if (i.yaResenado && !reseñados.has(i.productId)) reseñados.set(i.productId, i);
   const vistos = new Set<string>();
   const out: T[] = [];
   for (const i of items) {
     if (vistos.has(i.productId)) continue;
     vistos.add(i.productId);
-    out.push(reseñados.has(i.productId) && !i.yaResenado ? { ...i, yaResenado: true } : i);
+    const r = reseñados.get(i.productId);
+    out.push(r && !i.yaResenado ? { ...i, yaResenado: true, estadoResena: r.estadoResena } : i);
   }
   return out;
 }

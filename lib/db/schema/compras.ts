@@ -212,6 +212,8 @@ export const supplierMovements = pgTable(
     supplierPaymentId: uuid(),
     /** El cheque que le dimos y rebotó (goose 00250). */
     chequeId: uuid(),
+    /** La factura a la que se aplica un ajuste que baja la deuda (goose 00401). */
+    aplicaAId: uuid(),
   },
   (t) => [
     index("supplier_movements_supplier_idx").on(t.supplierId),
@@ -717,6 +719,9 @@ export const supplierVariantCodes = pgTable(
       .references(() => productVariants.id, { onDelete: "cascade" }),
     /** Tal cual lo escribe el proveedor en su planilla. */
     codigo: text().notNull(),
+    /** El último costo neto que trajo su lista (la orden lo sugiere). */
+    costoNeto: numeric({ precision: 14, scale: 4 }),
+    costoAt: timestamp({ withTimezone: true }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

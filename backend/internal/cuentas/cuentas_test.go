@@ -204,8 +204,10 @@ func TestCarteraCobroYRecibo(t *testing.T) {
 	// listado de cheques es de /admin/cheques: los dos, solo del admin.
 	// Cada cheque trae su circuito: la pantalla de pagos solo ofrece endosar
 	// los del circuito del pago.
+	// El 00123456 entró con un recibo que fue entero al B (no había nada
+	// facturado): queda del B (mes simulado, M3S3-001). Uno blanco, aparte.
 	if _, err := e.pool.Exec(context.Background(), `insert into cheques (sentido, tipo, numero, fecha_pago, importe, estado, circuito)
-		values ('recibido', 'fisico', '00999999', now(), 100, 'cartera', 'negro')`); err != nil {
+		values ('recibido', 'fisico', '00999999', now(), 100, 'cartera', 'blanco')`); err != nil {
 		t.Fatal(err)
 	}
 	if _, b := pedir(t, adm, "GET", u+"cheques/cartera", nil); !strings.Contains(b, "00123456") ||
@@ -238,6 +240,10 @@ func TestCarteraCobroYRecibo(t *testing.T) {
 	// Una retención sufrida baja la deuda con su recibo; el mismo certificado
 	// dos veces, no.
 	ret := map[string]string{"customerId": id, "numero": "0001-123", "impuesto": "iibb", "base": "100000", "alicuota": "3", "importe": "3000", "fecha": "2026-10-20"}
+	if c, b := pedir(t, adm, "POST", u+"retenciones-sufridas", ret); c != 422 || !strings.Contains(b, "Poné el régimen") {
+		t.Errorf("retención sin régimen: %d %s", c, b)
+	}
+	ret["codigoRegimen"] = "6"
 	if c, b := pedir(t, ven, "POST", u+"retenciones-sufridas", ret); c != 403 {
 		t.Errorf("retención del vendedor: %d %s", c, b)
 	}
@@ -248,7 +254,7 @@ func TestCarteraCobroYRecibo(t *testing.T) {
 		t.Errorf("retención repetida: %d %s", c, b)
 	}
 	var medio string
-	_ = e.pool.QueryRow(context.Background(), `select p.medio::text from receipt_parts p join receipts r on r.id = p.receipt_id where r.concepto like 'Retención de iibb%'`).Scan(&medio)
+	_ = e.pool.QueryRow(context.Background(), `select p.medio::text from receipt_parts p join receipts r on r.id = p.receipt_id where r.concepto like 'Retención de IIBB%'`).Scan(&medio)
 	if medio != "retencion" {
 		t.Errorf("el recibo de la retención: %q", medio)
 	}
@@ -325,7 +331,7 @@ func TestPortalYVinculo(t *testing.T) {
 	if _, b := pedir(t, web, "GET", u+"cuenta/corriente", nil); !strings.Contains(b, `"sinEntregar":50`) {
 		t.Errorf("sin entregar del acopio en parte: %s", b)
 	}
-	if _, b := pedir(t, web, "GET", u+"cuenta/credito?monto=700", nil); !strings.Contains(b, "Tenés 600 disponibles.") {
+	if _, b := pedir(t, web, "GET", u+"cuenta/credito?monto=700", nil); !strings.Contains(b, "Tenés $\u00a0600 disponibles.") {
 		t.Errorf("crédito: %s", b)
 	}
 	if _, b := pedir(t, web, "GET", u+"cuenta/movimientos", nil); !strings.Contains(b, "Compra a cuenta") {
@@ -363,9 +369,16 @@ func TestVendedoresYSeguimiento(t *testing.T) {
 
 	var cliente string
 	_ = e.pool.QueryRow(context.Background(), `insert into customers (nombre) values ('Pérez') returning id`).Scan(&cliente)
-	if c, b := pedir(t, ven, "POST", u+"seguimiento", map[string]string{"customerId": cliente, "asunto": "Llamar por la deuda", "proximaAccion": "2020-01-01"}); c != 200 {
+	// Mes simulado 2 (M3S2-021): una fecha pasada no se acepta (nacía vencida).
+	if c, b := pedir(t, ven, "POST", u+"seguimiento", map[string]string{"customerId": cliente, "asunto": "Llamar por la deuda", "proximaAccion": "2020-01-01"}); c != 422 ||
+		!strings.Contains(b, "La fecha ya pasó") {
+		t.Fatalf("fecha pasada: %d %s", c, b)
+	}
+	if c, b := pedir(t, ven, "POST", u+"seguimiento", map[string]string{"customerId": cliente, "asunto": "Llamar por la deuda"}); c != 200 {
 		t.Fatalf("gestión: %d %s", c, b)
 	}
+	// Vencida desde antes (la fecha llegó).
+	_, _ = e.pool.Exec(context.Background(), `update customer_follow_ups set proxima_accion_at = '2020-01-01 12:00-03'`)
 	if _, b := pedir(t, ven, "GET", u+"seguimiento/vencidas", nil); b != "{\"cuantas\":1}\n" {
 		t.Errorf("vencidas: %s", b)
 	}
@@ -375,8 +388,19 @@ func TestVendedoresYSeguimiento(t *testing.T) {
 	if len(gs) != 1 || !gs[0].Vencida {
 		t.Fatalf("gestiones: %s", b)
 	}
-	if c, b := pedir(t, ven, "PUT", u+"seguimiento/"+gs[0].ID, map[string]string{"etapa": "promesa", "nota": "paga el viernes"}); c != 200 || !strings.Contains(b, cliente) {
+	// M2S1-095, M3S4-028: «Prometió» pide para cuándo, y con la fecha deja
+	// de estar vencida.
+	if c, b := pedir(t, ven, "PUT", u+"seguimiento/"+gs[0].ID, map[string]string{"etapa": "promesa", "nota": "paga el viernes"}); c != 422 || !strings.Contains(b, "Poné para cuándo prometió.") {
+		t.Errorf("prometió sin fecha: %d %s", c, b)
+	}
+	cuando := time.Now().AddDate(0, 0, 3).Format("2006-01-02")
+	if c, b := pedir(t, ven, "PUT", u+"seguimiento/"+gs[0].ID, map[string]string{"etapa": "promesa", "nota": "paga el viernes", "proximaAccion": cuando}); c != 200 || !strings.Contains(b, cliente) {
 		t.Errorf("mover: %d %s", c, b)
+	}
+	_, b = pedir(t, ven, "GET", u+"seguimiento", nil)
+	_ = json.Unmarshal([]byte(b), &gs)
+	if len(gs) != 1 || gs[0].Vencida {
+		t.Errorf("sigue vencida: %s", b)
 	}
 	var notas string
 	_ = e.pool.QueryRow(context.Background(), `select notas from customer_follow_ups`).Scan(&notas)

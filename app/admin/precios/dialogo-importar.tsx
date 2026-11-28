@@ -24,8 +24,10 @@ const moneda = new Intl.NumberFormat("es-AR", {
   maximumFractionDigits: 0,
 });
 
+// Sin precio es «—» siempre: un 0 guardado y uno que no está son lo mismo
+// para quien lee la comparación (M2S1-044).
 const money = (valor?: string) =>
-  valor === undefined ? "—" : moneda.format(Number(valor));
+  valor === undefined || !(Number(valor) > 0) ? "—" : moneda.format(Number(valor));
 
 /**
  * Importación de precios desde planilla.
@@ -162,7 +164,7 @@ export function DialogoImportar() {
         ) : (
           <div className="space-y-4">
             <div className="flex flex-wrap gap-4 rounded-xl border p-4">
-              <Resumen valor={previa.cambian} etiqueta="cambian" destacado />
+              <Resumen valor={previa.cambian} etiqueta={previa.cambian === 1 ? "cambia" : "cambian"} destacado />
               <Resumen valor={previa.iguales} etiqueta="sin cambios" />
               <Resumen valor={previa.problemas} etiqueta="con problemas" />
             </div>

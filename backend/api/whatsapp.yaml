@@ -540,7 +540,7 @@ components:
     ConversacionListada:
       type: object
       required: [id, waJid, nombre, displayName, customerId, clienteNombre, clienteTipo, estado, ultimoMensajeAt, ultimoMensajePreview,
-        ultimoEntranteAt, noLeidos, ventanaAbierta, asignadoAUserId, asignadoNombre, baja]
+        ultimoEntranteAt, noLeidos, ventanaAbierta, asignadoAUserId, asignadoNombre, baja, paraContestar]
       properties:
         id: { type: string }
         waJid: { type: string }
@@ -558,6 +558,7 @@ components:
         asignadoAUserId: { type: string, nullable: true }
         asignadoNombre: { type: string, nullable: true }
         baja: { type: boolean }
+        paraContestar: { type: boolean, description: lo último es del cliente y el bot no contesta porque la atiende una persona }
     Campo:
       type: object
       required: [clave, donde, marcador, ejemplo]
@@ -636,7 +637,7 @@ components:
     DetalleConversacion:
       type: object
       required: [id, waJid, displayName, customerId, orderId, estado, notas, ultimoEntranteAt, noLeidos, asignadoAUserId, bajaAt, bajaDetalle,
-        resueltaAt, botEstado, clienteNombre, clienteTipo, clienteLista, clienteTelefono, clienteEmail, clienteLimite, clienteEstado, conocidos, nombre, sinNumero,
+        resueltaAt, botEstado, botMotivo, clienteNombre, clienteTipo, clienteLista, clienteTelefono, clienteEmail, clienteLimite, clienteEstado, clienteBloqueado, conocidos, nombre, sinNumero,
         ventanaAbierta, mensajes, saldo, limiteCredito, pedidos, documentos]
       properties:
         id: { type: string }
@@ -653,6 +654,7 @@ components:
         bajaDetalle: { type: string, nullable: true }
         resueltaAt: { type: string, format: date-time, nullable: true }
         botEstado: { type: string, enum: [activo, derivada], description: "«derivada»: el bot la pasó a una persona y no contesta" }
+        botMotivo: { type: string, nullable: true, description: "Por qué el bot la pasó a una persona" }
         clienteNombre: { type: string, nullable: true }
         clienteTipo: { type: string, nullable: true }
         clienteLista: { type: string, nullable: true, description: "La lista de precios propia; null si es la general" }
@@ -660,6 +662,7 @@ components:
         clienteEmail: { type: string, nullable: true }
         clienteLimite: { type: string, nullable: true }
         clienteEstado: { type: string, nullable: true }
+        clienteBloqueado: { type: boolean }
         conocidos: { type: object, additionalProperties: { type: string } }
         nombre: { type: string }
         sinNumero: { type: boolean }
@@ -703,7 +706,7 @@ components:
       type: object
       required: [filtro, conversaciones, contadores, estado, plantillas, personal, gasto, mensajes, detalle]
       properties:
-        filtro: { type: string, enum: [todas, sin-leer, mias, sin-asignar, resueltas] }
+        filtro: { type: string, enum: [todas, sin-leer, mias, sin-asignar, derivadas, resueltas] }
         conversaciones: { type: array, items: { $ref: "#/components/schemas/ConversacionListada" } }
         contadores:
           type: object
@@ -871,7 +874,7 @@ components:
       type: object
       required: [canal, estado, texto, atencion]
       properties:
-        canal: { type: string, enum: [whatsapp, whatsapp_manual, email] }
+        canal: { type: string, enum: [whatsapp, whatsapp_manual, email, whatsapp_pdf] }
         estado: { type: string }
         texto: { type: string }
         atencion: { type: boolean }

@@ -214,6 +214,7 @@ components:
         correo: { type: string }
         telefono: { type: string, description: para coordinar las entregas }
         clave: { type: string }
+        novedades: { type: boolean, description: si quiere las campañas por correo (sin tildar, arranca dado de baja) }
     CambioDeClave:
       type: object
       required: [nueva]

@@ -37,6 +37,10 @@ export default async function PagoPage({
   const retenido = Math.round((p.total - p.neto) * 100) / 100;
   const aplicado = p.facturas.reduce((s, f) => s + f.aplicado, 0);
   const aCuenta = Math.round((p.total - aplicado) * 100) / 100;
+  // Los medios con que salió, todos: un pago partido en transferencia y
+  // e-Cheq decía solo «Transferencia» (M2S1-037).
+  const medios = [...new Set((p.partes.length > 0 ? p.partes.map((x) => x.medio) : [p.medio]).map((m) => NOMBRE_DEL_MEDIO[m] ?? m))];
+  const anulado = Boolean(p.anuladoAt);
 
   return (
     <div className="space-y-6">
@@ -49,8 +53,8 @@ export default async function PagoPage({
         }
         detalle={[
           fechaCorta.format(p.fecha),
-          NOMBRE_DEL_MEDIO[p.medio] ?? p.medio,
-          p.referencia,
+          medios.join(" + "),
+          p.partes.length > 1 ? null : p.referencia,
           etiquetaDeCircuito(p.circuito, etiquetasDelCircuito(circuito)),
         ]
           .filter(Boolean)
@@ -65,25 +69,24 @@ export default async function PagoPage({
               <FileText className="h-4 w-4" aria-hidden="true" />
               Orden de pago
             </a>
-            {!p.anuladoAt && (
-              <AnularPago
-                id={p.id}
-                supplierId={p.supplierId}
-                titulo={`Anular el pago de ${formatearMonto(p.total)} a ${p.proveedor}`}
-                detalle={[
-                  `La deuda con ${p.proveedor} vuelve a su cuenta y las facturas quedan otra vez por pagar.`,
-                  p.retenciones.length > 0 ? "Los certificados de retención quedan anulados." : "",
-                  p.partes.some((x) => x.chequeNumero)
-                    ? "Los cheques endosados vuelven a la cartera y los propios se anulan."
-                    : "",
-                  p.efectivoEnCaja > 0
-                    ? `Los ${formatearMonto(p.efectivoEnCaja)} en efectivo vuelven a la caja de ${p.caja}.`
-                    : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-              />
-            )}
+            <AnularPago
+              anulado={anulado}
+              id={p.id}
+              supplierId={p.supplierId}
+              titulo={`Anular el pago de ${formatearMonto(p.total)} a ${p.proveedor}`}
+              detalle={[
+                `La deuda con ${p.proveedor} vuelve a su cuenta y las facturas quedan otra vez por pagar.`,
+                p.retenciones.length > 0 ? "Los certificados de retención quedan anulados." : "",
+                p.partes.some((x) => x.chequeNumero)
+                  ? "Los cheques endosados vuelven a la cartera y los propios se anulan."
+                  : "",
+                p.efectivoEnCaja > 0
+                  ? `Los ${formatearMonto(p.efectivoEnCaja)} en efectivo vuelven a la caja de ${p.caja}.`
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            />
           </>
         }
       />
@@ -95,8 +98,10 @@ export default async function PagoPage({
         </p>
       )}
 
-      <section className="tarjeta grid gap-5 p-5 sm:grid-cols-3">
-        <Cifra titulo="Baja la deuda" valor={p.total} grande />
+      {/* Anulado ya no baja nada: los importes quedan tachados y la primera
+          cifra se llama por lo que era (mes 23). */}
+      <section className={`tarjeta grid gap-5 p-5 sm:grid-cols-3 ${anulado ? "text-muted-foreground line-through" : ""}`}>
+        <Cifra titulo={anulado ? "Total" : "Baja la deuda"} valor={p.total} grande />
         <Cifra titulo="Retenido" valor={retenido} />
         <Cifra titulo="Salió" valor={p.neto} />
       </section>
@@ -105,21 +110,35 @@ export default async function PagoPage({
         <section className="tarjeta p-5">
           <h2 className="text-[19px] font-bold tracking-tight">Facturas</h2>
           <ul className="mt-3 divide-y divide-linea-suave">
-            {p.facturas.map((f) => (
-              <li key={f.id}>
-                <Link
-                  href={`/admin/compras/facturas/${f.id}`}
-                  className="flex items-baseline justify-between gap-3 py-2.5 hover:underline"
-                >
+            {/* Lo que canceló: facturas, cheques repuestos y ajustes. Anulado,
+                lo que cubría, tachado (M2S2-078). */}
+            {p.facturas.map((f) => {
+              const factura = f.tipo !== "cheque_rechazado" && f.tipo !== "ajuste";
+              const contenido = (
+                <>
                   <span>
                     <span className="tabular font-medium">{f.numero}</span>
-                    <span className="text-muted-foreground"> · del {fechaCorta.format(f.fechaEmision)}</span>
+                    {factura && (
+                      <span className="text-muted-foreground"> · del {fechaCorta.format(f.fechaEmision)}</span>
+                    )}
                   </span>
                   <span className="tabular font-semibold">{formatearMonto(f.aplicado)}</span>
-                </Link>
-              </li>
-            ))}
-            {aCuenta > 0.009 && (
+                </>
+              );
+              const clase = `flex items-baseline justify-between gap-3 py-2.5 ${anulado ? "text-muted-foreground line-through" : ""}`;
+              return (
+                <li key={f.id}>
+                  {factura ? (
+                    <Link href={`/admin/compras/facturas/${f.id}`} className={`${clase} hover:underline`}>
+                      {contenido}
+                    </Link>
+                  ) : (
+                    <div className={clase}>{contenido}</div>
+                  )}
+                </li>
+              );
+            })}
+            {aCuenta > 0.009 && !anulado && (
               <li className="flex items-baseline justify-between gap-3 py-2.5">
                 <span className="text-muted-foreground">A cuenta, sin aplicar</span>
                 <span className="tabular font-semibold">{formatearMonto(aCuenta)}</span>

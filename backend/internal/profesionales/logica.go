@@ -67,7 +67,13 @@ func ValidarSolicitud(m map[string]any) (Solicitud, *zod.Lector) {
 	l.String("mensaje", true).Trim().Max(600, "")
 	// El refine del objeto corre solo si todo lo demás validó.
 	if l.Ok() && !DocumentoValido(tipo, l.Texto("documentoNumero")) {
-		l.Mal("documentoNumero", "Revisá el número: no coincide con el tipo de documento.")
+		// Un CUIT de once cifras con el último número mal no es un problema
+		// de tipo: decía «no coincide con el tipo de documento» (M2S1-172).
+		if tipo == "cuit" && len(cuit.SoloDigitos(l.Texto("documentoNumero"))) == 11 {
+			l.Mal("documentoNumero", "El CUIT no es válido: revisá el último número.")
+		} else {
+			l.Mal("documentoNumero", "Revisá el número: no coincide con el tipo de documento.")
+		}
 	}
 	return Solicitud{
 		Nombre: l.Texto("nombre"), DocumentoTipo: tipo, DocumentoNumero: l.Texto("documentoNumero"), Email: l.Texto("email"),
@@ -240,7 +246,7 @@ func AcuseDeRecibo(sitio, nombre string) Correo {
 		Adelanto: "Estamos revisando tu acceso al portal de profesionales.",
 		Saludo:   nombre,
 		Parrafos: []string{
-			"Un asesor la va a revisar y te contestamos dentro de las próximas 24 horas hábiles.",
+			"Un asesor la va a revisar y te contestamos.",
 			"Si necesitás algo antes, escribinos por WhatsApp y lo vemos.",
 		},
 	})
@@ -271,7 +277,7 @@ func Bienvenida(sitio, nombre string, lista *string, limite float64, enlace stri
 		Parrafos: parrafos,
 		Datos:    datos,
 		CTA:      cta,
-		Cierre:   "Desde tu cuenta también podés pedir presupuestos express, con respuesta en 24 horas, y descargar la documentación técnica.",
+		Cierre:   "Desde tu cuenta también podés pedir presupuestos express y descargar la documentación técnica.",
 	})
 }
 

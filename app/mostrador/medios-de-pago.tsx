@@ -55,38 +55,45 @@ export function CamposDeCheque({
         ))}
       </div>
       {/* Banco y número arriba; la fecha con su ancho justo y el librador
-          abajo. En tres columnas, a 1024 px se leía «N° de che» y «dd/mm/aaa». */}
+          abajo. En tres columnas, a 1024 px se leía «N° de che» y «dd/mm/aaa».
+          Con su rótulo chico arriba, como la tarjeta: una vez llenos no se
+          sabía cuál era cuál (mes simulado, M3S3-052). */}
       <div className="grid grid-cols-2 gap-2">
-        <input
-          value={valor.banco}
-          onChange={(e) => cambiar("banco", e.target.value)}
-          placeholder="Banco"
-          aria-label="Banco del cheque"
-          className="h-11 min-w-0 rounded-lg border border-linea bg-background px-2.5 text-base"
-        />
-        <input
-          value={valor.numero}
-          onChange={(e) => cambiar("numero", e.target.value)}
-          inputMode="numeric"
-          placeholder="N° de cheque"
-          aria-label="Número del cheque"
-          className="tabular h-11 min-w-0 rounded-lg border border-linea bg-background px-2.5 text-base"
-        />
+        <CampoDeTarjeta rotulo="Banco">
+          <input
+            value={valor.banco}
+            onChange={(e) => cambiar("banco", e.target.value)}
+            data-foco="cheque-banco"
+            className="h-11 w-full min-w-0 rounded-lg border border-linea bg-background px-2.5 text-base"
+          />
+        </CampoDeTarjeta>
+        <CampoDeTarjeta rotulo="N°">
+          <input
+            value={valor.numero}
+            onChange={(e) => cambiar("numero", e.target.value)}
+            inputMode="numeric"
+            data-foco="cheque-numero"
+            className="tabular h-11 w-full min-w-0 rounded-lg border border-linea bg-background px-2.5 text-base"
+          />
+        </CampoDeTarjeta>
       </div>
       <div className="grid grid-cols-[8.5rem_minmax(0,1fr)] gap-2">
-        <CampoFecha
-          value={valor.fechaPago}
-          onChange={(e) => cambiar("fechaPago", e.target.value)}
-          aria-label="Fecha de pago del cheque"
-          className="tabular h-11 min-w-0 rounded-lg border border-linea bg-background px-2.5 text-base"
-        />
-        <input
-          value={valor.librador}
-          onChange={(e) => cambiar("librador", e.target.value)}
-          placeholder="Librador, si no es el cliente"
-          aria-label="Librador del cheque"
-          className="h-11 w-full min-w-0 rounded-lg border border-linea bg-background px-2.5 text-base"
-        />
+        <CampoDeTarjeta rotulo="Pago">
+          <CampoFecha
+            value={valor.fechaPago}
+            onChange={(e) => cambiar("fechaPago", e.target.value)}
+            data-foco="cheque-fecha"
+            className="tabular h-11 w-full min-w-0 rounded-lg border border-linea bg-background px-2.5 text-base"
+          />
+        </CampoDeTarjeta>
+        <CampoDeTarjeta rotulo="Librador">
+          <input
+            value={valor.librador}
+            onChange={(e) => cambiar("librador", e.target.value)}
+            placeholder="Si no es el cliente"
+            className="h-11 w-full min-w-0 rounded-lg border border-linea bg-background px-2.5 text-base"
+          />
+        </CampoDeTarjeta>
       </div>
       {problema && <p className="estado-espera text-sm font-medium">{problema}</p>}
     </div>
@@ -142,6 +149,7 @@ export function DatosDeTarjeta({
               value={tarjeta.nroLote}
               onChange={(e) => onTarjeta({ ...tarjeta, nroLote: e.target.value })}
               inputMode="numeric"
+              data-foco="lote"
               aria-invalid={(obligatorio && !tarjeta.nroLote.trim()) || undefined}
               className="tabular h-11 w-full min-w-0 rounded-lg border border-linea bg-background px-2.5 text-base"
             />
@@ -151,6 +159,7 @@ export function DatosDeTarjeta({
               value={tarjeta.nroCupon}
               onChange={(e) => onTarjeta({ ...tarjeta, nroCupon: e.target.value })}
               inputMode="numeric"
+              data-foco="cupon"
               aria-invalid={(obligatorio && !tarjeta.nroCupon.trim()) || undefined}
               className="tabular h-11 w-full min-w-0 rounded-lg border border-linea bg-background px-2.5 text-base"
             />
@@ -345,8 +354,21 @@ export function PagoPartido({
         </div>
       ))}
 
-      <div className="flex items-center justify-between pt-1">
-        <div className="flex gap-3">
+      {/* Lo que falta repartir, debajo de los importes y adentro de la
+          tarjeta: al lado de los botones se salía del borde (M2S2-128). */}
+      <p
+        className={`tabular text-right text-sm font-semibold ${
+          Math.abs(restante) > 0.01 ? "text-destructive" : "text-saldo-favor"
+        }`}
+      >
+        {Math.abs(restante) > 0.01
+          ? restante > 0
+            ? `Faltan ${formatearMonto(restante)}`
+            : `Sobran ${formatearMonto(-restante)}`
+          : "Cierra justo"}
+      </p>
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        <div className="flex flex-wrap gap-2">
           {partes.length < 4 && (
             <button
               type="button"
@@ -376,20 +398,8 @@ export function PagoPartido({
             Un solo medio
           </button>
         </div>
-        <span
-          className={`tabular text-sm font-semibold ${
-            Math.abs(restante) > 0.01
-              ? "text-destructive"
-              : "text-saldo-favor"
-          }`}
-        >
-          {Math.abs(restante) > 0.01
-            ? restante > 0
-              ? `Faltan ${formatearMonto(restante)}`
-              : `Sobran ${formatearMonto(-restante)}`
-            : "Cierra justo"}
-        </span>
       </div>
+
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { formatearDecimal } from "@/lib/unidades";
 import Link from "next/link";
 import { DollarSign, Maximize2, Plus, Settings2 } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
@@ -53,7 +54,7 @@ export default async function CortesPage({
         titulo="Cortes"
         resumen={
           pendientes.length > 0
-            ? `${plural(pendientes.length, "trabajo")} por hacer · ${Math.round(superficiePendiente)} m² de placa`
+            ? `${plural(pendientes.length, "trabajo")} por hacer · ${formatearDecimal(superficiePendiente)} m² de placa`
             : `${plural(cortes.length, "trabajo")} en total`
         }
       >

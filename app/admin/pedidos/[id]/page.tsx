@@ -1,4 +1,8 @@
-import { cantidadConUnidad } from "@/lib/formato";
+import { cantidadConUnidad, telefonoLegible } from "@/lib/formato";
+import { ajustesDelSitio } from "@/lib/dal/contenido";
+import { escalasDePago } from "@/lib/dal/descuentos-pago";
+import { valorDeRegla } from "@/lib/reglas";
+import { rotuloDelCircuito } from "@/lib/circuito";
 import Link from "next/link";
 import { UnirAFicha } from "@/components/admin/unir-a-ficha";
 import { notFound } from "next/navigation";
@@ -12,14 +16,18 @@ import {
   ETAPAS_RETIRO,
   Pasos,
 } from "@/components/admin/pasos";
-import { fechaHora, formatearMonto, formatearPorcentaje, moneda } from "@/components/admin/formato";
-import { obtenerPedido } from "@/lib/dal/admin/ventas";
+import { fechaHora, formatearMonto, formatearPorcentaje, moneda, plural } from "@/components/admin/formato";
+import { datosDeDevolucion, obtenerPedido } from "@/lib/dal/admin/ventas";
 import { AccionesPedido, CancelarPedido } from "../acciones";
 import { DiaDeEntrega } from "./dia-de-entrega";
-import { devolucionDesdeElPedido, pedidoParaFacturar } from "@/lib/dal/admin/facturacion";
+import { configuracionFiscalActual, devolucionDesdeElPedido, pedidoParaFacturar } from "@/lib/dal/admin/facturacion";
+import { letraQueCorresponde, type CondicionIva } from "@/lib/fiscal/comprobantes";
 import { BotonFacturar } from "./facturar";
 import { CorregirPedido, DevolverPedido } from "./corregir-devolver";
+import { FaltoAlgo } from "./falto-algo";
+import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { DevolverFacturado } from "./devolver-facturado";
+import { zonasParaPedido } from "../../presupuestos/zonas";
 import { Entregas } from "./entregas";
 import { saldoDeAcopio } from "@/lib/entregas";
 import { seOfreceLaFirma } from "@/lib/entregas/firma";
@@ -53,11 +61,12 @@ export default async function FichaPedidoPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ remito?: string }>;
+  searchParams: Promise<{ remito?: string; falto?: string }>;
 }) {
   const { id } = await params;
-  // «Preparar remito» desde el tablero llega con el formulario abierto.
-  const { remito: abrirRemito } = await searchParams;
+  // «Preparar remito» desde el tablero llega con el formulario abierto, y
+  // «Le faltó algo» desde las ventas de hoy del mostrador (M3S3-021).
+  const { remito: abrirRemito, falto } = await searchParams;
   if (!esUuid(id)) notFound();
   const [usuario, pedido] = await Promise.all([
     requireStaff(),
@@ -83,6 +92,26 @@ export default async function FichaPedidoPage({
   const factura = puedeEntrar("/admin/facturacion", usuario.staffRole);
   const datosFactura = factura ? await pedidoParaFacturar(id) : null;
   const facturado = datosFactura?.yaFacturado ?? null;
+  // Lo que saldría, para confirmarlo antes de emitir: la letra (con la regla
+  // del monotributista), a quién y cuánto.
+  const porEmitir =
+    datosFactura && !facturado
+      ? await (async () => {
+          const [emisor, ajustesFiscales] = await Promise.all([configuracionFiscalActual(), ajustesDelSitio()]);
+          const p = datosFactura.pedido;
+          return {
+            letra: letraQueCorresponde(
+              (emisor?.condicionIva ?? "responsable_inscripto") as CondicionIva,
+              (p.clienteCondicionIva ?? "consumidor_final") as CondicionIva,
+              valorDeRegla(ajustesFiscales, "factura_al_monotributista"),
+            ),
+            receptor: p.clienteRazonSocial || p.clienteNombre || p.contactoNombre,
+            cuit: p.clienteCuit,
+            condicion: p.clienteCondicionIva,
+            total: Number(p.total),
+          };
+        })()
+      : null;
   const verCliente = puedeEntrar("/admin/clientes", usuario.staffRole);
   const cancelable =
     puedeEntrar("/admin/presupuestos", usuario.staffRole) &&
@@ -91,7 +120,12 @@ export default async function FichaPedidoPage({
 
   // El aviso que corresponde al estado: lo que el cliente tiene que saber ahora.
   // Solo para quien atiende el WhatsApp de la maderera (no depósito).
-  const eventoAviso = puedeEntrar("/admin/whatsapp", usuario.staffRole) ? (EVENTO_DEL_ESTADO[pedido.estado] ?? null) : null;
+  // Un envío listo no se avisa: no se va a retirar, el aviso es el de «en
+  // camino» (mes simulado 2: decía «listo para retirar»).
+  const eventoAviso =
+    puedeEntrar("/admin/whatsapp", usuario.staffRole) && !(pedido.estado === "listo" && pedido.tipoEntrega === "envio")
+      ? (EVENTO_DEL_ESTADO[pedido.estado] ?? null)
+      : null;
 
   const cancelado = pedido.estado === "cancelado";
   const [pendientes, remitos, cortes, aviso, otros] = await Promise.all([
@@ -109,6 +143,16 @@ export default async function FichaPedidoPage({
   // botón principal es «Preparar remito» (mes simulado: era «Marcar
   // entregado», que se lleva todo lo que queda).
   const acopioEnCurso = pedido.acopio && porEntregar.length > 0;
+  // Un retiro listo con mercadería: lo que sigue es el remito, que deja la
+  // firma. Va arriba con «Preparar remito» como botón principal, y el
+  // encabezado no repite otro (mes simulado 2: arriba estaba «Marcar
+  // entregado» y había dos «Preparar remito» en la pantalla).
+  const remitoArriba =
+    acopioEnCurso || (pedido.tipoEntrega === "retiro" && pedido.estado === "listo" && porEntregar.length > 0);
+  // Preparando con un remito parcial ya firmado: el remito va arriba, pero
+  // «Marcar listo» no se pierde. Sin esto el pedido quedaba «Preparando» con
+  // el corte terminado y ningún rol lo podía marcar listo (mes 23, PED-1153).
+  const listoEnAcopio = acopioEnCurso && pedido.estado === "preparando";
   // El remito del camión sin firmar: en un envío en camino con algo por
   // llevar, firmarlo es lo que sigue (no «Marcar entregado»).
   const remitoEnLaCalle = remitos.find((r) => r.tipo === "envio" && seOfreceLaFirma(r));
@@ -117,19 +161,47 @@ export default async function FichaPedidoPage({
     : null;
   const cortesSinTerminar = cortes.filter((c) => c.estado === "en-cola" || c.estado === "en-proceso").map((c) => c.numero);
   const interno = pedido.comprobante === "interno" && !facturado;
+  // El mismo nombre que eligió la dueña en /admin/reglas (decía «Interno»
+  // con la regla en «B», mes simulado 2).
+  const circuito = rotuloDelCircuito(valorDeRegla(await ajustesDelSitio(), "etiqueta_del_circuito"));
   // Devolver y corregir: de quien mueve plata, y sin factura (con factura,
   // por la factura y su nota). Corregir, además, sin nada cobrado y fuera
   // del mostrador (la venta del mostrador se anula desde ahí).
   const manejaPlata = Boolean(usuario.staffRole && MANEJAN_PLATA.includes(usuario.staffRole));
-  const devolvible = manejaPlata && !cancelado && !pedido.facturado;
+  // Devuelto entero, no queda nada para devolver ni anular: seguía
+  // ofreciendo las dos cosas con el pedido en $ 0 (mes 23).
+  const quedaAlgo = pedido.items.some((i) => Number(i.cantidad) - (i.devuelto ?? 0) > 0.0001);
+  const tocable = manejaPlata && !cancelado && !pedido.facturado && quedaAlgo;
+  // Devolver es de lo que salió (o de lo cobrado, que vuelve): en un pedido
+  // sin preparar ni cobrar aparecía al lado de «Corregir», que es lo que
+  // corresponde (mes 23, PED-1123 y PED-1134).
+  const salioAlgo =
+    pedido.origen === "mostrador" ||
+    ["en-camino", "entregado"].includes(pedido.estado) ||
+    remitos.some((r) => r.estado !== "anulada");
+  const devolvible = tocable && (salioAlgo || pedido.cobrado > 0.005);
   // Facturado: la devolución sale del pedido con su nota de crédito mientras
   // no saque plata (H279); lo cobrado vuelve desde la factura.
   const devolucionFacturada =
     manejaPlata && !cancelado && pedido.facturado ? await devolucionDesdeElPedido(pedido.id) : null;
-  const devuelveDesdeElPedido = devolucionFacturada && devolucionFacturada.tope > 0.005 && devolucionFacturada.renglones.some((r) => r.queda > 0);
-  const corregible = devolvible && pedido.origen !== "mostrador" && pedido.cobrado < 0.005;
+  const paraDevolver = devolvible ? await datosDeDevolucion(pedido.id) : null;
+  const devuelveDesdeElPedido =
+    devolucionFacturada &&
+    devolucionFacturada.tope + devolucionFacturada.caja + devolucionFacturada.afuera > 0.005 &&
+    devolucionFacturada.renglones.some((r) => r.queda > 0);
+  // Entregado no se corrige: lo que falta va en otro pedido y lo que vuelve,
+  // con una devolución (mes simulado 2).
+  const corregible = tocable && pedido.origen !== "mostrador" && pedido.cobrado < 0.005 && pedido.estado !== "entregado";
+  // «Le faltó algo»: la reposición sin cargo es un ajuste del Stock, de quien
+  // entra ahí (M3S3-021).
+  const reponible = !cancelado && puedeEntrar("/admin/stock", usuario.staffRole);
+  const sucursalSlug = reponible
+    ? ((await listarSucursalesPublicas()).find((s) => s.id === pedido.branchId)?.slug ?? null)
+    : null;
+
   const renglones = pedido.items.map((i) => ({
     id: i.id,
+    deCatalogo: i.variantId != null,
     descripcion: i.descripcion,
     unidad: i.unidad,
     cantidad: Number(i.cantidad),
@@ -149,10 +221,18 @@ export default async function FichaPedidoPage({
   const etapas =
     pedido.tipoEntrega === "retiro" ? ETAPAS_RETIRO : ETAPAS_PEDIDO;
 
+  const devueltoTotal = pedido.devoluciones.reduce((t, d) => t + d.importe, 0);
+  const devueltoEnPlata = pedido.devoluciones.filter((d) => d.destino === "caja" || d.destino === "afuera").reduce((t, d) => t + d.importe, 0);
+  const sumaDeRenglones = Math.round(pedido.items.reduce((t, i) => t + Number(i.subtotal) * 100, 0)) / 100;
+  const descuentoAparte =
+    Number(pedido.descuento) > 0.004 &&
+    Math.abs(sumaDeRenglones + Number(pedido.costoEnvio) - Number(pedido.descuento) - Number(pedido.total)) < 0.02;
+
   const entregas = (
     <Entregas
       whatsapp={puedeEntrar("/admin/whatsapp", usuario.staffRole)}
-      avisos={avisosRemito}
+      // Con el aviso de arriba, el del remito no se repite debajo.
+      avisos={aviso ? {} : avisosRemito}
       orderId={pedido.id}
       tipoEntrega={pedido.tipoEntrega}
       estado={pedido.estado}
@@ -173,8 +253,10 @@ export default async function FichaPedidoPage({
   const sinCambio = new Set(
     cronologico.filter((h, i) => i > 0 && h.nota && h.estado === cronologico[i - 1].estado).map((h) => h.id),
   );
-  const historial: { clave: string; cuando: Date; titulo: ReactNode; nota?: string | null; quien?: string | null }[] = [
-    ...pedido.historial.map((h) => ({
+  const historial: { clave: string; cuando: Date; titulo: ReactNode; nota?: ReactNode; quien?: string | null }[] = [
+    // Las devoluciones van con su nota de crédito, de la lista de abajo; el
+    // renglón del historial que las anotaba no se repite.
+    ...pedido.historial.filter((h) => !(h.nota?.startsWith("Devolución") && pedido.devoluciones.length > 0)).map((h) => ({
       clave: h.id,
       cuando: h.createdAt,
       titulo: sinCambio.has(h.id) ? (
@@ -196,6 +278,29 @@ export default async function FichaPedidoPage({
       ),
       nota: [r.numero, ...r.medios.split(",").filter(Boolean).map((m) => MEDIOS_DE_COBRO[m] ?? m)].join(" · "),
       quien: r.quien,
+    })),
+    ...pedido.devoluciones.map((d) => ({
+      clave: d.id,
+      cuando: new Date(d.createdAt),
+      titulo: (
+        <p className="text-base font-medium">
+          Devolución <span className="tabular">{formatearMonto(d.importe)}</span>
+        </p>
+      ),
+      nota: (
+        <>
+          {d.notaId && d.nota && (
+            <>
+              <a href={`/api/comprobantes/${d.notaId}/pdf`} target="_blank" rel="noreferrer" className="codigo hover:text-brand-orange">
+                {d.nota}
+              </a>{" "}
+              ·{" "}
+            </>
+          )}
+          {DESTINO_DEVOLUCION[d.destino]} · {d.motivo}
+        </>
+      ),
+      quien: d.quien,
     })),
     ...remitos
       // El remito que completa el pedido ya está en el historial como
@@ -227,7 +332,7 @@ export default async function FichaPedidoPage({
             {/* Salió con el comprobante interno a propósito: no es una venta
                 que se olvidó de facturar. */}
             {interno && (
-              <span className="estado-cerrado rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium">Comprobante interno</span>
+              <span className="estado-cerrado rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium">{circuito}</span>
             )}
           </>
         }
@@ -257,9 +362,35 @@ export default async function FichaPedidoPage({
                 costoEnvio={Number(pedido.costoEnvio)}
                 conEnvio={pedido.tipoEntrega === "envio"}
                 descuento={Number(pedido.descuento)}
+                entrega={
+                  remitos.some((r) => r.estado !== "anulada") || pedido.estado === "en-camino"
+                    ? null
+                    : {
+                        tipo: pedido.tipoEntrega === "envio" ? "envio" : "retiro",
+                        direccion: pedido.direccionEntrega ?? "",
+                        zona: pedido.zonaEnvio ?? "",
+                      }
+                }
+                zonas={corregible ? await zonasParaPedido() : []}
+                porMedio={corregible ? await descuentoDelMedio(pedido) : null}
+                branchId={pedido.branchId}
+                customerId={pedido.customerId}
               />
             )}
-            {devolvible && <DevolverPedido id={pedido.id} numero={pedido.numero} renglones={renglones} />}
+            {devolvible && <DevolverPedido id={pedido.id} numero={pedido.numero} renglones={renglones} datos={paraDevolver} />}
+            {reponible && sucursalSlug && (
+              <FaltoAlgo
+                numero={pedido.numero}
+                sucursal={sucursalSlug}
+                abiertoAlEntrar={falto === "1"}
+                // Lo que se llevó: sin lo que ya devolvió («se llevó 6»
+                // con 2 devueltos, mes 23).
+                renglones={pedido.items.flatMap((i) => {
+                  const llevo = Math.round((Number(i.cantidad) - (i.devuelto ?? 0)) * 1000) / 1000;
+                  return i.variantId && llevo > 0 ? [{ variantId: i.variantId, descripcion: i.descripcion, cantidad: llevo }] : [];
+                })}
+              />
+            )}
             <a
               href={`/ticket/${pedido.id}`}
               target="_blank"
@@ -275,6 +406,7 @@ export default async function FichaPedidoPage({
               <BotonFacturar
                 discreto={interno}
                 orderId={pedido.id}
+                porEmitir={porEmitir}
                 comprobante={
                   facturado
                     ? {
@@ -294,8 +426,10 @@ export default async function FichaPedidoPage({
                 id={pedido.id}
                 numero={pedido.numero}
                 factura={devolucionFacturada.factura}
-                destino={devolucionFacturada.destino}
                 tope={devolucionFacturada.tope}
+                caja={devolucionFacturada.caja}
+                afuera={devolucionFacturada.afuera}
+                cajaAbierta={devolucionFacturada.cajaAbierta}
                 renglones={devolucionFacturada.renglones}
               />
             )}
@@ -318,8 +452,11 @@ export default async function FichaPedidoPage({
               sinCobrar={pedido.sinCobrar ? { numero: pedido.numero, monto: pedido.sinCobrar } : null}
               cortesSinTerminar={cortesSinTerminar}
               acopio={acopioEnCurso}
+              sinAvance={remitoArriba && !listoEnAcopio}
+              secundario={listoEnAcopio}
               porLlevar={porEntregar.length > 0}
               firmar={firmaEnLaCalle}
+              remitoAFirmar={remitoEnLaCalle?.numero ?? null}
               enLaFicha
             />
           </>
@@ -357,7 +494,7 @@ export default async function FichaPedidoPage({
           lleva» y lo que seguía quedaban unos 400 px vacíos (mes simulado). */}
       <div className="grid items-start gap-4 lg:grid-cols-[1fr_320px]">
         <div className="min-w-0 space-y-4">
-        {acopioEnCurso && entregas}
+        {remitoArriba && entregas}
 
         <section className="tarjeta overflow-hidden">
           <h2 className="px-5 pt-4 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">Qué lleva</h2>
@@ -379,6 +516,12 @@ export default async function FichaPedidoPage({
                   <td className="px-5 py-3.5 text-base">{item.descripcion}</td>
                   <td className="tabular px-4 py-3.5 text-right text-base text-muted-foreground">
                     {cantidadConUnidad(Number(item.cantidad), item.unidad, item.descripcion)}
+                    {(item.devuelto ?? 0) > 0 && (
+                      <span className="estado-espera block text-sm font-medium text-[var(--estado-tinta)]">
+                        {(item.devuelto ?? 0) === 1 ? "Volvió" : "Volvieron"}{" "}
+                        {cantidadConUnidad(item.devuelto ?? 0, item.unidad, item.descripcion)}
+                      </span>
+                    )}
                   </td>
                   <td className="tabular px-4 py-3.5 text-right text-base text-muted-foreground">
                     {formatearMonto(Number(item.precioUnitario))}
@@ -389,17 +532,27 @@ export default async function FichaPedidoPage({
             </tbody>
           </table>
           <dl className="space-y-1 border-t bg-hundida/50 px-5 py-4 text-base">
+            {(Number(pedido.costoEnvio) > 0 || descuentoAparte) && (
+              <div className="flex justify-between gap-3">
+                <dt>Subtotal</dt>
+                <dd className="tabular">{formatearMonto(sumaDeRenglones)}</dd>
+              </div>
+            )}
+            {/* El descuento por forma de pago del pedido web o del
+                presupuesto: los renglones van a lista y el total no
+                cerraba a la vista (mes simulado 2). El del mostrador ya
+                rebajó cada renglón: ahí no va. */}
+            {descuentoAparte && (
+              <div className="flex justify-between gap-3">
+                <dt>{pedido.descuentoMotivo || "Descuento"}</dt>
+                <dd className="tabular">−{formatearMonto(Number(pedido.descuento))}</dd>
+              </div>
+            )}
             {Number(pedido.costoEnvio) > 0 && (
-              <>
-                <div className="flex justify-between gap-3">
-                  <dt>Subtotal</dt>
-                  <dd className="tabular">{formatearMonto(Number(pedido.subtotal))}</dd>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <dt>Envío{pedido.zonaEnvio ? ` · ${pedido.zonaEnvio}` : ""}</dt>
-                  <dd className="tabular">{formatearMonto(Number(pedido.costoEnvio))}</dd>
-                </div>
-              </>
+              <div className="flex justify-between gap-3">
+                <dt>Envío{pedido.zonaEnvio ? ` · ${pedido.zonaEnvio}` : ""}</dt>
+                <dd className="tabular">{formatearMonto(Number(pedido.costoEnvio))}</dd>
+              </div>
             )}
             <div className="flex items-baseline justify-between gap-3 pt-1">
               <dt className="font-medium">Total</dt>
@@ -415,7 +568,8 @@ export default async function FichaPedidoPage({
             * las anteriores al módulo de compras no lo tienen y se cuentan
             * aparte en vez de promediarse como si hubieran costado cero.
             */}
-          {esAdmin && margen && (
+          {/* Cancelado no hubo venta: sin margen (mes simulado 2). */}
+          {esAdmin && margen && !cancelado && (
             <div className="border-t bg-muted/40 px-5 py-4">
               <div className="flex flex-wrap items-baseline justify-between gap-3">
                 <div>
@@ -424,7 +578,7 @@ export default async function FichaPedidoPage({
                     {moneda.format(margen.neto)} netos menos{" "}
                     {moneda.format(margen.costo)} de costo
                     {margen.sinCosto > 0 &&
-                      ` · ${margen.sinCosto} renglones sin costo, fuera de la cuenta`}
+                      ` · ${plural(margen.sinCosto, "renglón", "renglones")} sin costo, fuera de la cuenta`}
                   </p>
                 </div>
                 <p
@@ -444,7 +598,7 @@ export default async function FichaPedidoPage({
           )}
         </section>
 
-        {!acopioEnCurso && entregas}
+        {!remitoArriba && entregas}
 
         {/* El corte, en la ficha del pedido: «el pedido está listo menos el
             corte». Un pedido cancelado o entregado no manda nada a cortar. */}
@@ -452,10 +606,21 @@ export default async function FichaPedidoPage({
           <section className="tarjeta p-5">
             <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
               <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">Corte</h2>
-              {!["cancelado", "entregado"].includes(pedido.estado) && (
+              {!["cancelado", "entregado"].includes(pedido.estado) ? (
                 <Link href={`/admin/cortes/nuevo?pedido=${pedido.id}`} className="text-base text-brand-orange hover:underline">
                   Mandar a cortar
                 </Link>
+              ) : (
+                /* Entregado es cuando falta una pieza: la reposición sin
+                   cargo sale de acá (mes simulado 2: había que escribir la
+                   dirección a mano). */
+                pedido.estado === "entregado" &&
+                cortes.length > 0 &&
+                puedeEntrar("/admin/cortes/nuevo", usuario.staffRole) && (
+                  <Link href={`/admin/cortes/nuevo?pedido=${pedido.id}&reponer=1`} className="text-base text-brand-orange hover:underline">
+                    Reponer una pieza
+                  </Link>
+                )
               )}
             </div>
 
@@ -498,8 +663,22 @@ export default async function FichaPedidoPage({
                 {pedido.zonaEnvio && (
                   <p className="mt-1.5 flex items-center gap-2 text-base text-muted-foreground">
                     <MapPin className="h-5 w-5 shrink-0" />
-                    {pedido.zonaEnvio}
+                    {pedido.zonaEnvio.replace(/\s*\([^)]*\)\s*$/, "")}
                   </p>
+                )}
+                {/* La zona «a cotizar» sin flete: salía y se entregaba sin
+                    cotizarlo (mes simulado 2). */}
+                {/* Con la zona de la lista también, como el reparto: la del
+                    panel no lleva «(a cotizar)» en el nombre (M2S2-054). */}
+                {/* «Sin cargo» elegido a propósito no se cotiza, y lo
+                    entregado ya no se cotiza (mes 23, depósito). */}
+                {Number(pedido.costoEnvio) === 0 &&
+                  !pedido.fleteSinCargo &&
+                  !["entregado", "cancelado"].includes(pedido.estado) &&
+                  (await zonaACotizar(pedido.zonaEnvio)) && (
+                  <span className="estado-problema mt-2 inline-block rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)]">
+                    Flete sin cotizar
+                  </span>
                 )}
               </>
             ) : (
@@ -561,17 +740,58 @@ export default async function FichaPedidoPage({
                   </dd>
                 </div>
               )}
+              {/* Cada recibo con el medio por el que entró: la forma de pago
+                  es la que se acordó, y decía «Transferencia» de un cobro en
+                  efectivo (mes simulado 2). */}
               {pedido.recibos.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 pt-1">
+                <ul className="space-y-1 pt-1">
                   {pedido.recibos.map((r) => (
+                    <li key={r.id} className="flex items-baseline justify-between gap-3">
+                      <span className="min-w-0">
+                        <a
+                          href={`/api/recibos/${r.id}/pdf`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={`codigo hover:text-brand-orange ${r.estado === "anulado" ? "line-through" : ""}`}
+                        >
+                          {r.numero}
+                        </a>{" "}
+                        <span className="text-sm text-muted-foreground">
+                          {r.medios.split(",").filter(Boolean).map((m) => MEDIOS_DE_COBRO[m] ?? m).join(" · ")}
+                        </span>
+                      </span>
+                      <span className={`tabular text-sm ${r.estado === "anulado" ? "text-muted-foreground line-through" : ""}`}>
+                        {formatearMonto(r.total)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {/* Lo que volvió por la caja o el banco, y lo neto (M2S1-082). */}
+              {devueltoEnPlata > 0.004 && (
+                <>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-muted-foreground">Devuelto</dt>
+                    <dd className="tabular">−{formatearMonto(devueltoEnPlata)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-muted-foreground">Neto</dt>
+                    <dd className="tabular font-semibold">{formatearMonto(Number(pedido.total) - devueltoTotal)}</dd>
+                  </div>
+                </>
+              )}
+              {/* Las facturas y notas, para quien no entra a Facturación. */}
+              {pedido.comprobantes.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 border-t pt-2">
+                  {pedido.comprobantes.map((c) => (
                     <a
-                      key={r.id}
-                      href={`/api/recibos/${r.id}/pdf`}
-                      target="_blank"
+                      key={c.id}
+                      href={factura ? `/admin/facturacion/${c.id}` : `/api/comprobantes/${c.id}/pdf`}
+                      target={factura ? undefined : "_blank"}
                       rel="noreferrer"
-                      className={`codigo hover:text-brand-orange ${r.estado === "anulado" ? "line-through" : ""}`}
+                      className={`codigo hover:text-brand-orange ${c.estado === "anulada" ? "line-through" : ""}`}
                     >
-                      {r.numero}
+                      {c.etiqueta}
                     </a>
                   ))}
                 </div>
@@ -626,7 +846,7 @@ export default async function FichaPedidoPage({
                   className="tabular inline-flex h-10 items-center gap-1.5 rounded-lg bg-hundida px-3 text-base hover:bg-muted"
                 >
                   <Phone className="h-4 w-4" aria-hidden="true" />
-                  {pedido.telefono}
+                  {telefonoLegible(pedido.telefono)}
                 </a>
                 <a
                   href={`https://wa.me/${paraWhatsapp(pedido.telefono)}`}
@@ -675,6 +895,13 @@ export default async function FichaPedidoPage({
   );
 }
 
+const DESTINO_DEVOLUCION: Record<string, string> = {
+  caja: "Salió de la caja",
+  afuera: "Volvió por el banco",
+  cuenta: "A la cuenta corriente",
+  deuda: "Bajó lo que debía",
+};
+
 const MEDIOS_DE_COBRO: Record<string, string> = {
   efectivo: "Efectivo",
   transferencia: "Transferencia",
@@ -716,3 +943,30 @@ const EVENTO_DEL_ESTADO: Partial<Record<string, EventoManual>> = {
   "en-camino": "en-camino",
   entregado: "entregado",
 };
+
+/**
+ * El descuento por forma de pago del pedido, para que «Corregir» lo
+ * recalcule como Go (pedidos.Corregir): solo si el que tiene salió de una
+ * escala del medio (el motivo es su etiqueta). Uno a mano queda fijo.
+ */
+async function descuentoDelMedio(pedido: {
+  medioPago: string | null;
+  aCuenta?: number | null;
+  descuento: string;
+  descuentoMotivo: string | null;
+}) {
+  const medio = pedido.medioPago;
+  if (!medio || pedido.aCuenta != null || !(Number(pedido.descuento) > 0)) return null;
+  const escalas = (await escalasDePago()).filter((e) => e.medio === medio);
+  if (!escalas.some((e) => e.etiqueta === pedido.descuentoMotivo)) return null;
+  const alFlete = valorDeRegla(await ajustesDelSitio(), "descuento_al_flete") === "si";
+  return { medio, escalas, alFlete };
+}
+
+/** La zona del envío es «a cotizar»: por el nombre (la tienda) o por la lista. */
+async function zonaACotizar(zona: string | null): Promise<boolean> {
+  if (!zona) return false;
+  if (/a cotizar/i.test(zona)) return true;
+  const nombre = zona.trim().toLowerCase();
+  return (await zonasParaPedido()).some((z) => z.aCotizar && z.nombre.trim().toLowerCase() === nombre);
+}

@@ -9,6 +9,7 @@ import (
 
 	"mjbj/internal/api/comprasapi"
 	"mjbj/internal/auth"
+	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
 )
@@ -143,6 +144,16 @@ type PorRecibir struct {
 	FechaPrometida *time.Time `json:"fechaPrometida"`
 	Pendientes     int        `json:"pendientes"`
 	Lineas         int        `json:"lineas"`
+	// Faltantes es lo que falta de cada renglón, en unidades: decía «faltan
+	// 1 de 2» contando renglones (M2S1-077, M2S2-124).
+	Faltantes []Faltante `json:"faltantes"`
+}
+
+// Faltante es lo que falta llegar de un renglón de la orden.
+type Faltante struct {
+	Descripcion string  `json:"descripcion"`
+	Cantidad    float64 `json:"cantidad"`
+	Unidad      *string `json:"unidad"`
 }
 
 // OrdenesPorRecibir son las órdenes enviadas o con parte recibida, la que
@@ -158,7 +169,41 @@ func (s *Servicio) OrdenesPorRecibir(ctx context.Context) ([]PorRecibir, error) 
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(filas, pgx.RowToStructByPos[PorRecibir])
+	ordenes, err := pgx.CollectRows(filas, func(r pgx.CollectableRow) (PorRecibir, error) {
+		var o PorRecibir
+		err := r.Scan(&o.ID, &o.Numero, &o.Estado, &o.Proveedor, &o.Sucursal, &o.FechaPrometida, &o.Pendientes, &o.Lineas)
+		o.Faltantes = []Faltante{}
+		return o, err
+	})
+	if err != nil || len(ordenes) == 0 {
+		return ordenes, err
+	}
+	ids := make([]string, len(ordenes))
+	indice := map[string]int{}
+	for i, o := range ordenes {
+		ids[i], indice[o.ID] = o.ID, i
+	}
+	filas, err = s.pool.Query(ctx, `
+		SELECT i.purchase_order_id, i.descripcion, i.cantidad - i.cantidad_recibida, p.unit::text
+		FROM purchase_order_items i JOIN purchase_orders o ON o.id = i.purchase_order_id
+		LEFT JOIN product_variants v ON v.id = i.variant_id LEFT JOIN products p ON p.id = v.product_id
+		WHERE i.purchase_order_id = ANY($1::uuid[]) AND o.estado = 'parcial' AND i.cantidad_recibida < i.cantidad
+		ORDER BY i.purchase_order_id, i.orden`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer filas.Close()
+	for filas.Next() {
+		var orden string
+		var f Faltante
+		var cantidad jsmath.Num
+		if err := filas.Scan(&orden, &f.Descripcion, &cantidad, &f.Unidad); err != nil {
+			return nil, err
+		}
+		f.Cantidad = float64(cantidad)
+		ordenes[indice[orden]].Faltantes = append(ordenes[indice[orden]].Faltantes, f)
+	}
+	return ordenes, filas.Err()
 }
 
 // sinCostos borra los importes de una recepción para quien no ve precios.

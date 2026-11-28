@@ -150,6 +150,35 @@ func TestCambioDeEstado(t *testing.T) {
 	if r := e.registro(t, "entregado"); r != "email:omitida" {
 		t.Errorf("registro apagado: %s", r)
 	}
+	// Mes simulado 2: un envío listo no recibe «listo para retirar»: el
+	// correo dice que sale para la entrega (M2S1-074).
+	envio := e.pedido(t, "PED-000201", "ana@prueba.test", "envio")
+	if err := e.s.CambioDeEstado(ctx, envio, "listo"); err != nil {
+		t.Fatal(err)
+	}
+	if _, asunto, _, texto := e.ultimo(t); strings.Contains(asunto+texto, "retirar") {
+		t.Errorf("envío listo: %q %q", asunto, texto)
+	}
+}
+
+// M2S1-071: el retiro con el remito sin firmar no avisa «entregado»; sale
+// con la firma, y una sola vez.
+func TestEntregadoEsperaLaFirma(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	id := e.pedido(t, "PED-000210", "juan@prueba.test", "retiro")
+	remito := e.uno(t, `insert into deliveries (numero, order_id, estado, tipo, firma_token) values ('REM-0002', $1, 'preparada', 'retiro', 'tok') returning id`, id)
+	antes := e.correos()
+	if err := e.s.CambioDeEstado(ctx, id, "entregado"); err != nil || e.correos() != antes {
+		t.Fatalf("con el remito sin firmar salió el aviso: %v", err)
+	}
+	e.uno(t, `update deliveries set estado = 'entregada', firmado_at = now() where id = $1 returning 'ok'`, remito)
+	if err := e.s.CambioDeEstado(ctx, id, "entregado"); err != nil || e.correos() != antes+1 {
+		t.Fatalf("firmado, no salió: %v", err)
+	}
+	if err := e.s.CambioDeEstado(ctx, id, "entregado"); err != nil || e.correos() != antes+1 {
+		t.Fatalf("salió dos veces: %v", err)
+	}
 }
 
 func TestResultadoDePago(t *testing.T) {
@@ -171,9 +200,11 @@ func TestResultadoDePago(t *testing.T) {
 	if r := e.uno(t, `select count(*)::text from notifications_log where canal = 'push' and asunto = 'Pago acreditado · PED-000300'`); r != "1" {
 		t.Errorf("aviso al panel: %s", r)
 	}
-	// Lo que no es «aprobado» no avisa; una inscripción sin eventos, tampoco.
+	// Lo que no es «aprobado» ni un rechazo de la conciliación (que tiene su
+	// aviso, TestElRechazoSeAvisa) no avisa; una inscripción sin eventos,
+	// tampoco.
 	antes := e.correos()
-	_ = e.s.ResultadoDePago(ctx, CargaResultadoDePago{OrderID: &id, Tipo: "pedido", Detalle: "rechazado"})
+	_ = e.s.ResultadoDePago(ctx, CargaResultadoDePago{OrderID: &id, Tipo: "pedido", Detalle: "en_proceso"})
 	cliente := e.uno(t, `insert into customers (nombre, email) values ('Ana Gómez', 'ana@prueba.test') returning id`)
 	_ = e.s.ResultadoDePago(ctx, CargaResultadoDePago{CustomerID: &cliente, Tipo: "inscripcion", Detalle: "aprobado"})
 	if e.correos() != antes {
@@ -237,6 +268,13 @@ func TestPresupuestoEnviado(t *testing.T) {
 		!strings.Contains(texto, "Hola Ana,") || !strings.Contains(texto, "- Placa MDF 18 mm (2 u) $ 81.000,50\n- Tirante 2x4 (3.5 m) $ 3.500\n") ||
 		!strings.Contains(texto, "https://mjbj.com.ar/mi-cuenta/presupuestos") {
 		t.Errorf("correo: %s %q %q", para, asunto, texto)
+	}
+	// Con el PDF adjunto (M2S1-195).
+	e.b.mu.Lock()
+	adj := e.b.recibidos[len(e.b.recibidos)-1].Adjuntos
+	e.b.mu.Unlock()
+	if len(adj) != 1 || adj[0].Nombre != "P-2026-0050.pdf" || !strings.HasPrefix(string(adj[0].Contenido), "%PDF") {
+		t.Errorf("el correo salió sin el PDF: %d adjuntos", len(adj))
 	}
 	// El WhatsApp (simulado: proveedor de demostración), con la plantilla y
 	// el PDF del presupuesto pegado.
@@ -381,5 +419,61 @@ func TestPorLaCola(t *testing.T) {
 		if got := e.registro(t, ev); !strings.Contains(got, "email:enviada") {
 			t.Errorf("%s: %s", ev, got)
 		}
+	}
+}
+
+// Mes simulado 2 (M2S1-054): la factura sin CAE no le manda el PDF al
+// cliente (el número puede correrse con una baja); con el CAE, sí.
+func TestLaFacturaSinCaeNoSaleSola(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	cliente := e.uno(t, `insert into customers (nombre, email) values ('Sim Empresa', 'sim.empresa@prueba.test') returning id::text`)
+	factura := e.uno(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, customer_id, total) values ('factura_a', 15, 11, 'Sim Empresa', $1, 1000) returning id::text`, cliente)
+	antes := e.correos()
+	if err := e.s.Factura(ctx, factura); err != nil || e.correos() != antes {
+		t.Fatalf("sin CAE: %v, %d correos", err, e.correos()-antes)
+	}
+	// Renumerada sin que el cliente la haya recibido: no le llega «tu
+	// comprobante X ahora es Y» de un X que nunca vio (mes 23).
+	if err := e.s.FacturaRenumerada(ctx, factura, "Factura A 0015-00000012"); err != nil || e.correos() != antes {
+		t.Fatalf("renumerada sin haberla recibido: %v, %d correos", err, e.correos()-antes)
+	}
+	// Se la mandaron por WhatsApp desde el panel: corregida o renumerada, le
+	// llega el papel nuevo (FLUJO-F092).
+	e.uno(t, `insert into notifications_log (canal, evento, destinatario, entidad_tipo, entidad_id, estado)
+		values ('whatsapp_manual', 'factura_emitida', '5492235550000', 'invoice', $1, 'enviada') returning 'ok'`, factura)
+	if err := e.s.Factura(ctx, factura); err != nil || e.correos() != antes+1 {
+		t.Fatalf("corregida después de mandarla: %v, %d correos", err, e.correos()-antes)
+	}
+	if err := e.s.FacturaRenumerada(ctx, factura, "Factura A 0015-00000012"); err != nil || e.correos() != antes+2 {
+		t.Fatalf("renumerada después de mandarla: %v, %d correos", err, e.correos()-antes)
+	}
+	e.uno(t, `update invoices set cae = '12345678901234', cae_vencimiento = now() + interval '10 days' where id = $1 returning 'ok'`, factura)
+	if err := e.s.Factura(ctx, factura); err != nil || e.correos() != antes+3 {
+		t.Fatalf("con CAE: %v, %d correos", err, e.correos()-antes)
+	}
+}
+
+// Mes 23: «El comprobante … quedó sin efecto» le llegaba a un cliente que
+// nunca recibió ese comprobante (sin CAE no se le manda). Solo sale si lo
+// recibió por algún canal.
+func TestLaBajaSoloAQuienLoRecibio(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	cliente := e.uno(t, `insert into customers (nombre, email) values ('Sim Baja', 'sim.baja@prueba.test') returning id::text`)
+	factura := e.uno(t, `select gen_random_uuid()::text`)
+	baja := func() string {
+		return e.uno(t, `insert into invoices_dadas_de_baja (invoice_id, tipo, punto_venta, numero, receptor_nombre, customer_id, total,
+			fecha_emision, motivo, usuario_nombre, comprobante)
+			values ($1::uuid, 'factura_b', 15, 7, 'Sim Baja', $2, 1000, now(), 'Sim', 'Sim', '{}'::jsonb) returning id::text`, factura, cliente)
+	}
+	antes := e.correos()
+	if err := e.s.FacturaDadaDeBaja(ctx, baja()); err != nil || e.correos() != antes {
+		t.Fatalf("sin haberla recibido: %v, %d correos", err, e.correos()-antes)
+	}
+	e.uno(t, `insert into notifications_log (canal, evento, destinatario, entidad_tipo, entidad_id, estado)
+		values ('whatsapp_manual', 'factura_emitida', '5492235550000', 'invoice', $1::uuid, 'enviada') returning 'ok'`, factura)
+	if err := e.s.FacturaDadaDeBaja(ctx, baja()); err != nil || e.correos() != antes+1 {
+		t.Fatalf("después de recibirla: %v, %d correos", err, e.correos()-antes)
 	}
 }

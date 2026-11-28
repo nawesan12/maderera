@@ -771,6 +771,14 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   letter-spacing: -0.01em;
 }
 
+/* Lo que se tipea va en mono; lo que el campo sugiere es texto («El de cada
+   producto», «N.º de remito»), en la letra del texto (mes 23). */
+.tabular::placeholder,
+.codigo::placeholder {
+  font-family: var(--font-sans);
+  letter-spacing: normal;
+}
+
 /* Los controles del panel crecen a 40px, el mínimo que se acierta con el dedo
    o con un pulso poco firme. */
 .panel :is(input, select, textarea):not([type="checkbox"]):not([type="radio"]),
@@ -993,6 +1001,15 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   font-weight: 600;
 }
 
+/* El remito: la cantidad con su unidad en un renglón, y el corte debajo del
+   producto (mes simulado 2). */
+.comprobante-hoja .remito-detalle .remito-cantidad {
+  white-space: nowrap;
+}
+.comprobante-hoja .remito-detalle .remito-corte {
+  display: block;
+}
+
 /* Detalle */
 .comprobante-hoja .detalle {
   width: 100%;
@@ -1018,8 +1035,17 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   vertical-align: top;
 }
 
-.comprobante-hoja .der {
+.comprobante-hoja .der,
+/* El encabezado alineado como su columna: el `text-align: left` de los th
+   le ganaba a `.der` y los importes de la antigüedad de la deuda caían entre
+   dos títulos (mes simulado, M2S2-131). */
+.comprobante-hoja .detalle .der {
   text-align: right;
+}
+
+/* Las columnas de la antigüedad, del mismo ancho. */
+.comprobante-hoja .detalle.tramos {
+  table-layout: fixed;
 }
 
 .comprobante-hoja .mono {
@@ -1218,6 +1244,21 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   .comprobante-hoja .detalle td.fecha {
     font-size: 0.75rem;
     color: var(--tinta-suave);
+  }
+  /* El remito a 375: el producto a todo el ancho con la cantidad grande al
+     lado, y la nota del corte debajo del producto. */
+  .comprobante-hoja .remito-detalle tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.75rem;
+    align-items: baseline;
+  }
+  .comprobante-hoja .remito-detalle td {
+    display: block;
+  }
+  .comprobante-hoja .remito-detalle .remito-cantidad {
+    font-size: 1rem;
+    font-weight: 600;
   }
   .comprobante-hoja .marca-agua {
     font-size: 3rem;
@@ -1474,6 +1515,18 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   text-align: right;
   white-space: nowrap;
   font-weight: 600;
+}
+
+/* La venta anulada, en el papel: bien grande y arriba (mes simulado,
+   M2S1-083). Negro sobre blanco: la térmica no tiene color. */
+.ticket-hoja .anulada {
+  margin: 2mm 0;
+  border: 2px solid #1a1a1a;
+  padding: 1.5mm 0;
+  text-align: center;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
 }
 
 /* El cierre del turno, impreso desde la caja del mostrador (mes simulado,
@@ -2178,4 +2231,35 @@ html[data-zona-sin-flotante] .flotante-whatsapp {
     box-shadow: none;
     border: 1px solid #ccc;
   }
+  /* La hoja sale siempre en claro, como el remito: con el panel en oscuro,
+     el traslado salía blanco sobre blanco y la tabla como un bloque negro
+     (M2S1-076). Los tokens vuelven a los del tema claro dentro de la hoja. */
+  .hoja-sola {
+    color-scheme: light;
+    --foreground: oklch(0.15 0.01 60);
+    --card: #fff;
+    --card-foreground: oklch(0.15 0.01 60);
+    --muted: oklch(0.95 0.008 75);
+    --muted-foreground: oklch(0.45 0.01 60);
+    --border: oklch(0.90 0.01 75);
+    --hundida: #efedea;
+    --texto-2: #6b6660;
+    --texto-3: #70665b;
+    --textura-superficie: none;
+    color: var(--foreground);
+    background: #fff;
+  }
+}
+
+/* En oscuro, el verde de WhatsApp detrás de texto blanco va más oscuro: con
+   el token del texto (oklch 0.64) el botón quedaba en 2,9:1 (M2S1-188). El
+   token no cambia: es el del texto verde sobre fondo oscuro. */
+.dark :is(button, a, span, div).bg-verde-whatsapp {
+  background-color: oklch(0.5 0.11 150);
+}
+
+/* Las anclas del panel (la ayuda, #la-pantalla-del-taller) quedan debajo de
+   la barra fija de 60 px y no tapadas por ella. */
+.panel main [id] {
+  scroll-margin-top: 76px;
 }

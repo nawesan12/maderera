@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { refresh, revalidatePath } from "next/cache";
 import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
 
 /*
@@ -18,6 +18,10 @@ export interface EstadoCajas {
 function refrescar() {
   revalidatePath("/admin/caja");
   revalidatePath("/mostrador");
+  // La pantalla que llamó vuelve a pedir sus datos: con solo revalidar, la
+  // caja recién creada no aparecía y la dada de baja seguía con «Dar de
+  // baja» hasta recargar (mes 23).
+  refresh();
 }
 
 /**
@@ -54,6 +58,36 @@ export async function asignarVentaAlTurno(orderId: string, sessionId: string): P
   const r = await (await api()).POST("/api/v1/admin/caja/ventas-sueltas/{id}/asignar", {
     params: { path: { id: orderId } },
     body: { sessionId },
+  });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
+  refrescar();
+  return { ok: r.data.ok };
+}
+
+/**
+ * Mete en un turno el efectivo de un recibo cobrado sin caja abierta: el
+ * asiento lo mandaba a Caja y ningún arqueo lo contaba (mes simulado,
+ * M3S1-013).
+ */
+export async function asignarReciboAlTurno(receiptId: string, sessionId: string): Promise<EstadoCajas> {
+  const r = await (await api()).POST("/api/v1/admin/caja/fuera-de-caja/recibos/{id}/asignar", {
+    params: { path: { id: receiptId } },
+    body: { sessionId },
+  });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
+  refrescar();
+  return { ok: r.data.ok };
+}
+
+/**
+ * Lo que se lleva de la caja fuerte al banco. La clave es por intento: el
+ * doble clic no deposita dos veces.
+ */
+export async function depositarDeLaCajaFuerte(branchId: string, monto: number, clave: string): Promise<EstadoCajas> {
+  if (!Number.isFinite(monto) || monto <= 0) return { error: "El monto tiene que ser mayor a cero." };
+  const r = await (await api()).POST("/api/v1/admin/caja/cajas-fuertes/{id}/deposito", {
+    params: { path: { id: branchId } },
+    body: { monto, clave },
   });
   if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
   refrescar();

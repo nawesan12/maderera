@@ -1,12 +1,14 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { Check, Loader2, Pencil, X } from "lucide-react";
+import { useActionState, useState, useTransition } from "react";
+import { Loader2, Pencil, X } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import {
   cambiarAviso,
   guardarTextoAviso,
   type EstadoAviso,
 } from "./acciones";
+import { sinResetear } from "@/lib/acciones/sin-resetear";
 
 const estadoInicial: EstadoAviso = {};
 
@@ -32,20 +34,39 @@ export interface AvisoConfigurable {
  * ese estado.
  */
 export function FilaAviso({ aviso }: { aviso: AvisoConfigurable }) {
-  const [estadoCambio, accionCambio, cambiando] = useActionState(
-    cambiarAviso,
-    estadoInicial,
-  );
-  const [estadoTexto, accionTexto, guardando] = useActionState(
-    guardarTextoAviso,
-    estadoInicial,
-  );
+  const [estadoCambio, setEstadoCambio] = useState<EstadoAviso>(estadoInicial);
+  const [cambiando, empezar] = useTransition();
+  const [activo, setActivo] = useState(aviso.activo);
   const [editando, setEditando] = useState(false);
+  // Guardado bien, el editor se cierra (M3S1-011: quedaba abierto, como si
+  // no hubiera guardado).
+  const [estadoTexto, accionTexto, guardando] = useActionState(
+    async (previo: EstadoAviso, datos: FormData) => {
+      const r = await guardarTextoAviso(previo, datos);
+      if (r.ok) setEditando(false);
+      return r;
+    },
+    estadoInicial,
+  );
+
+  // Un interruptor con su estado (M2S3-063): el botón decía «Activo», que es
+  // un estado, donde va la acción.
+  function cambiar(v: boolean) {
+    setActivo(v);
+    empezar(async () => {
+      const datos = new FormData();
+      datos.set("id", aviso.id);
+      datos.set("activo", v ? "si" : "no");
+      const r = await cambiarAviso(estadoInicial, datos);
+      setEstadoCambio(r);
+      if (r.error) setActivo(!v);
+    });
+  }
 
   const info = { titulo: aviso.titulo, cuando: aviso.cuando };
 
   return (
-    <li className={aviso.activo ? "tarjeta p-5" : "tarjeta-hundida p-5"}>
+    <li className={activo ? "tarjeta p-5" : "tarjeta-hundida p-5"}>
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
         <div className="min-w-[14rem] flex-1">
           <h3 className="text-base font-medium">{info.titulo}</h3>
@@ -66,31 +87,13 @@ export function FilaAviso({ aviso }: { aviso: AvisoConfigurable }) {
           </p>
         </div>
 
-        <form action={accionCambio}>
-          <input type="hidden" name="id" value={aviso.id} />
-          <input
-            type="hidden"
-            name="activo"
-            value={aviso.activo ? "no" : "si"}
-          />
-          <button
-            type="submit"
-            disabled={cambiando}
-            aria-pressed={aviso.activo}
-            className={`inline-flex h-10 items-center gap-2 rounded-lg px-4 text-base font-medium transition-colors disabled:opacity-60 ${
-              aviso.activo
-                ? "bg-verde-whatsapp text-white hover:bg-brand-green/90"
-                : "border hover:bg-muted"
-            }`}
-          >
-            {cambiando ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : aviso.activo ? (
-              <Check className="h-5 w-5" />
-            ) : null}
-            {aviso.activo ? "Activo" : "Activar"}
-          </button>
-        </form>
+        <label className="flex shrink-0 cursor-pointer items-center gap-3">
+          {cambiando && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-hidden="true" />}
+          <span className={`text-base font-medium ${activo ? "" : "text-muted-foreground"}`}>
+            {activo ? "Prendido" : "Apagado"}
+          </span>
+          <Switch checked={activo} onCheckedChange={cambiar} disabled={cambiando} aria-label={info.titulo} />
+        </label>
       </div>
 
       {/* Texto que se manda si la conversación está abierta */}
@@ -112,15 +115,22 @@ export function FilaAviso({ aviso }: { aviso: AvisoConfigurable }) {
         </div>
 
         {editando ? (
-          <form action={accionTexto} className="mt-2 space-y-2">
+          <form onSubmit={sinResetear(accionTexto)} className="mt-2 space-y-2">
             <input type="hidden" name="id" value={aviso.id} />
             <textarea
               name="textoLibre"
               rows={3}
               maxLength={1000}
               defaultValue={aviso.textoLibre ?? ""}
-              className="w-full rounded-lg border bg-background px-3 py-2.5 text-base"
+              aria-invalid={estadoTexto.error ? true : undefined}
+              aria-describedby={estadoTexto.error ? `error-aviso-${aviso.id}` : undefined}
+              className="w-full rounded-lg border bg-background px-3 py-2.5 text-base aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/30"
             />
+            {estadoTexto.error && (
+              <p id={`error-aviso-${aviso.id}`} role="alert" className="text-base text-saldo-debe">
+                {estadoTexto.error}
+              </p>
+            )}
             <p className="text-sm text-muted-foreground">
               Datos que se completan solos: {aviso.datos.map((d) => `{{${d}}}`).join(", ")}.
             </p>
@@ -153,9 +163,9 @@ export function FilaAviso({ aviso }: { aviso: AvisoConfigurable }) {
           </p>
         )}
 
-        {(estadoCambio.error || estadoTexto.error) && (
+        {estadoCambio.error && (
           <p role="alert" className="mt-2 text-base text-saldo-debe">
-            {estadoCambio.error ?? estadoTexto.error}
+            {estadoCambio.error}
           </p>
         )}
       </div>

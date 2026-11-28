@@ -19,9 +19,12 @@ interface Params {
 const estilo: Record<StockLevel, { clase: string; texto: string }> = {
   // Tintas un punto más oscuras que el fondo de su color: con las de antes
   // el texto no llegaba a 4,5:1 sobre su propia insignia.
-  alto: { clase: "bg-brand-green/15 text-verde-whatsapp", texto: "En stock" },
-  medio: { clase: "bg-yellow-500/15 text-yellow-800 dark:text-yellow-300", texto: "Stock limitado" },
-  bajo: { clase: "bg-brand-red/15 text-saldo-debe", texto: "Poco stock" },
+  //
+  // Las mismas tres palabras que la ficha: «Stock limitado» y «Poco stock»
+  // no se distinguían y la ficha decía «Hay / Quedan pocas» (M3S3-046).
+  alto: { clase: "bg-brand-green/15 text-verde-whatsapp", texto: "Hay" },
+  medio: { clase: "bg-brand-green/15 text-verde-whatsapp", texto: "Hay" },
+  bajo: { clase: "bg-yellow-500/15 text-yellow-800 dark:text-yellow-300", texto: "Quedan pocas" },
   "sin-stock": { clase: "bg-muted text-muted-foreground", texto: "Sin stock" },
 };
 
@@ -168,8 +171,32 @@ async function Tabla({ params }: { params: Params }) {
   return (
     <Card>
       <CardContent className="p-0">
-        <div tabIndex={0} role="region" aria-label="Stock por sucursal" className="overflow-x-auto">
-          <table className="w-full">
+        {/* En el teléfono, una tarjeta por producto con la disponibilidad de
+            cada sucursal abajo: la tabla medía 556 px y lo que se vino a
+            mirar quedaba tapado a la derecha (mes simulado, M2S4-029). La
+            categoría ya está en el filtro. */}
+        <ul className="divide-y sm:hidden">
+          {productos.map((producto) => (
+            <li key={producto.id} className="px-4 py-3">
+              <p className="text-base font-medium">{producto.name}</p>
+              {producto.labels[0] && <p className="text-sm text-muted-foreground">{producto.labels[0]}</p>}
+              {/* Una sucursal por renglón, alineadas: en fila, la de la
+                  derecha quedaba abajo del WhatsApp flotante (mes 23). */}
+              <dl className="mt-2 grid grid-cols-[auto_auto] items-center justify-start gap-x-3 gap-y-1.5 text-sm">
+                {producto.stock.map((s) => (
+                  <div key={s.sucursal} className="contents">
+                    <dt className="text-texto-2">{s.nombre}</dt>
+                    <dd>
+                      <StockBadge level={s.nivel} />
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </li>
+          ))}
+        </ul>
+        <div tabIndex={0} role="region" aria-label="Stock por sucursal" className="hidden overflow-x-auto sm:block">
+          <table className="w-full" data-tabla="fija">
             <thead>
               <tr className="border-b bg-muted/50">
                 <th className="text-left p-4 text-sm font-semibold">Producto</th>

@@ -116,6 +116,8 @@ paths:
               properties:
                 receptorNombre: { type: string, maxLength: 120 }
                 receptorDocumento: { type: string, maxLength: 30 }
+                pin: { type: string, maxLength: 12, description: "el PIN de un admin para soltar lo que no se cobró (422 en pin)" }
+                ficha: { type: string, maxLength: 400 }
       responses:
         "200": { $ref: "#/components/responses/Hecho" }
         "401": { $ref: "#/components/responses/Problema" }
@@ -164,6 +166,35 @@ paths:
         "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/pedidos/{id}/devolucion:
     parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    get:
+      operationId: DatosDeDevolucionDelPedido
+      summary: Lo que queda por devolver de cada renglón y por dónde puede volver la plata.
+      responses:
+        "200":
+          description: Los datos del diálogo
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [renglones, deuda, aCuenta, caja, afuera, cajaAbierta]
+                properties:
+                  renglones:
+                    type: array
+                    items:
+                      type: object
+                      required: [orderItemId, queda, neto]
+                      properties:
+                        orderItemId: { type: string }
+                        queda: { type: number, format: double }
+                        neto: { type: number, format: double, description: "La plata de devolver todo lo que queda, neta del descuento del pedido" }
+                  deuda: { type: number, format: double }
+                  aCuenta: { type: boolean }
+                  caja: { type: number, format: double }
+                  afuera: { type: number, format: double }
+                  cajaAbierta: { type: boolean }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
     post:
       operationId: DevolverPedido
       summary: >-
@@ -190,6 +221,10 @@ paths:
                       cantidad: { type: number, format: double }
                 motivo: { type: string, maxLength: 300 }
                 clave: { type: string, maxLength: 80, description: "la del intento: un reintento devuelve la misma devolución" }
+                destino:
+                  type: string
+                  enum: [caja, afuera]
+                  description: "lo ya cobrado vuelve por la caja o por afuera; sin él, baja lo que falta cobrar o va a la cuenta"
       responses:
         "200":
           description: La devolución
@@ -234,6 +269,24 @@ paths:
                       cantidad: { type: number, format: double }
                       precioUnitario: { type: number, format: double }
                 costoEnvio: { type: number, format: double }
+                nuevos:
+                  type: array
+                  maxItems: 50
+                  description: Los renglones que se suman
+                  items:
+                    type: object
+                    required: [variantId, descripcion, cantidad, precioUnitario]
+                    additionalProperties: false
+                    properties:
+                      variantId: { type: string, maxLength: 64 }
+                      descripcion: { type: string, maxLength: 300 }
+                      unidad: { type: string, maxLength: 40 }
+                      cantidad: { type: number, format: double }
+                      precioUnitario: { type: number, format: double }
+                entrega: { type: string, enum: [retiro, envio], description: "para cambiar cómo se entrega (antes de que salga algo)" }
+                direccion: { type: string, maxLength: 300 }
+                zona: { type: string, maxLength: 120 }
+                sinCargo: { type: boolean }
                 motivo: { type: string, maxLength: 300 }
                 pin: { type: string, maxLength: 12 }
                 ficha: { type: string, maxLength: 400 }
@@ -450,6 +503,7 @@ paths:
                 precios: { type: string, enum: [actualizar, respetar], description: "para un presupuesto vencido: los de hoy o los del presupuesto (pasado lo libre, con el PIN de un admin)" }
                 pin: { type: string, maxLength: 128, description: "el PIN de un admin, o su contraseña si ninguno cargó PIN" }
                 ficha: { type: string, maxLength: 400 }
+                sucursal: { type: string, maxLength: 80, description: "el slug de la sucursal de donde sale, si no es la del presupuesto" }
       responses:
         "200": { $ref: "#/components/responses/Hecho" }
         "401": { $ref: "#/components/responses/Problema" }
@@ -502,6 +556,7 @@ components:
         id: { type: string, description: El pedido creado (o el presupuesto, si no se convirtió) }
         numero: { type: string }
         estado: { type: string, description: El estado al que llegó el pedido }
+        firmaToken: { type: string, description: El enlace de firma del remito que salió al avanzar }
     PlazoDelPresupuesto:
       type: object
       required: [texto, urgente, vencido]
@@ -550,6 +605,16 @@ components:
         alicuotaIva: { type: string, nullable: true }
         bajoCosto: { type: boolean, description: el precio no cubre el costo }
         piso: { type: number, format: double, nullable: true, description: "el precio final que apenas cubre el costo (precios.PisoDeCosto); null sin costo cargado o en una presentación" }
+        disponible:
+          type: array
+          description: Lo que hay para vender en cada sucursal activa
+          items:
+            type: object
+            required: [sucursal, nombre, disponible]
+            properties:
+              sucursal: { type: string }
+              nombre: { type: string }
+              disponible: { type: number, format: double }
     FichaParaUnir:
       type: object
       description: >-
@@ -569,6 +634,14 @@ components:
         vencido: { type: boolean, description: "pasó su validez: para pasarlo a pedido hay que elegir los precios" }
         motivoRechazo: { type: string, nullable: true, description: "por qué se perdió" }
         totalDeHoy: { type: string, nullable: true, description: "el total con los precios de lista de hoy, si venció" }
+        emailFicha: { type: string, nullable: true, description: "el correo de la ficha del cliente" }
+        pedidosCancelados:
+          type: array
+          description: Los pedidos que salieron de él y se cancelaron
+          items:
+            type: object
+            required: [id, numero]
+            properties: { id: { type: string }, numero: { type: string } }
         fichaPorCorreo:
           nullable: true
           description: Sin cliente, la ficha con el correo del contacto (para unirlo a mano)
@@ -612,6 +685,21 @@ components:
           description: Lo que falta de un pedido que ya salió en parte; vacío si no salió nada
           items: { $ref: "#/components/schemas/PorEntregar" }
         cortesSinTerminar: { type: array, items: { type: string }, description: Los cortes del pedido en cola o en la máquina }
+        aLlevar:
+          type: array
+          description: Lo que falta llevar de un envío sin entregar (vacío en un retiro)
+          items: { $ref: "#/components/schemas/PorEntregar" }
+        enElCamion:
+          type: array
+          description: Los remitos de envío sin firmar, con lo que lleva cada uno
+          items:
+            type: object
+            required: [numero, firmaToken, lineas]
+            properties:
+              numero: { type: string }
+              firmaToken: { type: string }
+              lineas: { type: array, items: { $ref: "#/components/schemas/PorEntregar" } }
+        fleteACotizar: { type: boolean, description: Un envío a una zona a cotizar sin flete cargado }
         comprobante: { type: string, nullable: true, enum: [interno, fiscal, null], description: Con qué salió la venta del mostrador }
         facturado: { type: boolean, description: Tiene una factura viva }
         id: { type: string }
@@ -676,6 +764,27 @@ components:
         costoUnitario: { type: string, nullable: true }
         alicuotaIva: { type: string, nullable: true }
         orden: { type: integer }
+        devuelto: { type: number, format: double, description: Lo que volvió de este renglón }
+    DevolucionEnLaFicha:
+      type: object
+      required: [id, importe, destino, motivo, notaId, nota, quien, createdAt]
+      properties:
+        id: { type: string }
+        importe: { type: number, format: double }
+        destino: { type: string, enum: [caja, cuenta, afuera, deuda] }
+        motivo: { type: string }
+        notaId: { type: string, nullable: true }
+        nota: { type: string, nullable: true, description: "«Nota de crédito B 0015-00000003»" }
+        quien: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+    ComprobanteDelPedido:
+      type: object
+      required: [id, etiqueta, tipo, estado]
+      properties:
+        id: { type: string }
+        etiqueta: { type: string }
+        tipo: { type: string }
+        estado: { type: string }
     PasoDelPedido:
       type: object
       required: [id, orderId, estado, nota, createdByUserId, quien, createdAt]
@@ -743,9 +852,14 @@ components:
       required: [id, numero, numeroProvisorio, cliente, email, telefono, empresa, branchId, customerId, sucursal, estado, origen,
         tipoEntrega, direccionEntrega, zonaEnvio, costoEnvio, subtotal, descuento, descuentoMotivo, total, medioPago, estadoPago,
         notas, createdAt, items, historial, pagos, margen, quoteId, numeroPresupuesto, saldoCliente, entregarEl, sinCobrar,
-        cobrado, aCobrar, recibos, comprobante, acopio, facturado]
+        cobrado, aCobrar, recibos, comprobante, acopio, facturado, devoluciones, comprobantes]
       properties:
         facturado: { type: boolean, description: Tiene una factura viva }
+        efectivoRecibido: { type: number, format: double, nullable: true, description: "con cuánto pagó en efectivo en el mostrador (el vuelto del ticket)" }
+        facturaId: { type: string, nullable: true, description: "la factura viva de la venta: el papel que vale" }
+        fleteSinCargo: { type: boolean, description: "el envío se pasó a pedido con «Sin cargo» a propósito" }
+        devoluciones: { type: array, items: { $ref: "#/components/schemas/DevolucionEnLaFicha" } }
+        comprobantes: { type: array, items: { $ref: "#/components/schemas/ComprobanteDelPedido" } }
         acopio: { type: boolean, description: Se retira de a partes (ya salió algo, o es la venta del mostrador en acopio) }
         cobrado: { type: number, format: double, description: Lo cobrado con recibos y en línea }
         aCobrar: { type: number, format: double, description: El total menos lo devuelto contra la deuda }

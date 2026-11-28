@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
+	"regexp"
 	"strings"
 	"time"
 
@@ -88,6 +90,14 @@ type RemitoCompleto struct {
 	// Reposicion es el corte de una reposición sin cargo (H321): lo que sale
 	// son sus piezas, no renglones del pedido, y no se cobra nada.
 	Reposicion *string `json:"reposicion"`
+	// Los datos fiscales del cliente, como pide un remito R (mes simulado 2:
+	// no llevaba CUIT ni condición de IVA).
+	ClienteRazonSocial  *string `json:"clienteRazonSocial"`
+	ClienteCuit         *string `json:"clienteCuit"`
+	ClienteCondicionIva *string `json:"clienteCondicionIva"`
+	// Final: se llevó lo último de un pedido que ya había salido en parte
+	// (decía «Remito de entrega total» con 2 juegos).
+	Final bool `json:"final"`
 }
 
 // RemitoDeLaVisita es otro remito que se firma junto con el del enlace.
@@ -97,15 +107,36 @@ type RemitoDeLaVisita struct {
 	Lineas       []LineaDelRemito `json:"lineas"`
 }
 
-// cortesDelPedido son los cortes vivos del pedido por variante: qué parte
-// de cada renglón sale cortada.
-func cortesDelPedido(ctx context.Context, db consultor, pedido string) (map[string][]corteDelRenglon, error) {
+// cortesDelRemito son, por variante, los cortes del pedido cuyas piezas
+// salieron con **este** remito (mes simulado 2): el texto se armaba con los
+// cortes vivos del pedido al leerlo, así que el remito de un acopio hacía
+// firmar «Cortado según CRT-3» con el corte en cola, tres remitos firmaban
+// las mismas diez piezas, y un remito ya firmado pasaba a citar un corte
+// hecho después.
+//
+// Un corte va en un remito si salió de la máquina antes de hacerlo (las
+// piezas existían) y no fue ya en otro remito vivo del pedido, anterior,
+// con esa placa. La reposición sin cargo no: sale con su propio remito.
+// Como depende solo de lo que pasó antes del remito, el papel no cambia
+// después.
+func cortesDelRemito(ctx context.Context, db consultor, pedido, remito string) (map[string][]corteDelRenglon, error) {
 	filas, err := db.Query(ctx, `
+		WITH r AS (SELECT id, created_at FROM deliveries WHERE id = $2),
+		c AS (
+		  SELECT co.id, co.variant_id, co.numero, co.placas, co.mitad IS NOT NULL AS mitad,
+		         coalesce(co.terminado_at, co.updated_at) AS salio
+		  FROM cutting_orders co
+		  WHERE co.order_id = $1 AND co.estado IN ('terminado', 'retirado') AND co.variant_id IS NOT NULL AND NOT co.sin_cargo)
 		SELECT c.variant_id::text, c.numero, c.placas,
-		       coalesce((SELECT sum(ci.cantidad) FROM cutting_items ci WHERE ci.cutting_order_id = c.id), 0)::int
-		FROM cutting_orders c
-		WHERE c.order_id = $1 AND c.estado <> 'cancelado' AND c.variant_id IS NOT NULL
-		ORDER BY c.numero`, pedido)
+		       coalesce((SELECT sum(ci.cantidad) FROM cutting_items ci WHERE ci.cutting_order_id = c.id), 0)::int, c.mitad
+		FROM c, r
+		WHERE c.salio <= r.created_at
+		  AND NOT EXISTS (
+		    SELECT 1 FROM deliveries d2 JOIN delivery_items di2 ON di2.delivery_id = d2.id
+		    JOIN order_items oi2 ON oi2.id = di2.order_item_id
+		    WHERE d2.order_id = $1 AND d2.id <> r.id AND d2.estado <> 'anulada' AND d2.cutting_order_id IS NULL
+		      AND oi2.variant_id = c.variant_id AND d2.created_at >= c.salio AND d2.created_at < r.created_at)
+		ORDER BY c.numero`, pedido, remito)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +145,7 @@ func cortesDelPedido(ctx context.Context, db consultor, pedido string) (map[stri
 	for filas.Next() {
 		var variante string
 		var c corteDelRenglon
-		if err := filas.Scan(&variante, &c.numero, &c.placas, &c.piezas); err != nil {
+		if err := filas.Scan(&variante, &c.numero, &c.placas, &c.piezas, &c.mitad); err != nil {
 			return nil, err
 		}
 		out[variante] = append(out[variante], c)
@@ -125,33 +156,62 @@ func cortesDelPedido(ctx context.Context, db consultor, pedido string) (map[stri
 type corteDelRenglon struct {
 	numero         string
 	placas, piezas int
+	// mitad: el corte sale de medias placas; sus placas son medias.
+	mitad bool
 }
 
 // TextoDelCorte es cómo se lee lo cortado de un renglón: «Cortado según
-// CRT-13: 14 piezas de 2 placas · 1 entera».
+// CRT-13: 14 piezas de 2 placas · 1 entera». Las placas del corte no pasan
+// lo que lleva el renglón (CRT-2 usaba 3 medias y el remito llevaba 2), y
+// de una media placa se dice «media placa» (decía «2 placas» y «6 piezas de
+// 3 placas» en el mismo papel).
 func TextoDelCorte(cs []corteDelRenglon, cantidad float64) *string {
 	if len(cs) == 0 {
 		return nil
 	}
 	var partes []string
 	placas := 0
+	medias := false
 	for _, c := range cs {
 		piezas := "piezas"
 		if c.piezas == 1 {
 			piezas = "pieza"
 		}
+		n := c.placas
+		if queda := int(math.Floor(cantidad+0.001)) - placas; n > queda {
+			n = max(queda, 0)
+		}
+		if n == 0 {
+			continue
+		}
 		de := "placas"
-		if c.placas == 1 {
+		switch {
+		case c.mitad && n == 1:
+			de = "media placa"
+		case c.mitad:
+			de = "medias placas"
+		case n == 1:
 			de = "placa"
 		}
-		partes = append(partes, "Cortado según "+c.numero+": "+fmt.Sprint(c.piezas)+" "+piezas+" de "+fmt.Sprint(c.placas)+" "+de)
-		placas += c.placas
+		medias = medias || c.mitad
+		partes = append(partes, "Cortado según "+c.numero+": "+fmt.Sprint(c.piezas)+" "+piezas+" de "+fmt.Sprint(n)+" "+de)
+		placas += n
+	}
+	if len(partes) == 0 {
+		return nil
 	}
 	t := strings.Join(partes, " · ")
 	if enteras := cantidad - float64(placas); enteras > 0.001 {
-		t += " · " + jsmath.Texto(enteras) + " entera"
-		if enteras != 1 {
-			t += "s"
+		t += " · " + jsmath.Texto(enteras)
+		switch {
+		case medias && enteras == 1:
+			t += " media placa entera"
+		case medias:
+			t += " medias placas enteras"
+		case enteras == 1:
+			t += " entera"
+		default:
+			t += " enteras"
 		}
 	}
 	return &t
@@ -179,18 +239,26 @@ func (s *Servicio) RemitoCompleto(ctx context.Context, id string) (*RemitoComple
 		return nil, ErrNoEsta
 	}
 	var r RemitoCompleto
-	var slug, zona, corte *string
+	var slug, zona, corte, dirCliente *string
+	var anteriores bool
 	err := s.pool.QueryRow(ctx, `
 		SELECT d.id, d.numero, d.tipo::text, d.estado::text, d.receptor_nombre, d.receptor_documento, d.firma_url, d.firmado_at,
 		  d.notas, d.created_at, o.numero, o.id, o.contacto_nombre, o.direccion_entrega, o.customer_id, o.estado_pago::text,
 		  o.medio_pago::text, b.name, b.slug, s.transportista, s.numero_seguimiento, `+fragmentos.SinCobrarDelPedido+`::float8,
-		  o.zona_envio, d.cutting_order_id::text
+		  o.zona_envio, d.cutting_order_id::text,
+		  nullif(c.razon_social, ''), nullif(c.cuit, ''), CASE WHEN c.id IS NOT NULL THEN c.condicion_iva::text END,
+		  coalesce(nullif(trim(c.direccion), ''), (SELECT a.calle || ', ' || a.localidad FROM addresses a WHERE a.customer_id = c.id
+		    ORDER BY a.predeterminada DESC, a.created_at LIMIT 1)),
+		  EXISTS (SELECT 1 FROM deliveries d2 WHERE d2.order_id = d.order_id AND d2.id <> d.id AND d2.estado <> 'anulada'
+		    AND d2.cutting_order_id IS NULL AND d2.created_at < d.created_at)
 		FROM deliveries d JOIN orders o ON o.id = d.order_id
+		LEFT JOIN customers c ON c.id = o.customer_id
 		LEFT JOIN branches b ON b.id = d.branch_id
 		LEFT JOIN shipments s ON s.delivery_id = d.id
 		WHERE d.id = $1 LIMIT 1`, id).Scan(&r.ID, &r.Numero, &r.Tipo, &r.Estado, &r.ReceptorNombre, &r.ReceptorDocumento, &r.FirmaURL,
 		&r.FirmadoAt, &r.Notas, &r.CreatedAt, &r.PedidoNumero, &r.PedidoID, &r.ClienteNombre, &r.ClienteDireccion, &r.CustomerID,
-		&r.EstadoPago, &r.MedioPago, &r.Sucursal, &slug, &r.Transportista, &r.NumeroSeguimiento, &r.SinCobrar, &zona, &corte)
+		&r.EstadoPago, &r.MedioPago, &r.Sucursal, &slug, &r.Transportista, &r.NumeroSeguimiento, &r.SinCobrar, &zona, &corte,
+		&r.ClienteRazonSocial, &r.ClienteCuit, &r.ClienteCondicionIva, &dirCliente, &anteriores)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoEsta
 	}
@@ -199,6 +267,11 @@ func (s *Servicio) RemitoCompleto(ctx context.Context, id string) (*RemitoComple
 	}
 	if r.Tipo == "envio" {
 		r.ClienteDireccion = DomicilioConZona(r.ClienteDireccion, zona)
+	} else if r.ClienteDireccion == nil || strings.TrimSpace(*r.ClienteDireccion) == "" {
+		// En un retiro, el domicilio de la ficha del cliente (o su primera
+		// dirección): decía «Domicilio del cliente: -» con «Sim Casa»
+		// cargada en Mi cuenta (mes simulado 2).
+		r.ClienteDireccion = dirCliente
 	}
 	if slug != nil {
 		if d, ok := direcciones[*slug]; ok {
@@ -208,7 +281,7 @@ func (s *Servicio) RemitoCompleto(ctx context.Context, id string) (*RemitoComple
 	if corte != nil {
 		return s.completarReposicion(ctx, &r, *corte)
 	}
-	cortes, err := cortesDelPedido(ctx, s.pool, r.PedidoID)
+	cortes, err := cortesDelRemito(ctx, s.pool, r.PedidoID, id)
 	if err != nil {
 		return nil, err
 	}
@@ -246,6 +319,7 @@ func (s *Servicio) RemitoCompleto(ctx context.Context, id string) (*RemitoComple
 	for _, p := range pendientes {
 		r.Pendientes = append(r.Pendientes, PendienteDelRemito{Descripcion: p.Descripcion, Unidad: p.Unidad, Pendiente: p.Pendiente})
 	}
+	r.Final = len(r.Pendientes) == 0 && anteriores
 	// La última factura vigente del pedido; una rechazada se nombra igual
 	// (es la emitida sin certificado: «sin CAE, sin valor fiscal»).
 	var tipo string
@@ -331,6 +405,12 @@ type ParaAvisar struct {
 	Email        *string `json:"email"`
 	EmailCliente *string `json:"emailCliente"`
 	EstadoPedido string  `json:"estadoPedido"`
+	// EstadoRemito: el pedido de firma sale solo si sigue «preparada».
+	EstadoRemito string `json:"estadoRemito"`
+	// Tipo (retiro o envío) y Firmado: el aviso de firmar dice «de tu
+	// entrega» en un envío y no sale si el remito ya se firmó (M2S2-113).
+	Tipo    string `json:"tipo"`
+	Firmado bool   `json:"firmado"`
 }
 
 // DatosParaAvisar lee el remito, su pedido y el correo del cliente.
@@ -340,9 +420,11 @@ func (s *Servicio) DatosParaAvisar(ctx context.Context, id string) (*ParaAvisar,
 	}
 	var a ParaAvisar
 	err := s.pool.QueryRow(ctx, `
-		SELECT d.firma_token, d.numero, o.numero, o.contacto_nombre, o.contacto_email, c.email, o.estado::text
+		SELECT d.firma_token, d.numero, o.numero, o.contacto_nombre, o.contacto_email, c.email, o.estado::text, d.estado::text,
+		  d.tipo::text, d.firmado_at IS NOT NULL
 		FROM deliveries d JOIN orders o ON o.id = d.order_id LEFT JOIN customers c ON c.id = o.customer_id
-		WHERE d.id = $1`, id).Scan(&a.FirmaToken, &a.Numero, &a.PedidoNumero, &a.Nombre, &a.Email, &a.EmailCliente, &a.EstadoPedido)
+		WHERE d.id = $1`, id).Scan(&a.FirmaToken, &a.Numero, &a.PedidoNumero, &a.Nombre, &a.Email, &a.EmailCliente, &a.EstadoPedido,
+		&a.EstadoRemito, &a.Tipo, &a.Firmado)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoEsta
 	}
@@ -395,7 +477,26 @@ func (r *RemitoCompleto) ParaElPdf() pdf.RemitoCompleto {
 		out.Factura = &pdf.FacturaDelRemito{Etiqueta: f.Etiqueta, Cae: deTexto(f.Cae), CaeVencimiento: f.CaeVencimiento}
 	}
 	out.Reposicion = deTexto(r.Reposicion)
+	out.ClienteRazonSocial, out.ClienteCuit, out.ClienteCondicionIva = deTexto(r.ClienteRazonSocial), deTexto(r.ClienteCuit), deTexto(r.ClienteCondicionIva)
+	out.Final = r.Final
 	return out
+}
+
+var reMedidaDeLaPlaca = regexp.MustCompile(`^\d{3,5}\s*[xX×]\s*\d{3,5}\s*(mm)?$`)
+
+// materialSinPlaca es «Melamina Blanca 18mm» de «Melamina Blanca — 2600 ×
+// 1830 mm — 18mm»: la medida de la placa en el renglón de una pieza confunde.
+func materialSinPlaca(material string) string {
+	partes := []string{}
+	for _, p := range strings.Split(material, " — ") {
+		if p = strings.TrimSpace(p); p != "" && !reMedidaDeLaPlaca.MatchString(p) {
+			partes = append(partes, p)
+		}
+	}
+	if len(partes) == 0 {
+		return material
+	}
+	return strings.Join(partes, " ")
 }
 
 // completarReposicion llena el remito de una reposición sin cargo con las
@@ -403,11 +504,16 @@ func (r *RemitoCompleto) ParaElPdf() pdf.RemitoCompleto {
 // en acopio del pedido (no es una entrega de su mercadería).
 func (s *Servicio) completarReposicion(ctx context.Context, r *RemitoCompleto, corte string) (*RemitoCompleto, error) {
 	var numero, material string
-	if err := s.pool.QueryRow(ctx, `SELECT numero, material_descripcion FROM cutting_orders WHERE id = $1`, corte).Scan(&numero, &material); err != nil {
+	var sinCargo bool
+	if err := s.pool.QueryRow(ctx, `SELECT numero, material_descripcion, sin_cargo FROM cutting_orders WHERE id = $1`, corte).Scan(&numero, &material, &sinCargo); err != nil {
 		return nil, err
 	}
-	r.Reposicion = &numero
-	r.SinCobrar = nil
+	// El remito de un pedido que solo lleva el corte (RemitoDelCorte) lista
+	// las mismas piezas, pero es una entrega cobrada: no dice «sin cargo».
+	if sinCargo {
+		r.Reposicion = &numero
+		r.SinCobrar = nil
+	}
 	r.Pendientes = []PendienteDelRemito{}
 	r.Visita = []RemitoDeLaVisita{}
 	filas, err := s.pool.Query(ctx, `
@@ -424,9 +530,12 @@ func (s *Servicio) completarReposicion(ctx context.Context, r *RemitoCompleto, c
 		if err := filas.Scan(&largo, &ancho, &cantidad, &etiqueta); err != nil {
 			return nil, err
 		}
-		d := fmt.Sprintf("%s — %d × %d mm", material, largo, ancho)
+		// La pieza primero y el material sin la medida de la placa: «Melamina
+		// Blanca — 2600 × 1830 mm — 18mm — 700 × 396 mm» ponía dos medidas
+		// seguidas y no se sabía cuál era la de la pieza.
+		d := fmt.Sprintf("%d × %d mm — %s", largo, ancho, materialSinPlaca(material))
 		if etiqueta != "" {
-			d += " · " + etiqueta
+			d = etiqueta + " " + d
 		}
 		r.Lineas = append(r.Lineas, LineaDelRemito{Descripcion: d, Unidad: "pieza", Cantidad: float64(cantidad)})
 	}

@@ -56,7 +56,11 @@ export function ArmadorDeEtiquetas({
 
   const resultados = texto.trim().length >= 2 ? encontradas.filter((e) => !elegidas.some((x) => x.id === e.id)) : [];
 
+  // Al elegir, el buscador se vacía para la siguiente, como en el traslado
+  // (quedaba escrito el último código, M2S1-168).
   function agregar(medidas: MedidaEncontrada[]) {
+    setTexto("");
+    setEncontradas([]);
     setElegidas((prev) => [
       ...prev,
       ...medidas
@@ -107,8 +111,10 @@ export function ArmadorDeEtiquetas({
                     className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-base hover:bg-muted"
                   >
                     <span className="min-w-0">
-                      <span className="block truncate font-medium">{r.producto}</span>
-                      <span className="block truncate text-sm text-muted-foreground">
+                      <span className="block font-medium break-words">{r.producto}</span>
+                      {/* La medida entera: el espesor es lo que distingue una
+                          placa de otra y se cortaba (M2S1-168). */}
+                      <span className="block text-sm break-words text-muted-foreground">
                         {r.medida} · <span className="tabular">{r.sku}</span>
                       </span>
                     </span>
@@ -135,9 +141,9 @@ export function ArmadorDeEtiquetas({
             {elegidas.map((e) => (
               <li key={e.id} className="tarjeta flex items-center gap-3 px-4 py-3">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-base font-medium">{e.producto}</p>
-                  <p className="truncate text-sm text-muted-foreground">
-                    {e.medida} · <span className="tabular">{e.codigo}</span>
+                  <p className="text-base font-medium break-words">{e.producto}</p>
+                  <p className="text-sm break-words text-muted-foreground">
+                    {e.medida} · <span className="tabular break-all">{e.codigo}</span>
                   </p>
                 </div>
                 <input

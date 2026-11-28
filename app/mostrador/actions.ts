@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { api, datos, mensajeDe, type Problema } from "@/lib/api/servidor";
 import type { Esquemas } from "@/lib/api/tipos";
 import { requireStaff } from "@/lib/dal/session";
+import { fichaDeCorte } from "@/lib/dal/admin/cortes";
 import { avisarPedidoNuevo } from "@/lib/dal/existencia";
 import { emitirParaLaVenta, letraQueSaldria } from "@/lib/mostrador/comprobante";
 import type { CorteDeMostrador, ResultadoDeMostrador } from "@/lib/mostrador/tipos";
@@ -36,6 +37,15 @@ export interface EstadoMostrador {
   renglones?: LineaDeVenta[];
   /** La venta anulada tenía un corte, que hay que volver a armar. */
   conCorte?: boolean;
+  /** Para «Rehacer»: el cliente, el papel, cómo pagó y el corte que quedó en la cola. */
+  rehacer?: {
+    customerId: string | null;
+    comprobante: "interno" | "fiscal" | null;
+    pagos: PagoDeVenta[];
+    cortes: string[];
+  };
+  /** La venta es igual a una de recién al mismo cliente (M3S4-015): se confirma y se reenvía. */
+  repetida?: string;
   /** La venta dejó medidas vendidas de más: hay que pedirlas (mes simulado, H218). */
   avisoStock?: string;
   /**
@@ -78,6 +88,10 @@ export interface VentaDelMostrador {
   ficha?: string;
   /** El presupuesto que armó la venta: al cobrar queda aceptado y atado al pedido. */
   presupuestoId?: string;
+  /** Con cuánto pagó en efectivo: el ticket dice el vuelto. */
+  efectivoRecibido?: number | null;
+  /** Quien atiende vio que es igual a una de recién y la cobra igual. */
+  repetidaOk?: boolean;
 }
 
 function refrescar() {
@@ -102,13 +116,15 @@ const error = (r: { error?: unknown }) => ({ error: mensajeDe(r.error as Problem
 export async function abrirCaja(
   branchId: string,
   fondoInicial: number,
-  extra: { motivo?: string; cajaId?: string | null } = {},
+  extra: { motivo?: string; cajaId?: string | null; corregir?: boolean } = {},
 ): Promise<EstadoMostrador> {
   const body = {
     branchId,
     fondoInicial,
     ...(extra.motivo?.trim() ? { motivo: extra.motivo.trim() } : {}),
     ...(extra.cajaId ? { cajaId: extra.cajaId } : {}),
+    // «Conté mal»: se corrige el arqueo anterior en vez de cargar un retiro (M2S3-002).
+    ...(extra.corregir ? { corregir: true } : {}),
   };
   const r = await (await api()).POST("/api/v1/mostrador/caja/abrir", { body });
   if (!r.data) return error(r);
@@ -122,9 +138,10 @@ export async function registrarMovimientoDeCaja(
   monto: number,
   motivo: string,
   destino?: "banco" | "caja_fuerte" | "otro",
+  categoria?: string,
 ): Promise<EstadoMostrador> {
   const r = await (await api()).POST("/api/v1/mostrador/caja/movimiento", {
-    body: { sessionId, tipo, monto, motivo, ...(destino ? { destino } : {}) },
+    body: { sessionId, tipo, monto, motivo, ...(destino ? { destino } : {}), ...(categoria ? { categoria } : {}) },
   });
   if (!r.data) return error(r);
   refrescar();
@@ -162,6 +179,7 @@ export async function cobrarVenta(venta: VentaDelMostrador): Promise<EstadoMostr
       error: resultado.error,
       autorizacion: resultado.autorizacion as Autorizacion | undefined,
       ficha: resultado.ficha,
+      repetida: resultado.repetida,
     };
   }
   // El seguimiento de este número tiene que existir aunque alguien lo haya
@@ -338,6 +356,8 @@ export async function emitirPresupuestoDeMostrador(presupuesto: {
   contactoNombre: string;
   contactoTelefono?: string | null;
   notas?: string | null;
+  /** Una por carrito: el segundo toque devuelve el mismo (M3S2-050). */
+  clave?: string;
 }): Promise<EstadoMostrador & { quoteId?: string }> {
   const r = await (await api()).POST("/api/v1/mostrador/presupuestos", { body: presupuesto as never });
   if (!r.data) return error(r);
@@ -355,11 +375,16 @@ export async function emitirPresupuestoDeMostrador(presupuesto: {
 export async function anularVenta(
   orderId: string,
   motivo: string,
-  opciones: { volvioLaMercaderia: boolean; pin?: string },
+  opciones: { volvioLaMercaderia: boolean; pin?: string; rehacer?: boolean },
 ): Promise<EstadoMostrador> {
   const r = await (await api()).POST("/api/v1/mostrador/ventas/{id}/anular", {
     params: { path: { id: orderId } },
-    body: { motivo, volvioLaMercaderia: opciones.volvioLaMercaderia, ...(opciones.pin ? { pin: opciones.pin } : {}) },
+    body: {
+      motivo,
+      volvioLaMercaderia: opciones.volvioLaMercaderia,
+      ...(opciones.pin ? { pin: opciones.pin } : {}),
+      ...(opciones.rehacer ? { rehacer: true } : {}),
+    },
   });
   if (!r.data) return error(r);
   if (r.data.autorizacion) {
@@ -387,8 +412,101 @@ export async function anularVenta(
       presentacion: (l.presentacion as LineaDeVenta["presentacion"]) ?? null,
     })),
     conCorte: r.data.conCorte ?? false,
+    rehacer: {
+      customerId: r.data.customerId ?? null,
+      comprobante: r.data.comprobante === "fiscal" || r.data.comprobante === "interno" ? r.data.comprobante : null,
+      pagos: (r.data.pagos ?? []).map((p) => ({
+        medio: p.medio as MedioDeMostrador,
+        importe: p.importe,
+        nroLote: p.nroLote,
+        nroCupon: p.nroCupon,
+        tarjeta: p.tarjeta,
+        cuotas: p.cuotas,
+        cheque: p.cheque
+          ? {
+              tipo: p.cheque.tipo === "echeq" ? "echeq" : "fisico",
+              numero: p.cheque.numero,
+              banco: p.cheque.banco,
+              librador: p.cheque.librador,
+              fechaPago: p.cheque.fechaPago,
+            }
+          : null,
+      })),
+      cortes: r.data.cortes ?? [],
+    },
   };
 }
+
+/**
+ * El corte que quedó en la cola al rehacer una venta, como lo necesita la
+ * pantalla para volver a abrirlo con su despiece (M2S3-047). Es lo mismo que
+ * arma la página con `?corte=`.
+ */
+export async function corteParaCobrar(id: string, deUnRehacer = false) {
+  const ficha = await fichaDeCorte(id);
+  // El de una venta rehecha está cancelado hasta que se ata a la nueva (Go
+  // lo revive solo si salió de un rehacer): así, si se abandona, el taller
+  // no lo corta sin cobrar (mes 23).
+  if (!ficha || ficha.corte.orderId || (ficha.corte.estado === "cancelado" && !deUnRehacer) || !ficha.corte.variantId) return null;
+  return aCorteACobrar(ficha);
+}
+
+/** La ficha de un corte sin venta, como la usa la pantalla del mostrador. */
+function aCorteACobrar(ficha: NonNullable<Awaited<ReturnType<typeof fichaDeCorte>>>) {
+  return {
+    id: ficha.corte.id,
+    numero: ficha.corte.numero,
+    customerId: ficha.corte.customerId,
+    variantId: ficha.corte.variantId!,
+    material: ficha.corte.material,
+    unidad: ficha.corte.unidad ?? "placa",
+    precio: ficha.corte.precioPlaca ?? 0,
+    largoMm: ficha.corte.varianteLargoMm,
+    anchoMm: ficha.corte.varianteAnchoMm,
+    color: ficha.corte.color,
+    categoria: ficha.corte.categoria,
+    formaDeVenta: (ficha.corte.formaDeVenta ?? "entera") as "entera" | "entera_o_media" | "metro_cuadrado",
+    precioMediaPct: ficha.corte.precioMediaPct ?? 50,
+    mitad: ficha.corte.mitad as "largo" | "ancho" | null,
+    canto: ficha.corte.cantoDescripcion ?? "",
+    pasadas: ficha.pasadasACobrar,
+    contacto: ficha.corte.customerId ? null : ficha.corte.cliente?.trim() || null,
+    telefono: ficha.corte.customerId ? null : ficha.corte.telefono,
+    piezas: ficha.corte.piezas.map((p) => ({
+      largo: String(p.largoMm),
+      ancho: String(p.anchoMm),
+      cantidad: String(p.cantidad),
+      veta: p.respetaVeta === 1,
+      cantoLargo: p.cantoLargo,
+      cantoAncho: p.cantoAncho,
+      etiqueta: p.etiqueta ?? "",
+    })),
+  };
+}
+
+/** Lo que se puede devolver de una venta sin factura (M3S2-060). */
+export async function datosDeDevolucionSinFactura(orderId: string) {
+  const r = await (await api()).GET("/api/v1/mostrador/ventas/{id}/devolucion-sin-factura", { params: { path: { id: orderId } } });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
+  return { datos: r.data };
+}
+
+/** Devuelve una parte de una venta sin factura, por la caja o por el medio de pago. */
+export async function devolverSinFactura(
+  orderId: string,
+  pedido: { clave: string; destino: "caja" | "afuera" | "cuenta"; motivo: string; renglones: { orderItemId: string; cantidad: number }[] },
+  pin?: string,
+): Promise<EstadoMostrador> {
+  const r = await (await api()).POST("/api/v1/mostrador/ventas/{id}/devolucion-sin-factura", {
+    params: { path: { id: orderId } },
+    body: { ...pedido, ...(pin ? { pin } : {}) },
+  });
+  if (!r.data) return error(r);
+  if (r.data.autorizacion) return { error: r.data.error, autorizacion: r.data.autorizacion as Autorizacion };
+  refrescar();
+  return { ok: r.data.ok };
+}
+
 
 /** Lo que debe un cliente, para ofrecer cobrarle la cuenta en el mostrador. */
 export async function saldoDeCuenta(customerId: string): Promise<number> {

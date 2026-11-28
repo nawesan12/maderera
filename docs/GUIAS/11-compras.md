@@ -2,6 +2,7 @@
 titulo: Compras y proveedores
 resumen: Pedir, recibir, cargar la factura y pagar: el costo, el crédito fiscal y las retenciones.
 orden: 11
+para: admin
 ---
 
 Todo lo de compras vive en el menú **Compras**. El orden en que se usa es casi

@@ -89,6 +89,16 @@ type FilaDeReposicion struct {
 	Vendido    float64  `json:"vendido"`
 	Cobertura  *float64 `json:"cobertura"`
 	Sugerido   float64  `json:"sugerido"`
+	// Lo que le falta a cada sucursal, partido en lo que se trae de la otra
+	// (la que tiene de sobra) y lo que se compra (PorSucursal). Sugerido es lo
+	// que se compra en la vista elegida.
+	ComprarCentral      float64 `json:"comprarCentral"`
+	ComprarAserradero   float64 `json:"comprarAserradero"`
+	TrasladoACentral    float64 `json:"trasladoACentral"`
+	TrasladoAAserradero float64 `json:"trasladoAAserradero"`
+	// Negativo: alguna sucursal tiene la medida en negativo (se vendió de
+	// más): va arriba de todo, en rojo.
+	Negativo bool `json:"negativo"`
 }
 
 // VendidoPorCategoria es un renglón del gráfico.
@@ -192,6 +202,20 @@ func CsvReposicion(r ReporteDeReposicion) string {
 		lineas = append(lineas, strings.Join(celdas, ";"))
 	}
 	return "\ufeff" + strings.Join(lineas, "\r\n")
+}
+
+// CsvReposicionPorSucursal es CsvReposicion con lo que se compra y lo que
+// se trae de la otra sucursal, sucursal por sucursal (mes simulado,
+// M2S1-029): «Comprar» es lo que se compra, y al lado lo que conviene
+// trasladar en vez de comprar. Las medidas en negativo van arriba.
+func CsvReposicionPorSucursal(r ReporteDeReposicion) string {
+	base := strings.Split(strings.TrimPrefix(CsvReposicion(r), "\ufeff"), "\r\n")
+	base[0] += ";Comprar en Central;Comprar en Aserradero;Traer al Central;Traer al Aserradero"
+	for i, f := range r.Filas {
+		base[i+1] += ";" + strings.Join([]string{jsmath.Texto(f.ComprarCentral), jsmath.Texto(f.ComprarAserradero),
+			jsmath.Texto(f.TrasladoACentral), jsmath.Texto(f.TrasladoAAserradero)}, ";")
+	}
+	return "\ufeff" + strings.Join(base, "\r\n")
 }
 
 // --- el reporte de ventas ---
@@ -327,6 +351,11 @@ func CsvReporteDeVentas(corte string, filas []FilaDeReporte, t TotalesDelReporte
 		costeado = numero(t.NetoCosteado)
 		costo = numero(*t.Costo)
 		margen = numero(*m)
+	}
+	// Lo que los renglones no llevan (el envío y el descuento del pedido),
+	// para que el total sea el mismo en todos los cortes.
+	if dif := jsmath.Redondear2(t.Total - t.Renglones); porRenglon(corte) && t.Renglones != 0 && (dif > 0.005 || dif < -0.005) {
+		lineas = append(lineas, strings.Join([]string{tx("Envíos y descuentos"), tx(""), tx(""), numero(dif), "", "", "", "", ""}, ";"))
 	}
 	lineas = append(lineas, strings.Join([]string{tx("Total"), tx(""), tx(""), numero(t.Total), numero(t.NetoVenta),
 		costeado, costo, margen, entero(t.LineasSinCosto)}, ";"))

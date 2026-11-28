@@ -182,3 +182,19 @@ func Cuantos(n int, uno, varios string) string {
 	}
 	return strconv.Itoa(n) + " " + varios
 }
+
+// Impuesto es cómo se escribe un impuesto en un archivo o un movimiento:
+// «ganancias» es «Ganancias» y «iva», «IVA» (mes simulado, M2S1-126).
+func Impuesto(clave string) string {
+	switch clave {
+	case "iva":
+		return "IVA"
+	case "iibb":
+		return "IIBB"
+	case "suss":
+		return "SUSS"
+	case "ganancias":
+		return "Ganancias"
+	}
+	return clave
+}

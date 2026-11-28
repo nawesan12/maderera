@@ -57,6 +57,8 @@ export async function registrarMovimientoDeProveedor(datos: {
   /** El motivo: obligatorio. */
   detalle: string;
   referencia?: string;
+  /** La factura a la que se aplica un ajuste que baja la deuda. */
+  aplicaA?: string;
 }): Promise<EstadoProveedor> {
   // A mano solo se anotan ajustes: las facturas y los pagos van por compras.
   const { supplierId, ...resto } = { ...datos, tipo: "ajuste" as const };

@@ -44,7 +44,18 @@ describe("chequesParaEndosar", () => {
   });
 
   it("la transferencia no ofrece cheques", () => {
-    expect(chequesParaEndosar(cartera, "transferencia", "blanco")).toEqual({ endosables: [], delOtroCircuito: [] });
+    expect(chequesParaEndosar(cartera, "transferencia", "blanco")).toEqual({ endosables: [], delOtroCircuito: [], esperanCae: [] });
+  });
+
+  // M2S2-040: con «endoso_espera_cae» en «al_cae», el que espera el CAE va
+  // apagado bajo «Espera CAE»; con la de arranque, se endosa como blanco.
+  it("el que espera el CAE y está trabado por la regla va aparte", () => {
+    const conCae = [...cartera, { ...cheque("C1", "fisico", "blanco"), esperaCae: true, trabado: true }];
+    const r = chequesParaEndosar(conCae, "cheque", "blanco");
+    expect(r.endosables.map((c) => c.id)).toEqual(["F1"]);
+    expect(r.esperanCae.map((c) => c.id)).toEqual(["C1"]);
+    const libre = [...cartera, { ...cheque("C1", "fisico", "blanco"), esperaCae: true, trabado: false }];
+    expect(chequesParaEndosar(libre, "cheque", "blanco").endosables.map((c) => c.id)).toEqual(["F1", "C1"]);
   });
 });
 

@@ -26,14 +26,27 @@ import {
 } from "@/components/admin/formulario";
 import { CampoFecha } from "@/components/ui/campo-fecha";
 
-const inicial: EstadoResena = {};
+/** `vuelta` cuenta las guardadas: el formulario se arma de nuevo, vacío. */
+type EstadoDelEditor = EstadoResena & { vuelta: number };
+
+const inicial: EstadoDelEditor = { vuelta: 0 };
+
+/**
+ * Guardar y, si salió, vaciar el formulario: conservaba autor, fecha,
+ * estrellas y el interruptor, y la siguiente se cargaba encima de la anterior
+ * (mes 23). Si falla, queda todo como estaba.
+ */
+async function guardarYVaciar(previo: EstadoDelEditor, datos: FormData): Promise<EstadoDelEditor> {
+  const r = await guardarResenaDelNegocio(previo, datos);
+  return { ...r, vuelta: r.ok ? previo.vuelta + 1 : previo.vuelta };
+}
 
 export interface ResenaEditable {
   id: string;
   autor: string;
   estrellas: number;
   texto: string;
-  /** "2026-03-15", como lo espera el input de fecha. */
+  /** «15/03/26», para mostrar. */
   fecha: string;
   origen: "manual" | "google";
   publicada: boolean;
@@ -46,10 +59,7 @@ export function EditorDeResenas({
   resenas: ResenaEditable[];
   hayGoogle: boolean;
 }) {
-  const [estado, guardar, guardando] = useActionState(
-    guardarResenaDelNegocio,
-    inicial,
-  );
+  const [estado, guardar, guardando] = useActionState(guardarYVaciar, inicial);
   const [trayendo, empezarTraida] = useTransition();
   const [aviso, setAviso] = useState<string | null>(null);
 
@@ -87,7 +97,7 @@ export function EditorDeResenas({
         ))}
       </ul>
 
-      <form {...sinReiniciar(guardar)} className="space-y-4">
+      <form key={estado.vuelta} {...sinReiniciar(guardar)} className="space-y-4">
         <Hoja>
           <Seccion titulo="Cargar una reseña" icono={MessageSquareQuote}>
             <label className="block">
@@ -133,7 +143,6 @@ export function EditorDeResenas({
                 nombre="publicada"
                 etiqueta="Mostrarla en el sitio"
                 icono={Eye}
-                defecto
               />
             </div>
           </Seccion>
@@ -175,13 +184,11 @@ function Fila({ resena }: { resena: ResenaEditable }) {
           ))}
         </span>
 
-        <div className="min-w-[14rem] flex-1">
-          <p className="text-base font-medium">
-            {resena.autor}
-            <span className="ml-2 text-sm font-normal text-muted-foreground">
-              {resena.fecha}
-              {resena.origen === "google" && " · de Google"}
-            </span>
+        <div className="min-w-0 flex-[1_1_14rem]">
+          <p className="text-base font-medium">{resena.autor}</p>
+          <p className="tabular text-sm text-muted-foreground">
+            {resena.fecha}
+            {resena.origen === "google" && " · de Google"}
           </p>
           <p className="mt-0.5 text-base text-muted-foreground">
             {resena.texto}

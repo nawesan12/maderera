@@ -88,7 +88,7 @@ export default async function MostradorPage({
     // Las reglas que cambian la cuenta (/admin/reglas): las mismas que lee Go.
     ajustesDelSitio(),
   ]);
-  const { turno, ventas, listaGeneral, fondoBase, movimientos, cierre, descuentoLibrePct, ultimoContado } = pantalla;
+  const { turno, ventas, listaGeneral, fondoBase, movimientos, cierre, descuentoLibrePct, ultimoContado, ultimoCierre } = pantalla;
 
   /*
    * «Cobrar en el mostrador» desde la ficha de un corte sin venta (mes
@@ -123,6 +123,10 @@ export default async function MostradorPage({
           mitad: ficha.corte.mitad as "largo" | "ancho" | null,
           canto: ficha.corte.cantoDescripcion ?? "",
           pasadas: ficha.pasadasACobrar,
+          // Sin ficha, el nombre y el teléfono que se anotaron con el corte
+          // pasan al pedido (mes simulado, M3S4-041).
+          contacto: ficha.corte.customerId ? null : ficha.corte.cliente?.trim() || null,
+          telefono: ficha.corte.customerId ? null : ficha.corte.telefono,
           piezas: ficha.corte.piezas.map((p) => ({
             largo: String(p.largoMm),
             ancho: String(p.anchoMm),
@@ -162,11 +166,15 @@ export default async function MostradorPage({
       escalasDePago={escalas}
       ventas={ventas}
       corteACobrar={corteACobrar}
+      ultimoCierre={ultimoCierre ?? null}
       reglas={{
         contadoSiempre: valorDeRegla(ajustes, "contado_por_lista") === "siempre",
         descuentoAlFlete: valorDeRegla(ajustes, "descuento_al_flete") === "si",
         loteObligatorio: valorDeRegla(ajustes, "lote_y_cupon") === "obligatorio",
+        descuentoSuma: valorDeRegla(ajustes, "descuento_con_escala") === "suma",
+        redondeoAlPeso: valorDeRegla(ajustes, "redondeo_efectivo") === "al_peso",
       }}
+
     />
   );
 }

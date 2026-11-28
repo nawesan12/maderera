@@ -83,7 +83,7 @@ func TestDevolucionDeUnPedidoFacturado(t *testing.T) {
 		t.Fatalf("stock %s, movimientos %s, destino %s", fisico, movimientos, destino)
 	}
 	var historial int
-	e.uno(t, `SELECT count(*)::int FROM order_status_history WHERE order_id = $1 AND nota LIKE 'Devolución con nota de crédito%'`, &historial, pedido)
+	e.uno(t, `SELECT count(*)::int FROM order_status_history WHERE order_id = $1 AND nota LIKE 'Devolución · Nota de crédito%'`, &historial, pedido)
 	if historial != 1 {
 		t.Errorf("historial: %d", historial)
 	}
@@ -98,6 +98,23 @@ func TestDevolucionDeUnPedidoFacturado(t *testing.T) {
 	if st, b := pedir(t, vendedora, "POST", u, map[string]any{"clave": "k2", "motivo": "Otra", "renglones": renglones}); st != 422 ||
 		!strings.Contains(string(b), "ya está cobrado") {
 		t.Fatalf("cobrado: %d %s", st, b)
+	}
+	// Mes simulado 2 (M2S2-022, M2S3-027): lo cobrado vuelve por donde
+	// entró, elegido desde el pedido, con su nota y su número en el
+	// historial (M3S2-049).
+	_, b = pedir(t, vendedora, "GET", u, nil)
+	if d := leerJSON[DevolucionDesdeElPedido](t, b); d.Afuera != 12100 || d.Caja != 0 {
+		t.Fatalf("topes por medio: %+v", d)
+	}
+	if st, b := pedir(t, vendedora, "POST", u, map[string]any{"clave": "k3", "motivo": "Otra", "renglones": renglones, "destino": "caja"}); st != 422 {
+		t.Fatalf("por la caja, sin efectivo: %d %s", st, b)
+	}
+	if st, b := pedir(t, vendedora, "POST", u, map[string]any{"clave": "k4", "motivo": "Otra", "renglones": renglones, "destino": "afuera"}); st != 200 {
+		t.Fatalf("por afuera: %d %s", st, b)
+	}
+	e.uno(t, `SELECT count(*)::int FROM order_status_history WHERE order_id = $1 AND nota LIKE 'Devolución · Nota de crédito % · Vuelve por el banco'`, &historial, pedido)
+	if historial != 1 {
+		t.Errorf("historial con la nota y por dónde volvió: %d", historial)
 	}
 }
 

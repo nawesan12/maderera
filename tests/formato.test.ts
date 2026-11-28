@@ -187,6 +187,9 @@ describe("cantidadConUnidad", () => {
     expect(unidadConcordada(119, "placa")).toBe("placas");
     expect(unidadConcordada(2.5, "placa")).toBe("placas");
     expect(unidadConcordada(22, "rollo")).toBe("rollos");
+    // M2S2-086 (mes 23): la laca de 4 litros se repone por lata, no por litro.
+    expect(unidadConcordada(12, "litro", "Laca 4 litros")).toBe("u.");
+    expect(unidadConcordada(12, "litro", "Laca")).not.toBe("u.");
   });
 });
 
@@ -196,5 +199,12 @@ describe("documentoConTipo", () => {
     expect(documentoConTipo("30-71234567-8")).toBe("CUIT 30-71234567-8");
     expect(documentoConTipo("20301112220")).toBe("CUIT 20-30111222-0");
     expect(documentoConTipo("30111222")).toBe("DNI 30.111.222");
+  });
+});
+
+describe("diaConSemana", () => {
+  it("escribe el día con barra, no con guion (mes 23, el reparto)", async () => {
+    const { diaConSemana } = await import("@/lib/formato");
+    expect(diaConSemana.format(new Date("2026-11-30T00:00:00Z"))).toBe("lun 30/11");
   });
 });

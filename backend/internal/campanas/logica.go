@@ -13,6 +13,7 @@ import (
 
 	"mjbj/internal/email"
 	"mjbj/internal/jsmath"
+	"mjbj/internal/whatsapp"
 	"mjbj/internal/zod"
 )
 
@@ -406,8 +407,34 @@ var titulos = map[string]bool{
 	"tec": true, "téc": true, "prof": true, "mg": true, "esc": true, "cr": true, "cra": true,
 }
 
-// PrimerNombre es primerNombre de lib/formato: sin los títulos (Arq., Ing.).
-func PrimerNombre(nombre string) string {
+var (
+	reMarcaNombre = regexp.MustCompile(`\{\{\s*nombre\s*\}\}`)
+	// Sin nombre se come también el espacio de antes: «Hola,» y no «Hola ,».
+	reMarcaConEspacio = regexp.MustCompile(`[ \t]*\{\{\s*nombre\s*\}\}`)
+)
+
+// Personalizar pone el primer nombre donde el texto dice {{nombre}} y dice si
+// el texto trae su propio saludo: el primer renglón con la marca. Un texto
+// sin la marca queda igual, con el saludo automático de siempre.
+func Personalizar(cuerpo, nombre string) (string, bool) {
+	if !reMarcaNombre.MatchString(cuerpo) {
+		return cuerpo, false
+	}
+	primero, _, _ := strings.Cut(strings.TrimLeft(cuerpo, " \t\r\n"), "\n")
+	propio := reMarcaNombre.MatchString(primero)
+	if pn := PrimerNombre(nombre); pn != "" {
+		return reMarcaNombre.ReplaceAllLiteralString(cuerpo, pn), propio
+	}
+	return reMarcaConEspacio.ReplaceAllLiteralString(cuerpo, ""), propio
+}
+
+// PrimerNombre es el saludo de whatsapp.NombreDeSaludo con el nombre de una
+// persona sin los títulos (Arq., Ing.): a una empresa no se la saluda por su
+// primera palabra (mes 23: «Hola Sim» a «Sim V1at Carpintería Ruiz»).
+func PrimerNombre(nombre string) string { return whatsapp.NombreDeSaludoCon(nombre, sinTitulo) }
+
+// sinTitulo es primerNombre de lib/formato: la primera palabra que no es un título.
+func sinTitulo(nombre string) string {
 	var partes []string
 	for _, p := range reEspaciosJ.Split(zod.Trim(nombre), -1) {
 		if p != "" {
@@ -455,6 +482,11 @@ var reAbsoluta = regexp.MustCompile(`^https?://`)
 // ArmarCorreo es armarCorreoDeCampana: lleva el enlace de baja de esa
 // persona y las cabeceras List-Unsubscribe (RFC 8058) que piden Gmail y
 // Yahoo a quien manda correo masivo.
+//
+// El texto puede traer su propio saludo con {{nombre}}, como las plantillas de
+// WhatsApp: se reemplaza por el primer nombre y el saludo automático no se
+// agrega. La vista previa decía «Hola Sim,» y debajo «Hola {{nombre}},» tal
+// cual (mes simulado, M2S1-049).
 func ArmarCorreo(sitio, secreto string, c ParaArmar, para, nombre string) Correo {
 	sitio = strings.TrimSuffix(sitio, "/")
 	absoluta := func(u string) string {
@@ -471,10 +503,11 @@ func ArmarCorreo(sitio, secreto string, c ParaArmar, para, nombre string) Correo
 	pagina := sitio + "/baja?" + consulta
 	unClic := sitio + "/api/baja?" + consulta
 
+	cuerpo, traeSaludo := Personalizar(c.Cuerpo, nombre)
 	o := email.Opciones{
 		Titulo:   c.Asunto,
 		Adelanto: c.Asunto,
-		Parrafos: CuerpoComoParrafos(c.Cuerpo),
+		Parrafos: CuerpoComoParrafos(cuerpo),
 		Pie: &email.Pie{
 			HTML:  `Te escribimos porque sos cliente de la maderera. Si no querés recibir más novedades, <a href="` + pagina + `" style="color:#7A6F66;">date de baja acá</a>. Los avisos de tus pedidos te van a seguir llegando.`,
 			Texto: "Si no querés recibir más novedades, date de baja en " + pagina,
@@ -483,7 +516,7 @@ func ArmarCorreo(sitio, secreto string, c ParaArmar, para, nombre string) Correo
 	if a := val(c.Adelanto); a != "" {
 		o.Adelanto = a
 	}
-	if nombre != "" {
+	if nombre != "" && !traeSaludo {
 		o.Saludo = PrimerNombre(nombre)
 	}
 	if i := val(c.ImagenURL); i != "" {

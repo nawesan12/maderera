@@ -34,6 +34,16 @@ type Renglon struct {
 	// placas vendidas y 70 en el galpón, el formulario no mostraba stock
 	// (mes simulado, H218). Sin producto, no hay.
 	EnElGalpon *float64 `json:"enElGalpon,omitempty"`
+	// GalponEnStock es EnElGalpon en la unidad del stock cuando el renglón
+	// es una presentación: de una media placa, «66 en el galpón» eran 33
+	// placas (mes simulado 2).
+	GalponEnStock *float64 `json:"galponEnStock,omitempty"`
+	// EnCorte es el corte del renglón que sigue en la cola o en la máquina, y
+	// EnCorteCantidad lo que se lleva de lo pendiente: esas piezas todavía no
+	// existen y el remito no las ofrece (M2S3-020: con el corte de vuelta en
+	// la máquina se ofrecía la media placa). El resto sale sin cortar.
+	EnCorte         string   `json:"enCorte,omitempty"`
+	EnCorteCantidad *float64 `json:"enCorteCantidad,omitempty"`
 }
 
 // maxCero es Math.max(x, 0) (NaN sigue siendo NaN).
@@ -200,6 +210,9 @@ type FormRemito struct {
 	// Otros son los acopios de otros pedidos del mismo cliente que salen en
 	// la misma visita (`otros`: [{orderId, cantidades}]).
 	Otros []OtroPedido `json:"otros,omitempty"`
+	// SinCobrar es el PIN de un admin para soltar lo que no se cobró (no
+	// es del golden: lo lee el handler).
+	SinCobrar SalidaSinCobrar `json:"-"`
 }
 
 // OtroPedido es lo que sale de otro acopio en la misma visita.
@@ -230,6 +243,8 @@ const MsjFaltaDocumento = "Falta el documento de quien retira. En un retiro es o
 type Receptor struct {
 	Nombre    *string
 	Documento *string
+	// SinCobrar: el PIN para soltar lo que no se cobró (AutorizarSinCobrar).
+	SinCobrar SalidaSinCobrar
 }
 
 // NuevoReceptor recorta los dos campos (vacío es nil).
@@ -256,10 +271,53 @@ func (r Receptor) Revisar() (string, string) {
 	if len([]rune(*r.Documento)) > 30 {
 		return "receptorDocumento", "El documento es muy largo."
 	}
+	if msj := RevisarDocumento(r.Documento); msj != "" {
+		return "receptorDocumento", msj
+	}
 	if r.Nombre != nil && len([]rune(*r.Nombre)) > 120 {
 		return "receptorNombre", "El nombre es muy largo."
 	}
 	return "", ""
+}
+
+// MsjDocumentoInvalido: «1» pasaba como documento de quien retira (mes
+// simulado 2).
+const MsjDocumentoInvalido = "Revisá el documento: un DNI tiene 7 u 8 números y un CUIT, 11."
+
+// RevisarDocumento controla el documento de quien retira, si lo hay: con
+// solo números (sin puntos ni guiones), de 7 a 11; un pasaporte (con
+// letras), de 6 a 15 caracteres. Vacío no es asunto de esta función.
+func RevisarDocumento(d *string) string {
+	if d == nil {
+		return ""
+	}
+	limpio := strings.Map(func(r rune) rune {
+		if r == '.' || r == '-' || r == ' ' {
+			return -1
+		}
+		return r
+	}, *d)
+	if limpio == "" {
+		return ""
+	}
+	digitos, otros := 0, 0
+	for _, r := range limpio {
+		switch {
+		case r >= '0' && r <= '9':
+			digitos++
+		case (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z'):
+			otros++
+		default:
+			return MsjDocumentoInvalido
+		}
+	}
+	if otros == 0 && (digitos < 7 || digitos > 11) {
+		return MsjDocumentoInvalido
+	}
+	if otros > 0 && (len(limpio) < 6 || len(limpio) > 15) {
+		return MsjDocumentoInvalido
+	}
+	return ""
 }
 
 // LeerRemito lee el formulario como prepararRemito: el esquema de zod, el

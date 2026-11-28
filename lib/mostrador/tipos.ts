@@ -53,6 +53,8 @@ export interface ResultadoDeMostrador {
   categoria?: string | null;
   formaDeVenta?: "entera" | "entera_o_media" | "metro_cuadrado";
   precioMediaPct?: number;
+  /** El de antes de una oferta vigente, para tacharlo. */
+  precioAnterior?: number | null;
 }
 
 /** Una fila del cierre Z: cuánto entró por cada medio. */
@@ -67,8 +69,13 @@ export interface RenglonDelCierre {
    * devoluciones parciales hechas en este turno.
    */
   devolucion: boolean;
-  /** Quién hizo las devoluciones parciales de la fila. */
+  /** Quién cobró el recibo, si no es quien abrió el turno. */
   quien?: string | null;
-  /** Lo cobrado por recibos de cuenta en el mostrador durante el turno. */
+  /** Lo cobrado por recibos durante el turno. */
   cobranza?: boolean;
+  /** El cobro es de un pedido, no de la cuenta. */
+  dePedido?: boolean;
+  /** Los pedidos de las devoluciones, o los recibos que cobró otra persona. */
+  pedidos?: string | null;
 }
+

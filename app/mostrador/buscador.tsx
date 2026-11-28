@@ -8,6 +8,7 @@ import { leerTipeo, vaSinDecimales, type LineaDeVenta } from "@/lib/mostrador/im
 import type { CopiaLista } from "@/lib/mostrador/offline/use-copia-local";
 import type { ResultadoDeMostrador } from "@/lib/mostrador/tipos";
 import { formatearCantidad } from "@/lib/unidades";
+import { medidaEnOrden } from "@/lib/cortes/placa";
 import {
   admiteMedia,
   descripcionConPresentacion,
@@ -18,7 +19,7 @@ import {
   type Presentacion,
   type ProductoQueSeVende,
 } from "@/lib/ventas/forma-de-venta";
-import { buscarEnMostrador } from "./actions";
+import { buscarEnMostrador, presupuestoParaLaVenta } from "./actions";
 
 /** «P-2026-0020», «p-2026-20» o «P2026-20»: el número de un presupuesto. */
 const ES_PRESUPUESTO = /^\s*p-?\d{4}-\d{1,6}\s*$/i;
@@ -76,6 +77,40 @@ export function Buscador({
   /** Cuál de los resultados está marcado. Se mueve con las flechas. */
   const [marcado, setMarcado] = useState(0);
   const campo = useRef<HTMLInputElement>(null);
+
+  /*
+   * El número de un presupuesto se reconoce mientras se tipea y se dice qué
+   * es, con su cliente y su total: decía «No hay nada en el catálogo…
+   * Cargarlo a mano» y Enter lo traía igual (mes simulado, M2S2-134).
+   */
+  const esPresupuesto = Boolean(onPresupuesto) && !sinConexion && ES_PRESUPUESTO.test(texto);
+  const [presupuesto, setPresupuesto] = useState<{ numero: string; cliente: string; total: number } | null>(null);
+  useEffect(() => {
+    if (!esPresupuesto) return;
+    let vigente = true;
+    const numero = texto.trim();
+    const t = setTimeout(async () => {
+      try {
+        const r = await presupuestoParaLaVenta(numero);
+        if (!vigente) return;
+        setPresupuesto(
+          "error" in r
+            ? null
+            : {
+                numero: r.numero,
+                cliente: r.contactoNombre,
+                total: r.lineas.reduce((s, l) => s + Math.round(l.cantidad * l.precioUnitario * 100) / 100, 0),
+              },
+        );
+      } catch {
+        if (vigente) setPresupuesto(null);
+      }
+    }, 250);
+    return () => {
+      vigente = false;
+      clearTimeout(t);
+    };
+  }, [esPresupuesto, texto]);
 
   // El foco arranca acá y vuelve acá después de cada ítem: en el mostrador se
   // tipea sin mirar, y un cursor que se va obliga a soltar el teclado.
@@ -151,7 +186,7 @@ export function Buscador({
    */
   /** El aviso de lo que no tiene precio, con las dos salidas que hay. */
   function sinPrecio(r: (typeof resultados)[number]) {
-    return `${r.producto} — ${r.medida} no tiene precio. Cargalo a mano o ponele precio en Precios.`;
+    return `${r.producto} — ${medidaEnOrden(r.medida)} no tiene precio. Cargalo a mano o ponele precio en Precios.`;
   }
 
   function elegir(r: (typeof resultados)[number], presentacion: Presentacion = null, yCobrar = false) {
@@ -161,17 +196,21 @@ export function Buscador({
     // «2,5*bisagra» no se redondea a tres sin decir nada: no entra, y se
     // dice por qué (revisión del carril F).
     if (vaSinDecimales({ variantId: r.variantId, unidad }, cantidad)) {
-      onNoEntra(`${r.producto} — ${r.medida} va sin decimales.`);
+      onNoEntra(`${r.producto} — ${medidaEnOrden(r.medida)} va sin decimales.`);
       return;
     }
     onElegir({
       variantId: r.variantId,
-      descripcion: descripcionConPresentacion(`${r.producto} — ${r.medida}`, pres),
+      descripcion: descripcionConPresentacion(`${r.producto} — ${medidaEnOrden(r.medida)}`, pres),
       unidad,
       cantidad,
       precioUnitario: precioDeLinea(r.precio, producto, pres),
       precioLista: precioDeLinea(r.precio, producto, pres),
+      precioAnterior: r.precioAnterior ? precioDeLinea(r.precioAnterior, producto, pres) : null,
       presentacion: pres,
+      // Lo disponible acá, para que el renglón diga «faltan» antes de cobrar
+      // y no recién después (mes simulado, M2S3-050).
+      disponible: r.stock,
     }, yCobrar);
     setTexto("");
     setResultados([]);
@@ -274,8 +313,28 @@ export function Buscador({
         {buscando && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
       </div>
 
-      {resuelto && visibles.length === 0 && (
+      {esPresupuesto && (
+        <button
+          type="button"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            onPresupuesto?.(texto.trim());
+            setTexto("");
+          }}
+          className="absolute inset-x-0 top-full z-20 mt-1.5 flex w-full items-center gap-3 rounded-xl border border-linea bg-popover px-4 py-3 text-left shadow-lg transition-colors hover:bg-hundida"
+        >
+          <span className="min-w-0 flex-1">
+            <span className="codigo block text-base font-semibold">{presupuesto?.numero ?? texto.trim().toUpperCase()}</span>
+            {presupuesto && <span className="block truncate text-sm text-muted-foreground">{presupuesto.cliente}</span>}
+          </span>
+          {presupuesto && <span className="tabular shrink-0 text-lg font-semibold">{formatearPrecio(presupuesto.total)}</span>}
+          <kbd className="shrink-0 rounded border border-linea px-1.5 py-0.5 text-xs text-muted-foreground">Enter</kbd>
+        </button>
+      )}
+
+      {!esPresupuesto && resuelto && visibles.length === 0 && (
         <div className="absolute inset-x-0 top-full z-20 mt-1.5 rounded-xl border border-linea bg-popover p-4 shadow-lg">
+
           <p className="text-base text-muted-foreground">
             No hay nada en el catálogo con «{consulta}».
           </p>
@@ -338,6 +397,7 @@ function FilaDeResultado({
     producto: string;
     medida: string;
     precio: number;
+    precioAnterior?: number | null;
     stock: number;
   };
   elegido: boolean;
@@ -360,14 +420,19 @@ function FilaDeResultado({
         >
           <span className="min-w-0 flex-1">
             <span className="line-clamp-2 break-words text-base font-medium">
-              {r.producto} — {r.medida}
+              {r.producto} — {medidaEnOrden(r.medida)}
             </span>
             <span className="block text-sm text-muted-foreground">
               {r.sku} · {r.stock > 0 ? `${formatearCantidad(r.stock)} disponibles acá` : "sin stock acá"}
             </span>
           </span>
           <span className="tabular shrink-0 text-right text-lg font-semibold">
-            {r.precio > 0 ? formatearPrecio(r.precio) : "sin precio"}
+            {r.precioAnterior != null && r.precio > 0 && (
+              <s className="block text-sm font-normal text-muted-foreground">{formatearPrecio(r.precioAnterior)}</s>
+            )}
+            <span className={r.precioAnterior != null && r.precio > 0 ? "text-rojo-oferta" : undefined}>
+              {r.precio > 0 ? formatearPrecio(r.precio) : "sin precio"}
+            </span>
             {seVendePorM2(comoSeVende(r)) && (
               <span className="block text-sm font-normal text-muted-foreground">
                 el m²

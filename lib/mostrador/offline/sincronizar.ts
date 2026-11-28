@@ -9,7 +9,7 @@ import {
   leerTodo,
   reemplazarTodo,
 } from "./db";
-import { clavePrecio, type PreciosLocales } from "./precio-local";
+import { clavePrecio, type OfertasLocales, type PreciosLocales } from "./precio-local";
 import type { ClienteLocal, VarianteLocal } from "./busqueda-local";
 
 /**
@@ -43,7 +43,7 @@ interface EstadoCatalogo {
  *
  * Subir este número obliga a bajar todo de nuevo una sola vez.
  */
-const FORMA_DE_LA_COPIA = 3;
+const FORMA_DE_LA_COPIA = 4;
 
 /** Cada cuánto se pregunta si cambió algo, con conexión. */
 export const CADA_CUANTO_MS = 10 * 60 * 1000;
@@ -178,13 +178,20 @@ export async function cargarIndices(): Promise<{
   variantes: VarianteLocal[];
   clientes: ClienteLocal[];
   precios: PreciosLocales;
+  ofertas: OfertasLocales;
   stock: Map<string, number>;
   listaGeneralId: string | null;
 }> {
   const [variantes, clientes, precios, stock, estado] = await Promise.all([
     leerTodo<VarianteLocal>("variantes"),
     leerTodo<ClienteLocal>("clientes"),
-    leerTodo<{ priceListId: string; variantId: string; precio: number }>("precios"),
+    leerTodo<{
+      priceListId: string;
+      variantId: string;
+      precio: number;
+      precioAnterior?: number | null;
+      ofertaHasta?: string | null;
+    }>("precios"),
     leerTodo<{ branchId: string; variantId: string; qty: number }>("stock"),
     leerMeta<EstadoCatalogo>("catalogo"),
   ]);
@@ -194,6 +201,14 @@ export async function cargarIndices(): Promise<{
     clientes,
     precios: new Map(
       precios.map((p) => [clavePrecio(p.priceListId, p.variantId), p.precio]),
+    ),
+    ofertas: new Map(
+      precios
+        .filter((p) => p.precioAnterior != null && p.ofertaHasta)
+        .map((p) => [
+          clavePrecio(p.priceListId, p.variantId),
+          { anterior: p.precioAnterior!, hasta: new Date(p.ofertaHasta!).getTime() },
+        ]),
     ),
     stock: new Map(stock.map((s) => [`${s.branchId}:${s.variantId}`, s.qty])),
     listaGeneralId: estado?.listaGeneralId ?? null,

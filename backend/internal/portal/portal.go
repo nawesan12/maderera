@@ -9,6 +9,7 @@ import (
 	"errors"
 	"log/slog"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -25,6 +26,7 @@ import (
 	"mjbj/internal/push"
 	"mjbj/internal/reglas"
 	"mjbj/internal/sqlc"
+	"mjbj/internal/ventas/fragmentos"
 )
 
 // Servicio son las lecturas y acciones del portal.
@@ -116,16 +118,20 @@ type Resumen struct {
 	PresupuestosAResponder int     `json:"presupuestosAResponder"`
 	Saldo                  float64 `json:"saldo"`
 	LimiteCredito          float64 `json:"limiteCredito"`
+	// CuentaPausada: la cuenta corriente está bloqueada. El portal no
+	// ofrece el disponible (M3S1-017).
+	CuentaPausada bool `json:"cuentaPausada"`
 }
 
 // ResumenDe es resumenCuenta.
 func (s *Servicio) ResumenDe(ctx context.Context, c *Cliente) (Resumen, error) {
 	r := Resumen{LimiteCredito: c.LimiteCredito}
 	err := s.pool.QueryRow(ctx, `SELECT
-		(SELECT count(*)::int FROM orders WHERE customer_id = $1 AND estado NOT IN ('entregado', 'cancelado')),
+		(SELECT count(*)::int FROM orders o WHERE o.customer_id = $1 AND `+fragmentos.EstadoParaElCliente+` NOT IN ('entregado', 'cancelado')),
 		(SELECT count(*)::int FROM quotes WHERE customer_id = $1 AND estado::text = ANY($2)),
-		(SELECT coalesce(sum(monto), 0)::float8 FROM account_movements WHERE customer_id = $1)`, c.ID, s.estadosAResponder(ctx)).
-		Scan(&r.PedidosEnCurso, &r.PresupuestosAResponder, &r.Saldo)
+		(SELECT coalesce(sum(monto), 0)::float8 FROM account_movements WHERE customer_id = $1),
+		(SELECT coalesce(cuenta_bloqueada, false) FROM customers WHERE id = $1)`, c.ID, s.estadosAResponder(ctx)).
+		Scan(&r.PedidosEnCurso, &r.PresupuestosAResponder, &r.Saldo, &r.CuentaPausada)
 	return r, err
 }
 
@@ -168,7 +174,7 @@ type Pedido struct {
 // algún renglón con saldo (lo mismo que entregas.SaldoDeAcopio).
 func (s *Servicio) Pedidos(ctx context.Context, c *Cliente) ([]Pedido, error) {
 	filas, err := s.pool.Query(ctx, `
-		SELECT o.id, o.numero, o.estado::text, o.estado_pago::text, o.medio_pago::text, o.tipo_entrega::text, o.total::float8,
+		SELECT o.id, o.numero, `+fragmentos.EstadoParaElCliente+`, o.estado_pago::text, o.medio_pago::text, o.tipo_entrega::text, o.total::float8,
 		  (SELECT count(*)::int FROM order_items i WHERE i.order_id = o.id), b.name,
 		  o.estado NOT IN ('entregado', 'cancelado') AND EXISTS (SELECT 1 FROM deliveries d WHERE d.order_id = o.id AND d.estado <> 'anulada')
 		    AND EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND NOT (oi.variant_id IS NULL AND oi.del_corte)
@@ -214,6 +220,10 @@ type Presupuesto struct {
 	CreatedAt   time.Time  `json:"createdAt"`
 	// AResponder: el cliente lo puede aceptar o rechazar (estadosAResponder).
 	AResponder bool `json:"aResponder"`
+	// ConPedido: ya se pasó a un pedido. El portal dice «Pasado a pedido» y
+	// no «Aceptado»: lo pasaba el vendedor y figuraba que el cliente lo
+	// había aceptado (mes simulado, M3S1-045).
+	ConPedido bool `json:"conPedido"`
 }
 
 // Presupuestos es misPresupuestos. Los que armó el bot de WhatsApp y todavía
@@ -221,7 +231,8 @@ type Presupuesto struct {
 func (s *Servicio) Presupuestos(ctx context.Context, c *Cliente) ([]Presupuesto, error) {
 	filas, err := s.pool.Query(ctx, `
 		SELECT q.id, q.numero, q.estado::text, q.total::float8, (SELECT count(*)::int FROM quote_items i WHERE i.quote_id = q.id),
-		  q.valido_hasta, q.created_at, q.estado::text = ANY($2)
+		  q.valido_hasta, q.created_at, q.estado::text = ANY($2),
+		  EXISTS (SELECT 1 FROM orders o WHERE o.quote_id = q.id AND o.estado <> 'cancelado')
 		FROM quotes q WHERE q.customer_id = $1 AND NOT (q.origen = 'whatsapp' AND q.estado = 'revision')
 		ORDER BY q.created_at DESC`, c.ID, s.estadosAResponder(ctx))
 	if err != nil {
@@ -295,17 +306,36 @@ func (s *Servicio) PresupuestoDe(ctx context.Context, c *Cliente, numero string)
 	return &p, err
 }
 
+// MotivosDelCliente son los que el cliente elige al rechazar desde Mi
+// cuenta (espejo de MOTIVOS en app/(public)/mi-cuenta/presupuestos): el
+// vendedor no sabía por qué se caía (mes simulado, M2S2-114).
+var MotivosDelCliente = []string{"Precio", "Plazo de entrega", "Ya lo compré", "Otro"}
+
 // Responder acepta o rechaza un presupuesto que está esperando respuesta.
 func (s *Servicio) Responder(ctx context.Context, c *Cliente, numero, respuesta string) (string, error) {
+	return s.ResponderConMotivo(ctx, c, numero, respuesta, "")
+}
+
+// ResponderConMotivo es Responder con el motivo del rechazo, que queda en
+// motivo_rechazo («Otro» si no eligió ninguno o no es uno de la lista).
+func (s *Servicio) ResponderConMotivo(ctx context.Context, c *Cliente, numero, respuesta, motivo string) (string, error) {
 	numero = strings.TrimSpace(numero)
 	if numero == "" || (respuesta != "aceptado" && respuesta != "rechazado") {
 		return "", plataforma.Invalido(map[string]string{"respuesta": "No pudimos guardar tu respuesta. Probá de nuevo."})
 	}
+	var motivoRechazo *string
+	if respuesta == "rechazado" {
+		m := strings.TrimSpace(motivo)
+		if !slices.Contains(MotivosDelCliente, m) {
+			m = "Otro"
+		}
+		motivoRechazo = &m
+	}
 	var id string
 	var total float64
-	err := s.pool.QueryRow(ctx, `UPDATE quotes SET estado = $1::estado_presupuesto, updated_at = now()
+	err := s.pool.QueryRow(ctx, `UPDATE quotes SET estado = $1::estado_presupuesto, motivo_rechazo = coalesce($5, motivo_rechazo), updated_at = now()
 		WHERE numero = $2 AND customer_id = $3 AND estado::text = ANY($4) RETURNING id, total::float8`,
-		respuesta, numero, c.ID, s.estadosAResponder(ctx)).Scan(&id, &total)
+		respuesta, numero, c.ID, s.estadosAResponder(ctx), motivoRechazo).Scan(&id, &total)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", plataforma.Invalido(map[string]string{"numero": "Ese presupuesto ya no está esperando respuesta. Escribinos y lo vemos."})
 	}

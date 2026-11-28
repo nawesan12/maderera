@@ -481,7 +481,7 @@ export interface paths {
         /** @description Lo que se puede devolver de un pedido facturado desde el pedido (renglones de su factura, el destino de la plata y el tope). 404 si no tiene factura viva. De quien mueve plata. */
         get: operations["DevolucionDesdeElPedido"];
         put?: never;
-        /** @description La devolución de un pedido facturado con su nota de crédito, sin que salga plata (a la cuenta corriente o bajando lo que falta cobrar). La clave hace que el reintento devuelva la misma. De quien mueve plata. */
+        /** @description La devolución de un pedido facturado con su nota de crédito (a la cuenta corriente, bajando lo que falta cobrar, o, ya cobrado, por la caja o por afuera). La clave hace que el reintento devuelva la misma. De quien mueve plata. */
         post: operations["DevolverDesdeElPedido"];
         delete?: never;
         options?: never;
@@ -649,6 +649,12 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             renumerados: components["schemas"]["Corrimiento"][];
+            /** @description el comprobante vivo que tiene hoy ese número */
+            reuso: {
+                invoiceId: string;
+                receptorNombre: string;
+                pedido: string | null;
+            } | null;
         };
         RenglonesADevolver: {
             itemId: string;
@@ -679,6 +685,8 @@ export interface components {
         }[];
         DatosDeDevolucion: {
             pedido: string;
+            /** @description El medio por el que vuelve lo de afuera, si es uno solo (lo cobrado con cheque vuelve por transferencia); vacío si son varios */
+            afueraPor: string;
             renglones: components["schemas"]["RenglonesDevolvibles"];
             /** Format: double */
             caja: number;
@@ -825,10 +833,12 @@ export interface components {
             id: string;
             invoiceId: string;
             /** @enum {string} */
-            medio: "efectivo" | "transferencia" | "mercado_pago" | "tarjeta" | "cheque" | "cuenta_corriente";
+            medio: "efectivo" | "transferencia" | "mercado_pago" | "tarjeta" | "cheque" | "cuenta_corriente" | "deposito" | "echeq" | "retencion";
             monto: string;
             referencia: string | null;
             receiptId: string | null;
+            /** @description el número del recibo (REC-0041) */
+            recibo: string | null;
             /** Format: date-time */
             fecha: string;
             createdByUserId: string | null;
@@ -894,6 +904,8 @@ export interface components {
             enCuenta: boolean;
             pedido: string | null;
             ventaAnulada: boolean;
+            /** @description Hay certificado y se le puede pedir el CAE */
+            conArca?: boolean;
             cobrosDelPedido: {
                 medio: string;
                 /** Format: double */
@@ -905,6 +917,22 @@ export interface components {
             }[];
             /** @description El enlace de verificación de ARCA (solo con CAE) */
             qrUrl: string | null;
+            /** @description En una nota, el comprobante que corrige, para el papel (Anula parcialmente: Factura A 0015-00000105 del 27/11/26) */
+            asociado?: string | null;
+            /** @description En la nota de una devolución, cómo y cuándo salió la plata */
+            devolucion?: {
+                /** @enum {string} */
+                destino: "caja" | "cuenta" | "afuera" | "deuda";
+                /** Format: date-time */
+                fecha: string;
+                /** Format: double */
+                importe: number;
+                partes: {
+                    medio: string;
+                    /** Format: double */
+                    importe: number;
+                }[];
+            } | null;
         };
         ResultadoDeAutorizacion: {
             ok?: string;
@@ -1222,6 +1250,10 @@ export interface operations {
                 hasta?: string;
                 cobro?: "contado" | "cuenta" | "todos";
                 busqueda?: string;
+                /** @description las de esa ficha */
+                cliente?: string;
+                /** @description solo las que todavía deben algo */
+                conSaldo?: boolean;
                 limite?: number;
                 desplazamiento?: number;
             };
@@ -1836,6 +1868,18 @@ export interface operations {
                         destino: "cuenta" | "deuda";
                         /** Format: double */
                         tope: number;
+                        /**
+                         * Format: double
+                         * @description lo cobrado en efectivo que todavía no volvió
+                         */
+                        caja: number;
+                        /**
+                         * Format: double
+                         * @description lo cobrado por los demás medios que todavía no volvió
+                         */
+                        afuera: number;
+                        /** @description la sucursal del pedido tiene la caja abierta */
+                        cajaAbierta: boolean;
                         renglones: components["schemas"]["RenglonesDevolvibles"];
                     };
                 };
@@ -1859,6 +1903,11 @@ export interface operations {
                     motivo: string;
                     /** Format: double */
                     importe?: number | null;
+                    /**
+                     * @description lo ya cobrado vuelve por la caja de la sucursal del pedido o por afuera; sin él, a la cuenta o a la deuda
+                     * @enum {string}
+                     */
+                    destino?: "caja" | "afuera";
                     renglones: components["schemas"]["RenglonesDelPedidoADevolver"];
                 };
             };

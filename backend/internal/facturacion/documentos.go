@@ -48,6 +48,18 @@ func dia(t *time.Time) *time.Time {
 	return &d
 }
 
+// diaGuardado es una fecha que se cargó como día del calendario
+// («1985-03-01», el inicio de actividades): Next la guarda a medianoche UTC,
+// así que pasarla por la hora argentina la corría al día anterior (M2S1-016).
+func diaGuardado(t *time.Time) *time.Time {
+	if t == nil {
+		return nil
+	}
+	u := t.UTC()
+	d := time.Date(u.Year(), u.Month(), u.Day(), 0, 0, 0, 0, time.UTC)
+	return &d
+}
+
 // Pdf arma el comprobante en PDF (internal/pdf, idéntico al de pdf-lib).
 // Las fechas van como el día en Argentina, el mismo que se le informó a ARCA.
 func (s *Servicio) Pdf(ctx context.Context, c *Completo) ([]byte, string, error) {
@@ -56,7 +68,7 @@ func (s *Servicio) Pdf(ctx context.Context, c *Completo) ([]byte, string, error)
 		return nil, "", err
 	}
 	emisor := &pdf.EmisorFiscal{Emisor: pdf.Emisor{RazonSocial: e.RazonSocial, NombreFantasia: de(e.NombreFantasia), Domicilio: de(e.Domicilio),
-		Cuit: de(e.Cuit)}, CondicionIva: e.CondicionIva, IngresosBrutos: de(e.IngresosBrutos), InicioActividades: dia(e.InicioActividades)}
+		Cuit: de(e.Cuit)}, CondicionIva: e.CondicionIva, IngresosBrutos: de(e.IngresosBrutos), InicioActividades: diaGuardado(e.InicioActividades)}
 	cp := pdf.ComprobantePdf{Tipo: c.Tipo, PuntoVenta: float64(c.PuntoVenta), Numero: float64(c.Numero), ReceptorNombre: c.ReceptorNombre,
 		ReceptorCuit: de(c.ReceptorCuit), ReceptorCondicionIva: c.ReceptorCondicionIva, ReceptorDomicilio: de(c.ReceptorDomicilio),
 		Neto: c.Neto, Iva21: c.Iva21, Iva27: c.Iva27, Iva105: c.Iva105, Exento: c.Exento, TributosTotal: c.TributosTotal, Total: c.Total,
@@ -71,7 +83,13 @@ func (s *Servicio) Pdf(ctx context.Context, c *Completo) ([]byte, string, error)
 	if strings.HasPrefix(c.Tipo, "factura") {
 		cp.CondicionVenta = condicionDeVenta(c)
 	}
-	cp.Pedido = de(c.Pedido)
+	// En una nota, el comprobante que corrige va en el lugar del pedido
+	// (M3S3-006).
+	if c.Asociado != nil {
+		cp.Asociado = *c.Asociado
+	} else {
+		cp.Pedido = de(c.Pedido)
+	}
 	for i, t := range c.Tributos {
 		cp.Tributos[i] = pdf.TributoComprobante{Descripcion: t.Descripcion, Alicuota: t.Alicuota, Importe: t.Importe}
 	}
@@ -84,9 +102,9 @@ func (s *Servicio) Pdf(ctx context.Context, c *Completo) ([]byte, string, error)
 }
 
 var mediosImpresos = map[string]string{
-	"efectivo": "Efectivo", "transferencia": "Transferencia", "deposito": "Transferencia", "mercado_pago": "Mercado Pago",
+	"efectivo": "Efectivo", "transferencia": "Transferencia", "deposito": "Depósito", "mercado_pago": "Mercado Pago",
 	"tarjeta": "Tarjeta", "debito": "Tarjeta de débito", "credito": "Tarjeta de crédito", "tarjeta_debito": "Tarjeta de débito",
-	"tarjeta_credito": "Tarjeta de crédito", "cheque": "Cheque", "echeq": "Cheque",
+	"tarjeta_credito": "Tarjeta de crédito", "cheque": "Cheque", "echeq": "e-Cheq", "retencion": "Retención",
 }
 
 // condicionDeVenta es lo que va en «Condición de venta» del papel: cuenta

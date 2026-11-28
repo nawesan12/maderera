@@ -8,6 +8,7 @@ import {
   Loader2,
   MapPin,
   Plus,
+  Receipt,
   Store,
   Truck,
   Wallet,
@@ -82,6 +83,9 @@ export function FormularioDeCompra({
   direcciones,
   escalasDePago,
   precioMayorista,
+  pagoOnline,
+  hayDatosBancarios,
+  reglas,
 }: {
   items: ItemResumen[];
   subtotal: number;
@@ -94,6 +98,7 @@ export function FormularioDeCompra({
     motivo: string | null;
     /** Sin crédito: lo que ofrece es el saldo a favor del cliente. */
     soloSaldoAFavor: boolean;
+    limiteCredito: number;
   };
   direcciones: DireccionElegible[];
   /** Descuentos por forma de pago. El servidor los vuelve a calcular al confirmar. */
@@ -105,6 +110,12 @@ export function FormularioDeCompra({
    * precio mayorista es de contado. `confirmarCompra` lo vuelve a verificar.
    */
   precioMayorista: boolean;
+  /** Hay con qué cobrar en línea: sin eso Mercado Pago no se ofrece (M2S2-002). */
+  pagoOnline: boolean;
+  /** La casa cargó a dónde transferir: sin eso la transferencia no se ofrece (M3S1-016). */
+  hayDatosBancarios: boolean;
+  /** Las reglas de /admin/reglas que Go aplica al confirmar (M3S2-013, M3S3-020). */
+  reglas: { alFlete: boolean; sinEscalaConLista: boolean };
 }) {
   const [estado, accion, pendiente] = useActionState(
     confirmarCompra,
@@ -114,12 +125,25 @@ export function FormularioDeCompra({
   const [entrega, setEntrega] = useState<"retiro" | "envio">("retiro");
   const [sucursalId, setSucursalId] = useState(sucursales[0]?.id ?? "");
   const [zonaId, setZonaId] = useState(zonas[0]?.id ?? "");
-  const medios = mediosHabilitados(MEDIOS, precioMayorista);
-  // Tipado como string y no como la unión de `MEDIOS`: la cuenta corriente es
-  // una opción más de esta pantalla y no sale de esa lista.
-  const [medioPago, setMedioPago] = useState<string>(
-    medios[0]?.valor ?? "transferencia",
+  const medios = mediosHabilitados(MEDIOS, precioMayorista).filter(
+    (m) =>
+      (m.valor !== "mercado_pago" || pagoOnline) &&
+      (m.valor !== "transferencia" || hayDatosBancarios),
   );
+  // Tipado como string y no como la unión de `MEDIOS`: la cuenta corriente es
+  // una opción más de esta pantalla y no sale de esa lista. Arranca sin
+  // elegir: quedaba marcado Mercado Pago y, sin cuenta corriente a la vista,
+  // salía un pedido que no se podía pagar (mes simulado, M3S1-031).
+  const [medioPago, setMedioPago] = useState<string>("");
+  const [faltaMedio, setFaltaMedio] = useState(false);
+  const elegirMedio = (m: string) => {
+    setMedioPago(m);
+    setFaltaMedio(false);
+  };
+  // Pasado el límite, la cuenta corriente se ve apagada con su motivo en vez
+  // de desaparecer (M3S1-031).
+  const cuentaApagada =
+    !cuentaCorriente.habilitado && cuentaCorriente.limiteCredito > 0 && cuentaCorriente.motivo !== null;
 
   // Dirección guardada elegida. Arranca en la predeterminada, que es el caso
   // habitual: se compra para el mismo lugar de siempre.
@@ -141,17 +165,31 @@ export function FormularioDeCompra({
         : zona.costo
       : 0;
 
-  // El descuento va sobre la mercadería, no sobre el flete. Es el mismo
-  // cálculo que hace `confirmarCompra`; acá solo se muestra.
-  const escala = descuentoPorMedioDePago(escalasDePago, medioPago, subtotal);
+  // El descuento va sobre la mercadería, y sobre el flete con la regla
+  // descuento_al_flete. Es el mismo cálculo que hace `confirmarCompra`
+  // (CuentasDeLaCompraCon); acá solo se muestra.
+  const baseEscala = subtotal + (reglas.alFlete ? costoEnvio : 0);
+  const escala =
+    precioMayorista && reglas.sinEscalaConLista
+      ? null
+      : descuentoPorMedioDePago(escalasDePago, medioPago, baseEscala);
   const descuento = escala
-    ? montoDelDescuentoDePago(subtotal, escala.porcentaje)
+    ? montoDelDescuentoDePago(baseEscala, escala.porcentaje)
     : 0;
 
   const total = subtotal - descuento + costoEnvio;
 
   return (
-    <form action={accion} className="grid gap-6 lg:grid-cols-[1fr_360px]">
+    <form
+      action={accion}
+      onSubmit={(e) => {
+        if (medioPago) return;
+        e.preventDefault();
+        setFaltaMedio(true);
+        document.getElementById("como-pagas")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }}
+      className="grid gap-6 lg:grid-cols-[1fr_360px]"
+    >
       <input type="hidden" name="entrega" value={entrega} />
       <input type="hidden" name="sucursalId" value={sucursalId} />
       <input type="hidden" name="zonaId" value={entrega === "envio" ? zonaId : ""} />
@@ -269,15 +307,20 @@ export function FormularioDeCompra({
                               : formatearPrecio(String(z.costo))
                         }
                         nota={
-                          z.aCotizar
-                            ? "Te pasamos el costo del flete al confirmar"
-                            : !gratis && z.envioGratisDesde > 0
-                              ? `Gratis desde ${formatearPrecio(String(z.envioGratisDesde))}`
-                              : undefined
+                          !z.aCotizar && !gratis && z.envioGratisDesde > 0
+                            ? `Gratis desde ${formatearPrecio(String(z.envioGratisDesde))}`
+                            : undefined
                         }
                       />
                     );
                   })}
+                  {/* Una sola vez para todas las zonas a cotizar, no en
+                      cada tarjeta (M2S2-112). */}
+                  {zonas.some((z) => z.aCotizar) && (
+                    <p className="px-1 text-[13.5px] text-acento-texto">
+                      Te pasamos el costo del flete al confirmar
+                    </p>
+                  )}
                 </div>
 
                 {/* Direcciones guardadas: para quien ya compró, elegir una es
@@ -333,22 +376,18 @@ export function FormularioDeCompra({
         </Card>
 
         {/* Pago */}
-        <Card className="rounded-[14px] border border-linea shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
+        <Card id="como-pagas" className="rounded-[14px] border border-linea shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
           <CardContent className="px-6 py-[22px]">
             <TituloPaso numero={3}>Cómo pagás</TituloPaso>
-            {precioMayorista && (
-              <p className="mb-3 rounded-[10px] bg-chip px-3.5 py-2.5 text-[13px] leading-relaxed text-texto-2">
-                Estás viendo tu precio de profesional, que es de contado: se paga
-                por transferencia, débito o efectivo. En cuotas con tarjeta corre
-                el precio de catálogo.
-              </p>
-            )}
-            <div className="space-y-2">
+            {/* El aviso del precio de profesional nombraba cuotas que no se
+                ofrecen y callaba la cuenta corriente: los medios que se ven
+                ya son los que valen (M3S2-058). */}
+            <div className="mt-4 space-y-2">
               {medios.map((m) => (
                 <OpcionLista
                   key={m.valor}
                   activa={medioPago === m.valor}
-                  onClick={() => setMedioPago(m.valor)}
+                  onClick={() => elegirMedio(m.valor)}
                   titulo={m.titulo}
                   detalle={m.detalle}
                   icono={m.icono}
@@ -360,17 +399,33 @@ export function FormularioDeCompra({
               {cuentaCorriente.habilitado && (
                 <OpcionLista
                   activa={medioPago === "cuenta_corriente"}
-                  onClick={() => setMedioPago("cuenta_corriente")}
+                  onClick={() => elegirMedio("cuenta_corriente")}
                   titulo={cuentaCorriente.soloSaldoAFavor ? "Con mi saldo a favor" : "Cuenta corriente"}
                   detalle={
                     cuentaCorriente.soloSaldoAFavor
                       ? `Tenés ${formatearPrecio(cuentaCorriente.disponible)} a favor`
                       : `Tenés ${formatearPrecio(cuentaCorriente.disponible)} disponibles`
                   }
-                  icono={Wallet}
+                  icono={Receipt}
+                />
+              )}
+              {cuentaApagada && (
+                <OpcionLista
+                  activa={false}
+                  deshabilitada
+                  onClick={() => {}}
+                  titulo="Cuenta corriente"
+                  detalle={cuentaCorriente.motivo ?? ""}
+                  icono={Receipt}
                 />
               )}
             </div>
+            {faltaMedio && (
+              <p role="alert" className="mt-3 flex items-center gap-2 text-sm font-medium text-destructive">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                Elegí cómo pagás.
+              </p>
+            )}
 
             {/* El saldo a favor que no alcanza no se esconde sin decir nada:
                 el cliente sabe que lo tiene y lo va a buscar. */}
@@ -441,8 +496,10 @@ export function FormularioDeCompra({
                 <dt className="text-muted-foreground">Subtotal</dt>
                 <dd className="tabular">{formatearPrecio(String(subtotal))}</dd>
               </div>
+              {/* Es plata a favor: en el color del saldo a favor, no en el
+                  rojo de las deudas y los errores (M3S3-047). */}
               {escala && descuento > 0 && (
-                <div className="flex justify-between font-medium text-rojo-oferta">
+                <div className="flex justify-between font-medium text-saldo-favor">
                   <dt>{escala.etiqueta || `Descuento ${escala.porcentaje}%`}</dt>
                   <dd className="tabular">
                     − {formatearPrecio(String(descuento))}
@@ -451,7 +508,9 @@ export function FormularioDeCompra({
               )}
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Envío</dt>
-                <dd className="tabular">
+                {/* La letra de los números solo para el importe: «Retirás
+                    vos» en monoespaciada parecía código (M3S3-047). */}
+                <dd className={entrega === "envio" && !zona?.aCotizar && !envioGratis ? "tabular" : ""}>
                   {entrega === "retiro"
                     ? "Retirás vos"
                     : zona?.aCotizar
@@ -565,6 +624,7 @@ function OpcionGrande({
 
 function OpcionLista({
   activa,
+  deshabilitada = false,
   onClick,
   titulo,
   detalle,
@@ -574,6 +634,7 @@ function OpcionLista({
   icono: Icono,
 }: {
   activa: boolean;
+  deshabilitada?: boolean;
   onClick: () => void;
   titulo: string;
   detalle: string;
@@ -587,10 +648,13 @@ function OpcionLista({
       type="button"
       onClick={onClick}
       aria-pressed={activa}
+      disabled={deshabilitada}
       className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
         activa
           ? "border-[1.5px] border-accion bg-naranja-tenue"
-          : "border border-linea hover:border-accion/40"
+          : deshabilitada
+            ? "cursor-not-allowed border border-dashed border-linea opacity-70"
+            : "border border-linea hover:border-accion/40"
       }`}
     >
       <span

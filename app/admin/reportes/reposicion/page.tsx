@@ -4,7 +4,7 @@ import { ArrowLeft, Download, FileText, ShoppingCart } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { GrupoListado } from "@/components/admin/grupo";
 import { plural } from "@/components/admin/formato";
-import { unidadConcordada } from "@/lib/formato";
+import { formatearMonto, unidadConcordada } from "@/lib/formato";
 
 // Las cantidades con coma, como en Stock: «36,5» y no «36.5».
 const cantidad = (n: number) => n.toLocaleString("es-AR", { maximumFractionDigits: 2 });
@@ -20,9 +20,10 @@ import { Vacio } from "@/components/admin/vacio";
 export const metadata: Metadata = { title: "Reposición" };
 
 const PERIODOS = [30, 60, 90] as const;
+// Cortas, para que las tres entren en un renglón a 375 px (M2S3-057).
 const SUCURSALES = {
-  todos: "Las dos sucursales",
-  "casa-central": "Casa Central",
+  todos: "Las dos",
+  "casa-central": "Central",
   aserradero: "Aserradero",
 };
 
@@ -74,7 +75,12 @@ export default async function ReposicionPage({
     .map((c) => ({ categoria: c.name, rubros: c.rubros.filter((r) => r.active).sort(orden) }))
     .filter((g) => g.rubros.length > 0);
 
-  const paraComprar = reporte.filas.filter((f) => f.sugerido > 0);
+  // Lo que hay que comprar o traer de la otra sucursal, con lo vendido de
+  // más (en negativo) arriba de todo (M2S4-001).
+  const paraComprar = reporte.filas.filter(
+    (f) => f.sugerido > 0 || f.trasladoACentral > 0 || f.trasladoAAserradero > 0 || f.negativo,
+  );
+  const aComprar = paraComprar.filter((f) => f.sugerido > 0);
   /*
    * Una orden por proveedor habitual: juntos, la bisagra de Herrajes salía en
    * la orden de Placas del Sur y había que sacarla a mano (simulación del mes,
@@ -83,7 +89,7 @@ export default async function ReposicionPage({
    */
   const sucursalId = sucursales.find((x) => x.slug === sucursal)?.id;
   const porProveedor = new Map<string, { nombre: string | null; filas: typeof paraComprar }>();
-  for (const f of paraComprar) {
+  for (const f of aComprar) {
     const clave = f.proveedorId ?? "";
     const grupo = porProveedor.get(clave) ?? { nombre: f.proveedor ?? null, filas: [] };
     grupo.filas.push(f);
@@ -102,10 +108,9 @@ export default async function ReposicionPage({
       if (sucursalId) q.set("sucursal", sucursalId);
       return { id, nombre: g.nombre, cantidad: g.filas.length, href: `/admin/compras/ordenes/nueva?${q}` };
     });
-  const seMovieron = reporte.filas.filter(
-    (f) => f.sugerido === 0 && f.vendido > 0,
-  );
-  const sinMovimiento = reporte.filas.filter((f) => f.vendido === 0);
+  const enLista = new Set(paraComprar.map((f) => f.variantId));
+  const seMovieron = reporte.filas.filter((f) => !enLista.has(f.variantId) && f.vendido > 0);
+  const sinMovimiento = reporte.filas.filter((f) => !enLista.has(f.variantId) && f.vendido === 0);
   const maxVendidoCategoria = Math.max(
     ...reporte.porCategoria.map((c) => c.vendido),
     1,
@@ -188,7 +193,7 @@ export default async function ReposicionPage({
               key={valor}
               href={consulta({ sucursal: valor })}
               aria-current={sucursal === valor ? "page" : undefined}
-              className={`h-10 rounded-lg px-3 text-base font-medium leading-10 transition-colors ${
+              className={`h-10 whitespace-nowrap rounded-lg px-3 text-base font-medium leading-10 transition-colors ${
                 sucursal === valor
                   ? "boton-accion"
                   : "border text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -199,10 +204,13 @@ export default async function ReposicionPage({
           ))}
         </div>
 
-        <SelectorDeRubro
-          actual={rubro}
-          grupos={gruposDeRubros}
-        />
+        {/* Sin rubros cargados el selector traía solo «Todos los rubros»:
+            un control que no filtra nada (mes 23, M2S4-034). */}
+        {gruposDeRubros.some((g) => g.rubros.length > 0) && (
+          <div className="w-full sm:w-auto">
+            <SelectorDeRubro actual={rubro} grupos={gruposDeRubros} />
+          </div>
+        )}
       </div>
 
       {/* Lo vendido por categoría, como barras. A mano y sin librería, como
@@ -212,20 +220,21 @@ export default async function ReposicionPage({
           <h2 className="text-base font-semibold">
             Qué se vendió, por categoría
           </h2>
-          <ul className="mt-4 space-y-2.5">
+          {/* En pesos, y la barra sobre su propio carril: medida contra el
+              ancho de toda la fila, 363 y 53 salían casi del mismo largo, y
+              en unidades se sumaban m² con tornillos (M2S3-058). */}
+          <ul className="mt-4 space-y-3">
             {reporte.porCategoria.map((c) => (
-              <li key={c.nombre} className="flex items-center gap-3">
-                <span className="w-44 shrink-0 truncate text-base">
-                  {c.nombre}
+              <li key={c.nombre} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 sm:grid-cols-[11rem_minmax(0,1fr)_auto]">
+                <span className="truncate text-base">{c.nombre}</span>
+                <span className="col-span-2 row-start-2 h-3 overflow-hidden rounded-full bg-hundida sm:col-span-1 sm:row-start-1 sm:col-start-2" aria-hidden>
+                  <span
+                    className="block h-full rounded-full bg-brand-orange/70"
+                    style={{ width: `${Math.max((c.vendido / maxVendidoCategoria) * 100, 1)}%` }}
+                  />
                 </span>
-                <span className="h-5 min-w-[3px] rounded-sm bg-brand-orange/70"
-                  style={{
-                    width: `${Math.max((c.vendido / maxVendidoCategoria) * 100, 1)}%`,
-                  }}
-                  aria-hidden
-                />
-                <span className="tabular shrink-0 text-base font-medium">
-                  {c.vendido}
+                <span className="tabular text-right text-base font-medium sm:col-start-3">
+                  {formatearMonto(c.vendido)}
                 </span>
               </li>
             ))}
@@ -276,14 +285,14 @@ export default async function ReposicionPage({
                 ))}
               </div>
             )}
-            <Tabla filas={paraComprar} conSugerido />
+            <Tabla filas={paraComprar} conSugerido sucursal={sucursal} />
           </GrupoListado>
 
           <GrupoListado
             titulo="Se venden y el stock alcanza"
             cantidad={seMovieron.length}
           >
-            <Tabla filas={seMovieron.slice(0, 40)} />
+            <Tabla filas={seMovieron.slice(0, 40)} sucursal={sucursal} />
             {seMovieron.length > 40 && (
               <p className="mt-2 text-sm text-muted-foreground">
                 Se muestran los 40 más vendidos. El resto sale en el CSV.
@@ -316,12 +325,49 @@ export default async function ReposicionPage({
   );
 }
 
+/** La unidad de la fila: la lata de 4 litros se cuenta por lata (M2S2-086). */
+function unidadDe(f: FilaDeReposicion, n: number): string {
+  return unidadConcordada(n, f.unidad, `${f.producto} ${f.medida}`);
+}
+
+/**
+ * Lo que una sucursal compra y lo que trae de la otra, en chico debajo de su
+ * stock, con su unidad: «traer 12» no decía si eran latas o litros (mes 23,
+ * M2S2-086).
+ */
+function Movimiento({ f, comprar, traer, desde }: { f: FilaDeReposicion; comprar: number; traer: number; desde: string }) {
+  if (comprar <= 0 && traer <= 0) return null;
+  return (
+    <span className="block text-sm font-medium">
+      {comprar > 0 && <span className="text-foreground">comprar {cantidad(comprar)} {unidadDe(f, comprar)}</span>}
+      {comprar > 0 && traer > 0 && " · "}
+      {traer > 0 && <span className="estado-espera">traer {cantidad(traer)} {unidadDe(f, traer)} {desde}</span>}
+    </span>
+  );
+}
+
+function Stock({ n }: { n: number }) {
+  return <span className={`tabular ${n < 0 ? "estado-problema font-semibold" : ""}`}>{cantidad(n)}</span>;
+}
+
+/**
+ * La lista de medidas. En la computadora, una tabla; en el teléfono, una
+ * tarjeta por medida (M2S1-040): el nombre a lo ancho, la medida y el código
+ * debajo, el stock de cada sucursal y lo que se compra en una línea, con el
+ * número grande; rubro, vendido y cobertura en chico. La tabla apilada daba
+ * siete renglones por medida y «Fenólic / o» en una columna angosta.
+ *
+ * Lo que se compra va en la columna de la sucursal para la que es, y lo que
+ * conviene traer de la otra al lado (M2S1-033).
+ */
 function Tabla({
   filas,
   conSugerido = false,
+  sucursal,
 }: {
   filas: FilaDeReposicion[];
   conSugerido?: boolean;
+  sucursal: string;
 }) {
   if (filas.length === 0) {
     return (
@@ -330,92 +376,120 @@ function Tabla({
       </p>
     );
   }
+  const verCentral = sucursal !== "aserradero";
+  const verAserradero = sucursal !== "casa-central";
+  const cobertura = (f: FilaDeReposicion) =>
+    f.cobertura === null ? null : f.cobertura > 365 ? "más de un año" : `${cantidad(f.cobertura)} días`;
 
   return (
-    <div className="tarjeta overflow-x-auto">
-      <table className="w-full">
-        <thead>
-          <tr className="border-b text-left">
-            <th className="px-5 py-3 text-sm font-medium text-muted-foreground">
-              Producto
-            </th>
-            <th className="px-4 py-3 text-sm font-medium text-muted-foreground">
-              Rubro
-            </th>
-            <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">
-              Central
-            </th>
-            <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">
-              Aserradero
-            </th>
-            <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">
-              Vendido
-            </th>
-            <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">
-              Cobertura
-            </th>
-            {conSugerido && (
-              <th className="px-5 py-3 text-right text-sm font-medium text-muted-foreground">
-                Comprar
-              </th>
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          {filas.map((f) => (
-            <tr key={f.variantId} className="border-b last:border-0">
-              <td className="px-5 py-3">
-                {/* Señalar un producto y no dejar abrirlo era el paso que
-                    faltaba: el reporte dice "comprá 12 de esto" y había que
-                    ir a buscarlo al listado para ver de qué se trata. */}
-                <Link
-                  href={`/admin/productos/${f.productId}`}
-                  className="text-base font-medium hover:text-brand-orange hover:underline"
-                >
-                  {f.producto}
-                </Link>
-                <p className="text-sm text-muted-foreground">
-                  {f.medida}
-                  {f.sku ? ` · ${f.sku}` : ""}
-                </p>
-              </td>
-              <td className="px-4 py-3 text-base text-muted-foreground">
-                {f.rubro ?? f.categoria}
-              </td>
-              <td className="tabular px-4 py-3 text-right text-base">
-                {cantidad(f.disponibleCentral)}
-              </td>
-              <td className="tabular px-4 py-3 text-right text-base">
-                {cantidad(f.disponibleAserradero)}
-              </td>
-              <td className="tabular px-4 py-3 text-right text-base">
-                {cantidad(f.vendido)}
-              </td>
-              <td className="tabular px-4 py-3 text-right text-base">
-                {f.cobertura === null ? (
-                  <span className="text-muted-foreground">—</span>
-                ) : (
-                  // Menos de una semana de cobertura pide atención: es lo que
-                  // se queda sin stock antes del próximo pedido al proveedor.
-                  <span
-                    className={
-                      f.cobertura <= 7 ? "font-semibold text-brand-orange-dark" : ""
-                    }
-                  >
-                    {/* 7620 días no dice nada que no diga «más de un año». */}
-                    {f.cobertura > 365 ? "Más de un año" : `${cantidad(f.cobertura)} días`}
-                  </span>
+    <>
+      <ul className="tarjeta divide-y divide-linea sm:hidden">
+        {filas.map((f) => (
+          <li key={f.variantId} className={`px-4 py-3 ${f.negativo ? "bg-[var(--estado-fondo)] estado-problema" : ""}`}>
+            <Link href={`/admin/productos/${f.productId}`} className="block text-base font-semibold text-foreground hover:underline">
+              {f.producto}
+            </Link>
+            <p className="text-sm text-muted-foreground">
+              {f.medida}
+              {f.sku ? ` · ${f.sku}` : ""}
+            </p>
+            <div className="mt-2 flex items-end justify-between gap-3">
+              <div className="min-w-0 space-y-0.5 text-base">
+                {verCentral && (
+                  <p>
+                    <span className="text-sm text-muted-foreground">Central </span>
+                    <span className="font-medium">
+                      <Stock n={f.disponibleCentral} />
+                    </span>
+                    {conSugerido && <Movimiento f={f} comprar={f.comprarCentral} traer={f.trasladoACentral} desde="del Aserradero" />}
+                  </p>
                 )}
-              </td>
-              {conSugerido && (
-                <td className="tabular px-5 py-3 text-right text-base font-semibold">
-                  {cantidad(f.sugerido)} {unidadConcordada(f.sugerido, f.unidad)}
-                </td>
+                {verAserradero && (
+                  <p>
+                    <span className="text-sm text-muted-foreground">Aserradero </span>
+                    <span className="font-medium">
+                      <Stock n={f.disponibleAserradero} />
+                    </span>
+                    {conSugerido && <Movimiento f={f} comprar={f.comprarAserradero} traer={f.trasladoAAserradero} desde="de Central" />}
+                  </p>
+                )}
+              </div>
+              {conSugerido && f.sugerido > 0 && (
+                <p className="shrink-0 text-right">
+                  <span className="tabular block text-[26px] font-bold leading-none text-foreground">{cantidad(f.sugerido)}</span>
+                  <span className="text-sm text-muted-foreground">{unidadDe(f, f.sugerido)} a comprar</span>
+                </p>
               )}
+            </div>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              {f.rubro ?? f.categoria} · vendido {cantidad(f.vendido)}
+              {cobertura(f) ? ` · cubre ${cobertura(f)}` : ""}
+            </p>
+          </li>
+        ))}
+      </ul>
+
+      <div className="tarjeta hidden overflow-x-auto sm:block">
+        <table className="w-full" data-tabla="fija">
+          <thead>
+            <tr className="border-b text-left">
+              <th className="px-5 py-3 text-sm font-medium text-muted-foreground">Producto</th>
+              <th className="px-4 py-3 text-sm font-medium text-muted-foreground">Rubro</th>
+              {verCentral && <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">Central</th>}
+              {verAserradero && <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">Aserradero</th>}
+              <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">Vendido</th>
+              <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">Cobertura</th>
+              {conSugerido && <th className="px-5 py-3 text-right text-sm font-medium text-muted-foreground">Comprar</th>}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {filas.map((f) => (
+              <tr key={f.variantId} className={`border-b last:border-0 ${f.negativo ? "estado-problema bg-[var(--estado-fondo)]" : ""}`}>
+                <td className="px-5 py-3">
+                  {/* Señalar un producto y no dejar abrirlo era el paso que
+                      faltaba: el reporte dice "comprá 12 de esto" y había que
+                      ir a buscarlo al listado para ver de qué se trata. */}
+                  <Link href={`/admin/productos/${f.productId}`} className="text-base font-medium hover:text-brand-orange hover:underline">
+                    {f.producto}
+                  </Link>
+                  <p className="text-sm text-muted-foreground">
+                    {f.medida}
+                    {f.sku ? ` · ${f.sku}` : ""}
+                  </p>
+                </td>
+                <td className="px-4 py-3 text-base text-muted-foreground">{f.rubro ?? f.categoria}</td>
+                {verCentral && (
+                  <td className="px-4 py-3 text-right text-base">
+                    <Stock n={f.disponibleCentral} />
+                    {conSugerido && <Movimiento f={f} comprar={f.comprarCentral} traer={f.trasladoACentral} desde="del Aserradero" />}
+                  </td>
+                )}
+                {verAserradero && (
+                  <td className="px-4 py-3 text-right text-base">
+                    <Stock n={f.disponibleAserradero} />
+                    {conSugerido && <Movimiento f={f} comprar={f.comprarAserradero} traer={f.trasladoAAserradero} desde="de Central" />}
+                  </td>
+                )}
+                <td className="tabular px-4 py-3 text-right text-base">{cantidad(f.vendido)}</td>
+                <td className="tabular px-4 py-3 text-right text-base">
+                  {f.cobertura === null ? (
+                    <span className="text-muted-foreground">—</span>
+                  ) : (
+                    // Menos de una semana de cobertura pide atención: es lo que
+                    // se queda sin stock antes del próximo pedido al proveedor.
+                    <span className={f.cobertura <= 7 ? "font-semibold text-brand-orange-dark" : ""}>{cobertura(f)}</span>
+                  )}
+                </td>
+                {conSugerido && (
+                  <td className="tabular px-5 py-3 text-right text-base font-semibold">
+                    {f.sugerido > 0 ? `${cantidad(f.sugerido)} ${unidadDe(f, f.sugerido)}` : <span className="text-muted-foreground">—</span>}
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }

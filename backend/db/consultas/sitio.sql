@@ -11,14 +11,16 @@ SELECT EXISTS (
 
 -- name: DocumentosVisibles :many
 -- El permiso va dentro de la consulta: listar todo y filtrar en la pantalla
--- ya sería haber leído lo que no corresponde.
+-- ya sería haber leído lo que no corresponde. Sin archivo subido (tamaño
+-- nulo: los de la semilla apuntaban a /fichas/, que la API no sirve) no se
+-- lista: daba 404 al tocarlo (mes simulado, M2S1-025).
 SELECT id, titulo, descripcion, categoria, url, formato, tamano_bytes, solo_profesionales
 FROM technical_documents
-WHERE activo AND (sqlc.arg(profesional)::boolean OR NOT solo_profesionales)
+WHERE activo AND tamano_bytes IS NOT NULL AND (sqlc.arg(profesional)::boolean OR NOT solo_profesionales)
 ORDER BY orden, titulo;
 
 -- name: DocumentosReservados :one
-SELECT count(*)::int FROM technical_documents WHERE activo AND solo_profesionales;
+SELECT count(*)::int FROM technical_documents WHERE activo AND solo_profesionales AND tamano_bytes IS NOT NULL;
 
 -- name: EventosProximos :many
 SELECT e.id, e.slug, e.titulo, e.resumen, e.imagen_url, e.lugar, e.inicia, e.termina, e.cupo, e.precio,
@@ -43,7 +45,10 @@ SELECT id, estado::text AS estado FROM event_registrations WHERE event_id = $1 A
 SELECT EXISTS (SELECT 1 FROM events WHERE slug = $1 AND estado <> 'borrador');
 
 -- name: SlugsDeEventosVisibles :many
-SELECT slug FROM events WHERE estado <> 'borrador' ORDER BY inicia DESC LIMIT $1;
+-- Los que se pueden ver y no pasaron, como /eventos: devolvía los que ya
+-- pasaron mientras /eventos decía que no había ninguno (mes simulado,
+-- M2S1-207). El de un evento pasado se sigue abriendo por su dirección.
+SELECT slug FROM events WHERE estado IN ('publicado', 'cerrado') AND inicia >= now() ORDER BY inicia LIMIT $1;
 
 -- name: SitemapCatalogo :many
 SELECT p.slug,

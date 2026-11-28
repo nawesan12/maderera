@@ -314,8 +314,18 @@ func (d *Disco) Borrar(url string) error {
 // PDF o la foto se abran en el navegador, nosniff y un sandbox por si alguna
 // vez entra algo que el navegador quiera interpretar.
 func Entregar(w http.ResponseWriter, datos []byte, tipo, cache string) {
+	EntregarComo(w, datos, tipo, cache, "")
+}
+
+// EntregarComo es Entregar con el nombre con que se guarda al bajarlo. El
+// nombre lo arma quien llama (letras, números, guiones y un punto).
+func EntregarComo(w http.ResponseWriter, datos []byte, tipo, cache, nombre string) {
 	w.Header().Set("Content-Type", tipo)
-	w.Header().Set("Content-Disposition", "inline")
+	if nombre != "" && !strings.ContainsAny(nombre, "\"\\\r\n") {
+		w.Header().Set("Content-Disposition", `inline; filename="`+nombre+`"`)
+	} else {
+		w.Header().Set("Content-Disposition", "inline")
+	}
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Security-Policy", "sandbox")
 	w.Header().Set("Cache-Control", cache)

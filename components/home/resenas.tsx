@@ -14,6 +14,14 @@ import type { ResenaDelNegocio } from "@/lib/google/resenas";
  * sobre todo el sitio. Se muestran porque son verdad y porque sirven, no para
  * sacar estrellitas en el buscador.
  */
+/**
+ * Cuántas publicadas hacen falta para que el bloque aparezca. Con una o dos
+ * opiniones resta: «5,0 sobre 1 opinión» parece un sitio recién armado. El
+ * panel lo cuenta igual, para que quien publica la primera no crea que ya se
+ * ve (mes simulado, M3S3-062).
+ */
+export const MINIMO_EN_PORTADA = 3;
+
 export function ResenasDelNegocio({
   resenas,
   resumen,
@@ -21,9 +29,7 @@ export function ResenasDelNegocio({
   resenas: ResenaDelNegocio[];
   resumen: { promedio: number; cuantas: number } | null;
 }) {
-  // Con una o dos opiniones el bloque resta: «5,0 sobre 1 opinión» parece
-  // un sitio recién armado. Aparece cuando hay con qué convencer.
-  if (resenas.length < 3) return null;
+  if (resenas.length < MINIMO_EN_PORTADA) return null;
 
   return (
     <section className="bg-sitio-alt py-14">
@@ -46,7 +52,9 @@ export function ResenasDelNegocio({
                     />
                   ))}
                 </span>
-                <span className="tabular font-semibold text-foreground">
+                {/* Las cifras de la letra del bloque: en la mono de las
+                    tablas, el «4,0» parecía de otra página (M3S1-073). */}
+                <span className="font-semibold text-foreground [font-variant-numeric:tabular-nums]">
                   {resumen.promedio.toLocaleString("es-AR", {
                     minimumFractionDigits: 1,
                   })}
@@ -59,7 +67,10 @@ export function ResenasDelNegocio({
         </div>
 
         <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {resenas.slice(0, 6).map((resena) => (
+          {/* Las de más estrellas primero, y entre iguales la más nueva:
+              por fecha, la de 3 estrellas encabezaba (M3S1-073). El orden
+              de las que llegan es el de la base (fecha), y es estable. */}
+          {[...resenas].sort((a, b) => b.estrellas - a.estrellas).slice(0, 6).map((resena) => (
             <li
               key={resena.id}
               className="flex flex-col rounded-2xl superficie px-5 py-[18px]"

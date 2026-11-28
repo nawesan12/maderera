@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"mjbj/internal/busqueda"
+	"regexp"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -40,6 +41,9 @@ type ResultadoDeMostrador struct {
 	// Piso es el precio final que apenas cubre el costo (precios.PisoDeCosto);
 	// nil sin costo cargado. El presupuesto marca un renglón por debajo.
 	Piso *float64 `json:"piso"`
+	// PrecioAnterior es el de antes de una oferta vigente, para tacharlo en
+	// el buscador y en el renglón (M2S2-030); nil sin oferta.
+	PrecioAnterior *float64 `json:"precioAnterior"`
 }
 
 // args junta los parámetros de una consulta armada a mano.
@@ -62,10 +66,43 @@ func (a *args) coincide(texto string, columnas ...string) string {
 	}
 	var por []string
 	for _, t := range terminos {
+		// «2x4» encuentra el tirante de 2" x 4" (M2S3-028): la medida se
+		// escribe sin comillas ni espacios.
+		if re, ok := busqueda.MedidaPorPor(t); ok {
+			p := a.poner(re)
+			var col []string
+			for _, c := range columnas {
+				col = append(col, "coalesce("+c+", '') ~* "+p)
+			}
+			por = append(por, "("+strings.Join(col, " OR ")+")")
+			continue
+		}
 		p := a.poner("%" + t + "%")
 		var col []string
 		for _, c := range columnas {
 			col = append(col, "f_unaccent("+c+") ILIKE f_unaccent("+p+")")
+		}
+		por = append(por, "("+strings.Join(col, " OR ")+")")
+	}
+	return "(" + strings.Join(por, " AND ") + ")"
+}
+
+// coincidePalabra es coincide con cada palabra al principio de una palabra
+// de la columna: «laca» no trae las «placas» (mes simulado, M2S1-187).
+func (a *args) coincidePalabra(texto string, columnas ...string) string {
+	terminos := strings.FieldsFunc(zodjs.TrimJS(texto), zodjs.EspacioJS)
+	if len(terminos) > 6 {
+		terminos = terminos[:6]
+	}
+	if len(terminos) == 0 {
+		return ""
+	}
+	var por []string
+	for _, t := range terminos {
+		p := a.poner("(^|[^[:alnum:]])" + regexp.QuoteMeta(t))
+		var col []string
+		for _, c := range columnas {
+			col = append(col, "f_unaccent("+c+") ~* f_unaccent("+p+")")
 		}
 		por = append(por, "("+strings.Join(col, " OR ")+")")
 	}
@@ -87,6 +124,13 @@ func joinDePrecios(a *args, l Lista, propia, general string) string {
 // precio es coalesce(propio, round(general × factor, 2)).
 func precio(a *args, l Lista, propia, general string) string {
 	return "coalesce(" + propia + ".price, round((" + general + ".price * " + a.poner(jsmath.Texto(l.FactorDerivado)) + "::numeric)::numeric, 2))"
+}
+
+// anterior es el precio de antes de la oferta vigente de la lista que da el
+// precio: la propia si tiene la medida, si no la general por el factor.
+func anterior(a *args, l Lista, propia, general string) string {
+	return "(CASE WHEN " + propia + ".price IS NOT NULL THEN CASE WHEN " + propia + ".oferta_hasta > now() THEN " + propia + ".precio_anterior END" +
+		" WHEN " + general + ".oferta_hasta > now() THEN round((" + general + ".precio_anterior * " + a.poner(jsmath.Texto(l.FactorDerivado)) + "::numeric)::numeric, 2) END)"
 }
 
 // numerosSueltos cuenta los números tipeados que no aparecen enteros en el
@@ -121,8 +165,17 @@ func soloDigitos(t string) bool {
 	return t != ""
 }
 
-// Buscar es buscarParaMostrador.
+// Buscar es buscarParaMostrador. Primero lo que tiene una palabra que empieza
+// con cada término; si no hay nada, lo que lo contiene en cualquier lado.
 func (s *Servicio) Buscar(ctx context.Context, texto, sucursal string, cliente *string) ([]ResultadoDeMostrador, error) {
+	out, err := s.buscar(ctx, texto, sucursal, cliente, true)
+	if err != nil || len(out) > 0 {
+		return out, err
+	}
+	return s.buscar(ctx, texto, sucursal, cliente, false)
+}
+
+func (s *Servicio) buscar(ctx context.Context, texto, sucursal string, cliente *string, porPalabra bool) ([]ResultadoDeMostrador, error) {
 	consulta := zodjs.TrimJS(texto)
 	out := []ResultadoDeMostrador{}
 	if zodjs.LargoJS(consulta) < 2 {
@@ -140,12 +193,21 @@ func (s *Servicio) Buscar(ctx context.Context, texto, sucursal string, cliente *
 	prefijo := a.poner(consulta + "%")
 	exacto := a.poner(consulta)
 	// El lector de código de barras escribe el número entero y un Enter.
-	cond := "(v.sku = " + exacto + " OR v.codigo_barras = " + exacto + " OR v.sku ILIKE " + prefijo + ")"
-	if t := a.coincide(consulta, "p.name", "v.label", "p.brand", "c.name"); t != "" {
+	// Y el código sin su familia: «MEL-BLA-18» encuentra «PLA-MEL-BLA-18»
+	// (mes simulado, M3S1-067: el armador de cortes no la encontraba).
+	tramo := a.poner("%-" + consulta + "%")
+	cond := "(v.sku = " + exacto + " OR v.codigo_barras = " + exacto + " OR v.sku ILIKE " + prefijo + " OR v.sku ILIKE " + tramo + ")"
+	coincide := a.coincide
+	if porPalabra {
+		coincide = a.coincidePalabra
+	}
+	if t := coincide(consulta, "p.name", "v.label", "p.brand", "c.name"); t != "" {
 		cond = "(" + cond + " OR " + t + ")"
 	}
+
 	joins := joinDePrecios(&a, lista, "propio", "general")
 	pr := precio(&a, lista, "propio", "general")
+	ant := anterior(&a, lista, "propio", "general")
 	suc := a.poner(sucursal)
 	sueltos := numerosSueltos(&a, consulta)
 	// Lo que coincide por el nombre va antes que lo que coincide por la
@@ -163,7 +225,7 @@ func (s *Servicio) Buscar(ctx context.Context, texto, sucursal string, cliente *
 	porNombre := "CASE WHEN " + nombre + " ILIKE f_unaccent(" + empieza + ") THEN 0 WHEN ' ' || " + nombre + " ILIKE f_unaccent(" + palabra + ") THEN 1 ELSE 2 END"
 	sql := `
 		SELECT v.id, v.sku, p.name, v.label, v.largo_mm, v.ancho_mm, v.color, c.name, p.unit::text,
-		       p.forma_de_venta::text, p.precio_media_pct, ` + pr + `,
+		       p.forma_de_venta::text, p.precio_media_pct, ` + pr + `, ` + ant + `,
 		       -- Lo disponible y no el físico: lo reservado para un acopio
 		       -- aparecía libre y se volvía a vender (mes simulado, H023).
 		       greatest(coalesce(i.qty, 0) - coalesce((SELECT sum(r.cantidad) FROM stock_reservations r
@@ -188,10 +250,14 @@ func (s *Servicio) Buscar(ctx context.Context, texto, sucursal string, cliente *
 		var r ResultadoDeMostrador
 		var cat string
 		var pct, stock jsmath.Num
-		var pre *jsmath.Num
+		var pre, ant *jsmath.Num
 		if err := filas.Scan(&r.VariantID, &r.Sku, &r.Producto, &r.Medida, &r.LargoMm, &r.AnchoMm, &r.Color, &cat, &r.Unidad,
-			&r.FormaDeVenta, &pct, &pre, &stock); err != nil {
+			&r.FormaDeVenta, &pct, &pre, &ant, &stock); err != nil {
 			return nil, err
+		}
+		if ant != nil && pre != nil && ant.F() > pre.F() {
+			v := ant.F()
+			r.PrecioAnterior = &v
 		}
 		r.Categoria = &cat
 		r.PrecioMediaPct = pct.F()
@@ -271,13 +337,16 @@ type ClienteDelMostrador struct {
 	Direccion     *string  `json:"direccion"`
 	Estado        string   `json:"estado"`
 	LimiteCredito *float64 `json:"limiteCredito,omitempty"`
-	PriceListID   *string  `json:"priceListId"`
+	// CuentaBloqueada: la pantalla apaga «Cuenta corriente» apenas se elige
+	// al cliente, y no recién al cobrar (mes simulado, M3S3-050).
+	CuentaBloqueada bool    `json:"cuentaBloqueada"`
+	PriceListID     *string `json:"priceListId"`
 	// Para completar el presupuesto al elegir al cliente.
 	Telefono *string `json:"telefono"`
 	Email    *string `json:"email"`
 }
 
-const columnasCliente = `id, nombre, razon_social, cuit, condicion_iva::text, direccion, estado::text, limite_credito, price_list_id, telefono, email`
+const columnasCliente = `id, nombre, razon_social, cuit, condicion_iva::text, direccion, estado::text, limite_credito, price_list_id, telefono, email, cuenta_bloqueada`
 
 func leerClientes(filas pgx.Rows) ([]ClienteDelMostrador, error) {
 	defer filas.Close()
@@ -286,7 +355,7 @@ func leerClientes(filas pgx.Rows) ([]ClienteDelMostrador, error) {
 		var c ClienteDelMostrador
 		var lim jsmath.Num
 		if err := filas.Scan(&c.ID, &c.Nombre, &c.RazonSocial, &c.Cuit, &c.CondicionIva, &c.Direccion, &c.Estado, &lim, &c.PriceListID,
-			&c.Telefono, &c.Email); err != nil {
+			&c.Telefono, &c.Email, &c.CuentaBloqueada); err != nil {
 			return nil, err
 		}
 		l := lim.F()
@@ -372,9 +441,11 @@ func (s *Servicio) ClientePorID(ctx context.Context, id string) (*ClienteDelMost
 	if err != nil || len(cs) == 0 {
 		return nil, err
 	}
+	// Con el límite: la pantalla apaga «Cuenta corriente» a quien no tiene
+	// (M2S4-061). clientePorId no lo traía.
 	c := cs[0]
-	c.LimiteCredito = nil // clientePorId no lo trae
 	return &c, nil
+
 }
 
 // PedidoSinCobrar es un pedido del cliente con mercadería que salió y algo

@@ -32,6 +32,11 @@ func TestCobrarUnCorteDeLaCola(t *testing.T) {
 	if o := e.txt(t, `select coalesce(order_id::text, '') from cutting_orders where id = $1`, existente); o != m["orderId"] {
 		t.Errorf("el corte no quedó atado: %q", o)
 	}
+	// El corte ya está terminado: el pedido nace listo para entregar, no
+	// en «Preparando» (M3S4-040).
+	if est := e.txt(t, `select estado::text from orders where id = $1`, m["orderId"]); est != "listo" {
+		t.Errorf("el pedido de un corte terminado quedó %s", est)
+	}
 	// El pedido sabe qué día lo pasa a buscar (PED-1155).
 	if d := e.txt(t, `select coalesce(to_char(entregar_el, 'YYYY-MM-DD'), '-') from orders where id = $1`, m["orderId"]); d != "2026-12-04" {
 		t.Errorf("el pedido no hereda «Lo retira el»: %s", d)

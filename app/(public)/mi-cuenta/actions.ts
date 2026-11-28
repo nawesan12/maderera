@@ -6,8 +6,7 @@ import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
 import { z } from "zod";
 import { verifySession } from "@/lib/dal/session";
 import { miPedido } from "@/lib/dal/cuenta";
-import { plural } from "@/lib/formato";
-import { agregarVarios } from "@/app/(public)/carrito-actions";
+import { agregarVarios, vaciarCarrito } from "@/app/(public)/carrito-actions";
 
 export interface EstadoAccion {
   error?: string;
@@ -26,7 +25,10 @@ export async function responderPresupuesto(
   if (!numero) return { error: "No pudimos guardar tu respuesta. Probá de nuevo." };
   const r = await (await api()).POST("/api/v1/cuenta/presupuestos/{numero}/respuesta", {
     params: { path: { numero } },
-    body: { respuesta: String(formData.get("respuesta") ?? "") },
+    body: {
+      respuesta: String(formData.get("respuesta") ?? ""),
+      motivo: String(formData.get("motivo") ?? "").slice(0, 60) || undefined,
+    },
   });
   if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "No pudimos guardar tu respuesta. Probá de nuevo.") };
   revalidatePath("/mi-cuenta", "layout");
@@ -63,21 +65,34 @@ export async function repetirPedido(
   const pedido = await miPedido(numero.data);
   if (!pedido) return { error: "No encontramos ese pedido." };
 
-  const resultado = await agregarVarios(
-    pedido.items.map((item) => ({
+  // Con algo ya en el carrito se elige: reemplazarlo o sumar. Sumaba sin
+  // avisar y el pedido salía con el doble de latas (mes simulado, M2S4-015).
+  if (formData.get("modo") === "reemplazar") {
+    const vaciado = await vaciarCarrito();
+    if (vaciado.error) return { error: vaciado.error };
+  }
+
+  // Lo que se devolvió no se repite: PED-1125 llevó 2 latas, devolvió 1, y
+  // «Volver a pedir» cargaba 2 (mes 23).
+  const devuelto = new Map(pedido.devuelto.map((d) => [d.orderItemId, d.cantidad]));
+  const renglones = pedido.items
+    .map((item) => ({
       variantId: item.variantId ?? undefined,
       descripcion: item.descripcion,
       unidad: item.unidad,
-      cantidad: Number(item.cantidad),
+      cantidad: Math.round((Number(item.cantidad) - (devuelto.get(item.id) ?? 0)) * 100) / 100,
       origen: "repetido",
-    })),
-  );
+    }))
+    .filter((r) => r.cantidad > 0);
+  if (renglones.length === 0) return { error: "Devolviste todo lo de este pedido." };
+
+  const resultado = await agregarVarios(renglones);
 
   if (resultado.error) return { error: resultado.error };
 
-  return {
-    ok: `Cargamos ${plural(pedido.items.length, "producto")} en tu presupuesto.`,
-  };
+  // Al carrito, con las líneas cargadas: la pantalla quedaba igual y no se
+  // sabía si había funcionado (M2S3-079).
+  redirect("/carrito");
 }
 
 /* -------------------------------------------------------------------------- */

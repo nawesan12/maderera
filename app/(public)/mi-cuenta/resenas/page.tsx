@@ -17,6 +17,24 @@ export const metadata: Metadata = {
  * hay nada que reseñar y la pantalla lo dice en vez de mostrar un formulario
  * vacío que no se puede completar.
  */
+/**
+ * La rechazada dice «No publicada», sin el motivo interno; la que se ve en
+ * la ficha, «Publicada» (M2S3-077).
+ */
+function EstadoDeLaResena({ estado }: { estado: string }) {
+  const [familia, texto] =
+    estado === "publicada"
+      ? ["estado-ok", "Publicada"]
+      : estado === "rechazada"
+        ? ["estado-cerrado", "No publicada"]
+        : ["estado-espera", "Enviada"];
+  return (
+    <span className={`${familia} shrink-0 rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)]`}>
+      {texto}
+    </span>
+  );
+}
+
 export default async function MisResenasPage() {
   // Una tarjeta por producto, en el orden en que llegan: al publicar, la
   // tarjeta se queda en su lugar como «Enviada» (H391).
@@ -56,10 +74,14 @@ export default async function MisResenasPage() {
             <li key={item.productId}>
               {item.yaResenado ? (
                 <p className="flex items-center justify-between gap-3 rounded-[12px] bg-hundida px-4 py-3 text-[15px] text-texto-2">
-                  <span className="min-w-0">{item.nombre}</span>
-                  <span className="estado-ok shrink-0 rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)]">
-                    Enviada
+                  <span className="min-w-0">
+                    <span className="block text-foreground">
+                      {item.nombre}
+                      {item.medida && <span className="text-texto-2"> · {item.medida}</span>}
+                    </span>
+                    <span className="tabular block text-sm">{item.numeroPedido}</span>
                   </span>
+                  <EstadoDeLaResena estado={item.estadoResena} />
                 </p>
               ) : (
                 <FormularioResena item={item} />

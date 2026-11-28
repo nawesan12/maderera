@@ -9,8 +9,10 @@ import {
   type VarianteLocal,
 } from "@/lib/mostrador/offline/busqueda-local";
 import {
+  anteriorLocal,
   clavePrecio,
   precioLocal,
+  type OfertasLocales,
   type PreciosLocales,
 } from "@/lib/mostrador/offline/precio-local";
 import { proximoAlVincular } from "@/lib/mostrador/offline/use-caja";
@@ -161,6 +163,31 @@ describe("precio local", () => {
 
   it("sin ningún precio devuelve cero, que la pantalla lee como a consultar", () => {
     expect(precioLocal(precios, "v9", "pro", "general")).toBe(0);
+  });
+});
+
+describe("oferta en la copia local (M2S2-030)", () => {
+  const ahora = Date.parse("2026-11-27T15:00:00Z");
+  const precios: PreciosLocales = new Map([
+    [clavePrecio("general", "v1"), 5500],
+    [clavePrecio("pro", "v1"), 5000],
+    [clavePrecio("general", "v2"), 300],
+  ]);
+  const ofertas: OfertasLocales = new Map([
+    [clavePrecio("general", "v1"), { anterior: 6200, hasta: ahora + 3_600_000 }],
+    [clavePrecio("general", "v2"), { anterior: 400, hasta: ahora - 1 }],
+  ]);
+
+  it("tacha el de antes de la lista que dio el precio", () => {
+    expect(anteriorLocal(precios, ofertas, "v1", null, "general", ahora)).toBe(6200);
+  });
+
+  it("con precio propio, la oferta de la general no cuenta", () => {
+    expect(anteriorLocal(precios, ofertas, "v1", "pro", "general", ahora)).toBeNull();
+  });
+
+  it("una oferta vencida no se tacha", () => {
+    expect(anteriorLocal(precios, ofertas, "v2", null, "general", ahora)).toBeNull();
   });
 });
 

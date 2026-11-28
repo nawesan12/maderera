@@ -20,15 +20,19 @@ se cargue el certificado, hay que resolver lo pendiente de una de dos formas.
    queda guardada y anotada en la bitácora.
 2. **Darlo de baja y reemitir.** Si el comprobante no tiene que salir así
    (letra equivocada, datos que no corresponden, una venta que se anuló), se
-   da de baja: se libera su número y los pendientes que vienen detrás bajan
-   uno. Después se emite de nuevo lo que corresponda. Antes de dar de baja un
-   comprobante cobrado, hay que anular su recibo, y queda registrado quién lo
-   hizo, cuándo y por qué.
+   da de baja: se libera su número y el último pendiente de la serie pasa a
+   ocuparlo, así la serie no queda con huecos y ningún otro comprobante
+   cambia de número. Al cliente del que se dio de baja se le avisa que quedó
+   sin efecto, y al del que cambió de número se le reenvía con el número
+   nuevo. Después se emite de nuevo lo que corresponda. Antes de dar de baja
+   un comprobante cobrado, hay que anular su recibo, y queda registrado quién
+   lo hizo, cuándo y por qué.
 
 Nada de esto se hace solo: cada comprobante lo decide alguien desde el panel.
 Una venta nueva del mostrador no arrastra lo pendiente de días anteriores:
 queda esperando hasta que esto se resuelva. Un comprobante de una venta que
-se anuló no se manda a ARCA: se da de baja.
+se anuló no se manda a ARCA: se da de baja en el mismo paso en que se anula
+la venta en el mostrador, y mientras no se dé de baja no suma en lo facturado.
 
 **A decidir:** ¿se autoriza todo lo pendiente con fecha de hoy, o prefieren
 dar de baja y reemitir alguna parte (por ejemplo, lo de meses ya cerrados)?
@@ -133,7 +137,8 @@ digan otra cosa, cada una sigue como funcionaba: la de **arranque**.
 | Cuándo cuenta una venta (H162) | Al entregar o facturar, lo primero | Al tomar el pedido · al entregar · al facturar |
 | Lo cobrado antes de facturar (H374) | Al circuito B si no había nada pendiente | A Anticipos de clientes, y se imputa a la factura cuando sale con CAE |
 | Lo que sobra de un cobro a cuenta (H407) | Al circuito B | A Anticipos de clientes (saldo a favor), y se imputa a la próxima factura |
-| El cobro de una factura sin CAE (H160) | Sin asiento hasta que llega el CAE | Contra una cuenta transitoria, que se cancela al llegar el CAE |
+| El cobro de una factura sin CAE (H160) | Entra a Caja o Banco contra Anticipos de clientes y se imputa cuando llega el CAE | Contra una cuenta transitoria (2.1.12), que se cancela al llegar el CAE |
+| La deuda cargada a mano en la cuenta de un cliente (saldo del sistema anterior, nota de débito sin comprobante) | Al circuito B: su cobro es venta sin factura | Al archivo de ustedes, Deudores contra 3.1.01 Saldos iniciales y ajustes, y su cobro la cancela |
 | Al monotributista (H207) | Factura A con la leyenda de la Ley 27.618 (RG 5003/2021) | Factura B |
 | Cómo se nombra el circuito sin factura (H167) | «B» | «Sin factura» · «Interno» |
 
@@ -178,18 +183,36 @@ igual.
 - El **cobro del mostrador** de un pedido sin factura va al B contra Ventas
   sin factura (o a Anticipos con esa regla). El día de la factura con CAE
   sale del B y entra a su archivo contra Deudores.
-- El cobro de una venta que **espera el CAE** espera el CAE (arranque), o va
-  contra 2.1.12 Cobros a imputar (facturas sin CAE) y se imputa a Deudores
-  cuando llega.
+- El cobro de una venta que **espera el CAE** entra el día que entró la
+  plata, contra Anticipos de clientes (arranque) o contra 2.1.12 Cobros a
+  imputar, y se imputa a Deudores cuando llega el CAE. El costo de lo
+  vendido espera el CAE, como la venta.
+- Lo cobrado en el B de un pedido que se factura después **pasa a su
+  archivo** el día que se emite la factura, contra Anticipos; la seña de un
+  pedido que se entrega sin factura vuelve al B.
+- El **cheque** de un recibo se deposita, se acredita y rebota en el archivo
+  por el que entró.
+- Lo cobrado con **tarjeta** queda en 1.1.13 Tarjetas a acreditar hasta que
+  se anota la liquidación, que entra al Banco neta de la comisión.
+- El retiro de caja que no fue al banco, el cheque cargado sin cobro y la
+  devolución por otro medio van a 2.1.13 Movimientos de fondos a imputar
+  (a definir), y el cierre lo avisa.
+- Los saldos iniciales y los ajustes del libro de un proveedor van contra
+  3.1.01 Saldos iniciales y ajustes (a definir).
 - El **depósito** de la caja al banco va de Caja a Banco, y la extracción
   del banco a la caja, de Banco a Caja. Cada retiro de caja guarda a dónde
   fue (banco, caja fuerte u otro); los anteriores se leen por el motivo.
 - El faltante o sobrante de cada **arqueo** va contra 5.1.12 Diferencias de
   caja.
+- La mercadería que sale o entra **sin venta** (rotura, faltante, conteo,
+  consumo del taller, lo perdido en un traslado, un ingreso sin remito) va
+  contra Mercaderías y 5.1.14 Diferencias de inventario, al costo promedio
+  del momento. La reposición sin cargo a un cliente va a 5.2.01 Costo de
+  mercaderías vendidas.
 
-**A definir:** ¿a qué cuenta van las diferencias de arqueo? ¿Y los ingresos
-de caja que no vienen del banco? Hoy se toman como plata de la caja fuerte,
-que es la misma Caja, y no se asientan.
+**A definir:** ¿a qué cuenta van las diferencias de arqueo? ¿Y las de
+inventario? ¿Y los ingresos de caja que no vienen del banco? Hoy se toman
+como plata de la caja fuerte, que es la misma Caja, y no se asientan.
 
 ## Devolución de una venta facturada
 
@@ -207,3 +230,14 @@ desde ahí: vuelve por caja o banco desde la factura.
 - **Cheque rechazado:** además del admin, la vendedora registra el rechazo
   desde la ficha del cliente con la firma de un admin. Hace lo mismo que la
   cartera: nota de débito por el importe, y la deuda vuelve a la cuenta.
+
+## El listado de deudores
+
+Una fila por cliente con el mismo saldo que su ficha, y ese saldo partido en
+tres columnas: lo que está en Deudores por ventas (1.1.03, con CAE), lo que
+se debe de facturas que esperan el CAE y lo del circuito B. Van también los
+saldos a favor, en negativo; abajo, lo que deben, los saldos a favor y el
+total. La columna «Con CAE» suma el mayor de 1.1.03.
+
+**A confirmar:** si les sirve el listado así o prefieren solo la columna del
+mayor.

@@ -93,6 +93,9 @@ type consultor interface {
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 }
 
+// Lo de la demostración no cuenta (mes simulado 2: en demostración el tope
+// corría igual, y el mes nuevo arrancaba con los avisos automáticos frenados
+// por mensajes que nunca salieron), igual que en el gasto en dólares.
 func (s *Servicio) usoDelMesCon(ctx context.Context, q consultor, ahora time.Time) (UsoDelMes, error) {
 	tope, err := topeMensajesCon(ctx, q)
 	if err != nil {
@@ -101,7 +104,8 @@ func (s *Servicio) usoDelMesCon(ctx context.Context, q consultor, ahora time.Tim
 	var n int
 	if err := q.QueryRow(ctx, `select count(*)::int from whatsapp_mensajes
 		where direccion = 'saliente' and created_at >= $1 and importado = false
-		  and coalesce(origen, '') <> 'telefono' and estado <> 'fallido'`, InicioDelMesArgentino(ahora)).Scan(&n); err != nil {
+		  and coalesce(origen, '') <> 'telefono' and estado <> 'fallido'
+		  and coalesce(wa_message_id, '') not like 'demo-%'`, InicioDelMesArgentino(ahora)).Scan(&n); err != nil {
 		return UsoDelMes{}, err
 	}
 	u := CalcularUso(n, tope)

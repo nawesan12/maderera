@@ -5,12 +5,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"mjbj/internal/api/profesionalesapi"
 	"mjbj/internal/auth"
+	"mjbj/internal/bitacora"
+	"mjbj/internal/cuit"
 	"mjbj/internal/limites"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
+	"mjbj/internal/sqlc"
 )
 
 // API son los handlers de api/profesionales.yaml.
@@ -119,7 +124,20 @@ func (a *API) AprobarSolicitud(ctx context.Context, r profesionalesapi.AprobarSo
 	if !l.Ok() {
 		return nil, invalido("No pudimos identificar esa solicitud. Recargá la pantalla y probá de nuevo.")
 	}
-	m, err := a.s.Aprobar(ctx, ses, id, lista, limite)
+	// La condición frente al IVA y el plazo viajan en el mismo formulario
+	// (M2S1-020, M2S1-137); fuera del esquema de zod del TS, que no los tenía.
+	var op Aprobacion
+	if v, ok := (*r.Body)["condicionIva"].(string); ok {
+		op.CondicionIva = strings.TrimSpace(v)
+	}
+	if v, ok := (*r.Body)["diasCredito"].(string); ok && strings.TrimSpace(v) != "" {
+		n, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil {
+			return nil, invalido("Revisá a cuántos días paga.")
+		}
+		op.DiasCredito = &n
+	}
+	m, err := a.s.Aprobar(ctx, ses, id, lista, limite, op)
 	if err != nil {
 		return nil, err
 	}
@@ -158,11 +176,17 @@ func (a *API) SolicitarAccesoProfesional(ctx context.Context, r profesionalesapi
 	if err := l.Problema(); err != nil {
 		return nil, err
 	}
-	// El freno, además de la de una pendiente por documento: sin él, la cola
-	// del panel se llena desde un solo lugar cambiando un dígito.
-	ip := plataforma.IPDelCliente(plataforma.PedidoDe(ctx))
-	if v := a.lim.Permitido(ctx, limites.Profesional, "ip:"+ip); !v.Permitido {
+	// El freno, además de la de una pendiente por documento: por documento
+	// (el que probó varias veces) y, con un techo alto, por conexión (la cola
+	// del panel no se llena desde un solo lugar cambiando un dígito). Por IP
+	// sola culpaba a quien compartía la conexión (M3S2-033).
+	if v := a.lim.Permitido(ctx, limites.Profesional, "doc:"+cuit.SoloDigitos(f.DocumentoNumero)); !v.Permitido {
 		return nil, espera(v)
+	}
+	ip := plataforma.IPDelCliente(plataforma.PedidoDe(ctx))
+	if v := a.lim.Permitido(ctx, limites.ProfesionalPorIP, "ip:"+ip); !v.Permitido {
+		return nil, plataforma.NuevoProblema(http.StatusTooManyRequests,
+			"Recibimos muchas solicitudes desde esta conexión. Esperá "+limites.CuantoFalta(v.EsperaSegundos)+" o escribinos por WhatsApp.")
 	}
 	m, err := a.s.Solicitar(ctx, auth.DeContexto(ctx), f)
 	if err != nil {
@@ -195,7 +219,8 @@ func (a *API) AsistentesDeEvento(ctx context.Context, r profesionalesapi.Asisten
 }
 
 func (a *API) CrearEvento(ctx context.Context, r profesionalesapi.CrearEventoRequestObject) (profesionalesapi.CrearEventoResponseObject, error) {
-	if _, err := panelEventos(ctx); err != nil {
+	ses, err := panelEventos(ctx)
+	if err != nil {
 		return nil, err
 	}
 	f, l := ValidarEvento(*r.Body)
@@ -206,6 +231,13 @@ func (a *API) CrearEvento(ctx context.Context, r profesionalesapi.CrearEventoReq
 	if err != nil {
 		return nil, err
 	}
+	// Los eventos tienen cupo y cobran: quién los carga y los publica queda en
+	// la bitácora (mes simulado, M2S3-017).
+	accion, verbo := sqlc.AccionAuditoriaCrear, "Cargó el evento «"
+	if editado {
+		accion, verbo = sqlc.AccionAuditoriaEditar, "Editó el evento «"
+	}
+	bitacora.Anotar(ctx, sqlc.New(a.s.pool), a.s.log, ses, accion, "evento", f.ID, verbo+f.Titulo+"»", nil)
 	if editado {
 		return listo("Evento actualizado."), nil
 	}
@@ -213,16 +245,21 @@ func (a *API) CrearEvento(ctx context.Context, r profesionalesapi.CrearEventoReq
 }
 
 func (a *API) CambiarEstadoEvento(ctx context.Context, r profesionalesapi.CambiarEstadoEventoRequestObject) (profesionalesapi.CambiarEstadoEventoResponseObject, error) {
-	if _, err := panelEventos(ctx); err != nil {
+	ses, err := panelEventos(ctx)
+	if err != nil {
 		return nil, err
 	}
 	id, estado, l := ValidarEstadoEvento(*r.Body)
 	if !l.Ok() {
 		return nil, invalido("No pudimos identificar ese evento. Recargá la pantalla y probá de nuevo.")
 	}
+	var titulo string
+	_ = a.s.pool.QueryRow(ctx, `select titulo from events where id = $1`, id).Scan(&titulo)
 	if err := a.s.CambiarEstadoEvento(ctx, id, estado); err != nil {
 		return nil, err
 	}
+	bitacora.Anotar(ctx, sqlc.New(a.s.pool), a.s.log, ses, sqlc.AccionAuditoriaCambiarEstado, "evento", id,
+		"Evento «"+titulo+"»: "+estado, nil)
 	return listo(TextoDeEstado[estado]), nil
 }
 
@@ -248,13 +285,41 @@ func (a *API) MandarRecordatorios(ctx context.Context, _ profesionalesapi.Mandar
 	if err != nil {
 		return nil, err
 	}
+	return listo(textoDeRecordatorios(n)), nil
+}
+
+func textoDeRecordatorios(n int) string {
 	switch n {
 	case 0:
-		return listo("No hay eventos mañana con gente sin avisar."), nil
+		return "No hay anotados sin avisar."
 	case 1:
-		return listo("Salieron 1 recordatorio."), nil
+		return "Salió 1 recordatorio."
 	}
-	return listo(fmt.Sprintf("Salieron %d recordatorios.", n)), nil
+	return fmt.Sprintf("Salieron %d recordatorios.", n)
+}
+
+func (o respuesta) VisitBorrarEventoResponse(w http.ResponseWriter) error   { return o.escribir(w) }
+func (o respuesta) VisitRecordarEventoResponse(w http.ResponseWriter) error { return o.escribir(w) }
+
+func (a *API) BorrarEvento(ctx context.Context, r profesionalesapi.BorrarEventoRequestObject) (profesionalesapi.BorrarEventoResponseObject, error) {
+	if _, err := panelEventos(ctx); err != nil {
+		return nil, err
+	}
+	if err := a.s.BorrarEvento(ctx, r.Id.String()); err != nil {
+		return nil, err
+	}
+	return listo("Evento borrado."), nil
+}
+
+func (a *API) RecordarEvento(ctx context.Context, r profesionalesapi.RecordarEventoRequestObject) (profesionalesapi.RecordarEventoResponseObject, error) {
+	if _, err := panelEventos(ctx); err != nil {
+		return nil, err
+	}
+	n, err := a.s.RecordarEvento(ctx, r.Id.String())
+	if err != nil {
+		return nil, err
+	}
+	return listo(textoDeRecordatorios(n)), nil
 }
 
 func (a *API) AnotarseAEvento(ctx context.Context, r profesionalesapi.AnotarseAEventoRequestObject) (profesionalesapi.AnotarseAEventoResponseObject, error) {
@@ -265,7 +330,12 @@ func (a *API) AnotarseAEvento(ctx context.Context, r profesionalesapi.AnotarseAE
 	// El evento con precio crea una preferencia real en Mercado Pago por
 	// inscripción: esto impide las mil con mil correos desde el mismo lado.
 	ip := plataforma.IPDelCliente(plataforma.PedidoDe(ctx))
-	if v := a.lim.PorAmbos(ctx, limites.Evento, ip, "correo", f.Email); !v.Permitido {
+	// Por correo el de siempre; por conexión, un techo alto: el wifi de un
+	// taller lo comparten varias personas (mes 23).
+	if v := a.lim.Permitido(ctx, limites.EventoPorIP, "ip:"+ip); !v.Permitido {
+		return nil, espera(v)
+	}
+	if v := a.lim.Permitido(ctx, limites.Evento, "correo:"+strings.ToLower(f.Email)); !v.Permitido {
 		return nil, espera(v)
 	}
 	ses := auth.DeContexto(ctx)

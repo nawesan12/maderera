@@ -81,16 +81,24 @@ function tituloDeVariante(producto: ProductoParaFeed, medida: string, varias: bo
   return base.length > 150 ? `${base.slice(0, 149)}…` : base;
 }
 
+function medidas(n: number): string {
+  return `${n} ${n === 1 ? "medida" : "medidas"}`;
+}
+
 export function armarFeedMerchant(
   productos: ProductoParaFeed[],
   origen: OrigenDelFeed,
   hoy: Date = new Date(),
+  tiendaActiva = true,
 ): string {
   const items: string[] = [];
   let sinFoto = 0;
   let sinPrecio = 0;
 
-  for (const producto of productos) {
+  // Con la tienda apagada no se publica nada, y la causa es esa: contarlo
+  // como «40 medidas sin precio» hacía buscar precios que estaban cargados
+  // (mes simulado, M2S1-175).
+  for (const producto of tiendaActiva ? productos : []) {
     const conPrecio = producto.variantes.filter(
       (v) => v.precio !== null && Number(v.precio) > 0,
     );
@@ -153,7 +161,9 @@ export function armarFeedMerchant(
 
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
-    `<!-- ${items.length} artículos. Afuera: ${sinFoto} sin foto, ${sinPrecio} medidas sin precio. Generado ${hoy.toISOString()}. -->`,
+    tiendaActiva
+      ? `<!-- ${items.length} artículos. Afuera: ${medidas(sinFoto)} sin foto, ${medidas(sinPrecio)} sin precio. Generado ${hoy.toISOString()}. -->`
+      : `<!-- 0 artículos: la tienda está apagada. Generado ${hoy.toISOString()}. -->`,
     '<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">',
     "  <channel>",
     `    <title>${escaparXml(origen.nombreTienda)}</title>`,

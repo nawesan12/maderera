@@ -154,23 +154,44 @@ const facturaSinAcreditar = `fv.estado <> 'borrador' AND fv.cae IS NOT NULL AND 
 // CircuitoDelCheque es, sobre la fila `ch` de cheques (con otro alias si se
 // pasa), el circuito en el que está el valor: «blanco» o «negro».
 //
-// **El cheque de una venta del mostrador no lo guarda, lo calcula.** Nace
-// con el «blanco» que pone cobros.RegistrarChequeRecibido, y una venta B
-// del mostrador no tiene asiento de cobro (la sección 4 de los asientos
-// solo asienta pagos de pedidos con factura con CAE): ese cheque nunca
-// debitó Valores a depositar del estudio. Con el dato guardado, su depósito
-// acreditaba esa cuenta en el estudio, donde nunca entró, y se podía endosar
-// en un pago blanco (la fuga que cierra la regla M8 de compras). Y no se
-// puede fijar al cobrar, porque la factura puede salir después de la venta:
-// el valor guardado quedaría viejo. Por eso es blanco solo si el pedido
-// tiene la misma factura que mira la sección 4 (con CAE y no de prueba).
-// Los demás cheques (los de un recibo, los entregados) llevan el suyo.
+// **El cheque de una venta del mostrador no lo guarda, lo calcula.** Va con
+// el cobro de su venta (la sección 4 de los asientos): es blanco si el pedido
+// tiene una factura emitida, con CAE o esperándolo (el cobro va al archivo
+// del estudio contra Anticipos hasta el CAE, y el que se cobró antes pasa
+// ahí el día de la factura), o si la regla «cobro_antes_de_facturar» manda
+// lo cobrado antes de facturar a Anticipos; si no, es del B. No se puede
+// fijar al cobrar, porque la factura puede salir después de la venta. Así el
+// cheque de la venta esperando el CAE se puede endosar a una factura A
+// (M2S2-024, M2S2-040).
+//
+// **El de un recibo va adonde lo mandó el reparto** (circuito_reparto, que
+// fija cobros.FijarReparto): el que el recibo mandó entero al B es del B
+// aunque se haya cobrado «blanco» (mes simulado, M3S3-001 y M3S3-005: entraba
+// a Valores a depositar del archivo B y su acreditación salía del A). El
+// recibo de antes de esa columna se lee por su reparto. El partido queda con
+// el suyo. Los entregados llevan el suyo.
 func CircuitoDelCheque(ch string) string {
-	return strings.ReplaceAll(`(CASE WHEN ch.order_payment_id IS NULL THEN ch.circuito::text
+	return strings.ReplaceAll(`(CASE WHEN ch.order_payment_id IS NULL THEN coalesce(nullif(ch.circuito_reparto, 'partido'),
+	    CASE WHEN ch.receipt_id IS NOT NULL AND EXISTS (SELECT 1 FROM receipts cre WHERE cre.id = ch.receipt_id
+	           AND cre.reparto_b > 0.005 AND coalesce(cre.reparto_deudores, 0) + coalesce(cre.reparto_anticipo, 0) < 0.005)
+	      THEN 'negro' ELSE ch.circuito::text END)
 	  WHEN EXISTS (SELECT 1 FROM order_payments cop JOIN invoices cfi ON cfi.order_id = cop.order_id
 	               WHERE cop.id = ch.order_payment_id AND cfi.tipo::text LIKE 'factura%' AND cfi.estado <> 'borrador'
-	                 AND cfi.cae IS NOT NULL AND cfi.cae_ambiente IS DISTINCT FROM 'homologacion')
+	                 AND cfi.cae_ambiente IS DISTINCT FROM 'homologacion')
+	    OR EXISTS (SELECT 1 FROM site_settings crg WHERE crg.clave = 'cobro_antes_de_facturar' AND crg.valor = 'anticipos')
 	  THEN 'blanco' ELSE 'negro' END)`, "ch.", ch+".")
+}
+
+// chequeEsperaCAE es que el cheque es de una venta con su factura emitida y
+// sin CAE todavía (ni anulada ni de prueba).
+const chequeEsperaCAE = `EXISTS (SELECT 1 FROM order_payments eop JOIN invoices efi ON efi.order_id = eop.order_id
+	  WHERE eop.id = ch.order_payment_id AND efi.tipo::text LIKE 'factura%' AND efi.estado NOT IN ('borrador', 'anulada')
+	    AND efi.cae IS NULL)`
+
+// ChequeEsperaCAE es chequeEsperaCAE sobre la fila `ch` (con otro alias si
+// se pasa): la pantalla de cheques dice «Espera CAE» y no «Circuito B».
+func ChequeEsperaCAE(ch string) string {
+	return "(" + strings.ReplaceAll(chequeEsperaCAE, "ch.", ch+".") + ")"
 }
 
 // FechaDelCheque es, sobre la fila `ch` de cheques, la fecha con la que el
@@ -187,8 +208,57 @@ func CircuitoDelCheque(ch string) string {
 // demás cheques (sin order_payment_id) llevan la fecha del evento.
 func FechaDelCheque(ch, at string) string {
 	return strings.NewReplacer("ch.", ch+".", "{AT}", at).Replace(`(CASE WHEN ch.order_payment_id IS NULL THEN {AT}
-	  ELSE greatest({AT}, coalesce((SELECT cfi.fecha_emision FROM order_payments cop JOIN invoices cfi ON cfi.order_id = cop.order_id
+	  ELSE greatest({AT}, coalesce((SELECT least(cfi.created_at, cfi.fecha_emision) FROM order_payments cop JOIN invoices cfi ON cfi.order_id = cop.order_id
 	               WHERE cop.id = ch.order_payment_id AND cfi.tipo::text LIKE 'factura%' AND cfi.estado <> 'borrador'
-	                 AND cfi.cae IS NOT NULL AND cfi.cae_ambiente IS DISTINCT FROM 'homologacion'
-	               ORDER BY (cfi.estado = 'anulada'), cfi.fecha_emision LIMIT 1), {AT})) END)`)
+	                 AND cfi.cae_ambiente IS DISTINCT FROM 'homologacion'
+	               ORDER BY cfi.created_at, cfi.id LIMIT 1), {AT})) END)`)
 }
+
+// Los hechos de venta de los reportes (ver internal/reportes/ventas.go): la
+// venta en la fecha que dice la regla «venta_reconocida» (orders.vendido_at),
+// cada devolución en la suya en negativo y la cancelación posterior también.
+// Columnas: las de orders más hecho, fecha, monto (con IVA) y operaciones.
+const (
+	HechosDeVenta = `(SELECT o.*, o.id AS hecho, o.vendido_at AS fecha, o.total AS monto, 1 AS operaciones
+		  FROM orders o WHERE o.vendido_at IS NOT NULL AND ` + CuentaComoVenta + `
+		UNION ALL
+		SELECT o.*, dv.id, dv.created_at, -dv.importe, 0 FROM devoluciones dv JOIN orders o ON o.id = dv.order_id
+		  WHERE ` + CuentaComoVenta + `
+		UNION ALL
+		SELECT o.*, ` + HechoDeLaCancelacion + `, o.cancelado_at,
+		  -(o.total - coalesce((SELECT sum(dv.importe) FROM devoluciones dv WHERE dv.order_id = o.id), 0)), 0
+		  FROM orders o WHERE ` + CanceladaDespues + `)`
+	// cuentaComoVenta: el pedido no se canceló, o se canceló después de
+	// contar como venta.
+	CuentaComoVenta  = `(o.estado <> 'cancelado' OR (o.vendido_at IS NOT NULL AND o.cancelado_at > o.vendido_at))`
+	CanceladaDespues = `o.estado = 'cancelado' AND o.vendido_at IS NOT NULL AND o.cancelado_at > o.vendido_at`
+	// hechoDeLaCancelacion es el id del hecho que resta la cancelación.
+	HechoDeLaCancelacion = `md5('cancelacion:' || o.id::text)::uuid`
+)
+
+// MotivoDelDescuento es, sobre la fila `o`, el motivo del descuento como se
+// lee: si el descuento salió de la escala de un medio («10% por
+// transferencia», el que se eligió al pasar el presupuesto a pedido) y el
+// pedido se terminó cobrando entero con recibos de otro medio que tiene su
+// escala («10% en efectivo»), el de ese medio. PED-1123, cobrado en
+// efectivo, decía «10% por transferencia» (mes 23). Si no, el guardado.
+const MotivoDelDescuento = `coalesce((SELECT pd2.etiqueta FROM payment_discounts pd2
+	  WHERE pd2.activo AND pd2.etiqueta <> '' AND o.estado_pago = 'pagado'
+	    AND o.descuento_motivo IN (SELECT pd3.etiqueta FROM payment_discounts pd3 WHERE pd3.medio::text <> pd2.medio::text)
+	    AND pd2.medio::text = (SELECT min(rpm.medio::text) FROM receipt_parts rpm JOIN receipts rcm ON rcm.id = rpm.receipt_id
+	                           WHERE rcm.estado = 'emitido' AND rcm.id IN ` + recibosDelPedido + `
+	                           HAVING count(DISTINCT rpm.medio) = 1)
+	  ORDER BY pd2.desde_monto DESC LIMIT 1), o.descuento_motivo)`
+
+// RetiroSinFirmar es, sobre la fila `o` de orders, si el pedido tiene un
+// remito de retiro preparado que el cliente todavía no firmó. La venta del
+// mostrador queda «entregado» al cobrarse, con el remito para firmar: el
+// portal la listaba «Entregado» y ofrecía reseñarla antes de la firma (mes
+// 23, M2S1-071).
+const RetiroSinFirmar = `EXISTS (SELECT 1 FROM deliveries rs WHERE rs.order_id = o.id AND rs.estado = 'preparada' AND rs.tipo = 'retiro')`
+
+// EstadoParaElCliente es el estado que ve el cliente: «por-firmar» hasta que
+// firma el retiro. Era «listo», y el que ya se había llevado la compra del
+// mostrador leía «Listo para retirar» mientras el panel decía «Entregado»
+// (mes 23, PED-1150). Se lo llevó; lo que falta es la firma.
+const EstadoParaElCliente = `(CASE WHEN o.estado = 'entregado' AND ` + RetiroSinFirmar + ` THEN 'por-firmar' ELSE o.estado::text END)`

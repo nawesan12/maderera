@@ -31,11 +31,12 @@ func TestInterruptoresDeLaTienda(t *testing.T) {
 	if desc != "Encendió la tienda online" || quien != "admin@prueba.test" {
 		t.Errorf("bitácora: %q %q", desc, quien)
 	}
-	// Un texto común no pasa por la bitácora.
+	// Un texto del sitio también deja su renglón, con lo que dice ahora (mes
+	// simulado, M2S3-017: la franja de arriba se publicó sin rastro).
 	_, _ = e.pool.Exec(context.Background(), `insert into site_settings (clave, valor) values ('telefono', '223 000')`)
 	pedir(t, adm, "PUT", u+"telefono", map[string]string{"valor": "223 590-3118"})
 	var n int
-	_ = e.pool.QueryRow(context.Background(), `select count(*) from audit_log`).Scan(&n)
+	_ = e.pool.QueryRow(context.Background(), `select count(*) from audit_log where entidad = 'sitio' and descripcion = 'Cambió «telefono»: 223 590-3118'`).Scan(&n)
 	if n != 1 {
 		t.Errorf("líneas en la bitácora: %d", n)
 	}
@@ -112,7 +113,8 @@ func TestReglasQueEsperanAlContador(t *testing.T) {
 	if err := e.pool.QueryRow(ctx, `select max(descripcion), count(*) from audit_log where entidad = 'regla' and entidad_id = 'venta_reconocida'`).Scan(&desc, &n); err != nil {
 		t.Fatal(err)
 	}
-	if n != 1 || desc != "Regla «venta_reconocida»: entregar_o_facturar → tomar" {
+	// Con las palabras de /admin/reglas (mes simulado, M2S4-052).
+	if n != 1 || desc != "Una venta cuenta…: Al entregar o facturar → Al tomar el pedido" {
 		t.Errorf("bitácora: %d %q", n, desc)
 	}
 	if !reglasdel.Es(ctx, e.pool, reglasdel.VentaReconocida, "tomar") {
@@ -122,5 +124,145 @@ func TestReglasQueEsperanAlContador(t *testing.T) {
 	_, _ = e.pool.Exec(ctx, `update site_settings set valor = 'x' where clave = 'venta_reconocida'`)
 	if v, _ := reglasdel.Valor(ctx, e.pool, reglasdel.VentaReconocida); v != "entregar_o_facturar" {
 		t.Errorf("basura: %q", v)
+	}
+}
+
+// Cada ajuste del sitio que cambia deja su renglón (el tope del bot, el
+// número humano, la franja de arriba); guardar lo mismo, ninguno (mes
+// simulado, M2S3-036 y M2S4-053).
+func TestLosAjustesDejanRenglon(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	adm := e.cliente(t, "admin@prueba.test", "admin")
+	u := e.srv.URL + "/api/v1/admin/contenido/ajustes/"
+	_, _ = e.pool.Exec(ctx, `insert into site_settings (clave, valor) values ('whatsapp_numero_humano', '') on conflict (clave) do nothing`)
+	for _, x := range [][2]string{{"whatsapp_tope_mensajes", "25"}, {"whatsapp_tope_mensajes", "25"}, {"whatsapp_numero_humano", "5492235550999"}} {
+		if c, b := pedir(t, adm, "PUT", u+x[0], map[string]string{"valor": x[1]}); c != 204 {
+			t.Fatalf("%s: %d %s", x[0], c, b)
+		}
+	}
+	var n int
+	var desc string
+	if err := e.pool.QueryRow(ctx, `select count(*), coalesce(min(descripcion), '') from audit_log where entidad = 'whatsapp' and entidad_id = 'whatsapp_tope_mensajes'`).Scan(&n, &desc); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 || !strings.HasPrefix(desc, "Tope de mensajes del bot de WhatsApp: ") || !strings.HasSuffix(desc, " → 25") {
+		t.Errorf("el tope: %d %q", n, desc)
+	}
+	if err := e.pool.QueryRow(ctx, `select count(*) from audit_log where entidad = 'whatsapp' and entidad_id = 'whatsapp_numero_humano'`).Scan(&n); err != nil || n != 1 {
+		t.Errorf("el número humano: %d %v", n, err)
+	}
+	// El número del sitio: «abc» no es un número, y lo escrito como se
+	// escribe queda en la forma de wa.me, con el nombre y el número legibles
+	// en la bitácora (mes 23).
+	_, _ = e.pool.Exec(ctx, `insert into site_settings (clave, valor, descripcion) values ('whatsapp_principal', '542235903118', 'Número al que van los botones de WhatsApp del sitio.') on conflict (clave) do nothing`)
+	if c, b := pedir(t, adm, "PUT", u+"whatsapp_principal", map[string]string{"valor": "abc"}); c != 422 || !strings.Contains(string(b), "característica") {
+		t.Errorf("número abc: %d %s", c, b)
+	}
+	if c, b := pedir(t, adm, "PUT", u+"whatsapp_principal", map[string]string{"valor": "223 590-3119"}); c != 204 {
+		t.Fatalf("número del sitio: %d %s", c, b)
+	}
+	var valor string
+	_ = e.pool.QueryRow(ctx, `select valor from site_settings where clave = 'whatsapp_principal'`).Scan(&valor)
+	_ = e.pool.QueryRow(ctx, `select descripcion from audit_log where entidad_id = 'whatsapp_principal'`).Scan(&desc)
+	if valor != "542235903119" || desc != "Número de WhatsApp del sitio: 223 590-3118 → 223 590-3119" {
+		t.Errorf("número del sitio: %q %q", valor, desc)
+	}
+}
+
+// M3S2-036: cómo arranca «Activo» en el alta de un producto es una regla:
+// arranca en «activo» (lo de siempre), se cambia a «inactivo» y vuelve, y
+// cada cambio queda en la bitácora con las palabras de la pantalla.
+func TestReglaDelAltaDeProducto(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	adm := e.cliente(t, "admin@prueba.test", "admin")
+	u := e.srv.URL + "/api/v1/admin/contenido/ajustes/alta_de_producto"
+	if v, _ := reglasdel.Valor(ctx, e.pool, reglasdel.AltaDeProducto); v != "activo" {
+		t.Fatalf("arranca en %q", v)
+	}
+	for _, valor := range []string{"inactivo", "activo"} {
+		if c, b := pedir(t, adm, "PUT", u, map[string]string{"valor": valor}); c != 204 {
+			t.Fatalf("%s: %d %s", valor, c, b)
+		}
+		if !reglasdel.Es(ctx, e.pool, reglasdel.AltaDeProducto, valor) {
+			t.Errorf("no quedó en %s", valor)
+		}
+	}
+	if c, _ := pedir(t, adm, "PUT", u, map[string]string{"valor": "a_veces"}); c != 422 {
+		t.Errorf("valor inválido: %d", c)
+	}
+	var descs []string
+	rs, _ := e.pool.Query(ctx, `select descripcion from audit_log where entidad = 'regla' and entidad_id = 'alta_de_producto' order by created_at`)
+	for rs.Next() {
+		var d string
+		_ = rs.Scan(&d)
+		descs = append(descs, d)
+	}
+	rs.Close()
+	if strings.Join(descs, "|") != "Un producto nuevo arranca: Activo → Inactivo, hasta prenderlo|Un producto nuevo arranca: Inactivo, hasta prenderlo → Activo" {
+		t.Errorf("bitácora: %q", descs)
+	}
+}
+
+// M2S3-020: qué pedido pasa solo a «listo» con su último corte es una
+// regla: arranca en «mostrador», va a «todos» y vuelve, con la bitácora.
+func TestReglaDeListoConElCorte(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	adm := e.cliente(t, "admin@prueba.test", "admin")
+	u := e.srv.URL + "/api/v1/admin/contenido/ajustes/listo_con_el_corte"
+	if v, _ := reglasdel.Valor(ctx, e.pool, reglasdel.ListoConElCorte); v != "mostrador" {
+		t.Fatalf("arranca en %q", v)
+	}
+	for _, valor := range []string{"todos", "mostrador"} {
+		if c, b := pedir(t, adm, "PUT", u, map[string]string{"valor": valor}); c != 204 {
+			t.Fatalf("%s: %d %s", valor, c, b)
+		}
+		if !reglasdel.Es(ctx, e.pool, reglasdel.ListoConElCorte, valor) {
+			t.Errorf("no quedó en %s", valor)
+		}
+	}
+	var descs []string
+	rs, _ := e.pool.Query(ctx, `select descripcion from audit_log where entidad = 'regla' and entidad_id = 'listo_con_el_corte' order by created_at`)
+	for rs.Next() {
+		var d string
+		_ = rs.Scan(&d)
+		descs = append(descs, d)
+	}
+	rs.Close()
+	if strings.Join(descs, "|") != "Con el último corte terminado, pasa solo a «Listo»: La venta del mostrador → Cualquier pedido|Con el último corte terminado, pasa solo a «Listo»: Cualquier pedido → La venta del mostrador" {
+		t.Errorf("bitácora: %q", descs)
+	}
+}
+
+// M2S2-040: si el cheque de una factura que espera el CAE se endosa es una
+// regla: arranca en «si», va a «al_cae» y vuelve, con la bitácora.
+func TestReglaDelEndosoQueEsperaElCAE(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	adm := e.cliente(t, "admin@prueba.test", "admin")
+	u := e.srv.URL + "/api/v1/admin/contenido/ajustes/endoso_espera_cae"
+	if v, _ := reglasdel.Valor(ctx, e.pool, reglasdel.EndosoEsperaCAE); v != "si" {
+		t.Fatalf("arranca en %q", v)
+	}
+	for _, valor := range []string{"al_cae", "si"} {
+		if c, b := pedir(t, adm, "PUT", u, map[string]string{"valor": valor}); c != 204 {
+			t.Fatalf("%s: %d %s", valor, c, b)
+		}
+		if !reglasdel.Es(ctx, e.pool, reglasdel.EndosoEsperaCAE, valor) {
+			t.Errorf("no quedó en %s", valor)
+		}
+	}
+	var descs []string
+	rs, _ := e.pool.Query(ctx, `select descripcion from audit_log where entidad = 'regla' and entidad_id = 'endoso_espera_cae' order by created_at`)
+	for rs.Next() {
+		var d string
+		_ = rs.Scan(&d)
+		descs = append(descs, d)
+	}
+	rs.Close()
+	if strings.Join(descs, "|") != "El cheque de una factura sin CAE se endosa: Sí, como blanco → Recién con el CAE|El cheque de una factura sin CAE se endosa: Recién con el CAE → Sí, como blanco" {
+		t.Errorf("bitácora: %q", descs)
 	}
 }

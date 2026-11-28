@@ -25,7 +25,7 @@ export interface DatosGasto {
   supplierId?: string;
   notas?: string;
   /** La factura del gasto: entra al libro IVA compras con su crédito fiscal. */
-  factura?: { tipo: string; puntoVenta: number; numero: number; iva21: number; iva105: number; iva27: number };
+  factura?: { tipo: string; puntoVenta: number; numero: number; cae?: string; iva21: number; iva105: number; iva27: number };
 }
 
 export async function cargarGasto(datos: DatosGasto): Promise<EstadoGasto> {

@@ -14,6 +14,9 @@ type FacturaDeLaOrden struct {
 	Comprobante string
 	Fecha       time.Time
 	Aplicado    float64
+	// Instante es que Fecha es un momento (un cheque rechazado, un ajuste) y
+	// no el día de una factura.
+	Instante bool
 }
 
 // RetencionDeLaOrden es un certificado que salió con el pago.
@@ -106,17 +109,30 @@ func OrdenDePago(d DatosOrdenDePago) ([]byte, error) {
 			y = AltoA4 - Margen - 10
 		}
 		h.Escribir(izq, Opciones{X: Margen, Y: y, Tamano: 9.5})
-		if medio != "" {
-			h.Escribir(Elipsis(medio, Normal, 8.5, Mm(80)), Opciones{X: Margen + Mm(62), Y: y, Tamano: 8.5, Color: TintaSuave})
-		}
 		h.Escribir(Moneda2(importe), Opciones{X: derecha, Y: y, Tamano: 9.5, Derecha: true})
+		// El detalle en los renglones que haga falta: el del e-Cheq (número,
+		// banco y fecha) se cortaba en «al 30/...» (mes 23).
+		if medio != "" {
+			for i, linea := range Renglones(medio, Normal, 8.5, Mm(80)) {
+				if i > 0 {
+					y -= Mm(4)
+				}
+				h.Escribir(linea, Opciones{X: Margen + Mm(62), Y: y, Tamano: 8.5, Color: TintaSuave})
+			}
+		}
 		y -= Mm(6)
 	}
 
 	if len(d.Facturas) > 0 {
 		seccion("Facturas que se cancelan")
 		for _, f := range d.Facturas {
-			renglon(f.Comprobante, "del "+FechaLocal(f.Fecha), f.Aplicado)
+			// La emisión de una factura es un día guardado como medianoche
+			// UTC: en hora argentina salía un día antes (M2S3-012).
+			dia := FechaDelDia(f.Fecha)
+			if f.Instante {
+				dia = FechaLocal(f.Fecha)
+			}
+			renglon(f.Comprobante, "del "+dia, f.Aplicado)
 		}
 		y -= Mm(4)
 	}

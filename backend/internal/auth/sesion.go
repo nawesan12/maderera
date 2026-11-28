@@ -259,6 +259,10 @@ func (s *Servicio) sesionDe(ctx context.Context, token string) (*Sesion, error) 
 // Alta es lo que se pide para registrarse.
 type Alta struct {
 	Nombre, Correo, Telefono, Clave string
+	// Novedades: si quiere las campañas por correo. Sin tildarlo, la
+	// dirección arranca en las bajas: el registro no las mencionaba y la
+	// cuenta nueva sumaba al alcance de las campañas (mes simulado, M2S2-050).
+	Novedades bool
 }
 
 // Registrar crea el usuario, su cuenta con clave, su perfil de cliente y su
@@ -299,6 +303,11 @@ func (s *Servicio) Registrar(ctx context.Context, w http.ResponseWriter, a Alta,
 		}
 		if err := q.CrearClienteDeRegistro(ctx, sqlc.CrearClienteDeRegistroParams{UserID: &id, Nombre: nombre, Email: &correo, Telefono: tel}); err != nil {
 			return err
+		}
+		if !a.Novedades {
+			if _, err := tx.Exec(ctx, `insert into bajas_de_correo (email, origen) values ($1, 'registro') on conflict do nothing`, correo); err != nil {
+				return err
+			}
 		}
 		token, err = s.crearSesion(ctx, q, id, ip, agente, true)
 		return err

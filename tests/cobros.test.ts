@@ -9,6 +9,7 @@ import {
   nombreDelCheque,
   normalizarNumeroDeCheque,
   revisarNumeroDeCheque,
+  tieneLetras,
 } from "@/lib/cheques/numero";
 import { importeEnLetras, revisarPartes, totalDePartes } from "@/lib/cobros/partes";
 import { leerPartes } from "../scripts/golden/originales/tanda6/leer";
@@ -58,6 +59,11 @@ describe("el número del cheque", () => {
     expect(revisarNumeroDeCheque("")).toMatch(/número/);
     expect(revisarNumeroDeCheque("12")).toMatch(/corto/);
     expect(revisarNumeroDeCheque("12345678")).toBeNull();
+    // Mes 23: el e-Cheq «E0055502» se marca en el campo; el «N°» de adelante no.
+    expect(tieneLetras("E0055502")).toBe(true);
+    expect(tieneLetras("N° 0055502")).toBe(false);
+    expect(tieneLetras("N")).toBe(false);
+    expect(revisarNumeroDeCheque("E0055502")).toMatch(/solo números/);
   });
 
   it("se nombra como se lo busca en el banco", () => {

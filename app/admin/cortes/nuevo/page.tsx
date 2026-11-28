@@ -10,12 +10,19 @@ import { DECIDEN_EN_LA_COLA, puedeEntrar } from "@/lib/roles";
 import { esUuid } from "@/lib/uuid";
 import { anchoDeSierra } from "@/lib/dal/sierra";
 import { FormularioCorte } from "./formulario";
-import { consultaDeCorte } from "@/lib/dal/consultas-corte";
+import { consultaDeCorte, contactoDeLaConsulta } from "@/lib/dal/consultas-corte";
 import { placasCortablesPublicas } from "@/lib/dal/cortes-publico";
 import { ajustesDelSitio } from "@/lib/dal/contenido";
 import { valorDeRegla } from "@/lib/reglas";
 
 export const metadata = { title: "Nuevo corte" };
+
+/*
+ * Fuera de la validación de navegación instantánea de `next dev`: el globo
+ * «1 Insight» tapaba la barra de guardar a 375 px (mes 23). El `instant` del
+ * layout del panel no alcanza a sus páginas. No cambia producción.
+ */
+export const instant = false;
 
 /** Solo se vuelve a pantallas propias: el chat del panel o de atención. */
 const VUELTA_PERMITIDA = /^\/(admin\/whatsapp|atencion)(\?|$)/;
@@ -46,6 +53,8 @@ export default async function NuevoCortePage({
     corregir?: string;
     volver?: string;
     telefono?: string;
+    /** Llega de «Reponer una pieza» del pedido entregado. */
+    reponer?: string;
   }>;
 }) {
   const usuario = await requireStaff();
@@ -59,17 +68,22 @@ export default async function NuevoCortePage({
   const pedidoId = sp.pedido ?? corregido?.corte.orderId ?? undefined;
   // De dónde se vino: el chat del cliente (H046).
   const volver = sp.volver && VUELTA_PERMITIDA.test(sp.volver) ? sp.volver : null;
-  const [sucursales, pedido, sierra, consulta, placas, cliente, ajustes] = await Promise.all([
+  const [sucursales, pedido, sierra, consulta, placas, clienteElegido, ajustes, contacto] = await Promise.all([
     listarSucursalesPublicas(),
     // Sin plata: el depósito también carga cortes de un pedido (el alta no
     // es del aserradero: lib/roles.ts).
     pedidoId ? pedidoParaElTaller(pedidoId) : Promise.resolve(null),
     anchoDeSierra(),
     token ? consultaDeCorte(token) : Promise.resolve(null),
-    token ? placasCortablesPublicas() : Promise.resolve([]),
+    token || pedidoId ? placasCortablesPublicas() : Promise.resolve([]),
     clienteId && esUuid(clienteId) ? obtenerCliente(clienteId) : Promise.resolve(null),
     ajustesDelSitio(),
+    // La consulta que mandó un cliente por WhatsApp trae su ficha y su
+    // teléfono (M2S3-024).
+    token && !clienteId && veClientes ? contactoDeLaConsulta(token) : Promise.resolve(null),
   ]);
+  const cliente =
+    clienteElegido ?? (contacto?.clienteId && esUuid(contacto.clienteId) ? await obtenerCliente(contacto.clienteId) : null);
   if (token && !consulta) notFound();
   // El teléfono del cliente del pedido, para el aviso de «corte listo»
   // (H046). El aserradero no lo ve.
@@ -164,6 +178,22 @@ export default async function NuevoCortePage({
         .reduce((t, k) => t + k.placasEnteras, 0),
     }));
 
+  // Un pedido que no vende la placa (la venta de un corte, que cobró las
+  // pasadas): la reposición arranca con la placa de sus cortes, no con una
+  // medida supuesta (mes simulado, M3S3-032).
+  const varianteDeSusCortes =
+    placasDelPedido.length === 0 ? otrosCortes.find((k) => k.variantId)?.variantId : undefined;
+  const deSusCortes = varianteDeSusCortes ? placas.find((p) => p.variantId === varianteDeSusCortes) : undefined;
+  const placaDeSusCortes = deSusCortes
+    ? {
+        variantId: deSusCortes.variantId,
+        descripcion: deSusCortes.descripcion,
+        largoMm: deSusCortes.largoMm,
+        anchoMm: deSusCortes.anchoMm,
+        color: deSusCortes.color,
+      }
+    : undefined;
+
   const c = corregido?.corte;
   const deCorregir = c
     ? {
@@ -191,6 +221,8 @@ export default async function NuevoCortePage({
         cliente: c.customerId ? { id: c.customerId, nombre: c.cliente, razonSocial: c.empresa } : null,
         branchId: c.branchId,
         sinCargo: c.sinCargo,
+        anchoSierraMm: c.anchoSierraMm,
+        fijadas: corregido?.fijadas ?? [],
         piezas: c.piezas.map((p) => ({
           largoMm: p.largoMm,
           anchoMm: p.anchoMm,
@@ -246,6 +278,10 @@ export default async function NuevoCortePage({
             ? {
                 token: consulta.token,
                 grupo: grupo.orden,
+                // La sucursal que eligió el cliente al mandarla: arrancaba en
+                // Casa Central y el trabajo iba a la cola de otro taller
+                // (mes simulado, M2S1-091).
+                branchId: sucursales.find((s) => s.slug === consulta.sucursal)?.id ?? null,
                 placa: placaDeLaConsulta
                   ? {
                       variantId: placaDeLaConsulta.variantId,
@@ -273,6 +309,7 @@ export default async function NuevoCortePage({
         anchoSierra={sierra}
         sierraEditable={usuario.staffRole === "admin"}
         puedeReponer={decide}
+        reponer={sp.reponer === "1"}
         corregir={deCorregir}
         clienteInicial={
           cliente
@@ -280,8 +317,14 @@ export default async function NuevoCortePage({
                 id: cliente.id,
                 nombre: cliente.nombre,
                 razonSocial: cliente.razonSocial,
-                telefono: cliente.telefono ?? (sp.telefono?.slice(0, 40) || null),
+                telefono: cliente.telefono ?? (sp.telefono?.slice(0, 40) || contacto?.telefono || null),
               }
+            : undefined
+        }
+        contactoInicial={
+          // Sin ficha ni nombre en WhatsApp, por lo menos el teléfono (mes 23).
+          !cliente && (contacto?.nombre || contacto?.telefono)
+            ? { nombre: contacto.nombre ?? "", telefono: contacto.telefono ?? "" }
             : undefined
         }
         desdePedido={
@@ -294,6 +337,7 @@ export default async function NuevoCortePage({
                 telefono: clienteDelPedido?.telefono ?? null,
                 entregarEl: pedido.entregarEl,
                 placas: placasDelPedido,
+                placaDeSusCortes,
                 cliente: pedido.customerId
                   ? {
                       id: pedido.customerId,

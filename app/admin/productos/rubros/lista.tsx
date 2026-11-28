@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { AlertCircle, Check, Link2, Loader2, Pencil, Plus } from "lucide-react";
+import { plural } from "@/lib/formato";
 import {
   alternarRubro,
   crearCategoria,
@@ -20,6 +21,7 @@ export interface RubroListado {
   active: boolean;
   /** Productos activos que ya lo tienen asignado. */
   productos: number;
+  inactivos: number;
   /** Productos de la categoría que lo nombran como texto y están sueltos. */
   sueltos: number;
 }
@@ -185,7 +187,7 @@ export function ListaDeRubros({
             <p className="text-base text-muted-foreground">
               {categoria.rubros.length === 0
                 ? "Sin rubros"
-                : `${categoria.rubros.length} rubros`}
+                : plural(categoria.rubros.length, "rubro")}
             </p>
           </div>
 
@@ -200,7 +202,7 @@ export function ListaDeRubros({
                   key={rubro.id}
                   className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3"
                 >
-                  <span className="min-w-[12rem] flex-1 text-base">
+                  <span className="min-w-0 flex-[1_1_12rem] text-base">
                     {rubro.name}
                     {!rubro.active && (
                       <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-sm text-muted-foreground">
@@ -210,9 +212,7 @@ export function ListaDeRubros({
                   </span>
 
                   <span className="tabular text-base text-muted-foreground">
-                    {rubro.productos === 0
-                      ? "sin productos"
-                      : `${rubro.productos} producto${rubro.productos === 1 ? "" : "s"}`}
+                    {cuantosDelRubro(rubro.productos, rubro.inactivos)}
                   </span>
 
                   {/* El enganche por texto solo se ofrece cuando hay algo que
@@ -253,4 +253,13 @@ export function ListaDeRubros({
       ))}
     </div>
   );
+}
+
+/** «1 producto», «2 productos · 1 inactivo», «1 inactivo» o «sin productos». */
+function cuantosDelRubro(activos: number, inactivos: number): string {
+  const partes = [
+    activos > 0 ? `${activos} producto${activos === 1 ? "" : "s"}` : null,
+    inactivos > 0 ? `${inactivos} inactivo${inactivos === 1 ? "" : "s"}` : null,
+  ].filter(Boolean);
+  return partes.length > 0 ? partes.join(" · ") : "sin productos";
 }

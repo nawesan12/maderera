@@ -72,6 +72,8 @@ export function HojaDeCorteImpresa({
     mitad?: { sentido: "largo" | "ancho"; enteraLargo: number; enteraAncho: number } | null;
     /** Una reposición sin cargo: el retal queda en la maderera. */
     sinCargo?: boolean;
+    /** La placa la trae el cliente: lo que sobra es suyo. */
+    placaDelCliente?: boolean;
   };
 }) {
   const media = Boolean(corte.mitad);
@@ -89,9 +91,10 @@ export function HojaDeCorteImpresa({
 
       <div className="hc-barra">
         <div>
-          <p className="hc-titulo">
+          {/* El título de la página es el h1 (M3S4-025). */}
+          <h1 className="hc-titulo">
             Hoja de corte {corte.numero} · {corte.cliente}
-          </p>
+          </h1>
           <p className="hc-sub">
             {corte.material} · {corte.deQueSale} de {mm(hoja.placaLargo)} ×{" "}
             {mm(hoja.placaAncho)} mm · {fechaCorta.format(corte.createdAt)}
@@ -99,7 +102,7 @@ export function HojaDeCorteImpresa({
           </p>
         </div>
         <div className="no-imprimir hc-acciones">
-          <BotonImprimir />
+          <BotonImprimir corto />
           <a href={`/api/cortes/${corte.id}/hoja`} className="hc-boton">
             Bajar en PDF
           </a>
@@ -119,27 +122,9 @@ export function HojaDeCorteImpresa({
         />
       </div>
 
-      {/* Lo que el operario tiene que saber antes de tipear la primera medida. */}
-      <div className="hc-reglas">
-        <p>
-          <strong>Las medidas son las de la pieza.</strong> La máquina descuenta
-          la sierra sola: tiene que tener cargado un disco de{" "}
-          {formatearSierra(hoja.anchoSierra)}. Si en WinCut figura otro, este
-          plano no sirve tal cual: avisá antes de cortar.
-        </p>
-        <p>
-          <strong>Sin refilado.</strong> El plano usa {media ? "la media" : "la placa entera"} de{" "}
-          {mm(hoja.placaLargo)} × {mm(hoja.placaAncho)} mm. Si hay que refilar un
-          borde golpeado, fijate en «queda» de cada corte cuánto margen hay.
-        </p>
-        <p>
-          <strong>El orden es el de la seccionadora:</strong> primero los cortes
-          longitudinales de la placa (tiras), después los transversales de cada
-          tira, después los de tercer nivel. Las medidas van en tandas de hasta{" "}
-          4, que es lo que acepta el semiautomático.
-        </p>
-      </div>
-
+      {/* Las reglas de la hoja, que son las mismas en todas, van al pie: tres
+          párrafos antes de «Partir la placa» ocupaban una pantalla del
+          teléfono (mes simulado, M3S3-068). La sierra ya está en las cifras. */}
       {corte.notas && <p className="hc-aviso">Indicaciones: {corte.notas}</p>}
 
       {/* El primer corte de una media placa es partir la entera. */}
@@ -203,13 +188,14 @@ export function HojaDeCorteImpresa({
       )}
 
       {hoja.patrones.map((patron, i) => (
-        <Patron key={i} patron={patron} hoja={hoja} indice={i} cantos={corte.cantos ?? []} media={media} sinCargo={Boolean(corte.sinCargo)} />
+        <Patron key={i} patron={patron} hoja={hoja} indice={i} cantos={corte.cantos ?? []} media={media} sinCargo={Boolean(corte.sinCargo)} placaDelCliente={Boolean(corte.placaDelCliente)} />
       ))}
 
       <p className="hc-pie">
-        La secuencia sale del plano que calcula la plataforma, el mismo con el
-        que se cobró el trabajo. Antes de la primera placa, comprobá una pieza
-        con el metro.
+        Las medidas son las de la pieza: la máquina descuenta el disco de{" "}
+        {formatearSierra(hoja.anchoSierra)}; si WinCut tiene otro, avisá antes de cortar. Sin refilado.
+        El orden es el de la seccionadora: tiras, transversales y tercer nivel, en tandas de hasta 4.
+        Antes de la primera placa, comprobá una pieza con el metro.
       </p>
     </div>
   );
@@ -231,6 +217,7 @@ function Patron({
   cantos,
   media,
   sinCargo,
+  placaDelCliente,
 }: {
   patron: PatronDeCorte;
   hoja: HojaDeCorte;
@@ -238,8 +225,9 @@ function Patron({
   cantos: CantoDePieza[];
   media: boolean;
   sinCargo: boolean;
+  placaDelCliente: boolean;
 }) {
-  const delCliente = sobraDelCliente(patron.seVendeEntera, { sinCargo });
+  const delCliente = sobraDelCliente(patron.seVendeEntera, { sinCargo, placaDelCliente });
   const cuantas = patron.placas.length;
   const nombre = media ? "Media" : "Placa";
   const placas =
@@ -259,7 +247,7 @@ function Patron({
         </span>
       </h2>
       <p className="hc-duenio">
-        {queSeHaceConLaPlaca(patron.seVendeEntera, { sinCargo, media })}
+        {queSeHaceConLaPlaca(patron.seVendeEntera, { sinCargo, media, placaDelCliente })}
         {delCliente ? ": los retales son del cliente y se van con él." : ": los retales quedan en la maderera."}
       </p>
 
@@ -267,7 +255,7 @@ function Patron({
       {/* En el teléfono las medidas de adentro del dibujo no se leen: van
           debajo, pieza por pieza (H125). */}
       <p className="hc-leyenda">
-        {[...new Map(patron.dibujo.piezas.map(({ rect, pieza }) => [pieza.indice, `P${pieza.indice + 1} ${mm(rect.ancho)} × ${mm(rect.alto)}`])).values()].join(" · ")}
+        {[...new Map(patron.dibujo.piezas.map(({ pieza }) => [pieza.indice, `P${pieza.indice + 1} ${mm(pieza.largoOriginal)} × ${mm(pieza.anchoOriginal)}`])).values()].join(" · ")}
       </p>
 
       {patron.operaciones.length === 0 ? (
@@ -483,7 +471,9 @@ function Dibujo({
       ))}
 
       {patron.dibujo.piezas.map(({ rect, pieza }, i) => {
-        const medida = `${mm(rect.ancho)} × ${mm(rect.alto)}`;
+        // La medida como se pidió, largo × ancho: «P1 400 × 600» era una
+        // pieza de 600 × 400 dibujada parada (M2S1-208).
+        const medida = `${mm(pieza.largoOriginal)} × ${mm(pieza.anchoOriginal)}`;
         const cuerpoP = Math.min(60 * escala, rect.alto * 0.42, rect.ancho * 0.3);
         // Una pieza angosta y alta lleva la medida parada, debajo de su
         // número: acostada se pisaba con la de al lado (H194). Un dígito
@@ -575,15 +565,13 @@ function Dibujo({
 const ESTILOS = `
   .hoja-corte { max-width: 210mm; margin: 0 auto; padding: 8mm; font-family: var(--font-sans, sans-serif); color: #1a1a1a; background: #fff; font-size: 12pt; }
   .hc-barra { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 4mm; }
-  .hc-titulo { font-size: 17pt; font-weight: 700; }
+  .hc-titulo { font-size: 17pt; font-weight: 700; margin: 0; }
   .hc-sub { font-size: 11pt; color: #444; margin-top: 1mm; }
   .hc-acciones { display: flex; flex-wrap: wrap; gap: 8px; }
   .hc-boton, .hoja-corte .boton-imprimir { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; border: 1px solid #bbb; border-radius: 8px; background: #fff; font-size: 12pt; font-weight: 600; color: #1a1a1a; text-decoration: none; cursor: pointer; }
   .hc-numeros { display: flex; flex-wrap: wrap; gap: 6mm; margin: 0 0 4mm; padding: 3mm 4mm; border: 1px solid #ccc; border-radius: 2mm; background: #faf8f5; }
   .hc-valor { font-size: 17pt; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
   .hc-rotulo { font-size: 9.5pt; color: #444; }
-  .hc-reglas { margin-bottom: 4mm; padding: 3mm 4mm; border-left: 4px solid #1a1a1a; background: #f5f3f0; font-size: 11pt; }
-  .hc-reglas p + p { margin-top: 1.5mm; }
   .hc-aviso { margin: 3mm 0; padding: 3mm 4mm; border-left: 4px solid #c2410c; background: #fff5ef; font-size: 11.5pt; }
   .hc-patron { margin-top: 6mm; padding-top: 4mm; border-top: 2px solid #1a1a1a; }
   .hc-patron + .hc-patron { break-before: page; }

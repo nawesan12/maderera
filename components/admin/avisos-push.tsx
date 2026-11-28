@@ -19,12 +19,32 @@ import {
  * **Sin claves VAPID en el servidor no se ofrece nada**: un botón que promete
  * avisos y no los manda es peor que no tenerlo. Se dice qué falta.
  */
-export function AvisosPush() {
+class SinRespuesta extends Error {}
+
+/** La promesa, o SinRespuesta si no llega en `ms`. */
+function conPlazo<T>(promesa: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolver, rechazar) => {
+    const reloj = setTimeout(() => rechazar(new SinRespuesta()), ms);
+    promesa.then(
+      (v) => {
+        clearTimeout(reloj);
+        resolver(v);
+      },
+      (e) => {
+        clearTimeout(reloj);
+        rechazar(e);
+      },
+    );
+  });
+}
+
+export function AvisosPush({ soloSiFaltan = false }: { soloSiFaltan?: boolean } = {}) {
   const [estado, setEstado] = useState<
     "cargando" | "sin-claves" | "sin-soporte" | "apagado" | "prendido"
   >("cargando");
   const [clave, setClave] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [trabajando, empezar] = useTransition();
 
   useEffect(() => {
@@ -63,6 +83,7 @@ export function AvisosPush() {
 
   async function prender() {
     setAviso(null);
+    setError(null);
 
     const permiso = await Notification.requestPermission();
 
@@ -75,33 +96,58 @@ export function AvisosPush() {
 
     // El ayudante ya está registrado por el mostrador con alcance de raíz; si
     // todavía no está —alguien que solo usa el panel— se registra acá.
-    const registro =
-      (await navigator.serviceWorker.getRegistration()) ??
-      (await navigator.serviceWorker.register(
-        `/sw.js?v=${process.env.NEXT_PUBLIC_BUILD_ID ?? "dev"}`,
-        { scope: "/" },
-      ));
+    //
+    // Todo el camino va con su error, no solo la suscripción: un ayudante
+    // que se queda «installing» dejaba `ready` colgado para siempre y el
+    // botón sin decir nada (mes 23). `ready` tiene un plazo.
+    let suscripcion: PushSubscription;
+    try {
+      const registro =
+        (await navigator.serviceWorker.getRegistration()) ??
+        (await navigator.serviceWorker.register(
+          `/sw.js?v=${process.env.NEXT_PUBLIC_BUILD_ID ?? "dev"}`,
+          { scope: "/" },
+        ));
 
-    await navigator.serviceWorker.ready;
+      await conPlazo(navigator.serviceWorker.ready, 15_000);
 
-    const suscripcion = await registro.pushManager.subscribe({
-      // Sin esto el navegador no entrega mensajes sin notificación visible, y
-      // Chrome directamente rechaza la suscripción.
-      userVisibleOnly: true,
-      applicationServerKey: clave!,
-    });
+      // El navegador puede rechazar la suscripción aunque el permiso esté
+      // dado (sin servicio de push, en modo privado; M2S1-048).
+      suscripcion = await registro.pushManager.subscribe({
+        // Sin esto el navegador no entrega mensajes sin notificación visible, y
+        // Chrome directamente rechaza la suscripción.
+        userVisibleOnly: true,
+        applicationServerKey: clave!,
+      });
+    } catch (e) {
+      setError(
+        e instanceof SinRespuesta
+          ? "El navegador no terminó de prepararse. Recargá la página y probá de nuevo."
+          : "Este navegador no pudo suscribirse a los avisos.",
+      );
+      return;
+    }
 
     const datos = suscripcion.toJSON();
 
-    const r = await activarAvisos({
-      endpoint: suscripcion.endpoint,
-      p256dh: datos.keys?.p256dh ?? "",
-      auth: datos.keys?.auth ?? "",
-      descripcion: navigator.userAgent.slice(0, 120),
-    });
+    let r: Awaited<ReturnType<typeof activarAvisos>>;
+    try {
+      r = await activarAvisos({
+        endpoint: suscripcion.endpoint,
+        p256dh: datos.keys?.p256dh ?? "",
+        auth: datos.keys?.auth ?? "",
+        descripcion: navigator.userAgent.slice(0, 120),
+      });
+    } catch {
+      setError("No se pudo guardar este dispositivo. Probá de nuevo en un momento.");
+      return;
+    }
 
-    setAviso(r.error ?? r.ok ?? null);
-    if (!r.error) setEstado("prendido");
+    if (r.error) setError(r.error);
+    else {
+      setAviso(r.ok ?? null);
+      setEstado("prendido");
+    }
   }
 
   async function apagar() {
@@ -118,6 +164,11 @@ export function AvisosPush() {
   }
 
   if (estado === "cargando") return null;
+
+  // En el inicio solo se ofrece si este dispositivo no los tiene: el parte
+  // del día y los candidatos a baja salían «omitida: ningún dispositivo»
+  // semanas enteras (mes simulado, M3S1-058). Prendidos, se dice una vez.
+  if (soloSiFaltan && estado !== "apagado" && !(estado === "prendido" && aviso)) return null;
 
   if (estado === "sin-soporte") {
     return (
@@ -189,6 +240,11 @@ export function AvisosPush() {
 
       {aviso && (
         <span className="text-base text-muted-foreground">{aviso}</span>
+      )}
+      {error && (
+        <span role="alert" className="text-base text-destructive">
+          {error}
+        </span>
       )}
     </div>
   );

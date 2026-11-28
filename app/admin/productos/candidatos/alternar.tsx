@@ -18,7 +18,7 @@ import { alternarActivo } from "../actions";
  * y era un botón de un clic que hacía desaparecer la fila sin decir una
  * palabra: no se distinguía "se dio de baja" de "se colgó la pantalla".
  */
-export function AlternarBaja({ id, nombre }: { id: string; nombre: string }) {
+export function AlternarBaja({ id, nombre, stock }: { id: string; nombre: string; stock: number }) {
   const [pendiente, empezar] = useTransition();
   const [confirmando, setConfirmando] = useState(false);
   const router = useRouter();
@@ -39,7 +39,13 @@ export function AlternarBaja({ id, nombre }: { id: string; nombre: string }) {
         abierto={confirmando}
         alCerrar={() => setConfirmando(false)}
         titulo={`Dar de baja «${nombre}»`}
-        detalle="Deja de aparecer en el catálogo del sitio ahora mismo. No se borra: se puede volver a activar desde la ficha del producto."
+        detalle={
+          // Con stock se dice: lo recibido esa semana se proponía de baja a un
+          // clic sin advertirlo (mes simulado, M2S1-124).
+          stock > 0
+            ? `Tiene ${stock} en stock. Deja de aparecer en el catálogo y en el mostrador ahora mismo; se vuelve a activar desde la ficha.`
+            : "Deja de aparecer en el catálogo y en el mostrador ahora mismo. No se borra: se vuelve a activar desde la ficha."
+        }
         confirmar="Sí, darlo de baja"
         peligro
         pendiente={pendiente}

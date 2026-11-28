@@ -117,6 +117,24 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Listo" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/eventos/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      operationId: BorrarEvento
+      summary: Borra un borrador sin anotados
+      responses:
+        "200": { $ref: "#/components/responses/Listo" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/eventos/{id}/recordatorio:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: RecordarEvento
+      summary: Manda el recordatorio a los anotados de un evento que todavía no lo recibieron
+      responses:
+        "200": { $ref: "#/components/responses/Listo" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/eventos/{id}/asistentes:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
@@ -283,8 +301,13 @@ components:
     EventoAdmin:
       type: object
       required: [id, slug, titulo, resumen, descripcion, lugar, sucursal, inicia, termina, cupo, precio, soloProfesionales, estado,
-        inscriptos, confirmados, reservados, recaudado, proximo]
+        inscriptos, confirmados, reservados, recaudado, proximo, empezo, manana, porRecordar, asistieron, sinMarcar]
       properties:
+        asistieron: { type: integer, description: los marcados «vino» }
+        sinMarcar: { type: integer, description: los que tienen el lugar y todavía no se marcó si vinieron }
+        empezo: { type: boolean, description: ya empezó (desde ahí se toma asistencia) }
+        manana: { type: boolean, description: empieza mañana, en hora de Buenos Aires }
+        porRecordar: { type: integer, description: los anotados que todavía no recibieron el recordatorio }
         id: { type: string }
         slug: { type: string }
         titulo: { type: string }

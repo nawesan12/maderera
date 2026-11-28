@@ -505,7 +505,10 @@ func (s *Servicio) Obtener(ctx context.Context, id string) (*Ficha, error) {
 	if err != nil {
 		return nil, err
 	}
-	if c.UserID == nil && c.Email != nil && *c.Email != "" {
+	// La ficha apagada (la que quedó al unir su cuenta web con otra) no
+	// ofrece vincular: un clic le sacaba la cuenta a la ficha con la deuda
+	// (M3S1-025).
+	if c.UserID == nil && c.Active && c.Email != nil && *c.Email != "" {
 		var w CuentaWeb
 		err := s.pool.QueryRow(ctx, `SELECT id, nombre, created_at FROM customers
 			WHERE email = $1 AND active AND user_id IS NOT NULL AND id <> $2 LIMIT 1`, *c.Email, c.ID).Scan(&w.ID, &w.Nombre, &w.CreatedAt)
@@ -576,15 +579,23 @@ type Gestion struct {
 	Asunto          string     `json:"asunto"`
 	Notas           *string    `json:"notas"`
 	ProximaAccionAt *time.Time `json:"proximaAccionAt"`
-	Vencida         bool       `json:"vencida"`
-	CreatedAt       time.Time  `json:"createdAt"`
+	// Vencida: el día argentino de la próxima acción ya pasó. ParaHoy: es
+	// hoy. Comparando el mediodía guardado con la hora, la de hoy pasaba a
+	// «Vencía el» a las 12 (mes 23: a las 21 se leía vencida).
+	Vencida   bool      `json:"vencida"`
+	ParaHoy   bool      `json:"paraHoy"`
+	CreatedAt time.Time `json:"createdAt"`
+	// Saldo es lo que debe el cliente en la cuenta (positivo, debe): la
+	// tarjeta no lo decía y había que escribirlo en el asunto (mes simulado 2).
+	Saldo float64 `json:"saldo"`
 }
 
 // Gestiones es listarGestiones (y gestionesDelCliente, con un cliente): las
 // abiertas, o todas; la próxima acción más cercana primero.
 func (s *Servicio) Gestiones(ctx context.Context, incluirCerradas bool, cliente string, hoy time.Time) ([]Gestion, error) {
 	filas, err := s.pool.Query(ctx, `
-		SELECT g.id, g.customer_id, coalesce(c.razon_social, c.nombre), g.etapa::text, g.asunto, g.notas, g.proxima_accion_at, g.created_at
+		SELECT g.id, g.customer_id, coalesce(c.razon_social, c.nombre), g.etapa::text, g.asunto, g.notas, g.proxima_accion_at, g.created_at,
+		       c.cuenta_saldo::float8
 		FROM customer_follow_ups g JOIN customers c ON c.id = g.customer_id
 		WHERE ($1 OR g.etapa <> 'cerrado') AND ($2 = '' OR g.customer_id::text = $2)
 		ORDER BY g.proxima_accion_at ASC NULLS LAST, g.created_at DESC`, incluirCerradas, cliente)
@@ -593,16 +604,28 @@ func (s *Servicio) Gestiones(ctx context.Context, incluirCerradas bool, cliente 
 	}
 	return pgx.CollectRows(filas, func(r pgx.CollectableRow) (Gestion, error) {
 		var g Gestion
-		err := r.Scan(&g.ID, &g.CustomerID, &g.Cliente, &g.Etapa, &g.Asunto, &g.Notas, &g.ProximaAccionAt, &g.CreatedAt)
-		g.Vencida = g.ProximaAccionAt != nil && !g.ProximaAccionAt.After(hoy)
+		err := r.Scan(&g.ID, &g.CustomerID, &g.Cliente, &g.Etapa, &g.Asunto, &g.Notas, &g.ProximaAccionAt, &g.CreatedAt, &g.Saldo)
+		if g.ProximaAccionAt != nil {
+			dia, hoyDia := diaArgentino(*g.ProximaAccionAt), diaArgentino(hoy)
+			g.Vencida, g.ParaHoy = dia.Before(hoyDia), dia.Equal(hoyDia)
+		}
 		return g, err
 	})
 }
 
-// GestionesVencidas es cuántas abiertas tienen la próxima acción vencida.
+// GestionesVencidas es cuántas abiertas tienen la próxima acción para hoy
+// o vencida (el «Para hoy» del inicio): hasta que termina el día argentino,
+// no hasta la hora de ahora.
 func (s *Servicio) GestionesVencidas(ctx context.Context, hoy time.Time) (int, error) {
 	var n int
+	manana := diaArgentino(hoy).AddDate(0, 0, 1)
 	err := s.pool.QueryRow(ctx, `SELECT count(*)::int FROM customer_follow_ups
-		WHERE etapa <> 'cerrado' AND proxima_accion_at IS NOT NULL AND proxima_accion_at <= $1`, hoy).Scan(&n)
+		WHERE etapa <> 'cerrado' AND proxima_accion_at IS NOT NULL AND proxima_accion_at < $1`, manana).Scan(&n)
 	return n, err
+}
+
+// diaArgentino es la medianoche argentina del día de t.
+func diaArgentino(t time.Time) time.Time {
+	a := t.In(argentina)
+	return time.Date(a.Year(), a.Month(), a.Day(), 0, 0, 0, 0, argentina)
 }

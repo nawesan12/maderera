@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { drenar, limpiarConfirmadas, resumenDeCola } from "./cola";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { drenar, efectivoEnCola, leerCola, limpiarConfirmadas, type EfectivoEnCola } from "./cola";
+import { resumir } from "./cola-estado";
 import type { ResumenDeCola } from "./cola-estado";
 
 /**
@@ -21,11 +22,13 @@ const CADA_MS = 20_000;
 export interface EstadoCola extends ResumenDeCola {
   /** La sesión venció: la cola retiene todo y hay que volver a entrar. */
   faltaSesion: boolean;
+  /** El efectivo de lo que espera, de esta sucursal: ya está en el cajón (M2S1-086). */
+  efectivo: EfectivoEnCola;
   refrescar: () => Promise<void>;
   drenarAhora: () => Promise<void>;
 }
 
-export function useCola(enLinea: boolean): EstadoCola {
+export function useCola(enLinea: boolean, branchId = ""): EstadoCola {
   const [resumen, setResumen] = useState<ResumenDeCola>({
     pendientes: 0,
     atascadas: 0,
@@ -33,14 +36,25 @@ export function useCola(enLinea: boolean): EstadoCola {
     sinSubir: 0,
   });
   const [faltaSesion, setFaltaSesion] = useState(false);
+  const [efectivo, setEfectivo] = useState<EfectivoEnCola>({ ventas: 0, ingresos: 0, retiros: 0 });
 
+  /*
+   * Solo la última lectura pisa el estado. Dos lecturas a la vez (la del
+   * ciclo y la de recién cobrar) podían terminar al revés, y la vieja dejaba
+   * el chip y «N ventas sin enviar» una venta atrasados (mes 23, M2S1-086).
+   */
+  const lectura = useRef(0);
   const refrescar = useCallback(async () => {
+    const esta = ++lectura.current;
     try {
-      setResumen(await resumenDeCola());
+      const filas = await leerCola();
+      if (esta !== lectura.current) return;
+      setResumen(resumir(filas));
+      setEfectivo(efectivoEnCola(filas, branchId));
     } catch {
       // Sin almacén local no hay cola que mostrar.
     }
-  }, []);
+  }, [branchId]);
 
   const drenarAhora = useCallback(async () => {
     try {
@@ -90,5 +104,6 @@ export function useCola(enLinea: boolean): EstadoCola {
     return () => clearTimeout(t);
   }, []);
 
-  return { ...resumen, faltaSesion, refrescar, drenarAhora };
+  return { ...resumen, faltaSesion, efectivo, refrescar, drenarAhora };
+
 }

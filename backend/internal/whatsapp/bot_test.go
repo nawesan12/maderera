@@ -3,6 +3,7 @@ package whatsapp
 import (
 	"context"
 	"fmt"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -156,8 +157,38 @@ func TestBotEnLaBandeja(t *testing.T) {
 	}
 	entra("wamid.bot2", "quiero hablar con una persona")
 	r := respuestas()
-	if len(r) != 2 || !strings.Contains(r[1], "https://wa.me/5492235903118?text=") {
+	if len(r) != 2 || !strings.Contains(r[1], "/api/whatsapp/hablar/") || strings.Contains(r[1], "wa.me") {
 		t.Fatalf("derivar: %v", r)
+	}
+	// El enlace corto lleva al número humano con todo lo que escribió en la
+	// última hora (M2S2-139, M2S3-022).
+	token := r[1][strings.LastIndex(r[1], "/")+1:]
+	req := httptest.NewRequest("GET", "/api/whatsapp/hablar/"+token, nil)
+	req.SetPathValue("token", token)
+	rec := httptest.NewRecorder()
+	e.wa.Hablar(rec, req)
+	destino := rec.Header().Get("Location")
+	if rec.Code != 302 || !strings.HasPrefix(destino, "https://wa.me/5492235903118?text=") ||
+		!strings.Contains(destino, "abren") || !strings.Contains(destino, "persona") {
+		t.Fatalf("hablar: %d %s", rec.Code, destino)
+	}
+	// Devuelta al bot, contesta aunque una persona haya escrito antes
+	// (M2S3-025).
+	if _, err := e.pool.Exec(ctx, `insert into whatsapp_mensajes (conversacion_id, direccion, tipo, cuerpo, estado, origen, ocurrido_at)
+		select id, 'saliente', 'text', 'Hola, te ayudo', 'enviado', 'panel', now() from whatsapp_conversaciones where wa_jid = $1`, jid); err != nil {
+		t.Fatal(err)
+	}
+	var convID string
+	_ = e.pool.QueryRow(ctx, `select id from whatsapp_conversaciones where wa_jid = $1`, jid).Scan(&convID)
+	if err := e.wa.ReactivarBot(ctx, convID); err != nil {
+		t.Fatal(err)
+	}
+	entra("wamid.bot2b", "aceptan transferencia?")
+	if r := respuestas(); len(r) != 3 || !strings.Contains(r[2], "Transferencia") {
+		t.Fatalf("devuelta al bot: %v", r)
+	}
+	if _, err := e.pool.Exec(ctx, `update whatsapp_conversaciones set bot_estado = 'derivada' where id = $1`, convID); err != nil {
+		t.Fatal(err)
 	}
 	var estado string
 	_ = e.pool.QueryRow(ctx, `select bot_estado from whatsapp_conversaciones where wa_jid = $1`, jid).Scan(&estado)
@@ -165,7 +196,7 @@ func TestBotEnLaBandeja(t *testing.T) {
 		t.Fatalf("estado: %s", estado)
 	}
 	entra("wamid.bot3", "hola?")
-	if r := respuestas(); len(r) != 2 {
+	if r := respuestas(); len(r) != 3 {
 		t.Fatalf("derivada, el bot no contesta: %v", r)
 	}
 }

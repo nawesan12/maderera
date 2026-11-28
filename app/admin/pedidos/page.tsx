@@ -20,6 +20,15 @@ import { numerosDelDueno } from "@/lib/dal/admin/resumen";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { AccionesPedido } from "./acciones";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
+import { RefrescarEnVivo } from "@/components/vivo/refrescar-en-vivo";
+import { ajustesDelSitio } from "@/lib/dal/contenido";
+import { valorDeRegla } from "@/lib/reglas";
+import { etiquetasDelCircuito } from "@/lib/circuito";
+
+/** El chip del circuito sin factura, con la palabra de la regla («B», «Sin factura», «Interno»). */
+function rotuloCorto(nombre: "b" | "sin_factura" | "interno"): string {
+  return etiquetasDelCircuito(nombre).negro;
+}
 
 /** Las etapas por las que pasa un pedido, en orden. */
 const COLUMNAS = [
@@ -29,6 +38,16 @@ const COLUMNAS = [
   { estado: "en-camino", titulo: "En camino" },
 ] as const;
 
+/**
+ * Las columnas que abre cada número de «Para hoy» (mes simulado, M3S2-020 y
+ * M2S1-192): «16 pedidos por preparar» abría el tablero entero, y «12 Sin
+ * preparar» arriba de todo parecía otro número.
+ */
+const COLUMNAS_DEL_FILTRO: Record<string, readonly string[]> = {
+  "por-preparar": ["pendiente", "preparando"],
+  listo: ["listo"],
+};
+
 export default async function PedidosPage({
   searchParams,
 }: {
@@ -36,6 +55,8 @@ export default async function PedidosPage({
 }) {
   const params = await searchParams;
   if (params.ver === "historial") return <Historial params={params} />;
+  const soloColumnas = params.estado ? COLUMNAS_DEL_FILTRO[params.estado] : undefined;
+  const columnas = soloColumnas ? COLUMNAS.filter((c) => soloColumnas.includes(c.estado)) : COLUMNAS;
   const [pedidos, sucursales] = await Promise.all([
     listarPedidos({ busqueda: params.buscar, sucursal: params.sucursal, vista: params.buscar ? undefined : "tablero" }),
     listarSucursalesPublicas(),
@@ -50,7 +71,8 @@ export default async function PedidosPage({
   const cobra = rol != null && MANEJAN_PLATA.includes(rol);
   const [avisosListo, avisosEnCamino] = atiende
     ? await Promise.all([
-        avisosManuales("listo", "order", pedidos.filter((p) => p.estado === "listo").map((p) => p.id)),
+        // Un envío listo no se avisa: no se retira (mes simulado 2).
+        avisosManuales("listo", "order", pedidos.filter((p) => p.estado === "listo" && p.tipoEntrega === "retiro").map((p) => p.id)),
         avisosManuales("en-camino", "order", pedidos.filter((p) => p.estado === "en-camino").map((p) => p.id)),
       ])
     : [{}, {}];
@@ -66,13 +88,26 @@ export default async function PedidosPage({
   const activos = pedidos.filter(
     (p) => !["entregado", "cancelado"].includes(p.estado),
   );
+  // El saldo de un acopio, aparte y en gris: está guardado a nombre del
+  // cliente, no es lo que hay que entregar hoy (mes simulado 2).
+  const enAcopio = activos.filter((p) => p.acopio && p.estado === "listo");
   // Lo que falta cobrar con la regla de «Me deben» (sinCobrar, de Go): sin
   // los pedidos a cuenta corriente, que ya están en la cuenta, y descontando
-  // lo cobrado. Sumar el total de todo lo no pagado daba un tercer número.
-  const porCobrar = activos.reduce((s, p) => s + (p.sinCobrar ?? 0), 0);
+  // lo cobrado; con lo entregado sin cobrar, que también se cobra desde acá
+  // (decía $ 836.680 con $ 481.900 más abajo, mes simulado 2).
+  const enLaColumna = (estado: string) => pedidos.filter((p) => p.estado === estado && !enAcopio.includes(p));
+  const conAcopio = Boolean(soloColumnas?.includes("listo")) && enAcopio.length > 0;
+  const columnasVisibles = conAcopio ? columnas.filter((c) => enLaColumna(c.estado).length > 0) : columnas;
+  const porCobrar = [...activos, ...entregadosSinCobrar].reduce((s, p) => s + (p.sinCobrar ?? 0), 0);
+  const [ajustes] = await Promise.all([ajustesDelSitio()]);
+  const circuito = rotuloCorto(valorDeRegla(ajustes, "etiqueta_del_circuito"));
 
   return (
     <div>
+      {/* Se factura, se cobra, se cancela o entra un pedido en otra
+          pantalla: esta se refresca sola (canales «ventas» y «pedidos»,
+          M2S2-099, M3S1-034 y M3S3-045). */}
+      <RefrescarEnVivo canales={["ventas", "pedidos"]} />
       <EncabezadoPanel
         titulo="Pedidos"
         resumen={
@@ -104,32 +139,48 @@ export default async function PedidosPage({
         </div>
       ) : (
         <>
-          <Tablero>
-            {COLUMNAS.map((columna) => {
-              const enColumna = pedidos.filter(
-                (p) => p.estado === columna.estado,
-              );
-              const monto = enColumna.reduce((s, p) => s + p.total, 0);
+          {/* Filtrado («Listos» desde el inicio), una columna vacía con el
+              pedido abajo en «En acopio» decía «0 Listos» y mostraba uno
+              (mes 23): la vacía no se muestra si el acopio tiene algo. */}
+          {columnasVisibles.length > 0 && (
+            <Tablero>
+              {columnasVisibles.map((columna) => {
+                const enColumna = enLaColumna(columna.estado);
+                const monto = enColumna.reduce((s, p) => s + p.total, 0);
 
-              return (
-                <ColumnaTablero
-                  key={columna.estado}
-                  titulo={columna.titulo}
-                  cantidad={enColumna.length}
-                  detalle={
-                    enColumna.length > 0 ? formatearMonto(monto) : undefined
-                  }
-                  estado={columna.estado}
-                >
-                  {enColumna.map((pedido) => (
-                    <TarjetaPedido key={pedido.id} pedido={pedido} aviso={avisos[pedido.id] ?? null} cobra={cobra} />
-                  ))}
-                </ColumnaTablero>
-              );
-            })}
-          </Tablero>
+                return (
+                  <ColumnaTablero
+                    key={columna.estado}
+                    titulo={columna.titulo}
+                    cantidad={enColumna.length}
+                    detalle={
+                      enColumna.length > 0 ? formatearMonto(monto) : undefined
+                    }
+                    estado={columna.estado}
+                  >
+                    {enColumna.map((pedido) => (
+                      <TarjetaPedido key={pedido.id} pedido={pedido} aviso={avisos[pedido.id] ?? null} cobra={cobra} />
+                    ))}
+                  </ColumnaTablero>
+                );
+              })}
+            </Tablero>
+          )}
 
-          {entregadosSinCobrar.length > 0 && (
+          {(!soloColumnas || soloColumnas.includes("listo")) && enAcopio.length > 0 && (
+            <section id="acopio" className="mt-8 scroll-mt-24">
+              <h2 className="mb-2.5 text-base font-semibold text-muted-foreground">
+                En acopio <span className="tabular font-normal">{enAcopio.length}</span>
+              </h2>
+              <ul className="tarjeta-hundida overflow-hidden rounded-xl">
+                {enAcopio.map((p) => (
+                  <FilaCerrada key={p.id} pedido={p} fecha={haceCuanto(p.createdAt)} circuito={circuito} />
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {!soloColumnas && entregadosSinCobrar.length > 0 && (
             <section className="mt-8">
               <h2 className="mb-2.5 text-base font-semibold">
                 Entregados sin cobrar{" "}
@@ -145,14 +196,14 @@ export default async function PedidosPage({
             </section>
           )}
 
-          {entregados.length > 0 && (
+          {!soloColumnas && entregados.length > 0 && (
             <section className="mt-8">
               <h2 className="mb-2.5 text-base font-semibold text-muted-foreground">
                 Cerrados esta semana
               </h2>
               <ul className="overflow-hidden tarjeta">
                 {entregados.slice(0, 10).map((p) => (
-                  <FilaCerrada key={p.id} pedido={p} fecha={haceCuanto(p.createdAt)} />
+                  <FilaCerrada key={p.id} pedido={p} fecha={haceCuanto(p.createdAt)} circuito={circuito} />
                 ))}
               </ul>
             </section>
@@ -259,6 +310,8 @@ async function Historial({
 
   return (
     <div>
+      {/* Un pedido cancelado o cobrado en otra pestaña sale solo (M3S3-045). */}
+      <RefrescarEnVivo canales={["ventas", "pedidos"]} />
       <EncabezadoPanel
         titulo="Pedidos"
         resumen={
@@ -363,14 +416,20 @@ function FilaCerrada({
   fecha,
   urgente = false,
   monto,
+  circuito = "B",
 }: {
   pedido: PedidoListado;
   fecha: string;
   urgente?: boolean;
+  /** Cómo se llama el circuito sin factura (regla etiqueta_del_circuito). */
+  circuito?: string;
   /** Lo que falta cobrar, en el filtro «Sin cobrar». */
   monto?: number;
 }) {
   const interno = p.comprobante === "interno" && !p.facturado && p.estado !== "cancelado";
+  // El acopio que se debe lleva la marca, como la tarjeta del tablero (mes
+  // 23: PED-1169 debía $ 1.077.840 sin ninguna marca).
+  const debe = monto == null && p.estado !== "cancelado" && (p.sinCobrar ?? 0) > 0.009;
   return (
     <li className="border-b last:border-0">
       <Link href={`/admin/pedidos/${p.id}`} className="block px-5 py-3.5 transition-colors hover:bg-hundida/60">
@@ -383,7 +442,12 @@ function FilaCerrada({
           <span className={`text-base ${urgente ? "estado-problema" : "text-muted-foreground"}`}>{fecha}</span>
           <EtiquetaEstado estado={p.estado} contexto="pedido" />
           {interno && (
-            <span className="estado-cerrado rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium">Interno</span>
+            <span className="estado-cerrado rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium">{circuito}</span>
+          )}
+          {debe && (
+            <span className="estado-espera rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium text-[var(--estado-tinta)]">
+              Sin cobrar
+            </span>
           )}
           <span
             className={`tabular ml-auto text-base ${monto != null ? "estado-problema font-semibold" : "font-medium"} ${

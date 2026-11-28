@@ -84,11 +84,93 @@ func TestRepartoPorRol(t *testing.T) {
 	}
 }
 
+// Facturar, cobrar con un recibo o cancelar un pedido avisa por «ventas»
+// (00363): las otras pantallas no se enteraban (M2S2-099, M3S1-034).
+func TestVentasAvisaAlFacturarCobrarYCancelar(t *testing.T) {
+	pool := pruebas.Base(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := Nueva(pool.Config().ConnString(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	go c.Correr(ctx)
+	admin := httptest.NewServer(conRol(c, sqlc.StaffRoleAdmin))
+	defer admin.Close()
+	resultado := make(chan []string, 1)
+	// El pedido nuevo y el cancelado avisan también por «pedidos» (00381):
+	// acá cuentan los de «ventas».
+	go func() { resultado <- leerEventos(t, admin.URL, 5, 5*time.Second) }()
+	time.Sleep(500 * time.Millisecond)
+	var pedido string
+	if err := pool.QueryRow(ctx, `INSERT INTO orders (numero, contacto_nombre, origen, subtotal, total, estado) VALUES ('PED-1', 'Ana', 'mostrador', 1, 1, 'pendiente') RETURNING id`).Scan(&pedido); err != nil {
+		t.Fatal(err)
+	}
+	for _, sql := range []string{
+		`INSERT INTO invoices (tipo, punto_venta, numero, estado, receptor_nombre, total, order_id) VALUES ('factura_b', 3, 1, 'emitida', 'Ana', 1, '` + pedido + `')`,
+		`INSERT INTO receipts (numero, recibido_de, total, origen) VALUES ('REC-0001', 'Ana', 1, 'panel')`,
+		`UPDATE orders SET estado = 'cancelado' WHERE id = '` + pedido + `'`,
+	} {
+		if _, err := pool.Exec(ctx, sql); err != nil {
+			t.Fatalf("%s: %v", sql, err)
+		}
+	}
+	var ventas []string
+	todos := <-resultado
+	for _, e := range todos {
+		if e != "pedidos" {
+			ventas = append(ventas, e)
+		}
+	}
+	if e := ventas; strings.Join(e, ",") != "ventas,ventas,ventas" || len(todos) != 5 {
+		t.Errorf("eventos: %v", e)
+	}
+}
+
 func TestSinPersonalNoHayStream(t *testing.T) {
 	c := Nueva("", slog.New(slog.NewTextHandler(io.Discard, nil)))
 	w := httptest.NewRecorder()
 	c.ServeHTTP(w, httptest.NewRequest("GET", "/api/vivo", nil))
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("sin sesión: %d", w.Code)
+	}
+}
+
+// Mes simulado 2 (M2S4-012): un pedido del panel, y su cambio de estado,
+// también se avisan (el canal solo publicaba los de la tienda); un update
+// que no cambia el estado, no.
+func TestLosPedidosDelPanelSeAvisan(t *testing.T) {
+	pool := pruebas.Base(t)
+	ctx := context.Background()
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Release()
+	if _, err := conn.Exec(ctx, `listen mjbj_vivo`); err != nil {
+		t.Fatal(err)
+	}
+	var id string
+	if err := pool.QueryRow(ctx, `insert into orders (numero, contacto_nombre, origen, subtotal, total) values ('PED-1187', 'Ana', 'presupuesto', 1, 1) returning id`).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `update orders set notas = 'x' where id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `update orders set estado = 'cancelado' where id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+	var cargas []string
+	for i := 0; i < 2; i++ {
+		espera, cancel := context.WithTimeout(ctx, 3*time.Second)
+		n, err := conn.Conn().WaitForNotification(espera)
+		cancel()
+		if err != nil {
+			t.Fatalf("aviso %d: %v (llegaron %v)", i, err, cargas)
+		}
+		cargas = append(cargas, n.Payload)
+	}
+	if !strings.Contains(cargas[0], `"nuevo": true`) || !strings.Contains(cargas[0], `"origen": "presupuesto"`) {
+		t.Errorf("el alta: %s", cargas[0])
+	}
+	if !strings.Contains(cargas[1], `"estado": "cancelado"`) || !strings.Contains(cargas[1], `"nuevo": false`) {
+		t.Errorf("la cancelación: %s", cargas[1])
 	}
 }

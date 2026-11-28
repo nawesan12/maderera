@@ -97,7 +97,6 @@ export function FormularioEmisor({ emisor }: { emisor: DatosEmisor }) {
             id="cuit"
             etiqueta="CUIT"
             defaultValue={emisor.cuit}
-            placeholder="30-12345678-9"
             required
             tabular
           />

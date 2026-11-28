@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -32,6 +33,10 @@ type PlacaCortable struct {
 	PrecioMediaPct      float64 `json:"precioMediaPct"`
 	PrecioPorPasada     float64 `json:"precioPorPasada"`
 	PrecioPorMetroCanto float64 `json:"precioPorMetroCanto"`
+	// HayStock: alguna disponible en alguna sucursal. Las que no, al final:
+	// el armador arrancaba con el Fenólico de 18, la única sin stock (mes
+	// simulado, M2S1-106).
+	HayStock bool `json:"hayStock"`
 }
 
 // Placas son las placas cortables con los precios de una lista. Solo las que
@@ -44,7 +49,8 @@ func (s *Servicio) Placas(ctx context.Context, l catalogo.Lista) ([]PlacaCortabl
 	}
 	filas, err := s.pool.Query(ctx, `
 		SELECT pv.id::text, p.name, pv.label, pv.largo_mm, pv.ancho_mm, pv.color, c.name, p.forma_de_venta::text,
-		       p.precio_media_pct, coalesce(pp.price, round((pg.price * $3::numeric)::numeric, 2))
+		       p.precio_media_pct, coalesce(pp.price, round((pg.price * $3::numeric)::numeric, 2)),
+		       EXISTS (SELECT 1 FROM inventory i WHERE i.variant_id = pv.id AND i.qty - coalesce(i.reservado, 0) > 0)
 		FROM product_variants pv
 		JOIN products p ON p.id = pv.product_id
 		JOIN categories c ON c.id = p.category_id
@@ -62,7 +68,7 @@ func (s *Servicio) Placas(ctx context.Context, l catalogo.Lista) ([]PlacaCortabl
 		var producto, medida, categoria, forma string
 		var largo, ancho, pct int32
 		var precio *jsmath.Num
-		if err := filas.Scan(&p.VariantID, &producto, &medida, &largo, &ancho, &p.Color, &categoria, &forma, &pct, &precio); err != nil {
+		if err := filas.Scan(&p.VariantID, &producto, &medida, &largo, &ancho, &p.Color, &categoria, &forma, &pct, &precio, &p.HayStock); err != nil {
 			return nil, err
 		}
 		if precio == nil || precio.F() <= 0 {
@@ -78,7 +84,11 @@ func (s *Servicio) Placas(ctx context.Context, l catalogo.Lista) ([]PlacaCortabl
 		p.PrecioPorPasada, p.PrecioPorMetroCanto = t.PrecioPorPasada, t.PrecioPorMetroCanto
 		out = append(out, p)
 	}
-	return out, filas.Err()
+	if err := filas.Err(); err != nil {
+		return nil, err
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].HayStock && !out[j].HayStock })
+	return out, nil
 }
 
 func (s *Servicio) placa(ctx context.Context, l catalogo.Lista, variantID string) (*PlacaCortable, error) {

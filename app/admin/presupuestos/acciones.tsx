@@ -15,13 +15,22 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatearMonto } from "@/components/admin/formato";
+import { importeParaElCampo } from "@/lib/formato";
 import { CampoPin, type Autorizacion } from "@/components/autorizacion/campo-pin";
 import { CampoFecha } from "@/components/ui/campo-fecha";
+import { descuentoPorMedioDePago, montoDelDescuentoDePago, type EscalaDePago } from "@/lib/precios/medio-pago";
 
 export interface ZonaParaPedido {
   nombre: string;
   costo: number;
   aCotizar: boolean;
+}
+
+/** Un renglón con lo que hay en cada sucursal, para avisar antes de reservar. */
+export interface RenglonConStock {
+  descripcion: string;
+  cantidad: number;
+  disponible: { sucursal: string; nombre: string; disponible: number }[];
 }
 
 /** Por qué se perdió: los mismos de Go (pedidos.MotivosDeRechazo). */
@@ -53,12 +62,13 @@ function useCambiarEstado(id: string) {
  * correo con el detalle y, si está prendido en /admin/avisos, el WhatsApp).
  * Va con los otros canales en «Mandárselo», no entre las decisiones.
  */
-export function EnviarAlCliente({ id }: { id: string }) {
+export function EnviarAlCliente({ id, yaEnviado = false }: { id: string; yaEnviado?: boolean }) {
   const { cambiar, pendiente } = useCambiarEstado(id);
   return (
     <button
       type="button"
-      onClick={() => cambiar("enviado")}
+      // Ya enviado (por WhatsApp): solo el correo, sin cambiar el estado.
+      onClick={() => cambiar("enviado", yaEnviado ? "por_correo" : undefined)}
       disabled={pendiente}
       className="inline-flex h-11 items-center gap-2 rounded-lg bg-hundida px-3.5 text-base font-medium transition-colors hover:bg-muted disabled:opacity-50"
     >
@@ -81,7 +91,14 @@ export function AccionesPresupuesto({
   abrirPasar = false,
   credito = null,
   bajoCosto = 0,
+  escalas = [],
+  baseEscala = 0,
+  renglones = [],
+  sucursal = null,
 }: {
+  /** Las escalas del descuento por forma de pago y sobre cuánto van. */
+  escalas?: EscalaDePago[];
+  baseEscala?: number;
   /** Pasó su validez: al pasarlo a pedido se eligen los precios. */
   vencido?: { totalDeHoy: number } | null;
   /** Recién guardado con «Guardar y pasar a pedido»: el paso ya abierto. */
@@ -104,6 +121,10 @@ export function AccionesPresupuesto({
   credito?: { disponible: number; bloqueada: boolean } | null;
   /** Cuántos renglones quedan por debajo del costo. */
   bajoCosto?: number;
+  /** Lo que lleva, con lo que hay en cada sucursal (M2S1-089). */
+  renglones?: RenglonConStock[];
+  /** El slug de la sucursal del presupuesto. */
+  sucursal?: string | null;
 }) {
   const { cambiar, pendiente } = useCambiarEstado(id);
   const [rechazando, setRechazando] = useState(false);
@@ -125,6 +146,9 @@ export function AccionesPresupuesto({
   }
 
   const decidible = ["pendiente", "revision", "enviado"].includes(estado);
+  // Aceptado sin pedido vivo (se canceló): también se rechaza, con su motivo
+  // (M2S4-066: quedaba «Aceptado» para siempre).
+  const rechazable = decidible || estado === "aceptado";
   // Lo que todavía no vio el cliente se corrige en el lugar; lo demás se
   // duplica (mes simulado: un renglón equivocado obligaba a rechazarlo).
   const corregible = ["pendiente", "revision"].includes(estado);
@@ -145,6 +169,10 @@ export function AccionesPresupuesto({
           abierto={abrirPasar}
           credito={credito}
           bajoCosto={bajoCosto}
+          escalas={escalas}
+          baseEscala={baseEscala}
+          renglones={renglones}
+          sucursal={sucursal}
         />
       )}
       {decidible && estado !== "aceptado" && (
@@ -168,7 +196,7 @@ export function AccionesPresupuesto({
       ) : (
         <Duplicar id={id} />
       )}
-      {decidible && (
+      {rechazable && (
         <>
           <button
             onClick={() => setRechazando(true)}
@@ -255,7 +283,15 @@ function PasarAPedido({
   abierto: abiertoDeEntrada = false,
   credito,
   bajoCosto,
+  escalas,
+  baseEscala,
+  renglones,
+  sucursal: sucursalDelPresupuesto,
 }: {
+  escalas: EscalaDePago[];
+  baseEscala: number;
+  renglones: RenglonConStock[];
+  sucursal: string | null;
   abierto?: boolean;
   id: string;
   numero: string;
@@ -293,6 +329,20 @@ function PasarAPedido({
   const [precios, setPrecios] = useState<"actualizar" | "respetar">("actualizar");
   const [pidePin, setPidePin] = useState<Autorizacion | null>(null);
   const entrega = useRef<HTMLDivElement>(null);
+  /*
+   * De dónde sale (M2S1-089): con un renglón sin stock en la sucursal del
+   * presupuesto, se ve cuál y se elige otra que lo tenga. Sin esto reservaba
+   * igual y la sucursal quedaba en negativo.
+   */
+  const sucursalesConStock = renglones.find((r) => r.disponible.length > 0)?.disponible ?? [];
+  const [sucursal, setSucursal] = useState(sucursalDelPresupuesto ?? sucursalesConStock[0]?.sucursal ?? "");
+  const faltantes = renglones
+    .map((r) => {
+      const aca = r.disponible.find((d) => d.sucursal === sucursal);
+      return aca && aca.disponible + 0.0001 < r.cantidad ? { ...r, hay: aca.disponible } : null;
+    })
+    .filter((r): r is RenglonConStock & { hay: number } => r !== null);
+
   const totalBase = vencido && precios === "actualizar" ? vencido.totalDeHoy : total;
 
   const medios: { valor: Medio; texto: string }[] = [
@@ -308,8 +358,13 @@ function PasarAPedido({
   // Un envío sin flete no sale: se carga o se elige «Sin cargo» (mes
   // simulado: se creaban pedidos con envío y $0 de flete sin aviso).
   const faltaFlete = tipo === "envio" && !hayCosto && !sinCargo;
-  const totalPedido = totalBase + costoEnvio;
   const aCuenta = medio === "cuenta_corriente";
+  // El descuento por forma de pago, el mismo que Go aplica al crear (y que
+  // el mostrador hace en la venta): con «Transferencia» salía la lista.
+  const base = total > 0 ? Math.round(baseEscala * (totalBase / total) * 100) / 100 : 0;
+  const escala = medio && !aCuenta ? descuentoPorMedioDePago(escalas, medio, base) : null;
+  const descuento = escala ? montoDelDescuentoDePago(base, escala.porcentaje) : 0;
+  const totalPedido = Math.round((totalBase - descuento + costoEnvio) * 100) / 100;
   const disponible = credito && !credito.bloqueada ? Math.max(credito.disponible, 0) : null;
   const parteLeida = Number(parteTexto.trim().replace(/\./g, "").replace(",", "."));
   const parteMal = aCuenta && parteTexto.trim() !== "" && !(Number.isFinite(parteLeida) && parteLeida > 0);
@@ -327,10 +382,15 @@ function PasarAPedido({
   function elegirZona(nombre: string) {
     setZona(nombre);
     const z = zonas.find((x) => x.nombre === nombre);
-    if (z && !z.aCotizar && z.costo > 0) {
-      setCosto(String(z.costo).replace(".", ","));
-      setSinCargo(false);
-    }
+    // El flete de la tarifa va propuesto y se puede cambiar, también en una
+    // zona «a cotizar» que tiene uno de referencia; la de costo cero es sin
+    // cargo (M2S1-189: había que tipearlo para que apareciera «Crear»).
+    // Una zona «a cotizar» sin referencia deja el flete vacío: el de la zona
+    // anterior quedaba puesto (M2S1-189, Tandil → Batán seguía en 72.000).
+    if (!z) return;
+    setSinCargo(false);
+    if (z.costo > 0) setCosto(importeParaElCampo(z.costo));
+    else setCosto(z.aCotizar ? "" : "0");
   }
 
   function pasar(pin?: string) {
@@ -346,6 +406,7 @@ function PasarAPedido({
         entregarEl: entregarEl || undefined,
         ...(vencido ? { precios } : {}),
         ...(pin ? { pin } : {}),
+        ...(sucursal && sucursal !== sucursalDelPresupuesto ? { sucursal } : {}),
       });
       if (r.autorizacion) {
         setPidePin(r.autorizacion);
@@ -434,6 +495,41 @@ function PasarAPedido({
               </div>
             )}
 
+            {(faltantes.length > 0 || (sucursal !== sucursalDelPresupuesto && sucursal)) && sucursalesConStock.length > 1 && (
+              <div className="space-y-2">
+                <p className="text-base font-medium">Sale de</p>
+                <Opciones
+                  etiqueta="Sale de"
+                  valor={sucursal}
+                  alCambiar={setSucursal}
+                  opciones={sucursalesConStock.map((d) => ({ valor: d.sucursal, texto: d.nombre }))}
+                />
+                {faltantes.length > 0 && (
+                  <ul className="estado-problema space-y-1 rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-base text-[var(--estado-tinta)]">
+                    {faltantes.map((f) => {
+                      const otra = f.disponible.find((d) => d.sucursal !== sucursal && d.disponible >= f.cantidad);
+                      return (
+                        <li key={f.descripcion} className="flex items-start gap-2">
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                          <span>
+                            <span className="tabular font-medium">{f.cantidad}</span> × {f.descripcion}: hay{" "}
+                            <span className="tabular">{f.hay}</span>
+                            {otra ? ` · en ${otra.nombre}, ${otra.disponible}` : ""}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            )}
+            {faltantes.length > 0 && sucursalesConStock.length <= 1 && (
+              <p className="estado-problema flex items-start gap-2 rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-base text-[var(--estado-tinta)]">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                Sin stock: {faltantes.map((f) => f.descripcion).join(", ")}
+              </p>
+            )}
+
             <div ref={entrega} className="space-y-2">
               <p className="text-base font-medium">Entrega</p>
               <Opciones
@@ -488,6 +584,10 @@ function PasarAPedido({
                       value={costo}
                       disabled={sinCargo}
                       onChange={(e) => setCosto(e.target.value)}
+                      // Al salir se muestra con los miles, como el resto.
+                      onBlur={() => {
+                        if (!costoMal && hayCosto) setCosto(importeParaElCampo(costoLeido));
+                      }}
                       aria-invalid={costoMal || faltaFlete || undefined}
                       className="tabular"
                     />
@@ -576,7 +676,13 @@ function PasarAPedido({
               )}
             </div>
 
-            <div className="flex items-baseline justify-between border-t border-linea pt-4">
+            {descuento > 0 && (
+              <div className="flex items-baseline justify-between border-t border-linea pt-4">
+                <span className="text-base text-muted-foreground">{escala?.etiqueta || "Descuento"}</span>
+                <span className="tabular text-base">−{formatearMonto(descuento)}</span>
+              </div>
+            )}
+            <div className={`flex items-baseline justify-between pt-4 ${descuento > 0 ? "" : "border-t border-linea"}`}>
               <span className="text-base text-muted-foreground">Total del pedido</span>
               <span className="tabular text-xl font-semibold">{formatearMonto(totalPedido)}</span>
             </div>
@@ -607,6 +713,7 @@ function PasarAPedido({
                   pasaElLimite ||
                   parteMal ||
                   faltaResto ||
+                  !medio ||
                   (tipo === "envio" && !direccion.trim())
                 }
                 onClick={() => pasar()}
@@ -625,7 +732,9 @@ function PasarAPedido({
                       ? "Revisá el flete"
                       : faltaResto
                         ? "Falta cómo paga el resto"
-                        : "Crear el pedido"}
+                        : !medio
+                          ? "Falta cómo paga"
+                          : "Crear el pedido"}
               </button>
             </div>
           </div>

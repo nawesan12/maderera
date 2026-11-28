@@ -13,7 +13,7 @@ entra con el correo y la contraseña que le dio administración al darle el alta
 tiene el suyo, y todo lo que se carga queda a nombre de quien lo cargó. Prestar
 la clave es prestar la firma.
 
-Si la sesión se cierra sola, no pasó nada malo: vuelva a entrar y siga donde
+Si la sesión se cierra sola, no pasó nada malo: volvé a entrar y seguí donde
 estaba.
 
 ## Cómo está armado
@@ -74,8 +74,8 @@ Solo muestra lo que el puesto de cada uno puede abrir: quien atiende el
 mostrador no va a encontrar proveedores ahí, igual que no los ve en el menú.
 
 Si viene de un sistema de escritorio donde había que elegir primero el módulo y
-después buscar, este es el cambio de costumbre que más tiempo ahorra: escriba lo
-que busca y elija del resultado.
+después buscar, este es el cambio de costumbre que más tiempo ahorra: escribí lo
+que buscás y elegí del resultado.
 
 ## La campana
 

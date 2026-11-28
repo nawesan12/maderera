@@ -21,7 +21,10 @@ export function GET() {
       short_name: "Mostrador",
       description: "Punto de venta del mostrador, funciona sin internet.",
       start_url: "/mostrador",
-      scope: "/",
+      // Solo el mostrador: con «/», cualquier enlace del sitio o del panel se
+      // abría adentro de la app del Mostrador (mes simulado, M3S1-033). El
+      // ayudante sin conexión sigue registrado en «/» (registro-sw.tsx).
+      scope: "/mostrador",
       display: "standalone",
       orientation: "landscape",
       background_color: "#faf7f2",

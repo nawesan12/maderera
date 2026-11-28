@@ -193,6 +193,14 @@ func (s *Servicio) autorizar(ctx context.Context, id string, a *arca) (string, e
 		// mandó, con el botón de corregir los datos del cliente.
 		return "", errEmision(sinValorFiscal)
 	}
+	// Lo que la RG 1415 pide impreso en el comprobante y que el papel saca de
+	// Configuración de ARCA: sin el N° de Ingresos Brutos o el inicio de
+	// actividades, el comprobante autorizado sale incompleto (mes simulado,
+	// M2S1-016). Se frena acá, antes de pedir el CAE: emitir sin CAE sigue
+	// igual.
+	if m := faltaDelEmisor(ctx, s); m != "" {
+		return "", errEmision(m)
+	}
 	cfg := s.env.Leer()
 
 	s.cae.Lock()
@@ -327,8 +335,13 @@ func (s *Servicio) CorregirReceptor(ctx context.Context, id string, c map[string
 		if err != nil {
 			return err
 		}
-		if estado != "rechazada" || cae != nil {
-			return errEmision("Solo se corrigen los datos de un comprobante que ARCA rechazó.")
+		// También el emitido sin CAE: todavía no salió a ARCA y el dato mal
+		// cargado se corrige con el mismo número, sin darlo de baja y correr
+		// la serie (mes simulado, FLUJO-F092). Si el cliente ya tenía el
+		// papel, le llega el corregido; si no, le llega con el CAE
+		// (notificaciones.Factura).
+		if (estado != "rechazada" && estado != "emitida") || cae != nil {
+			return errEmision("Solo se corrigen los datos de un comprobante sin CAE.")
 		}
 		config, err := emisorEn(ctx, tx)
 		if err != nil {
@@ -350,10 +363,15 @@ func (s *Servicio) CorregirReceptor(ctx context.Context, id string, c map[string
 		if m := fiscal.FaltaIdentificarComprador(tipo, total, cuit, s.ahora()); m != "" {
 			return errEmision(m)
 		}
-		_, err = tx.Exec(ctx, `UPDATE invoices SET receptor_nombre = $2, receptor_cuit = $3, receptor_condicion_iva = $4::condicion_iva,
+		if _, err = tx.Exec(ctx, `UPDATE invoices SET receptor_nombre = $2, receptor_cuit = $3, receptor_condicion_iva = $4::condicion_iva,
 			receptor_domicilio = $5, estado = 'emitida', observaciones_arca = NULL, updated_at = now() WHERE id = $1`,
-			id, cab.nombre, cuit, cab.condicion, cab.domicilio)
-		return err
+			id, cab.nombre, cuit, cab.condicion, cab.domicilio); err != nil {
+			return err
+		}
+		if estado == "emitida" {
+			return s.encolarAviso(ctx, tx, id)
+		}
+		return nil
 	})
 }
 
@@ -745,4 +763,24 @@ func (b bitacoraArca) Despues(ctx context.Context, id string, exito bool, respue
 		return
 	}
 	_, _ = b.pool.Exec(ctx, `UPDATE arca_log SET exito = $2, respuesta = $3 WHERE id = $1`, id, exito, respuesta)
+}
+
+// faltaDelEmisor dice qué le falta al emisor para un comprobante con CAE, o
+// "" si está completo.
+func faltaDelEmisor(ctx context.Context, s *Servicio) string {
+	e, err := s.ObtenerEmisor(ctx)
+	if err != nil {
+		return ""
+	}
+	var falta []string
+	if e.IngresosBrutos == nil || strings.TrimSpace(*e.IngresosBrutos) == "" {
+		falta = append(falta, "el N° de Ingresos Brutos")
+	}
+	if e.InicioActividades == nil {
+		falta = append(falta, "el inicio de actividades")
+	}
+	if len(falta) == 0 {
+		return ""
+	}
+	return "Falta " + strings.Join(falta, " y ") + " en Configuración de ARCA: van impresos en el comprobante."
 }

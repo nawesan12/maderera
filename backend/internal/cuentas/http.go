@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -26,16 +27,41 @@ import (
 
 // API son los handlers.
 type API struct {
-	pool     *pgxpool.Pool
-	clientes *clientes.Servicio
-	cobros   *cobros.Servicio
-	interna  plataforma.ConfigInterna
-	ahora    func() time.Time
+	pool             *pgxpool.Pool
+	clientes         *clientes.Servicio
+	cobros           *cobros.Servicio
+	interna          plataforma.ConfigInterna
+	ahora            func() time.Time
+	sitio            string
+	enviarInvitacion func(ctx context.Context, correo, nombre, url string)
 }
 
 // NuevaAPI arma los handlers.
 func NuevaAPI(pool *pgxpool.Pool, cl *clientes.Servicio, co *cobros.Servicio, interna plataforma.ConfigInterna) *API {
 	return &API{pool: pool, clientes: cl, cobros: co, interna: interna, ahora: time.Now}
+}
+
+// ConInvitacion le da a la API cómo mandar el link de la invitación al
+// portal y el sitio con que se arma la dirección.
+func (a *API) ConInvitacion(sitio string, enviar func(ctx context.Context, correo, nombre, url string)) *API {
+	a.sitio, a.enviarInvitacion = strings.TrimSuffix(sitio, "/"), enviar
+	return a
+}
+
+func (a *API) InvitarAlPortal(ctx context.Context, r cuentasapi.InvitarAlPortalRequestObject) (cuentasapi.InvitarAlPortalResponseObject, error) {
+	ses, err := auth.Exigir(ctx, sqlc.StaffRoleAdmin, sqlc.StaffRoleVendedor)
+	if err != nil {
+		return nil, err
+	}
+	inv, err := a.clientes.InvitarAlPortal(ctx, ses, r.Id)
+	if err != nil {
+		return nil, err
+	}
+	url := a.sitio + "/entrar/" + inv.Token
+	if a.enviarInvitacion != nil {
+		a.enviarInvitacion(ctx, inv.Correo, inv.Nombre, url)
+	}
+	return ok(map[string]string{"ok": "Le mandamos a " + inv.Correo + " el link para entrar a su cuenta.", "url": url}), nil
 }
 
 var _ cuentasapi.StrictServerInterface = (*API)(nil)
@@ -78,6 +104,7 @@ func (o respuesta) VisitCajaDelCobroACuentaResponse(w http.ResponseWriter) error
 func (o respuesta) VisitCreditoDeClienteResponse(w http.ResponseWriter) error   { return o.escribir(w) }
 func (o respuesta) VisitVincularCuentaWebResponse(w http.ResponseWriter) error  { return o.escribir(w) }
 func (o respuesta) VisitHistorialDeClienteResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitInvitarAlPortalResponse(w http.ResponseWriter) error    { return o.escribir(w) }
 func (o respuesta) VisitRegistrarMovimientoResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -226,7 +253,7 @@ func (a *API) RegistrarMovimiento(ctx context.Context, r cuentasapi.RegistrarMov
 	if err != nil {
 		return nil, err
 	}
-	if err := a.clientes.Movimiento(ctx, ses, r.Id, r.Body.Tipo, r.Body.Monto, texto(r.Body.Detalle)); err != nil {
+	if err := a.clientes.Movimiento(ctx, ses, r.Id, r.Body.Tipo, r.Body.Monto, texto(r.Body.Detalle), texto(r.Body.Fecha)); err != nil {
 		return nil, err
 	}
 	return mensaje("Movimiento registrado."), nil

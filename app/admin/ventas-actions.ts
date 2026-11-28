@@ -49,19 +49,39 @@ export async function avanzarPedido(
   id: string,
   desde?: string,
   /** Quien retira: en un retiro que pasa a entregado, el documento va en el remito y es obligatorio. */
-  quien?: { receptorNombre?: string; receptorDocumento?: string },
-): Promise<EstadoVenta> {
+  quien?: { receptorNombre?: string; receptorDocumento?: string; pin?: string },
+): Promise<EstadoVenta & { autorizacion?: Autorizacion; firmaToken?: string; campo?: string }> {
   const r = await (await api()).POST("/api/v1/admin/pedidos/{id}/avanzar", {
     params: { path: { id }, query: desde ? { desde } : {} },
     body: quien ?? {},
   });
-  if (!r.data) return fallo(r);
+  if (!r.data) {
+    // Soltar lo que no se cobró pide el PIN de un admin
+    // (entregas.AutorizarSinCobrar).
+    const e = (r.error as Problema | undefined)?.errores;
+    if (e?.pin && e.pinMotivo === "sin_cobrar") {
+      return {
+        error: e.pin,
+        autorizacion: {
+          motivo: "sin_cobrar",
+          monto: Number(e.pinMonto ?? 0),
+          pinIncorrecto: e.pinIncorrecto === "si",
+          sinAdmins: e.pinSinAdmins === "si" || undefined,
+          conClave: e.pinConClave === "si" || undefined,
+          bloqueadoHasta: e.pinHasta,
+        },
+      };
+    }
+    if (e?.receptorDocumento) return { error: e.receptorDocumento, campo: "receptorDocumento" };
+    return fallo(r);
+  }
 
   // El WhatsApp y el correo al cliente los encoló Go con el avance: salen
   // aunque esta respuesta se corte, y no la demoran.
   refrescar();
+  revalidatePath("/admin/reparto");
 
-  return { ok: r.data.ok };
+  return { ok: r.data.ok, firmaToken: r.data.firmaToken };
 }
 
 export async function cancelarPedido(id: string, motivo?: string): Promise<EstadoVenta> {
@@ -130,6 +150,8 @@ export interface EntregaDelPedido {
   /** Un presupuesto vencido: los precios de hoy o los suyos (con PIN). */
   precios?: "actualizar" | "respetar";
   pin?: string;
+  /** El slug de la sucursal de donde sale, si no es la del presupuesto. */
+  sucursal?: string;
 }
 
 export async function convertirEnPedido(
@@ -227,15 +249,17 @@ export async function devolverPedido(
   renglones: { orderItemId: string; cantidad: number }[],
   motivo: string,
   clave: string,
+  destino?: "caja" | "afuera",
 ): Promise<EstadoVenta> {
   const r = await (await api()).POST("/api/v1/admin/pedidos/{id}/devolucion", {
     params: { path: { id } },
-    body: { renglones, motivo, clave },
+    body: { renglones, motivo, clave, ...(destino ? { destino } : {}) },
   });
   if (!r.data) return fallo(r);
   refrescar();
   revalidatePath(`/admin/pedidos/${id}`);
   revalidatePath("/admin/stock");
+  if (destino === "caja") revalidatePath("/admin/caja");
   return { ok: r.data.ok };
 }
 
@@ -262,17 +286,19 @@ export async function devolverPedidoFacturado(
   motivo: string,
   clave: string,
   importe: number | null,
-): Promise<EstadoVenta> {
+  destino?: "caja" | "afuera",
+): Promise<EstadoVenta & { notaId?: string }> {
   const r = await (await api()).POST("/api/v1/admin/facturacion/pedidos/{id}/devolucion", {
     params: { path: { id } },
-    body: { renglones, motivo, clave, importe },
+    body: { renglones, motivo, clave, importe, ...(destino ? { destino } : {}) },
   });
   if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
   refrescar();
   revalidatePath(`/admin/pedidos/${id}`);
   revalidatePath("/admin/stock");
   revalidatePath("/admin/facturacion");
-  return { ok: "Devolución registrada." };
+  if (destino === "caja") revalidatePath("/admin/caja");
+  return { ok: "Devolución registrada.", notaId: r.data.notaId || undefined };
 }
 
 /**
@@ -284,7 +310,11 @@ export async function corregirPedido(
   id: string,
   correccion: {
     renglones: { orderItemId: string; cantidad: number; precioUnitario: number }[];
+    nuevos?: { variantId: string; descripcion: string; unidad?: string; cantidad: number; precioUnitario: number }[];
     costoEnvio?: number;
+    entrega?: "retiro" | "envio";
+    direccion?: string;
+    zona?: string;
     motivo: string;
     pin?: string;
   },

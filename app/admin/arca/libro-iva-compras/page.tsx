@@ -129,8 +129,42 @@ export default async function LibroIvaComprasPage({
           No hay comprobantes de compra cargados en {etiqueta}.
         </p>
       ) : (
-        <div className="tarjeta overflow-x-auto">
-          <table className="w-full min-w-[980px] text-base">
+        <>
+        {/* En el teléfono, un renglón por comprobante: número y tipo, el
+            proveedor abajo y a la derecha el total con su neto e IVA, sin
+            las columnas vacías. La tabla apilada medía nueve renglones por
+            comprobante y cortaba «Compro…» (M2S4-032). */}
+        <ul className="tarjeta divide-y divide-linea sm:hidden">
+          {libro.filas.map((f) => {
+            const iva = f.iva21 + f.iva105 + f.iva27;
+            return (
+              <li key={f.id} className="flex items-start justify-between gap-3 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-base">
+                    <span className="codigo">{numeroDeCompra(f.puntoVenta, f.numero)}</span>{" "}
+                    <span className="whitespace-nowrap text-sm text-muted-foreground">{abreviatura(f.tipo)}</span>
+                  </p>
+                  <p className="break-words text-base">{f.proveedor}</p>
+                  <p className="tabular text-sm text-muted-foreground">
+                    {fechaCorta.format(f.fechaEmision)}
+                    {!daCreditoFiscal(f.tipo) && " · sin crédito"}
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="tabular text-base font-medium">{moneda.format(f.total)}</p>
+                  <p className="tabular text-sm text-muted-foreground">neto {moneda.format(f.neto)}</p>
+                  {iva !== 0 && <p className="tabular text-sm text-muted-foreground">IVA {moneda.format(iva)}</p>}
+                  {f.percepciones !== 0 && (
+                    <p className="tabular text-sm text-muted-foreground">perc. {moneda.format(f.percepciones)}</p>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+        <div className="tarjeta hidden sm:block">
+          {/* Sin ancho mínimo: si no entra, se apila (tablas-apilables). */}
+          <table className="w-full text-base">
             <thead>
               <tr className="border-b border-linea text-left text-sm uppercase tracking-wide text-muted-foreground">
                 <th className="px-3 py-3 font-semibold">Fecha</th>
@@ -192,9 +226,19 @@ export default async function LibroIvaComprasPage({
             </tfoot>
           </table>
         </div>
+        </>
       )}
     </div>
   );
+}
+
+/** «FC A», «NC A»: el tipo corto para el renglón del teléfono. */
+function abreviatura(tipo: string): string {
+  const letra = tipo.slice(-1).toUpperCase();
+  if (tipo.startsWith("factura_")) return `FC ${letra}`;
+  if (tipo.startsWith("nota_credito_")) return `NC ${letra}`;
+  if (tipo.startsWith("nota_debito_")) return `ND ${letra}`;
+  return nombreComprobanteCompra(tipo);
 }
 
 function Importe({ valor }: { valor: number }) {

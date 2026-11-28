@@ -76,21 +76,16 @@ export function PuntosDeVenta({
                     ? `Sucursal ${punto.sucursal}`
                     : "Para toda la empresa"}
                 </p>
-                {/* Sin el último número emitido, el primer comprobante sale
-                    número 1 y pisa una serie que ARCA viene contando. Es lo
-                    único de esta pantalla que no se puede corregir después. */}
-                {punto.numeroInicial > 0 ? (
-                  <p className="mt-1 text-base text-muted-foreground">
-                    Sigue desde el{" "}
-                    <span className="tabular">
-                      {String(punto.numeroInicial).padStart(8, "0")}
-                    </span>
-                  </p>
-                ) : (
-                  <p className="mt-1 text-base text-[var(--estado-tinta,#8a5a08)]">
-                    Falta el último número emitido en el sistema anterior
-                  </p>
-                )}
+                {/* El último número del sistema anterior se pide al dar de
+                    alta (sin valor por defecto): un cero es un punto de venta
+                    nuevo, elegido a propósito, y no se marca como si faltara
+                    (mes 23). */}
+                <p className="mt-1 text-base text-muted-foreground">
+                  {punto.numeroInicial > 0 ? "Sigue desde el " : "Arranca en el "}
+                  <span className="codigo">
+                    {String(punto.numeroInicial + (punto.numeroInicial > 0 ? 0 : 1)).padStart(8, "0")}
+                  </span>
+                </p>
               </div>
 
               <button
@@ -214,7 +209,8 @@ function Formulario({
               name="numeroInicial"
               type="number"
               min={0}
-              defaultValue={punto?.numeroInicial ?? 0}
+              required
+              defaultValue={punto?.numeroInicial}
               className="h-10 w-full rounded-lg border bg-background px-3 text-base sm:w-56"
             />
             {/* El sistema numera desde el siguiente: evita que el primer

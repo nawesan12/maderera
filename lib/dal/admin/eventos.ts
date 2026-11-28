@@ -6,7 +6,7 @@ import type { Esquemas } from "@/lib/api/tipos";
 /**
  * Eventos y sus inscriptos, para el panel (el ACCESO de /admin/eventos). Los
  * sirve la API de Go (backend/internal/profesionales/eventos.go), que también
- * resuelve `proximo` y `recaudado` (lo cobrado: solo lo confirmado).
+ * resuelve `proximo`, `recaudado` (lo cobrado, también de quien no vino) y la asistencia.
  */
 
 export type EventoAdmin = Omit<Esquemas["EventoAdmin"], "inicia" | "termina"> & { inicia: Date; termina: Date | null };

@@ -6,7 +6,7 @@ import { Loader2, Plus } from "lucide-react";
 import { Suspense, type ComponentProps, type ReactNode } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useCarrito } from "@/lib/carrito-context";
-import { formatearUnidad } from "@/lib/formato";
+import { formatearUnidad, unidadDeVenta } from "@/lib/formato";
 import type { ProductoListado } from "@/lib/dal/catalog";
 import { PlacaDeProducto } from "@/components/catalogo/placa-de-producto";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
@@ -190,7 +190,7 @@ export function TarjetaDeProducto({
         {/* Las medidas que faltan ya las cuenta el «+N» del precio. */}
         <div className="hidden flex-wrap gap-[5px] sm:flex">
           <span className="inline-flex h-[23px] items-center rounded-md bg-chip px-2 text-[11.5px] text-texto-2">
-            por {formatearUnidad(product.unit)}
+            por {formatearUnidad(unidadDeVenta(product.unit, `${product.name} ${product.labels.join(" ")}`))}
           </span>
         </div>
 

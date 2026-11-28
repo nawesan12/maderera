@@ -326,6 +326,11 @@ func TestBotTopeDeMensajes(t *testing.T) {
 	salen(7, "panel", "enviado")
 	salen(5, "telefono", "enviado")
 	salen(5, "bot", "fallido")
+	// Mes simulado 2: lo de la demostración tampoco (el tope corría igual).
+	if _, err := b.pool.Exec(ctx, `insert into whatsapp_mensajes (conversacion_id, direccion, tipo, cuerpo, estado, origen, ocurrido_at, wa_message_id)
+		select $1, 'saliente', 'text', 'x', 'enviado', 'panel', now() - interval '13 hours', 'demo-' || g from generate_series(1, 5) g`, conv.ID); err != nil {
+		t.Fatal(err)
+	}
 	u, err := b.wa.UsoDelMes(ctx, b.wa.ahora())
 	if err != nil || u.Usados != 7 || u.Tope != 10 || u.Ahorro {
 		t.Fatalf("uso: %+v %v", u, err)
@@ -338,7 +343,7 @@ func TestBotTopeDeMensajes(t *testing.T) {
 		t.Errorf("en ahorro no saluda: %q", r)
 	}
 	b.texto(jid, "asdf qwer")
-	if r := b.delBot(jid); len(r) != 1 || !strings.Contains(r[0], "wa.me") {
+	if r := b.delBot(jid); len(r) != 1 || !strings.Contains(r[0], "/api/whatsapp/hablar/") {
 		t.Errorf("en ahorro deriva a la primera: %q", r)
 	}
 
@@ -347,6 +352,11 @@ func TestBotTopeDeMensajes(t *testing.T) {
 	b.texto(jid, "a qué hora abren?")
 	if r := b.delBot(jid); len(r) != 0 {
 		t.Errorf("con el tope, el bot no manda: %q", r)
+	}
+	// Pero la conversación pasa a una persona, a la vista (M2S2-032).
+	var estado string
+	if err := b.pool.QueryRow(ctx, `select bot_estado from whatsapp_conversaciones where wa_jid = $1`, jid).Scan(&estado); err != nil || estado != "derivada" {
+		t.Errorf("con el tope, la conversación queda %q (%v)", estado, err)
 	}
 	if !b.wa.TopeAlcanzado(ctx) {
 		t.Error("la bandeja tendría que pedir confirmación")

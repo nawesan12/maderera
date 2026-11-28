@@ -216,7 +216,10 @@ export function textoDelPedido(grupos: GrupoDelMensaje[], enlace: string): strin
         (p) =>
           `• ${p.etiqueta ? `${p.etiqueta}: ` : ""}${p.cantidad} de ${p.largoMm} × ${p.anchoMm} mm${p.respetaVeta ? ", con veta" : ""}${lados(p)}`,
       ),
-      ...(g.canto.trim() ? [`Tapacanto: ${g.canto.trim()}`] : []),
+      // Sin ninguna pieza con canto, el tapacanto no se nombra (M2S2-145).
+      ...(g.canto.trim() && g.piezas.some((p) => p.cantoLargo > 0 || p.cantoAncho > 0)
+        ? [`Tapacanto: ${g.canto.trim()}`]
+        : []),
     ].join("\n"),
   );
   return ["Hola! Quería pedir este corte:", bloques.join("\n\n"), enlace].join("\n");

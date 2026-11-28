@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -33,7 +34,15 @@ type Servicio struct {
 	// enSegundoPlano corre los avisos después de responder (el after() de
 	// Next). Las pruebas lo cambian para esperarlos.
 	enSegundoPlano func(func(context.Context))
+	// PagoOnline dice si hay con qué cobrar en línea (pagos.Config.Elegir);
+	// nil es que sí. Sin eso, un evento pago no reserva lugar.
+	PagoOnline func() bool
 }
+
+// MsjEventoSinPago es lo que se contesta al anotarse a un evento pago con el
+// cobro en línea apagado: reservaba el lugar y no había forma de pagarlo
+// (mes simulado, M2S2-016).
+const MsjEventoSinPago = "El pago online no está disponible. Escribinos por WhatsApp y te anotamos."
 
 // Nuevo arma el servicio. sitio es APP_URL (para los enlaces de los correos).
 func Nuevo(pool *pgxpool.Pool, av *avisos.Servicio, sitio string, log *slog.Logger) *Servicio {
@@ -215,7 +224,11 @@ const noSePudo = "No pudimos habilitar esta cuenta. Fijate si el cliente ya tien
 // Aprobar habilita el acceso, en una transacción: vincula o crea la ficha
 // (gana la del CUIT; la cuenta web se muda a ella), asigna la lista y el
 // límite, y marca el perfil de la cuenta web. Devuelve el mensaje.
-func (s *Servicio) Aprobar(ctx context.Context, ses *auth.Sesion, id string, lista, limiteTexto *string) (string, error) {
+func (s *Servicio) Aprobar(ctx context.Context, ses *auth.Sesion, id string, lista, limiteTexto *string, opciones ...Aprobacion) (string, error) {
+	var op Aprobacion
+	if len(opciones) > 0 {
+		op = opciones[0]
+	}
 	sol, err := s.leerSolicitud(ctx, s.pool, id)
 	if err != nil {
 		return "", err
@@ -232,6 +245,12 @@ func (s *Servicio) Aprobar(ctx context.Context, ses *auth.Sesion, id string, lis
 	}
 	if math.IsNaN(limite) || math.IsInf(limite, 0) || limite < 0 {
 		return "", invalido("Revisá el límite de cuenta corriente.")
+	}
+	if op.CondicionIva != "" && !slices.Contains(CondicionesIva, op.CondicionIva) {
+		return "", invalido("Elegí la condición frente al IVA.")
+	}
+	if op.DiasCredito != nil && (*op.DiasCredito < 0 || *op.DiasCredito > 365) {
+		return "", invalido("Revisá a cuántos días paga.")
 	}
 
 	var nombreLista *string
@@ -344,6 +363,21 @@ func (s *Servicio) Aprobar(ctx context.Context, ses *auth.Sesion, id string, lis
 				d.VincularCuentaWeb, sol.userID); err != nil {
 				return err
 			}
+			// El CUIT de la solicitud pasa a la ficha que no tenía (M2S1-020):
+			// quedaba «CUIT —, Consumidor final» y se le facturaba B a quien
+			// pidió la cuenta con CUIT. Solo si ninguna otra ficha lo tiene.
+			if sol.cuit != nil && *sol.cuit != "" && porCuit == nil {
+				if _, err := tx.Exec(ctx, `update customers c set cuit = $2 where c.id = $1 and (c.cuit is null or c.cuit = '')
+					and not exists (select 1 from customers o where o.id <> c.id and o.cuit = any($3::text[]))`,
+					*d.Destino, cuit.SoloDigitos(*sol.cuit), cuit.Variantes(*sol.cuit)); err != nil {
+					return err
+				}
+			}
+			if op.CondicionIva != "" {
+				if _, err := tx.Exec(ctx, `update customers set condicion_iva = $2::condicion_iva where id = $1`, *d.Destino, op.CondicionIva); err != nil {
+					return err
+				}
+			}
 			customerID = *d.Destino
 		} else {
 			nombre := sol.nombre
@@ -356,6 +390,12 @@ func (s *Servicio) Aprobar(ctx context.Context, ses *auth.Sesion, id string, lis
 			if sol.cuit != nil && *sol.cuit != "" {
 				condicion = "responsable_inscripto"
 			}
+			// La elige quien aprueba (M3S2-092): un CUIT 27 de persona puede
+			// ser monotributista, y antes quedaba inscripto sin que nadie lo
+			// eligiera.
+			if op.CondicionIva != "" {
+				condicion = op.CondicionIva
+			}
 			if err := tx.QueryRow(ctx, `insert into customers (tipo, rubro, price_list_id, limite_credito, nombre, razon_social, cuit,
 				condicion_iva, email, telefono, user_id, estado)
 				values ('profesional', $1, $2, $3, $4, $5, $6, $7::condicion_iva, $8, $9, $10, 'activo')
@@ -367,6 +407,13 @@ func (s *Servicio) Aprobar(ctx context.Context, ses *auth.Sesion, id string, lis
 			}
 		}
 
+		// El plazo de pago junto con el límite (M2S1-137: la ficha quedaba
+		// «Paga a __ días»).
+		if op.DiasCredito != nil {
+			if _, err := tx.Exec(ctx, `update customers set dias_credito = $2 where id = $1`, customerID, *op.DiasCredito); err != nil {
+				return err
+			}
+		}
 		// La cuenta web: el rol (el personal conserva el suyo) y la lista, para
 		// que el catálogo le muestre los precios nuevos apenas recargue.
 		if sol.userID != nil {
@@ -452,20 +499,30 @@ func (s *Servicio) Rechazar(ctx context.Context, ses *auth.Sesion, id, motivo st
 // alguien del panel). Una pendiente por documento. Devuelve el mensaje.
 func (s *Servicio) Solicitar(ctx context.Context, ses *auth.Sesion, f Solicitud) (string, error) {
 	numero := cuit.SoloDigitos(f.DocumentoNumero)
-	var pendiente bool
-	if err := s.pool.QueryRow(ctx, `select exists(select 1 from professional_applications where documento_numero = $1 and estado = 'pendiente')`,
-		numero).Scan(&pendiente); err != nil {
-		return "", err
-	}
-	if pendiente {
-		return "Ya tenemos tu solicitud y la estamos revisando. Te contestamos dentro de las próximas 24 horas hábiles.", nil
-	}
 	var cu, userID *string
 	if f.DocumentoTipo == "cuit" {
 		cu = &numero
 	}
 	if ses != nil {
 		userID = &ses.UserID
+	}
+	// Una pendiente por documento. Si es de quien la manda (la misma cuenta
+	// o el mismo correo), ya está; si es de otro, se dice: devolvía «Ya
+	// tenemos tu solicitud» de una ajena y el formulario volvía al principio
+	// sin que nada cambiara (mes 23).
+	var pendiente, propia bool
+	if err := s.pool.QueryRow(ctx, `select count(*) > 0,
+		coalesce(bool_or(lower(email) = lower($2) or (user_id is not null and user_id = $3)), false)
+		from professional_applications where documento_numero = $1 and estado = 'pendiente'`,
+		numero, f.Email, userID).Scan(&pendiente, &propia); err != nil {
+		return "", err
+	}
+	if pendiente && propia {
+		return "Ya tenemos tu solicitud. Un asesor la está revisando.", nil
+	}
+	if pendiente {
+		campo := "documentoNumero"
+		return "", plataforma.Invalido(map[string]string{campo: "Ese documento ya tiene una solicitud en revisión. Si es tuya, escribinos por WhatsApp."})
 	}
 	var id string
 	if err := s.pool.QueryRow(ctx, `insert into professional_applications (nombre, razon_social, documento_tipo, documento_numero, cuit,
@@ -479,7 +536,8 @@ func (s *Servicio) Solicitar(ctx context.Context, ses *auth.Sesion, f Solicitud)
 		s.avisos.Despachar(ctx, avisos.Despacho{Evento: "solicitud_profesional", Para: f.Email, EntidadTipo: "professional_application",
 			EntidadID: id, Correo: avisos.Correo(AcuseDeRecibo(s.sitio, PrimeraPalabra(f.Nombre)))})
 	})
-	return "Recibimos tu solicitud. Te contestamos dentro de las próximas 24 horas hábiles.", nil
+	// Sin plazo, como «Cómo funciona»: nadie confirmó las 24 horas (M2S1-201).
+	return "Recibimos tu solicitud. Un asesor la va a revisar.", nil
 }
 
 // SolicitudEnCurso es la última solicitud de quien mira.
@@ -587,3 +645,15 @@ func (s *Servicio) EnlaceDeAcceso(ctx context.Context, ses *auth.Sesion, id stri
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "profesional", sol.id, "Generó un link de acceso para "+sol.nombre, nil)
 	return strings.TrimSuffix(s.sitio, "/") + "/entrar/" + token, sol.nombre, sol.telefono, nil
 }
+
+// Aprobacion es lo que elige quien aprueba además de la lista y el límite.
+type Aprobacion struct {
+	// CondicionIva: la condición frente al IVA de la ficha. Vacía, la de
+	// antes (inscripto con CUIT en una ficha nueva; la existente no cambia).
+	CondicionIva string
+	// DiasCredito: a cuántos días paga. Nil, el de la ficha.
+	DiasCredito *int
+}
+
+// CondicionesIva son las de condicion_iva.
+var CondicionesIva = []string{"responsable_inscripto", "monotributista", "exento", "consumidor_final", "no_categorizado"}

@@ -116,6 +116,8 @@ export interface VarianteDetalle {
   anchoMm: number | null;
   espesorMm: number | null;
   precio: string | null;
+  /** El de antes de la oferta vigente, para tacharlo; null sin oferta. */
+  precioAnterior: string | null;
   /** El nivel en cada sucursal activa, en el orden de `branches`. */
   stock: StockDeSucursal[];
   /** La de antes, por el slug; lo nuevo lee `stock`. */
@@ -157,6 +159,8 @@ export interface ProductoDetalle {
   documentos: DocumentoDeFicha[];
   /** Cuántos hay reservados a profesionales: de esos va solo el número. */
   documentosReservados: number;
+  /** Los ids de esos reservados, sin título (los baja el profesional). */
+  reservados: string[];
 }
 
 export interface DocumentoDeFicha {
@@ -414,7 +418,7 @@ const fichaCacheada = cachearPublico(
 
 export const obtenerProductoPublico = cache(async (slug: string): Promise<ProductoDetalle | null> => {
   const p = await fichaCacheada(slug);
-  return p && { ...p, usos: p.usos ?? null, cuidados: p.cuidados ?? null, documentos: p.documentos ?? [], documentosReservados: p.documentosReservados ?? 0 };
+  return p && { ...p, usos: p.usos ?? null, cuidados: p.cuidados ?? null, documentos: p.documentos ?? [], documentosReservados: p.documentosReservados ?? 0, reservados: p.reservados ?? [] };
 });
 
 /**

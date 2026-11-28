@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
+import { nombresDeRubros } from "@/lib/catalogo/rubros";
 
 /**
  * Filtrar una pantalla por rubro.
@@ -29,6 +30,7 @@ export function SelectorDeRubro({
 }) {
   const router = useRouter();
   const parametros = useSearchParams();
+  const nombres = nombresDeRubros(grupos);
   const [pendiente, iniciar] = useTransition();
 
   function elegir(valor: string) {
@@ -40,13 +42,13 @@ export function SelectorDeRubro({
   }
 
   return (
-    <label className="flex items-center gap-2">
+    <label className="flex w-full items-center gap-2 sm:w-auto">
       <span className="text-base text-muted-foreground">Rubro</span>
       <select
         value={actual}
         onChange={(e) => elegir(e.target.value)}
         aria-busy={pendiente}
-        className="h-11 rounded-lg border border-linea bg-card px-3 text-base outline-none transition-colors focus:border-accion/50"
+        className="h-11 min-w-0 flex-1 rounded-lg border border-linea bg-card px-3 text-base outline-none transition-colors focus:border-accion/50 sm:flex-none"
       >
         <option value="todos">Todos los rubros</option>
         {grupos.map((g) => (
@@ -55,7 +57,9 @@ export function SelectorDeRubro({
                 «Accesorios» de Placas traía los de las tres (H069). */}
             {g.rubros.map((r) => (
               <option key={r.id} value={r.id}>
-                {r.name}
+                {/* El nombre que se repite en otra categoría lleva la suya:
+                    el teléfono no siempre muestra el grupo (M2S4-034). */}
+                {nombres.get(r.id) ?? r.name}
               </option>
             ))}
           </optgroup>

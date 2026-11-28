@@ -22,8 +22,11 @@ import (
 	"mjbj/internal/bitacora"
 	"mjbj/internal/catalogo"
 	"mjbj/internal/cola"
+	"mjbj/internal/entregas"
 	"mjbj/internal/jsmath"
+	"mjbj/internal/numeracion"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/reglas"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas/fragmentos"
@@ -72,6 +75,13 @@ type CorteListado struct {
 	// SalioAt es cuándo salió de la máquina: terminado_at, o para lo de antes
 	// de la 00240 la última modificación. Nulo mientras está en la cola.
 	SalioAt *time.Time `json:"salioAt"`
+	// OrderID: el corte de un pedido se entrega con el pedido, con quién
+	// retira y su remito (mes simulado, M3S2-026 y M3S4-040).
+	OrderID *string `json:"orderId"`
+	// Cobrado: el pedido del corte no debe nada (la regla de la ficha). El
+	// inicio del depósito marca «Sin cobrar» lo terminado que no lo está,
+	// para no entregarlo sin saberlo (mes simulado, M2S4-047).
+	Cobrado bool `json:"cobrado"`
 	// UpdatedAt es lo que compara el agente del taller para volver a bajar
 	// un corte corregido. No sale en la cola.
 	UpdatedAt time.Time `json:"-"`
@@ -134,9 +144,14 @@ func (s *Servicio) Listar(ctx context.Context, busqueda, estado string, sucursal
 		SELECT co.id::text, co.numero, co.contacto_nombre, co.material_descripcion, co.placas, co.pasadas,
 		       co.estado::text, co.urgente, co.notas, b.name, co.created_at, co.updated_at, r.piezas, r.superficie,
 		       co.mitad::text, co.sin_cargo, co.branch_id::text,
-		       CASE WHEN co.estado IN ('terminado', 'retirado') THEN coalesce(co.terminado_at, co.updated_at) END
+		       CASE WHEN co.estado IN ('terminado', 'retirado') THEN coalesce(co.terminado_at, co.updated_at) END,
+		       pv.largo_mm, pv.ancho_mm, co.order_id::text,
+		       (o.id IS NOT NULL AND o.estado <> 'cancelado' AND coalesce(`+fragmentos.SinCobrarDelPedido+`, 0) <= 0.009
+		        AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.id = co.cargo_order_id AND coalesce(`+fragmentos.SinCobrarDelPedido+`, 0) > 0.009))
 		FROM cutting_orders co
 		LEFT JOIN branches b ON b.id = co.branch_id
+		LEFT JOIN product_variants pv ON pv.id = co.variant_id
+		LEFT JOIN orders o ON o.id = co.order_id
 		LEFT JOIN (
 			-- Las piezas solo de los cortes del tablero: antes se agrupaba
 			-- cutting_items entero, con todo lo cortado desde el primer día.
@@ -158,10 +173,12 @@ func (s *Servicio) Listar(ctx context.Context, busqueda, estado string, sucursal
 		var urgente int32
 		var piezas *int32
 		var sup *jsmath.Num
+		var vl, va *int32
 		if err := filas.Scan(&c.ID, &c.Numero, &c.Cliente, &c.Material, &c.Placas, &c.Pasadas, &c.Estado, &urgente,
-			&c.Notas, &c.Sucursal, &c.CreatedAt, &c.UpdatedAt, &piezas, &sup, &c.Mitad, &c.SinCargo, &c.BranchID, &c.SalioAt); err != nil {
+			&c.Notas, &c.Sucursal, &c.CreatedAt, &c.UpdatedAt, &piezas, &sup, &c.Mitad, &c.SinCargo, &c.BranchID, &c.SalioAt, &vl, &va, &c.OrderID, &c.Cobrado); err != nil {
 			return nil, err
 		}
+		c.Material = MaterialEnOrden(c.Material, vl, va)
 		c.Urgente = urgente == 1
 		if piezas != nil {
 			c.Piezas = *piezas
@@ -220,20 +237,25 @@ type CorteDelPedido struct {
 	VariantID     *string `json:"variantId"`
 	PlacasEnteras float64 `json:"placasEnteras"`
 	SinCargo      bool    `json:"sinCargo"`
+	// Piezas del despiece: el ticket de la venta las dice junto al número
+	// del corte, que es con lo que el cliente vuelve a retirar (M2S3-095).
+	Piezas int `json:"piezas"`
 }
 
 // DelPedido son los cortes que salieron de un pedido, el más nuevo primero.
 func (s *Servicio) DelPedido(ctx context.Context, orderID string) ([]CorteDelPedido, error) {
 	filas, err := s.pool.Query(ctx, `
 		SELECT id::text, numero, material_descripcion, estado::text, urgente, created_at, variant_id::text,
-		       (CASE WHEN mitad IS NULL THEN placas ELSE placas / 2.0 END)::float8, sin_cargo
+		       (CASE WHEN mitad IS NULL THEN placas ELSE placas / 2.0 END)::float8, sin_cargo,
+		       (SELECT coalesce(sum(ci.cantidad), 0)::int FROM cutting_items ci WHERE ci.cutting_order_id = cutting_orders.id)
 		FROM cutting_orders WHERE order_id = $1 ORDER BY created_at DESC`, orderID)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(filas, func(r pgx.CollectableRow) (CorteDelPedido, error) {
 		var c CorteDelPedido
-		err := r.Scan(&c.ID, &c.Numero, &c.Material, &c.Estado, &c.Urgente, &c.CreatedAt, &c.VariantID, &c.PlacasEnteras, &c.SinCargo)
+		err := r.Scan(&c.ID, &c.Numero, &c.Material, &c.Estado, &c.Urgente, &c.CreatedAt, &c.VariantID, &c.PlacasEnteras, &c.SinCargo, &c.Piezas)
+		c.Material = MaterialEnOrden(c.Material, nil, nil)
 		return c, err
 	})
 }
@@ -352,6 +374,7 @@ func (s *Servicio) Obtener(ctx context.Context, id string) (*Corte, error) {
 		return nil, err
 	}
 	c.VarianteLargoMm, c.VarianteAnchoMm, c.PropiaLargoMm, c.PropiaAnchoMm, c.PrecioMediaPct = i32f(vl), i32f(va), i32f(pl), i32f(pa), i32f(pct)
+	c.Material = MaterialEnOrden(c.Material, vl, va)
 	c.AnchoSierraMm = sierra.F()
 	c.Urgente = urgente == 1
 
@@ -464,9 +487,10 @@ func PlanoDelMotor(c *Corte) Plano {
 	}
 	sierra := c.AnchoSierraMm
 	busqueda := c.MotorPlano >= 2
+	relleno := c.MotorPlano >= MotorRelleno
 	return CalcularPlano(DatosDelPlano{
 		Piezas: piezas, PlacaLargo: c.Medida.Largo, PlacaAncho: c.Medida.Ancho,
-		AnchoSierra: &sierra, Fijadas: LeerAcomodoManual(acomodo), Busqueda: &busqueda,
+		AnchoSierra: &sierra, Fijadas: LeerAcomodoManual(acomodo), Busqueda: &busqueda, Relleno: &relleno,
 	})
 }
 
@@ -609,6 +633,9 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 		if err := s.listoConElCorte(ctx, ses, id, numero); err != nil {
 			return "", err
 		}
+		if err := s.StockDeLaPlacaChica(ctx, ses, id); err != nil {
+			return "", err
+		}
 	}
 	// La reposición entregada queda escrita en el pedido que la originó: el
 	// reclamo se cierra con constancia (H321).
@@ -619,6 +646,11 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 			return "", err
 		}
 	}
+	if sig == "retirado" && !sinCargo && pedido != nil {
+		if err := s.entregadoConElCorte(ctx, ses, id, numero); err != nil {
+			return "", err
+		}
+	}
 	texto := map[string]string{"en-proceso": "en la máquina", "terminado": "terminado", "retirado": "retirado"}[sig]
 	return numero + " quedó " + texto + ".", nil
 }
@@ -626,8 +658,12 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 // listoConElCorte: la venta del mostrador que lleva un corte queda en curso
 // hasta que el corte sale de la máquina (mes simulado); con el último corte
 // terminado pasa sola a «listo», con el aviso al cliente. Los pedidos de
-// otro origen los marca listos el depósito, que sabe qué más falta.
+// otro origen los marca listos el depósito, que sabe qué más falta, salvo
+// que la regla «listo_con_el_corte» diga «todos» (M2S3-020). Al que no
+// pasa solo, el historial le anota igual «Corte X terminado»: el depósito
+// no se enteraba.
 func (s *Servicio) listoConElCorte(ctx context.Context, ses *auth.Sesion, corte, numero string) error {
+	todos := reglas.Es(ctx, s.pool, reglas.ListoConElCorte, "todos")
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var pedido, origen, estado string
 		err := tx.QueryRow(ctx, `
@@ -639,26 +675,126 @@ func (s *Servicio) listoConElCorte(ctx context.Context, ses *auth.Sesion, corte,
 		if err != nil {
 			return err
 		}
-		if origen != "mostrador" || (estado != "pendiente" && estado != "preparando") {
+		if estado != "pendiente" && estado != "preparando" {
 			return nil
-		}
-		var faltan int
-		if err := tx.QueryRow(ctx, `SELECT count(*)::int FROM cutting_orders WHERE order_id = $1 AND estado IN ('en-cola', 'en-proceso')`,
-			pedido).Scan(&faltan); err != nil || faltan > 0 {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `UPDATE orders SET estado = 'listo', updated_at = now() WHERE id = $1`, pedido); err != nil {
-			return err
 		}
 		var usuario *string
 		if ses != nil {
 			usuario = &ses.UserID
+		}
+		var faltan int
+		if err := tx.QueryRow(ctx, `SELECT count(*)::int FROM cutting_orders WHERE order_id = $1 AND estado IN ('en-cola', 'en-proceso')`,
+			pedido).Scan(&faltan); err != nil {
+			return err
+		}
+		// El pedido que solo lleva lo del corte (el que nació de «Cobrar» en
+		// la ficha) no tiene nada más que preparar: pasa a listo como el del
+		// mostrador (M3S4-040).
+		var soloElCorte bool
+		if err := tx.QueryRow(ctx, `SELECT NOT EXISTS (SELECT 1 FROM order_items WHERE order_id = $1 AND NOT coalesce(del_corte, false))`,
+			pedido).Scan(&soloElCorte); err != nil {
+			return err
+		}
+		if faltan > 0 || (origen != "mostrador" && !todos && !soloElCorte) {
+			// Sigue en su estado, con el renglón en el historial.
+			_, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, $2::estado_pedido, $3, $4)`,
+				pedido, estado, "Corte "+numero+" terminado", usuario)
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE orders SET estado = 'listo', updated_at = now() WHERE id = $1`, pedido); err != nil {
+			return err
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, 'listo', $2, $3)`,
 			pedido, "Corte "+numero+" terminado", usuario); err != nil {
 			return err
 		}
 		_, err = cola.Encolar(ctx, sqlc.New(tx), "pedido.estado", map[string]string{"orderId": pedido, "estado": "listo"}, time.Time{})
+		return err
+	})
+}
+
+// noEstaListoSinElCorte deshace lo que hizo listoConElCorte (mes simulado
+// 2, M2S3-020): el corte que vuelve a la máquina deja su pedido otra vez
+// «preparando» (seguía «Listo para retirar», con «Avisarle» y «Preparar
+// remito» de piezas que no existían), y el historial lo dice, con el aviso
+// al cliente si ya había salido. Solo si nada salió todavía.
+func (s *Servicio) noEstaListoSinElCorte(ctx context.Context, ses *auth.Sesion, corte, numero string) error {
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var pedido, estado string
+		err := tx.QueryRow(ctx, `SELECT o.id::text, o.estado::text FROM cutting_orders c JOIN orders o ON o.id = c.order_id
+			WHERE c.id = $1 FOR UPDATE OF o`, corte).Scan(&pedido, &estado)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil || estado != "listo" {
+			return err
+		}
+		var salio, avisado bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM deliveries WHERE order_id = $1 AND estado <> 'anulada'),
+			EXISTS (SELECT 1 FROM notifications_log WHERE entidad_id = $1::uuid AND evento IN ('listo', 'pedido_listo') AND estado::text = 'enviada')`,
+			pedido).Scan(&salio, &avisado); err != nil {
+			return err
+		}
+		if salio {
+			return nil
+		}
+		nota := "Corte " + numero + " volvió a la máquina"
+		if avisado {
+			nota += " · el aviso de listo ya había salido"
+		}
+		var usuario *string
+		if ses != nil {
+			usuario = &ses.UserID
+		}
+		if _, err := tx.Exec(ctx, `UPDATE orders SET estado = 'preparando', updated_at = now() WHERE id = $1`, pedido); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, 'preparando', $2, $3)`,
+			pedido, nota, usuario)
+		return err
+	})
+}
+
+// entregadoConElCorte: el pedido que solo cobró el corte queda entregado
+// cuando el corte se retira (mes simulado 2, M2S2-055: seguía «Preparando»
+// con «Marcar listo», y cerrarlo pedía dos toques y dos campos), con el
+// remito de las piezas para firmar.
+func (s *Servicio) entregadoConElCorte(ctx context.Context, ses *auth.Sesion, corte, numero string) error {
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := numeracion.BloquearRemitos(ctx, tx); err != nil {
+			return err
+		}
+		var pedido, estado string
+		var sucursal *string
+		err := tx.QueryRow(ctx, `SELECT o.id::text, o.estado::text, o.branch_id::text FROM cutting_orders c JOIN orders o ON o.id = c.order_id
+			WHERE c.id = $1 FOR UPDATE OF o`, corte).Scan(&pedido, &estado, &sucursal)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil || estado == "entregado" || estado == "cancelado" {
+			return err
+		}
+		solo, err := entregas.SoloElCorte(ctx, tx, pedido)
+		if err != nil || !solo {
+			return err
+		}
+		var faltan int
+		if err := tx.QueryRow(ctx, `SELECT count(*)::int FROM cutting_orders WHERE order_id = $1 AND NOT sin_cargo
+			AND estado NOT IN ('retirado', 'cancelado')`, pedido).Scan(&faltan); err != nil || faltan > 0 {
+			return err
+		}
+		var usuario *string
+		if ses != nil {
+			usuario = &ses.UserID
+		}
+		if _, err := entregas.RemitoDelCorte(ctx, tx, pedido, sucursal, usuario, entregas.Receptor{}); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE orders SET estado = 'entregado', updated_at = now() WHERE id = $1`, pedido); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, 'entregado', $2, $3)`,
+			pedido, "Corte "+numero+" retirado", usuario)
 		return err
 	})
 }
@@ -700,6 +836,15 @@ func (s *Servicio) Volver(ctx context.Context, ses *auth.Sesion, id, desde strin
 		return "", yaCambio(numero, ahora)
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCambiarEstado, "corte", id, numero+": "+estado+" → "+anterior+" (deshecho)", nil)
+	if estado == "terminado" {
+		if err := s.noEstaListoSinElCorte(ctx, ses, id, numero); err != nil {
+			return "", err
+		}
+		// Lo que salió del stock al terminarlo vuelve con él a la máquina.
+		if err := s.StockDeLaPlacaChica(ctx, ses, id); err != nil {
+			return "", err
+		}
+	}
 	texto := map[string]string{"en-cola": "volvió a la cola", "en-proceso": "volvió a la máquina"}[anterior]
 	return numero + " " + texto + ".", nil
 }
@@ -735,8 +880,9 @@ func anularEnLaTransaccion(ctx context.Context, tx pgx.Tx, id, motivo string) (s
 	}
 	var estado, numero string
 	var pedido *string
-	err := tx.QueryRow(ctx, `SELECT estado::text, numero, order_id::text FROM cutting_orders WHERE id = $1 FOR UPDATE`, id).
-		Scan(&estado, &numero, &pedido)
+	var sinCargo bool
+	err := tx.QueryRow(ctx, `SELECT estado::text, numero, order_id::text, sin_cargo FROM cutting_orders WHERE id = $1 FOR UPDATE`, id).
+		Scan(&estado, &numero, &pedido, &sinCargo)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", noEncontrado
 	}
@@ -750,7 +896,11 @@ func anularEnLaTransaccion(ctx context.Context, tx pgx.Tx, id, motivo string) (s
 	if estado != "en-cola" && estado != "en-proceso" {
 		return "", error422(numero + " ya salió de la máquina: no se anula.")
 	}
-	if pedido != nil {
+	// Una reposición sin cargo no se cobró en ninguna venta: los renglones
+	// del pedido son los del corte original, y por ellos CRT-56 decía «se
+	// cobró en la venta PED-1231» y no se podía corregir ni anular (mes
+	// simulado, M3S3-023).
+	if pedido != nil && !sinCargo {
 		var vendido *string
 		err := tx.QueryRow(ctx, `
 			SELECT o.numero FROM orders o
@@ -802,6 +952,11 @@ func (s *Servicio) AlternarUrgente(ctx context.Context, id string) (string, erro
 }
 
 // CargarPasadas anota las pasadas que dio la máquina.
+//
+// Lo que se cobra lo cambia el mostrador (ManejanPlata, en el handler): el
+// depósito veía el campo y podía bajar el cobro de un corte sin cobrar antes
+// de entregarlo (mes simulado, M2S4-008). Bajarlas de lo que dice el plano
+// es un descuento, y lo hace un administrador.
 func (s *Servicio) CargarPasadas(ctx context.Context, ses *auth.Sesion, id string, pasadas float64) error {
 	cantidad := 0.0
 	if !math.IsNaN(pasadas) {
@@ -809,6 +964,19 @@ func (s *Servicio) CargarPasadas(ctx context.Context, ses *auth.Sesion, id strin
 	}
 	if cantidad > math.MaxInt32 {
 		return error422("Son demasiadas pasadas.")
+	}
+	if ses == nil || ses.RolStaff == nil || *ses.RolStaff != sqlc.StaffRoleAdmin {
+		c, err := s.Obtener(ctx, id)
+		if err != nil {
+			return err
+		}
+		if c == nil {
+			return plataforma.NuevoProblema(http.StatusNotFound, "No encontramos la orden de corte.")
+		}
+		if sugeridas := PlanoDelCorte(c).PasadasCobrables; int(cantidad) < sugeridas {
+			return plataforma.NuevoProblema(http.StatusForbidden,
+				fmt.Sprintf("El plano dice %d: cobrar menos pasadas lo autoriza un administrador.", sugeridas))
+		}
 	}
 	var numero string
 	var previas int32
@@ -824,6 +992,7 @@ func (s *Servicio) CargarPasadas(ctx context.Context, ses *auth.Sesion, id strin
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "corte", id,
 		fmt.Sprintf("%s: %d → %d pasadas", numero, previas, int32(cantidad)), nil)
+	s.tomarTotal(ctx, id)
 	return nil
 }
 
@@ -839,11 +1008,31 @@ func (s *Servicio) GuardarAcomodo(ctx context.Context, ses *auth.Sesion, id stri
 		}
 		guardado = &b
 	}
+	// Las pasadas y las placas a cobrar pasan a ser las del plano acomodado:
+	// la ficha cobraba 10 pasadas del automático mientras el plano y la hoja
+	// decían 8 (mes simulado, M2S2-045).
+	c, err := s.Obtener(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	if c == nil {
+		return "", plataforma.NuevoProblema(http.StatusNotFound, "No encontramos la orden de corte.")
+	}
+	libre := PlanoDelCorte(c)
+	if c.AcomodoManual != nil {
+		c.AcomodoManual = nil
+		libre = PlanoDelCorte(c)
+	}
+	c.AcomodoManual = guardado
+	plano := PlanoDelCorte(c)
+	if guardado != nil && !SeCobraElManual(plano, libre) {
+		plano = libre
+	}
 	var numero string
 	// El estado va en el mismo UPDATE: entre leerlo y escribir, el taller
 	// puede haberlo pasado a la máquina.
-	err := s.pool.QueryRow(ctx, `UPDATE cutting_orders SET acomodo_manual = $2, updated_at = now()
-		WHERE id = $1 AND estado = 'en-cola' RETURNING numero`, id, guardado).Scan(&numero)
+	err = s.pool.QueryRow(ctx, `UPDATE cutting_orders SET acomodo_manual = $2, placas = $3, pasadas = $4, updated_at = now()
+		WHERE id = $1 AND estado = 'en-cola' RETURNING numero`, id, guardado, len(plano.Placas), plano.PasadasCobrables).Scan(&numero)
 	if errors.Is(err, pgx.ErrNoRows) {
 		var hay bool
 		if err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM cutting_orders WHERE id = $1)`, id).Scan(&hay); err != nil {
@@ -866,6 +1055,7 @@ func (s *Servicio) GuardarAcomodo(ctx context.Context, ses *auth.Sesion, id stri
 		desc = fmt.Sprintf("%s: acomodo corregido a mano (%d %s)", numero, len(fijadas), pieza)
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "corte", id, desc, nil)
+	s.tomarTotal(ctx, id)
 	if guardado != nil {
 		return "Acomodo guardado.", nil
 	}
@@ -905,6 +1095,7 @@ func (s *Servicio) CambiarSierra(ctx context.Context, ses *auth.Sesion, id, valo
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "corte", id,
 		fmt.Sprintf("%s: disco de %s a %s mm", c.Numero, jsmath.Texto(anterior), jsmath.Texto(*ancho)), nil)
+	s.tomarTotal(ctx, id)
 	if n := len(plano.NoEntran); n > 0 {
 		return fmt.Sprintf("Disco cambiado. Ojo: con %s mm hay %d pieza(s) que no entran.", jsmath.Texto(*ancho), n), nil
 	}

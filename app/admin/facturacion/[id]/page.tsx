@@ -15,7 +15,7 @@ import {
   Truck,
 } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
-import { cantidadConUnidad, fechaCorta, fechaLarga, formatearCuit, formatearMonto, hoyEnArgentina, moneda, plural, ZONA } from "@/lib/formato";
+import { cantidadConUnidad, fechaCorta, fechaLarga, formatearCuit, formatearMonto, formatearMontoContable, hoyEnArgentina, plural, unitarioQueCierra, ZONA } from "@/lib/formato";
 import { datosDeDevolucion, obtenerComprobante, serieDelComprobante } from "@/lib/dal/admin/facturacion";
 import {
   discriminaIva,
@@ -57,6 +57,14 @@ const CONDICIONES: Record<string, string> = {
   exento: "Exento",
   consumidor_final: "Consumidor final",
   no_categorizado: "No categorizado",
+};
+
+// Por dónde volvió la plata de una devolución.
+const DEVUELTO_POR: Record<string, string> = {
+  caja: "Por la caja, en efectivo",
+  cuenta: "A la cuenta corriente",
+  deuda: "Baja lo que debía",
+  afuera: "Por afuera",
 };
 
 const MEDIOS: Record<string, string> = {
@@ -248,26 +256,35 @@ export default async function FichaComprobantePage({
               </details>
             </div>
           ))}
-          {autorizable && serie?.tramo && (
-            // Con más de 15 sin CAE atrás (facturacion.maxAnteriores), ARCA no
-            // se pide desde acá: la serie se autoriza de a 15, desde el que
-            // tiene justo 15 atrás. El botón dice el tramo entero, del
-            // primero sin CAE a ese: «desde el 16» no decía qué pasaba con
-            // los de antes.
-            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+          {/* Sin certificado no hay a quién pedirle el CAE: el botón solo
+              devolvía un error. Queda el camino a cargarlo (mes 23). */}
+          {autorizable && !comprobante.cae && comprobante.conArca === false && (
+            <div className="mt-3">
               <Link
-                href={`/admin/facturacion/${serie.tramo.invoiceId}`}
-                className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-accion px-4 py-2 text-center text-base font-medium text-white transition-colors hover:bg-brand-orange-dark sm:w-auto"
+                href="/admin/arca/configuracion"
+                className="inline-flex h-10 items-center rounded-lg border border-linea px-3.5 text-base font-medium hover:bg-hundida"
               >
-                Autorizar del {numeroFormateado(comprobante.puntoVenta, serie.tramo.desde)} al{" "}
-                {numeroFormateado(comprobante.puntoVenta, serie.tramo.numero)}
+                Cargar el certificado de ARCA
               </Link>
-              <span className="text-sm text-muted-foreground">
-                {plural(serie.anterioresSinCae, "anterior", "anteriores")} sin CAE
-              </span>
             </div>
           )}
-          {autorizable && !serie?.tramo && (
+          {autorizable && comprobante.conArca !== false && serie?.tramo && (
+            // Con más de 15 sin CAE atrás (facturacion.maxAnteriores), ARCA no
+            // se pide desde acá: la serie se autoriza de a 15, desde el que
+            // tiene justo 15 atrás. El botón autoriza ese tramo desde acá
+            // mismo, del primero sin CAE a ese: antes era un enlace con cara
+            // de acción que llevaba a otra factura donde había que volver a
+            // tocar «Autorizar» (M2S3-091).
+            <div className="mt-3">
+              <BotonAutorizar
+                id={serie.tramo.invoiceId}
+                rechazado={false}
+                etiqueta={`Autorizar del ${numeroFormateado(comprobante.puntoVenta, serie.tramo.desde)} al ${numeroFormateado(comprobante.puntoVenta, serie.tramo.numero)}`}
+                consecuencias={[plural(serie.anterioresSinCae, "anterior", "anteriores") + " sin CAE"]}
+              />
+            </div>
+          )}
+          {autorizable && comprobante.conArca !== false && !serie?.tramo && (
             <div className="mt-3">
               <BotonAutorizar
                 id={comprobante.id}
@@ -279,9 +296,10 @@ export default async function FichaComprobantePage({
               />
             </div>
           )}
-          {autorizable && comprobante.estado === "rechazada" && (
+          {autorizable && (comprobante.estado === "rechazada" || comprobante.estado === "emitida") && (
             <div className="mt-3">
               <CorregirReceptor
+                rechazado={comprobante.estado === "rechazada"}
                 id={comprobante.id}
                 nombre={comprobante.receptorNombre}
                 cuit={comprobante.receptorCuit}
@@ -328,8 +346,10 @@ export default async function FichaComprobantePage({
               </span>
             </h2>
 
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[40rem] text-left">
+            {/* Sin ancho mínimo ni desplazamiento: debajo de 640 px la tabla
+                se apila sola (tablas-apilables). */}
+            <div>
+              <table className="w-full text-left">
                 <thead>
                   <tr className="border-b text-sm uppercase tracking-[0.06em] text-muted-foreground">
                     <th scope="col" className="px-5 py-2.5 font-semibold">Descripción</th>
@@ -351,12 +371,10 @@ export default async function FichaComprobantePage({
                         {/* Sin unidad es por unidad, como en el PDF: «10» solo no decía qué. */}
                         {cantidadConUnidad(Number(item.cantidad), item.unidad || "unidad", item.descripcion)}
                       </td>
+                      {/* Con los decimales que hagan falta para que
+                          cantidad × unitario dé el subtotal (M3S2-063). */}
                       <td className="tabular px-3 py-3 text-right text-base">
-                        {moneda.format(
-                          discrimina
-                            ? Number(item.precioUnitario)
-                            : Number(item.subtotal) / Number(item.cantidad),
-                        )}
+                        {unitarioQueCierra(Number(discrimina ? item.neto : item.subtotal), Number(item.cantidad))}
                       </td>
                       {discrimina && (
                         <td className="tabular px-3 py-3 text-right text-base text-muted-foreground">
@@ -367,7 +385,7 @@ export default async function FichaComprobantePage({
                           = subtotal neto, y el IVA abajo. Con el subtotal
                           con IVA la fila no se podía verificar (H080). */}
                       <td className="tabular px-5 py-3 text-right text-base font-medium">
-                        {moneda.format(Number(discrimina ? item.neto : item.subtotal))}
+                        {formatearMontoContable(discrimina ? item.neto : item.subtotal)}
                       </td>
                     </tr>
                   ))}
@@ -375,30 +393,30 @@ export default async function FichaComprobantePage({
               </table>
             </div>
 
-            {/* Totales: en la A el IVA se discrimina; en la B va incluido */}
+            {/* Totales: en la A el IVA se discrimina; en la B va incluido.
+                Todos con sus centavos, como el papel: el total sin ellos al
+                lado del neto y el IVA con ellos no se podía sumar (mes 23). */}
             <dl className="space-y-1.5 border-t bg-muted/40 px-5 py-4 text-base">
               {discrimina ? (
                 <>
-                  <Fila etiqueta="Neto gravado" valor={moneda.format(Number(comprobante.neto))} />
+                  <Fila etiqueta="Neto gravado" valor={formatearMontoContable(comprobante.neto)} />
                   {Number(comprobante.iva21) > 0 && (
-                    <Fila etiqueta="IVA 21%" valor={moneda.format(Number(comprobante.iva21))} />
+                    <Fila etiqueta="IVA 21%" valor={formatearMontoContable(comprobante.iva21)} />
                   )}
                   {Number(comprobante.iva105) > 0 && (
-                    <Fila etiqueta="IVA 10,5%" valor={moneda.format(Number(comprobante.iva105))} />
+                    <Fila etiqueta="IVA 10,5%" valor={formatearMontoContable(comprobante.iva105)} />
                   )}
                   {Number(comprobante.iva27) > 0 && (
-                    <Fila etiqueta="IVA 27%" valor={moneda.format(Number(comprobante.iva27))} />
+                    <Fila etiqueta="IVA 27%" valor={formatearMontoContable(comprobante.iva27)} />
                   )}
                   {Number(comprobante.exento) > 0 && (
-                    <Fila etiqueta="Exento" valor={moneda.format(Number(comprobante.exento))} />
+                    <Fila etiqueta="Exento" valor={formatearMontoContable(comprobante.exento)} />
                   )}
                 </>
               ) : (
                 <Fila
                   etiqueta="Subtotal"
-                  valor={moneda.format(
-                    Number(comprobante.total) - Number(comprobante.tributosTotal),
-                  )}
+                  valor={formatearMontoContable(Number(comprobante.total) - Number(comprobante.tributosTotal))}
                 />
               )}
 
@@ -406,27 +424,52 @@ export default async function FichaComprobantePage({
                 <Fila
                   key={tributo.id}
                   etiqueta={`${tributo.descripcion} (${Number(tributo.alicuota)}%)`}
-                  valor={moneda.format(Number(tributo.importe))}
+                  valor={formatearMontoContable(tributo.importe)}
                 />
               ))}
 
               <div className="flex items-baseline justify-between border-t pt-2.5">
                 <dt className="font-semibold">Total</dt>
                 <dd className="tabular text-2xl font-bold">
-                  {moneda.format(Number(comprobante.total))}
+                  {formatearMontoContable(comprobante.total)}
                 </dd>
               </div>
 
               {!discrimina && totalIva > 0 && (
                 <p className="pt-1 text-sm text-muted-foreground">
                   {/* En esta factura no se discrimina, pero se informa a ARCA igual. */}
-                  IVA contenido: {moneda.format(totalIva)}
+                  IVA contenido: {formatearMontoContable(totalIva)}
                 </p>
               )}
             </dl>
           </section>
 
-          {/* Cobros */}
+          {/* La nota de una devolución: cómo y cuándo salió la plata. Tenía
+              «Cobros» vacío y el egreso no aparecía en ningún lado (M2S3-046). */}
+          {comprobante.devolucion && (
+            <section className="tarjeta overflow-hidden">
+              <h2 className="flex items-baseline justify-between gap-3 border-b px-5 py-3.5 text-base font-medium">
+                Devolución
+                <span className="tabular text-base font-normal text-muted-foreground">
+                  {fechaCorta.format(new Date(comprobante.devolucion.fecha))}
+                </span>
+              </h2>
+              <ul className="divide-y">
+                {(comprobante.devolucion.partes.length > 0
+                  ? comprobante.devolucion.partes
+                  : [{ medio: comprobante.devolucion.destino, importe: comprobante.devolucion.importe }]
+                ).map((p) => (
+                  <li key={p.medio} className="flex items-baseline justify-between gap-3 px-5 py-3">
+                    <span className="text-base">{DEVUELTO_POR[p.medio] ?? MEDIOS[p.medio] ?? p.medio}</span>
+                    <span className="tabular text-base font-medium">{formatearMonto(-p.importe)}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {/* Cobros: una nota sin cobros no muestra la caja vacía. */}
+          {(!comprobante.tipo.startsWith("nota_credito") || comprobante.cobros.length > 0) && (
           <section className="tarjeta overflow-hidden">
             <h2 className="flex items-baseline justify-between gap-3 border-b px-5 py-3.5 text-base font-medium">
               Cobros
@@ -467,7 +510,7 @@ export default async function FichaComprobantePage({
                         </a>
                       )}
                     </span>
-                    <span className="tabular text-base font-medium">{moneda.format(cobro.monto)}</span>
+                    <span className="tabular text-base font-medium">{formatearMonto(cobro.monto)}</span>
                   </li>
                 ))}
               </ul>
@@ -495,14 +538,14 @@ export default async function FichaComprobantePage({
                           href={`/api/recibos/${cobro.receiptId}/pdf`}
                           target="_blank"
                           rel="noopener"
-                          className="ml-2 text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                          className="codigo ml-2 text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
                         >
-                          recibo
+                          {cobro.recibo ?? "recibo"}
                         </a>
                       )}
                     </span>
                     <span className="tabular text-base font-medium">
-                      {moneda.format(Number(cobro.monto))}
+                      {formatearMonto(cobro.monto)}
                     </span>
                   </li>
                 ))}
@@ -511,7 +554,12 @@ export default async function FichaComprobantePage({
 
             {!anulada && !comprobante.ventaAnulada && comprobante.saldo > 0 && (
               <div className="p-5">
+                {/* La clave cambia con cada cobro: el formulario vuelve a
+                    nacer vacío, con el saldo nuevo propuesto. Quedaba con el
+                    importe y el número de operación del cobro anterior y el
+                    medio en Efectivo, listo para cobrar dos veces (M2S1-006). */}
                 <FormularioCobro
+                  key={`${comprobante.saldo}-${comprobante.enCuenta}-${comprobante.cobros.length}`}
                   id={comprobante.id}
                   saldo={comprobante.saldo}
                   // La que ya se debe en la cuenta no ofrece pasarla otra vez.
@@ -520,6 +568,7 @@ export default async function FichaComprobantePage({
               </div>
             )}
           </section>
+          )}
         </div>
 
         <div className="space-y-4">
@@ -576,10 +625,9 @@ export default async function FichaComprobantePage({
               href={`/admin/facturacion/${comprobante.comprobanteOrigenId}`}
               className="tarjeta block p-5 transition-colors hover:bg-muted/50"
             >
-              <p className="text-base font-medium">Comprobante que corrige</p>
-              <p className="text-base text-muted-foreground">
-                Ver el original
-              </p>
+              {/* «Anula parcialmente: Factura A 0015-00000105 del 27/11/26»,
+                  lo mismo que el papel (M3S3-006). */}
+              <p className="text-base font-medium">{comprobante.asociado ?? "Comprobante que corrige"}</p>
             </Link>
           )}
 

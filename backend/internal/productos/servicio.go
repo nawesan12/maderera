@@ -513,8 +513,9 @@ func (s *Servicio) Guardar(ctx context.Context, ses *auth.Sesion, f FormProducto
 	}
 	id := p.ID
 	var nuevas []fotos.Medida
+	var preciosCambiados []string
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		nuevas = nil
+		nuevas, preciosCambiados = nil, nil
 		q := s.q.WithTx(tx)
 		ls, err := s.listasYSucursales(ctx, q)
 		if err != nil {
@@ -615,9 +616,28 @@ func (s *Servicio) Guardar(ctx context.Context, ses *auth.Sesion, f FormProducto
 			for _, lp := range []struct {
 				lista  *string
 				precio string
-			}{{ls.general, v.PrecioGeneral}, {ls.profesional, v.PrecioProfesional}} {
+				nombre string
+			}{{ls.general, v.PrecioGeneral, "general"}, {ls.profesional, v.PrecioProfesional, "profesional"}} {
 				if lp.lista == nil {
 					continue
+				}
+				// El precio que cambia queda en la bitácora con el de antes y el
+				// nuevo, como en el ajuste masivo (mes simulado, M2S1-047): la
+				// edición de un precio salía «Editó el producto», sin montos.
+				var antes *string
+				_ = tx.QueryRow(ctx, `SELECT price::text FROM price_list_items WHERE price_list_id = $1 AND variant_id = $2`, *lp.lista, vid).Scan(&antes)
+				nuevo := jsmath.Numero(lp.precio)
+				previo := 0.0
+				if antes != nil {
+					previo = jsmath.Numero(*antes)
+				}
+				if (nuevo > 0 || previo > 0) && math.Abs(nuevo-previo) > 0.005 {
+					cual := v.SKU
+					if cual == "" {
+						cual = v.Label
+					}
+					texto := "Precio " + lp.nombre + " de " + cual + ": " + formato.Importe(max(previo, 0)) + " → " + formato.Importe(max(nuevo, 0))
+					preciosCambiados = append(preciosCambiados, texto)
 				}
 				// Sin precio profesional propio, la medida sigue el porcentaje
 				// de la lista sobre la general. Guardar un 0 le ganaba al
@@ -688,6 +708,9 @@ func (s *Servicio) Guardar(ctx context.Context, ses *auth.Sesion, f FormProducto
 	for _, m := range nuevas {
 		s.fotos.Adjuntar(ctx, s.pool, m)
 	}
+	for _, texto := range preciosCambiados {
+		bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "precio", p.ID, texto+" · "+p.Name, nil)
+	}
 	accion, verbo, entidad := sqlc.AccionAuditoriaCrear, "Cargó", ""
 	if p.ID != "" {
 		accion, verbo, entidad = sqlc.AccionAuditoriaEditar, "Editó", p.ID
@@ -742,8 +765,16 @@ func (s *Servicio) GuardarMesesSinVender(ctx context.Context, ses *auth.Sesion, 
 		return "", err
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "producto", "",
-		"Cambió el umbral de candidatos a baja a "+strconv.Itoa(meses)+" meses sin ventas", nil)
-	return "Ahora se señalan los que no se venden hace " + strconv.Itoa(meses) + " meses.", nil
+		"Cambió el umbral de candidatos a baja a "+Meses(meses)+" sin ventas", nil)
+	return "Ahora se señalan los que no se venden hace " + Meses(meses) + ".", nil
+}
+
+// Meses es «1 mes» o «12 meses» (mes simulado, M2S3-060 y M2S3-064).
+func Meses(n int) string {
+	if n == 1 {
+		return "1 mes"
+	}
+	return strconv.Itoa(n) + " meses"
 }
 
 // Candidato es un producto que quizá haya que dar de baja.
@@ -771,16 +802,33 @@ func (s *Servicio) Candidatos(ctx context.Context, meses int, ahora time.Time) (
 		return nil, err
 	}
 	out := []Candidato{}
+	// Cuántos motivos de verdad tiene cada uno, para ordenar: el chip
+	// informativo de «Nunca se vendió» no suma.
+	peso := map[string]int{}
 	for _, f := range filas {
+		// Lo hecho a medida no es candidato: no tiene stock ni precio por
+		// naturaleza y se vende de vez en cuando; con el umbral en 1 la
+		// escalera a medida volvía por «Nunca se vendió» (M2S4-033, mes 23).
+		if f.APedido {
+			continue
+		}
 		c := Candidato{ID: f.ID, Nombre: f.Nombre, Slug: f.Slug, Categoria: f.Categoria, Stock: f.Stock,
 			Variantes: f.Variantes, VariantesSinPrecio: f.VariantesSinPrecio, Motivos: []string{}}
+		// Lo que entró hace poco no es un candidato aunque no se haya vendido:
+		// la referencia es la última venta, la última compra recibida o el
+		// alta, la más nueva. Contando desde siempre, la mercadería recibida
+		// esa semana salía «Nunca se vendió» con 200 en stock (M2S1-124).
+		referencia := f.Creado
+		if f.UltimaCompra.Valid && f.UltimaCompra.Time.After(referencia) {
+			referencia = f.UltimaCompra.Time
+		}
 		if f.UltimaVenta.Valid {
 			d := int(math.Floor(float64(ahora.Sub(f.UltimaVenta.Time).Milliseconds()) / 86_400_000))
 			c.DiasSinVender = &d
-			if f.UltimaVenta.Time.Before(corte) {
-				c.Motivos = append(c.Motivos, "Sin ventas hace "+strconv.Itoa(int(math.Floor(float64(d)/30)))+" meses")
+			if f.UltimaVenta.Time.Before(corte) && referencia.Before(corte) {
+				c.Motivos = append(c.Motivos, "Sin ventas hace "+Meses(int(math.Floor(float64(d)/30))))
 			}
-		} else if f.Creado.Before(corte) {
+		} else if referencia.Before(corte) {
 			c.Motivos = append(c.Motivos, "Nunca se vendió")
 		}
 		if c.Stock <= 0 {
@@ -789,10 +837,16 @@ func (s *Servicio) Candidatos(ctx context.Context, meses int, ahora time.Time) (
 		if c.Variantes > 0 && c.VariantesSinPrecio == c.Variantes {
 			c.Motivos = append(c.Motivos, "Ninguna medida tiene precio")
 		}
+		// «Nunca se vendió» se dice con cualquier umbral: con 12 meses no salía
+		// y con 1 sí, siendo el mismo producto (M2S4-033).
+		peso[c.ID] = len(c.Motivos)
+		if len(c.Motivos) > 0 && !f.UltimaVenta.Valid && !slices.Contains(c.Motivos, "Nunca se vendió") {
+			c.Motivos = append([]string{"Nunca se vendió"}, c.Motivos...)
+		}
 		if len(c.Motivos) > 0 {
 			out = append(out, c)
 		}
 	}
-	slices.SortStableFunc(out, func(a, b Candidato) int { return len(b.Motivos) - len(a.Motivos) })
+	slices.SortStableFunc(out, func(a, b Candidato) int { return peso[b.ID] - peso[a.ID] })
 	return out, nil
 }

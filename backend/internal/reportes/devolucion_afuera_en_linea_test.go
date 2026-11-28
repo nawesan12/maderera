@@ -22,7 +22,7 @@ func TestLaDevolucionPorAfueraDeUnaTransferenciaAsientaElReintegro(t *testing.T)
 	if _, err := fac.ObtenerEmisor(ctx); err != nil {
 		t.Fatal(err)
 	}
-	e.exec(t, `update configuracion_fiscal set cuit = '30589445259', condicion_iva = 'responsable_inscripto'`)
+	e.exec(t, `update configuracion_fiscal set cuit = '30589445259', condicion_iva = 'responsable_inscripto', ingresos_brutos = '901-123456-7', inicio_actividades = '1981-03-01'`)
 	e.exec(t, `insert into puntos_venta (numero, nombre, numero_inicial) values (3, 'Mostrador', 0)`)
 
 	facturado := func(numero, proveedor string) (pedido, factura, renglon string) {
@@ -90,5 +90,29 @@ func TestLaDevolucionPorAfueraDeUnaTransferenciaAsientaElReintegro(t *testing.T)
 	// TR-1 cierra en cero; MP-1 queda con 605 en contra hasta que avise Mercado Pago.
 	if s := redondear(SaldoDeCuenta(asientos, Cuentas.Deudores)); s != -605 {
 		t.Errorf("Deudores: %v, quería −605 (lo de Mercado Pago que falta avisar)", s)
+	}
+
+	// Cobranzas lista la devolución como egreso, con su nota y el medio por
+	// el que salió, y no le cambia lo cobrado (M2S3-046).
+	c, err := e.s.Cobranzas(ctx, Periodo{}, 50, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tr *Cobranza
+	devoluciones := 0
+	for i, f := range c.Filas {
+		if f.Tipo == "devolucion" {
+			devoluciones++
+			if f.Pedido != nil && *f.Pedido == "TR-1" {
+				tr = &c.Filas[i]
+			}
+		}
+	}
+	if devoluciones != 2 || tr == nil || tr.Total != -605 || tr.Numero == nil || len(tr.Partes) != 1 || tr.Partes[0].Medio != "transferencia" ||
+		tr.Partes[0].Importe != -605 {
+		t.Fatalf("la devolución en Cobranzas: %+v", tr)
+	}
+	if c.Cobrado != 2420 {
+		t.Errorf("cobrado: %v", c.Cobrado)
 	}
 }

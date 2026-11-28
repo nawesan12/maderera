@@ -159,8 +159,18 @@ func EnlaceWaMe(telefono, texto string) string {
 // ArmarAvisoManual arma el texto del aviso (el de la plantilla, rellenado) y
 // el enlace de wa.me.
 func ArmarAvisoManual(evento string, nombre *string, telefono *string, valores map[string]string, enlace *Enlace) AvisoManualArmado {
+	return armarConCuerpo(evento, nil, nombre, telefono, valores, enlace)
+}
+
+// armarConCuerpo es ArmarAvisoManual con otro texto que el de la plantilla:
+// el aviso manual es texto libre, y del cheque que no se tomó o que se le
+// devolvió al cliente la plantilla decía «no se pudo acreditar… El importe
+// volvió a tu cuenta corriente» (mes 23, M2S4-017 y M2S3-088).
+func armarConCuerpo(evento string, propio *string, nombre *string, telefono *string, valores map[string]string, enlace *Enlace) AvisoManualArmado {
 	cuerpo := "Hola {{nombre}}, te escribimos de la maderera."
-	if c := CuerpoDePlantilla(AvisosManuales[evento].Plantilla); c != nil {
+	if propio != nil {
+		cuerpo = *propio
+	} else if c := CuerpoDePlantilla(AvisosManuales[evento].Plantilla); c != nil {
 		cuerpo = *c
 	}
 	v := map[string]string{}

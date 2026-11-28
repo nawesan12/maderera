@@ -136,6 +136,26 @@ export async function obtenerPedido(id: string): Promise<PedidoCompleto | null> 
   };
 }
 
+export interface DatosDeDevolucion {
+  /** `neto`: la plata de devolver todo lo que queda, con el descuento del pedido. */
+  renglones: { orderItemId: string; queda: number; neto: number }[];
+  deuda: number;
+  aCuenta: boolean;
+  caja: number;
+  afuera: number;
+  cajaAbierta: boolean;
+}
+
+/**
+ * Lo que necesita el diálogo de la devolución sin factura: cuánto queda de
+ * cada renglón y por dónde puede volver la plata. Null si no le toca (403).
+ */
+export async function datosDeDevolucion(id: string): Promise<DatosDeDevolucion | null> {
+  const r = await (await api()).GET("/api/v1/admin/pedidos/{id}/devolucion", { params: { path: { id } } });
+  if (!r.data) return null;
+  return r.data;
+}
+
 export type PedidoParaElTaller = Esquemas["PedidoParaElTaller"];
 
 /**

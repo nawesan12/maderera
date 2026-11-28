@@ -27,6 +27,9 @@ type parteCruda struct {
 	Referencia *string          `json:"referencia"`
 	ChequeID   *string          `json:"chequeId"`
 	Cheque     *json.RawMessage `json:"cheque"`
+	// Impuesto de una retención sufrida (ganancias, iva, suss, iibb): el
+	// certificado va en la referencia (M2S1-093).
+	Impuesto *string `json:"impuesto"`
 }
 
 type chequeCrudo struct {
@@ -57,6 +60,9 @@ func LeerPartes(crudo string) ([]Parte, string) {
 			return nil, "Invalid input: expected string, received undefined"
 		}
 		x := Parte{Medio: Medio(medio), Importe: precios.ParsearImporte(*p.Importe)}
+		if p.Impuesto != nil {
+			x.Impuesto = strings.TrimSpace(*p.Impuesto)
+		}
 		if p.Referencia != nil {
 			r := strings.TrimSpace(*p.Referencia)
 			if plataforma.LargoJS(r) > 120 {

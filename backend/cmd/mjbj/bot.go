@@ -27,9 +27,11 @@ func buscadorDelBot(pool *pgxpool.Pool) whatsapp.Buscador {
 		if err != nil {
 			return nil, err
 		}
-		// Seis y sin fotos: el bot contesta con nombre, medidas y dónde hay,
-		// así que no arma el catálogo entero para quedarse con seis.
-		f := catalogo.Filtros{Busqueda: consulta, Limite: 6}
+		// Sin fotos: el bot contesta con nombre, medidas y dónde hay. Trae
+		// hasta veinte y el bot se queda con los que más se parecen
+		// (whatsapp.rankearProductos): el catálogo ordena por categoría y
+		// nombre, y con seis el Fenólico le ganaba a la Melamina Blanca.
+		f := catalogo.Filtros{Busqueda: consulta, Limite: 20}
 		if consulta == "" {
 			f.Categoria = rubro
 		}
@@ -37,14 +39,23 @@ func buscadorDelBot(pool *pgxpool.Pool) whatsapp.Buscador {
 		if err != nil {
 			return nil, err
 		}
+		// «melamina blanca placas cortadas» no tiene todas las palabras en
+		// ningún producto: se prueba sacando las del final antes de caer al
+		// rubro entero.
+		for palabras := strings.Fields(consulta); len(ps) == 0 && len(palabras) > 1; {
+			palabras = palabras[:len(palabras)-1]
+			if ps, err = cat.Claves(ctx, catalogo.Filtros{Busqueda: strings.Join(palabras, " "), Limite: 20}, general); err != nil {
+				return nil, err
+			}
+		}
 		if len(ps) == 0 && consulta != "" && rubro != "" {
-			if ps, err = cat.Claves(ctx, catalogo.Filtros{Categoria: rubro, Limite: 6}, general); err != nil {
+			if ps, err = cat.Claves(ctx, catalogo.Filtros{Categoria: rubro, Limite: 20}, general); err != nil {
 				return nil, err
 			}
 		}
 		out := make([]whatsapp.ProductoBot, 0, len(ps))
 		for _, p := range ps {
-			b := whatsapp.ProductoBot{Nombre: p.Name, Slug: p.Slug, Medidas: p.Labels, Sucursales: len(p.Stock)}
+			b := whatsapp.ProductoBot{Nombre: p.Name, Slug: p.Slug, Medidas: p.Labels, Sucursales: len(p.Stock), StockPorMedida: p.StockPorMedida}
 			for _, x := range p.Stock {
 				if x.Nivel != catalogo.SinStock {
 					b.ConStock = append(b.ConStock, x.Nombre)

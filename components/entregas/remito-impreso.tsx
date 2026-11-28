@@ -85,7 +85,9 @@ export function RemitoImpreso({
                 ? "Reposición sin cargo"
                 : deAcopio
                   ? "Remito de entrega parcial"
-                  : "Remito de entrega total"}
+                  : remito.final
+                    ? "Remito de entrega final"
+                    : "Remito de entrega total"}
             </p>
             <p className="numero">{remito.numero}</p>
             <div className="datos">
@@ -108,13 +110,23 @@ export function RemitoImpreso({
         <section className="receptor">
           <p className="etiqueta">Destinatario</p>
           <div className="receptor-grilla">
+            {/* El cliente con sus datos fiscales (un remito R los lleva), y al
+                lado quien retira con su documento: el documento quedaba bajo
+                «Cliente» y se leía como el del cliente (mes simulado 2). */}
             <div>
               <span>Cliente</span>
-              <strong>{remito.clienteNombre}</strong>
+              <strong>{remito.clienteRazonSocial || remito.clienteNombre}</strong>
+              {remito.clienteCuit && (
+                <span className="mono">
+                  CUIT {formatearCuit(remito.clienteCuit)}
+                  {remito.clienteCondicionIva && ` · ${CONDICION_IVA[remito.clienteCondicionIva] ?? remito.clienteCondicionIva}`}
+                </span>
+              )}
             </div>
             <div>
               <span>{envio ? "Recibe" : "Retira"}</span>
               <strong>{remito.receptorNombre || "—"}</strong>
+              {remito.receptorDocumento && <span className="mono">{remito.receptorDocumento}</span>}
             </div>
             {remito.clienteDireccion && (
               <div>
@@ -128,12 +140,6 @@ export function RemitoImpreso({
                     : "Domicilio del cliente"}
                 </span>
                 <strong>{remito.clienteDireccion}</strong>
-              </div>
-            )}
-            {remito.receptorDocumento && (
-              <div>
-                <span>Documento</span>
-                <strong className="mono">{remito.receptorDocumento}</strong>
               </div>
             )}
             {remito.transportista && (
@@ -158,12 +164,14 @@ export function RemitoImpreso({
           </div>
         </section>
 
-        <table className="detalle">
+        {/* Una sola columna para la cantidad con su unidad: «5 u.» quedaba
+            corrido de su encabezado, y a 375 px el producto, el «5» y
+            «placas» se partían en cinco renglones (mes simulado 2). */}
+        <table className="detalle remito-detalle">
           <thead>
             <tr>
               <th>Descripción</th>
               <th className="der">Cantidad</th>
-              <th className="der">Unidad</th>
             </tr>
           </thead>
           <tbody>
@@ -172,10 +180,11 @@ export function RemitoImpreso({
                 <td>
                   {linea.descripcion}
                   {/* Lo que sale cortado y según qué corte. */}
-                  {linea.corte && <span className="chico" style={{ display: "block" }}>{linea.corte}</span>}
+                  {linea.corte && <span className="chico remito-corte">{linea.corte}</span>}
                 </td>
-                <td className="der mono">{linea.cantidad}</td>
-                <td className="der">{unidadDe(linea.unidad, linea.cantidad, linea.descripcion)}</td>
+                <td className="der mono remito-cantidad">
+                  {cantidadLegible(linea.cantidad)} {unidadDe(linea.unidad, linea.cantidad, linea.descripcion)}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -266,9 +275,22 @@ export function RemitoImpreso({
 /** La unidad concordada: «placas», «rollos»; lo abreviado no cambia. */
 function unidadDe(unidad: string, cantidad: number, descripcion: string): string {
   if (unidad === "pasada") return cantidad === 1 ? "corte" : "cortes";
-  const u = formatearUnidad(unidadDeVenta(unidad, descripcion));
+  const deVenta = unidadDeVenta(unidad, descripcion);
+  // «1 media», como la firma, el PDF y el formulario (cantidadConUnidad):
+  // acá decía «1 media placa» (mes 23).
+  if (deVenta === "media_placa") return cantidad === 1 ? "media" : "medias";
+  const u = formatearUnidad(deVenta);
   return cantidad === 1 ? u : unidadEnPlural(u);
 }
+
+const cantidadLegible = (n: number) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 3 }).format(n);
+
+const CONDICION_IVA: Record<string, string> = {
+  responsable_inscripto: "Responsable inscripto",
+  monotributista: "Monotributista",
+  exento: "Exento",
+  consumidor_final: "Consumidor final",
+};
 
 const MEDIO: Record<string, string> = {
   efectivo: "Efectivo",

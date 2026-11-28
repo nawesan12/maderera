@@ -52,6 +52,9 @@ export default async function FacturaDeCompraPage({
           (x) => !x.tipo.startsWith("nota_credito") && x.tipo !== "cheque_rechazado" && x.saldo - f.total > -0.01,
         )
       : [];
+  const flete = f.flete ?? 0;
+  const diferencia =
+    Math.round((f.neto - f.renglones.reduce((s, r) => s + r.cantidad * r.costoUnitario, 0) - flete) * 100) / 100;
   const estado = f.anuladaAt
     ? { texto: "Anulada", clase: "text-saldo-debe" }
     : esCredito
@@ -93,7 +96,8 @@ export default async function FacturaDeCompraPage({
               {f.proveedor}
             </Link>
             {` · del ${fechaCorta.format(f.fechaEmision)}`}
-            {f.fechaVencimiento && ` · vence ${fechaCorta.format(f.fechaVencimiento)}`}
+            {/* Una nota de crédito no vence: resta (las de antes guardaban la fecha). */}
+            {f.fechaVencimiento && !esCredito && ` · vence ${fechaCorta.format(f.fechaVencimiento)}`}
           </>
         }
         acciones={
@@ -121,7 +125,7 @@ export default async function FacturaDeCompraPage({
         </p>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className={`grid gap-6 ${esCredito && !f.aplicaA ? "" : "lg:grid-cols-[minmax(0,1fr)_22rem]"}`}>
         <section className="tarjeta p-5">
           <dl className="divide-y divide-linea-suave">
             {importes.map(([nombre, valor]) => (
@@ -136,8 +140,17 @@ export default async function FacturaDeCompraPage({
             </div>
           </dl>
           <p className="mt-4 text-base text-muted-foreground">
+            {/* Anulada, no da crédito fiscal: decía «Da crédito fiscal» debajo
+                de «Anulada» (M3S3-025). */}
             {[
-              daCreditoFiscal(f.tipo) ? "Da crédito fiscal" : "Sin crédito fiscal",
+              // La nota de crédito A recibida resta crédito fiscal (mes 23).
+              f.anuladaAt
+                ? null
+                : !daCreditoFiscal(f.tipo)
+                  ? "Sin crédito fiscal"
+                  : esCredito
+                    ? "Resta crédito fiscal"
+                    : "Da crédito fiscal",
               f.cae ? `CAE ${f.cae}` : null,
               f.numeroRemito ? `Remito ${f.numeroRemito}` : null,
             ]
@@ -147,6 +160,22 @@ export default async function FacturaDeCompraPage({
           {f.observaciones && <p className="mt-2 text-base">{f.observaciones}</p>}
         </section>
 
+        {/* Una nota de crédito no se paga: resta. En vez de «Pagos: Ninguno»,
+            a qué factura se aplicó, si se aplicó (mes 23). */}
+        {esCredito ? (
+          f.aplicaA && (
+            <section className="tarjeta p-5">
+              <h2 className="text-[19px] font-bold tracking-tight">Aplicada a</h2>
+              {f.aplicaAId ? (
+                <Link href={`/admin/compras/facturas/${f.aplicaAId}`} className="codigo mt-3 inline-block text-base font-medium hover:underline">
+                  {f.aplicaA}
+                </Link>
+              ) : (
+                <p className="codigo mt-3 text-base font-medium">{f.aplicaA}</p>
+              )}
+            </section>
+          )
+        ) : (
         <section className="tarjeta p-5">
           <h2 className="text-[19px] font-bold tracking-tight">Pagos</h2>
           {f.pagos.length === 0 && f.creditos.length === 0 ? (
@@ -191,13 +220,15 @@ export default async function FacturaDeCompraPage({
             </ul>
           )}
         </section>
+        )}
       </div>
 
       {f.renglones.length > 0 && (
         <section className="tarjeta overflow-hidden">
-          <h2 className="px-5 pt-5 text-[19px] font-bold tracking-tight">Mercadería</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[620px] text-base">
+          <h2 className="px-5 pt-5 text-[19px] font-bold tracking-tight">{f.devolucion ? "Devuelto" : "Mercadería"}</h2>
+          {/* Sin ancho mínimo: en el teléfono la tabla se apila sola. */}
+          <div>
+            <table className="w-full text-base">
               <thead>
                 <tr className="border-b border-linea text-left text-sm uppercase tracking-wide text-muted-foreground">
                   <th className="px-5 py-2.5 font-semibold">Producto</th>
@@ -223,6 +254,31 @@ export default async function FacturaDeCompraPage({
               </tbody>
             </table>
           </div>
+          {/* El flete y la diferencia facturada, para que la mercadería sume
+              el neto de arriba (M2S1-123). */}
+          {!f.devolucion && (flete > 0.009 || Math.abs(diferencia) > 0.009) && (
+            <dl className="tabular space-y-1 border-t border-linea px-5 py-3 text-base">
+              {flete > 0.009 && (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted-foreground">Flete y gastos</dt>
+                  <dd>{formatearMonto(flete)}</dd>
+                </div>
+              )}
+              {Math.abs(diferencia) > 0.009 && (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted-foreground">Diferencia facturada</dt>
+                  <dd>
+                    {diferencia > 0 ? "+" : "−"}
+                    {formatearMonto(Math.abs(diferencia))}
+                  </dd>
+                </div>
+              )}
+              <div className="flex justify-between gap-3 pt-1">
+                <dt className="font-semibold">Neto</dt>
+                <dd className="font-bold">{formatearMonto(f.neto)}</dd>
+              </div>
+            </dl>
+          )}
         </section>
       )}
 

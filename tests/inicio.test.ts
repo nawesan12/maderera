@@ -27,12 +27,14 @@ describe("partirPendientes", () => {
         { clave: "preparar", urgente: true },
         { clave: "cortes", urgente: true },
         { clave: "pedidos-atrasados", urgente: true },
+        // Los cortes terminados van en «Para entregar» (M2S4-047).
         { clave: "cortes-sin-retirar" },
+        { clave: "reponer" },
       ],
       CLAVES_EN_LAS_LISTAS_DEL_DEPOSITO,
     );
     expect(paraHoy.map((p) => p.clave)).toEqual(["pedidos-atrasados"]);
-    expect(pendientes.map((p) => p.clave)).toEqual(["cortes-sin-retirar"]);
+    expect(pendientes.map((p) => p.clave)).toEqual(["reponer"]);
   });
 
   it("sin urgentes, «Para hoy» queda vacío", () => {
@@ -119,10 +121,14 @@ describe("paraEntregar", () => {
     expect(renglones[0].sinCobrar).toBe(500);
   });
 
-  // H104: el acopio en curso viaja al renglón para que el botón sea «Preparar remito».
-  it("dice si es un acopio en curso", () => {
-    const { renglones } = paraEntregar([{ ...pedido("PED-1", "listo", 1), acopio: true }, pedido("PED-2", "listo", 2)]);
-    expect(renglones.map((r) => r.acopio)).toEqual([true, false]);
+  // Mes simulado 2: el saldo de un acopio está guardado, nadie lo pidió hoy:
+  // va aparte y no arriba con el botón naranja (antes, H104, iba en la lista
+  // con «Preparar remito»).
+  it("deja el acopio aparte", () => {
+    const { renglones, total, enAcopio } = paraEntregar([{ ...pedido("PED-1", "listo", 1), acopio: true }, pedido("PED-2", "listo", 2)]);
+    expect(renglones.map((r) => r.numero)).toEqual(["PED-2"]);
+    expect(total).toBe(1);
+    expect(enAcopio).toBe(1);
   });
 
   it("no manda el total al depósito", () => {

@@ -40,6 +40,8 @@ const NOMBRES: Record<string, string> = {
   monto: "Monto",
   importe: "Importe",
   fecha: "Fecha",
+  codigoRegimen: "Régimen",
+  fechaPago: "Fecha de pago del cheque",
 };
 
 /** «precioPorPasada» → «Precio por pasada», si no está en la lista. */

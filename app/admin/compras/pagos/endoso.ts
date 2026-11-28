@@ -12,6 +12,10 @@ export interface ChequeDeCartera {
   cliente: string | null;
   /** En qué circuito está el valor (lo decide Go: fragmentos.CircuitoDelCheque). */
   circuito: Circuito;
+  /** De una venta con su factura esperando el CAE. */
+  esperaCae?: boolean;
+  /** Espera el CAE y la regla «endoso_espera_cae» no lo deja endosar todavía. */
+  trabado?: boolean;
 }
 
 /** Lo que este módulo necesita de un renglón del pago. */
@@ -38,14 +42,18 @@ export function chequesParaEndosar(
   cartera: ChequeDeCartera[],
   medio: string,
   circuito: Circuito | "",
-): { endosables: ChequeDeCartera[]; delOtroCircuito: ChequeDeCartera[] } {
-  if (medio !== "cheque" && medio !== "echeq") return { endosables: [], delOtroCircuito: [] };
+): { endosables: ChequeDeCartera[]; delOtroCircuito: ChequeDeCartera[]; esperanCae: ChequeDeCartera[] } {
+  if (medio !== "cheque" && medio !== "echeq") return { endosables: [], delOtroCircuito: [], esperanCae: [] };
   const buscado = medio === "echeq" ? "echeq" : "fisico";
   const pago = circuito || "blanco";
   const delTipo = cartera.filter((c) => c.tipo === buscado);
+  // Los trabados por la regla van aparte, bajo «Espera CAE»: así se ve por
+  // qué no se eligen, igual que los del otro circuito (mes 23, M2S2-040).
+  const libres = delTipo.filter((c) => !c.trabado);
   return {
-    endosables: delTipo.filter((c) => c.circuito === pago),
-    delOtroCircuito: delTipo.filter((c) => c.circuito !== pago),
+    endosables: libres.filter((c) => c.circuito === pago),
+    delOtroCircuito: libres.filter((c) => c.circuito !== pago),
+    esperanCae: delTipo.filter((c) => c.trabado),
   };
 }
 
@@ -64,7 +72,7 @@ export function sinEndososDelOtroCircuito<R extends RenglonConCheque>(
   return partes.map((p) => {
     if (!p.chequeId) return p;
     const cheque = cartera.find((c) => c.id === p.chequeId);
-    if (!cheque || cheque.circuito === pago) return p;
+    if (!cheque || (cheque.circuito === pago && !cheque.trabado)) return p;
     return { ...p, chequeId: "", importe: p.importe === String(cheque.importe) ? "" : p.importe };
   });
 }

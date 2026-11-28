@@ -22,6 +22,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Defines values for CierreAsientoCircuito.
@@ -41,13 +42,16 @@ func (e CierreAsientoCircuito) Valid() bool {
 
 // Defines values for CobranzasFilasTipo.
 const (
-	EnLinea CobranzasFilasTipo = "en-linea"
-	Recibo  CobranzasFilasTipo = "recibo"
+	Devolucion CobranzasFilasTipo = "devolucion"
+	EnLinea    CobranzasFilasTipo = "en-linea"
+	Recibo     CobranzasFilasTipo = "recibo"
 )
 
 // Valid indicates whether the value is a known member of the CobranzasFilasTipo enum.
 func (e CobranzasFilasTipo) Valid() bool {
 	switch e {
+	case Devolucion:
+		return true
 	case EnLinea:
 		return true
 	case Recibo:
@@ -123,6 +127,24 @@ func (e AsientosCsvParamsCircuito) Valid() bool {
 	case AsientosCsvParamsCircuitoBlanco:
 		return true
 	case AsientosCsvParamsCircuitoNegro:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CargarLiquidacionJSONBodyCircuito.
+const (
+	CargarLiquidacionJSONBodyCircuitoBlanco CargarLiquidacionJSONBodyCircuito = "blanco"
+	CargarLiquidacionJSONBodyCircuitoNegro  CargarLiquidacionJSONBodyCircuito = "negro"
+)
+
+// Valid indicates whether the value is a known member of the CargarLiquidacionJSONBodyCircuito enum.
+func (e CargarLiquidacionJSONBodyCircuito) Valid() bool {
+	switch e {
+	case CargarLiquidacionJSONBodyCircuitoBlanco:
+		return true
+	case CargarLiquidacionJSONBodyCircuitoNegro:
 		return true
 	default:
 		return false
@@ -219,11 +241,18 @@ type CierreAsientoCircuito string
 
 // CierrePendiente defines model for CierrePendiente.
 type CierrePendiente struct {
-	Cantidad int    `json:"cantidad"`
-	Clave    string `json:"clave"`
-	Detalle  string `json:"detalle"`
-	Donde    string `json:"donde"`
-	Titulo   string `json:"titulo"`
+	Cantidad int `json:"cantidad"`
+
+	// Casos Los casos del aviso uno por uno, con su importe y a dónde se resuelve cada uno
+	Casos *[]struct {
+		Donde   string   `json:"donde"`
+		Importe *float64 `json:"importe,omitempty"`
+		Nombre  string   `json:"nombre"`
+	} `json:"casos,omitempty"`
+	Clave   string `json:"clave"`
+	Detalle string `json:"detalle"`
+	Donde   string `json:"donde"`
+	Titulo  string `json:"titulo"`
 }
 
 // CierreResumen defines model for CierreResumen.
@@ -231,6 +260,7 @@ type CierreResumen struct {
 	Cerrado MesCerrado          `json:"cerrado"`
 	Compras CierreTotalesConIva `json:"compras"`
 	Gastos  CierreTotales       `json:"gastos"`
+	GastosB CierreTotales       `json:"gastosB"`
 
 	// Iva La posición de IVA con percepciones, retenciones y los saldos técnico y de libre disponibilidad que se arrastran
 	Iva struct {
@@ -250,10 +280,16 @@ type CierreResumen struct {
 	PercepcionesIibb CierreTotales `json:"percepcionesIibb"`
 
 	// PosicionIva Débito menos crédito del mes
-	PosicionIva            float64            `json:"posicionIva"`
+	PosicionIva float64 `json:"posicionIva"`
+
+	// PrimerMes El primer mes con algún movimiento (YYYY-MM)
+	PrimerMes              string             `json:"primerMes"`
 	Resultado              ResultadoComparado `json:"resultado"`
 	RetencionesPracticadas CierreTotales      `json:"retencionesPracticadas"`
 	RetencionesSufridas    CierreTotales      `json:"retencionesSufridas"`
+
+	// TarjetasSinLiquidar Lo cobrado con tarjeta hasta el fin del mes que todavía no liquidó
+	TarjetasSinLiquidar float64 `json:"tarjetasSinLiquidar"`
 
 	// Vendido facturado + sinCae + interno + sinFactura = total, exacto; la misma base que ventasNetas del resultado
 	Vendido CierreVendido       `json:"vendido"`
@@ -322,6 +358,29 @@ type Cobranzas struct {
 
 // CobranzasFilasTipo defines model for Cobranzas.Filas.Tipo.
 type CobranzasFilasTipo string
+
+// EstadoDelSistema defines model for EstadoDelSistema.
+type EstadoDelSistema struct {
+	Pendientes int `json:"pendientes"`
+	Tareas     []struct {
+		Error       *string    `json:"error"`
+		Estado      string     `json:"estado"`
+		IniciadaAt  time.Time  `json:"iniciadaAt"`
+		Periodo     string     `json:"periodo"`
+		Tarea       string     `json:"tarea"`
+		TerminadaAt *time.Time `json:"terminadaAt"`
+	} `json:"tareas"`
+	Trabajos []struct {
+		CreatedAt   time.Time  `json:"createdAt"`
+		Estado      string     `json:"estado"`
+		Id          string     `json:"id"`
+		Intentos    int        `json:"intentos"`
+		MaxIntentos int        `json:"maxIntentos"`
+		TerminadoAt *time.Time `json:"terminadoAt"`
+		Tipo        string     `json:"tipo"`
+		UltimoError *string    `json:"ultimoError"`
+	} `json:"trabajos"`
+}
 
 // InicioActividad defines model for InicioActividad.
 type InicioActividad struct {
@@ -452,6 +511,9 @@ type NumerosDelDueno struct {
 		FacturasVencidas   int     `json:"facturasVencidas"`
 		Proveedores        int     `json:"proveedores"`
 
+		// RemitosSinFactura La parte de sinFactura que es mercadería recibida con remito y sin factura
+		RemitosSinFactura float64 `json:"remitosSinFactura"`
+
 		// SinFactura Lo que el libro debe por encima de las facturas con saldo (saldo inicial, ajustes, remitos)
 		SinFactura float64 `json:"sinFactura"`
 		Total      float64 `json:"total"`
@@ -475,31 +537,7 @@ type NumerosDelDueno struct {
 		// Vencido Solo de la cuenta corriente
 		Vencido float64 `json:"vencido"`
 	} `json:"meDeben"`
-	PlataHoy struct {
-		// Banco Lo que se movió hoy en el banco
-		Banco      float64 `json:"banco"`
-		BancoEntro float64 `json:"bancoEntro"`
-		BancoSalio float64 `json:"bancoSalio"`
-
-		// CajaFuerte Lo retirado hoy de las cajas a la caja fuerte
-		CajaFuerte float64 `json:"cajaFuerte"`
-		Cajas      []struct {
-			BranchId string `json:"branchId"`
-			Cerrada  bool   `json:"cerrada"`
-
-			// Esperado Lo que tendría que haber
-			Esperado float64 `json:"esperado"`
-			Sucursal string  `json:"sucursal"`
-		} `json:"cajas"`
-		Cheques            Monto   `json:"cheques"`
-		ChequesDepositados Monto   `json:"chequesDepositados"`
-		Efectivo           float64 `json:"efectivo"`
-		MercadoPago        float64 `json:"mercadoPago"`
-
-		// Tarjetas A acreditar; no suma al total
-		Tarjetas float64 `json:"tarjetas"`
-		Total    float64 `json:"total"`
-	} `json:"plataHoy"`
+	PlataHoy PlataHoy `json:"plataHoy"`
 }
 
 // PendienteDelRol defines model for PendienteDelRol.
@@ -511,6 +549,39 @@ type PendienteDelRol struct {
 	Texto    string  `json:"texto"`
 	Urgente  *bool   `json:"urgente,omitempty"`
 	Vencido  *bool   `json:"vencido,omitempty"`
+}
+
+// PlataHoy defines model for PlataHoy.
+type PlataHoy struct {
+	// Banco Lo que se movió hoy en el banco
+	Banco      float64 `json:"banco"`
+	BancoEntro float64 `json:"bancoEntro"`
+
+	// BancoSaldo El último saldo cargado más lo que entró y menos lo que salió desde entonces; sin saldo cargado, null y el banco no suma al total
+	BancoSaldo   *float64   `json:"bancoSaldo"`
+	BancoSaldoAl *time.Time `json:"bancoSaldoAl"`
+	BancoSalio   float64    `json:"bancoSalio"`
+
+	// CajaFuerte Lo retirado hoy de las cajas a la caja fuerte
+	CajaFuerte float64 `json:"cajaFuerte"`
+	Cajas      []struct {
+		BranchId string `json:"branchId"`
+		Cerrada  bool   `json:"cerrada"`
+
+		// Esperado Lo que tendría que haber
+		Esperado float64 `json:"esperado"`
+		Sucursal string  `json:"sucursal"`
+	} `json:"cajas"`
+	Cheques            Monto   `json:"cheques"`
+	ChequesDepositados Monto   `json:"chequesDepositados"`
+	Efectivo           float64 `json:"efectivo"`
+	MercadoPago        float64 `json:"mercadoPago"`
+
+	// Tarjetas A acreditar; no suma al total
+	Tarjetas float64 `json:"tarjetas"`
+
+	// Total Lo que hay: efectivo, caja fuerte, Mercado Pago, cheques y el saldo del banco si se cargó. Lo movido hoy en el banco no suma
+	Total float64 `json:"total"`
 }
 
 // ReporteDeVentas defines model for ReporteDeVentas.
@@ -564,7 +635,10 @@ type ReporteTotales struct {
 	NetoCosteado   float64 `json:"netoCosteado"`
 	NetoVenta      float64 `json:"netoVenta"`
 
-	// Total Con IVA; subtotales de renglones o total de los pedidos
+	// Renglones Lo que suman con IVA las filas del corte; en los cortes por renglón
+	Renglones float64 `json:"renglones"`
+
+	// Total Con IVA
 	Total float64 `json:"total"`
 }
 
@@ -584,22 +658,35 @@ type ReposicionFila struct {
 	Categoria            string   `json:"categoria"`
 	CategoriaSlug        string   `json:"categoriaSlug"`
 	Cobertura            *float64 `json:"cobertura"`
+	ComprarAserradero    float64  `json:"comprarAserradero"`
+	ComprarCentral       float64  `json:"comprarCentral"`
 	Disponible           float64  `json:"disponible"`
 	DisponibleAserradero float64  `json:"disponibleAserradero"`
 	DisponibleCentral    float64  `json:"disponibleCentral"`
 	Medida               string   `json:"medida"`
-	ProductId            string   `json:"productId"`
-	Producto             string   `json:"producto"`
-	Proveedor            *string  `json:"proveedor,omitempty"`
 
-	// ProveedorId El proveedor habitual (el último con el que se cargó un código)
+	// Negativo Alguna sucursal tiene la medida en negativo
+	Negativo  bool    `json:"negativo"`
+	ProductId string  `json:"productId"`
+	Producto  string  `json:"producto"`
+	Proveedor *string `json:"proveedor,omitempty"`
+
+	// ProveedorId El proveedor al que se le compró por última vez la medida (o el último con el que se cargó un código)
 	ProveedorId *string `json:"proveedorId,omitempty"`
 	Rubro       *string `json:"rubro"`
 	Sku         *string `json:"sku"`
-	Sugerido    float64 `json:"sugerido"`
-	Unidad      string  `json:"unidad"`
-	VariantId   string  `json:"variantId"`
-	Vendido     float64 `json:"vendido"`
+
+	// Sugerido Lo que se compra en la vista elegida
+	Sugerido float64 `json:"sugerido"`
+
+	// TrasladoAAserradero Lo que conviene traer de Casa Central en vez de comprar
+	TrasladoAAserradero float64 `json:"trasladoAAserradero"`
+
+	// TrasladoACentral Lo que conviene traer del Aserradero en vez de comprar
+	TrasladoACentral float64 `json:"trasladoACentral"`
+	Unidad           string  `json:"unidad"`
+	VariantId        string  `json:"variantId"`
+	Vendido          float64 `json:"vendido"`
 }
 
 // Resultado defines model for Resultado.
@@ -704,9 +791,24 @@ type AsientosCsvParamsCircuito string
 
 // CerrarElMesJSONBody defines parameters for CerrarElMes.
 type CerrarElMesJSONBody struct {
-	Cerrado bool   `json:"cerrado"`
-	Periodo string `json:"periodo"`
+	Cerrado bool `json:"cerrado"`
+
+	// Motivo Por qué se reabre; obligatorio para reabrir
+	Motivo  *string `json:"motivo,omitempty"`
+	Periodo string  `json:"periodo"`
 }
+
+// CargarLiquidacionJSONBody defines parameters for CargarLiquidacion.
+type CargarLiquidacionJSONBody struct {
+	Bruto      float64                            `json:"bruto"`
+	Circuito   *CargarLiquidacionJSONBodyCircuito `json:"circuito,omitempty"`
+	Comision   float64                            `json:"comision"`
+	Fecha      string                             `json:"fecha"`
+	Referencia *string                            `json:"referencia,omitempty"`
+}
+
+// CargarLiquidacionJSONBodyCircuito defines parameters for CargarLiquidacion.
+type CargarLiquidacionJSONBodyCircuito string
 
 // PendientesDelCierreParams defines parameters for PendientesDelCierre.
 type PendientesDelCierreParams struct {
@@ -746,6 +848,11 @@ type PendientesDelRolParamsRol string
 // StockParaReponerParams defines parameters for StockParaReponer.
 type StockParaReponerParams struct {
 	Limite *int `form:"limite,omitempty" json:"limite,omitempty"`
+}
+
+// CargarSaldoDelBancoJSONBody defines parameters for CargarSaldoDelBanco.
+type CargarSaldoDelBancoJSONBody struct {
+	Monto float64 `json:"monto"`
 }
 
 // ReporteDeReposicionParams defines parameters for ReporteDeReposicion.
@@ -826,6 +933,12 @@ type VentasPorMesParams struct {
 // CerrarElMesJSONRequestBody defines body for CerrarElMes for application/json ContentType.
 type CerrarElMesJSONRequestBody CerrarElMesJSONBody
 
+// CargarLiquidacionJSONRequestBody defines body for CargarLiquidacion for application/json ContentType.
+type CargarLiquidacionJSONRequestBody CargarLiquidacionJSONBody
+
+// CargarSaldoDelBancoJSONRequestBody defines body for CargarSaldoDelBanco for application/json ContentType.
+type CargarSaldoDelBancoJSONRequestBody CargarSaldoDelBancoJSONBody
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 
@@ -837,6 +950,9 @@ type ServerInterface interface {
 
 	// (POST /api/v1/admin/cierre/cerrado)
 	CerrarElMes(w http.ResponseWriter, r *http.Request)
+
+	// (POST /api/v1/admin/cierre/liquidaciones)
+	CargarLiquidacion(w http.ResponseWriter, r *http.Request)
 
 	// (GET /api/v1/admin/cierre/pendientes)
 	PendientesDelCierre(w http.ResponseWriter, r *http.Request, params PendientesDelCierreParams)
@@ -868,6 +984,9 @@ type ServerInterface interface {
 	// (GET /api/v1/admin/inicio/reponer)
 	StockParaReponer(w http.ResponseWriter, r *http.Request, params StockParaReponerParams)
 
+	// (POST /api/v1/admin/inicio/saldo-banco)
+	CargarSaldoDelBanco(w http.ResponseWriter, r *http.Request)
+
 	// (GET /api/v1/admin/inicio/ventas-por-sucursal)
 	InicioVentasPorSucursal(w http.ResponseWriter, r *http.Request)
 
@@ -885,6 +1004,12 @@ type ServerInterface interface {
 
 	// (GET /api/v1/admin/reportes/ventas/meses)
 	VentasPorMes(w http.ResponseWriter, r *http.Request, params VentasPorMesParams)
+
+	// (GET /api/v1/admin/sistema)
+	EstadoDelSistema(w http.ResponseWriter, r *http.Request)
+
+	// (POST /api/v1/admin/sistema/trabajos/{id}/reintentar)
+	ReintentarTrabajo(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -993,6 +1118,20 @@ func (siw *ServerInterfaceWrapper) CerrarElMes(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CerrarElMes(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CargarLiquidacion operation middleware
+func (siw *ServerInterfaceWrapper) CargarLiquidacion(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CargarLiquidacion(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1273,6 +1412,20 @@ func (siw *ServerInterfaceWrapper) StockParaReponer(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.StockParaReponer(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CargarSaldoDelBanco operation middleware
+func (siw *ServerInterfaceWrapper) CargarSaldoDelBanco(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CargarSaldoDelBanco(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1708,6 +1861,46 @@ func (siw *ServerInterfaceWrapper) VentasPorMes(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// EstadoDelSistema operation middleware
+func (siw *ServerInterfaceWrapper) EstadoDelSistema(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EstadoDelSistema(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReintentarTrabajo operation middleware
+func (siw *ServerInterfaceWrapper) ReintentarTrabajo(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReintentarTrabajo(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -1840,9 +2033,13 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/cierre/pendientes", wrapper.PendientesDelCierre)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/cierre/resumen", wrapper.ResumenDelMes)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/cierre/cerrado", wrapper.CerrarElMes)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/cierre/liquidaciones", wrapper.CargarLiquidacion)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/inicio/metricas", wrapper.MetricasDelResumen)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/cobranzas", wrapper.CobranzasDelPeriodo)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/inicio/dueno", wrapper.NumerosDelDueno)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/inicio/saldo-banco", wrapper.CargarSaldoDelBanco)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/sistema", wrapper.EstadoDelSistema)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/sistema/trabajos/{id}/reintentar", wrapper.ReintentarTrabajo)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/inicio/ventas-por-sucursal", wrapper.InicioVentasPorSucursal)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/inicio/reponer", wrapper.StockParaReponer)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/inicio/actividad", wrapper.ActividadReciente)
@@ -1921,6 +2118,22 @@ func (response CerrarElMes200JSONResponse) VisitCerrarElMesResponse(w http.Respo
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
+}
+
+type CargarLiquidacionRequestObject struct {
+	Body *CargarLiquidacionJSONRequestBody
+}
+
+type CargarLiquidacionResponseObject interface {
+	VisitCargarLiquidacionResponse(w http.ResponseWriter) error
+}
+
+type CargarLiquidacion204Response struct {
+}
+
+func (response CargarLiquidacion204Response) VisitCargarLiquidacionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
 }
 
 type PendientesDelCierreRequestObject struct {
@@ -2151,6 +2364,28 @@ func (response StockParaReponer200JSONResponse) VisitStockParaReponerResponse(w 
 	return err
 }
 
+type CargarSaldoDelBancoRequestObject struct {
+	Body *CargarSaldoDelBancoJSONRequestBody
+}
+
+type CargarSaldoDelBancoResponseObject interface {
+	VisitCargarSaldoDelBancoResponse(w http.ResponseWriter) error
+}
+
+type CargarSaldoDelBanco200JSONResponse PlataHoy
+
+func (response CargarSaldoDelBanco200JSONResponse) VisitCargarSaldoDelBancoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type InicioVentasPorSucursalRequestObject struct {
 }
 
@@ -2334,6 +2569,51 @@ func (response VentasPorMes200JSONResponse) VisitVentasPorMesResponse(w http.Res
 	return err
 }
 
+type EstadoDelSistemaRequestObject struct {
+}
+
+type EstadoDelSistemaResponseObject interface {
+	VisitEstadoDelSistemaResponse(w http.ResponseWriter) error
+}
+
+type EstadoDelSistema200JSONResponse EstadoDelSistema
+
+func (response EstadoDelSistema200JSONResponse) VisitEstadoDelSistemaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReintentarTrabajoRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type ReintentarTrabajoResponseObject interface {
+	VisitReintentarTrabajoResponse(w http.ResponseWriter) error
+}
+
+type ReintentarTrabajo200JSONResponse struct {
+	Ok string `json:"ok"`
+}
+
+func (response ReintentarTrabajo200JSONResponse) VisitReintentarTrabajoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 
@@ -2345,6 +2625,9 @@ type StrictServerInterface interface {
 
 	// (POST /api/v1/admin/cierre/cerrado)
 	CerrarElMes(ctx context.Context, request CerrarElMesRequestObject) (CerrarElMesResponseObject, error)
+
+	// (POST /api/v1/admin/cierre/liquidaciones)
+	CargarLiquidacion(ctx context.Context, request CargarLiquidacionRequestObject) (CargarLiquidacionResponseObject, error)
 
 	// (GET /api/v1/admin/cierre/pendientes)
 	PendientesDelCierre(ctx context.Context, request PendientesDelCierreRequestObject) (PendientesDelCierreResponseObject, error)
@@ -2376,6 +2659,9 @@ type StrictServerInterface interface {
 	// (GET /api/v1/admin/inicio/reponer)
 	StockParaReponer(ctx context.Context, request StockParaReponerRequestObject) (StockParaReponerResponseObject, error)
 
+	// (POST /api/v1/admin/inicio/saldo-banco)
+	CargarSaldoDelBanco(ctx context.Context, request CargarSaldoDelBancoRequestObject) (CargarSaldoDelBancoResponseObject, error)
+
 	// (GET /api/v1/admin/inicio/ventas-por-sucursal)
 	InicioVentasPorSucursal(ctx context.Context, request InicioVentasPorSucursalRequestObject) (InicioVentasPorSucursalResponseObject, error)
 
@@ -2393,6 +2679,12 @@ type StrictServerInterface interface {
 
 	// (GET /api/v1/admin/reportes/ventas/meses)
 	VentasPorMes(ctx context.Context, request VentasPorMesRequestObject) (VentasPorMesResponseObject, error)
+
+	// (GET /api/v1/admin/sistema)
+	EstadoDelSistema(ctx context.Context, request EstadoDelSistemaRequestObject) (EstadoDelSistemaResponseObject, error)
+
+	// (POST /api/v1/admin/sistema/trabajos/{id}/reintentar)
+	ReintentarTrabajo(ctx context.Context, request ReintentarTrabajoRequestObject) (ReintentarTrabajoResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -2510,6 +2802,37 @@ func (sh *strictHandler) CerrarElMes(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CerrarElMesResponseObject); ok {
 		if err := validResponse.VisitCerrarElMesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CargarLiquidacion operation middleware
+func (sh *strictHandler) CargarLiquidacion(w http.ResponseWriter, r *http.Request) {
+	var request CargarLiquidacionRequestObject
+
+	var body CargarLiquidacionJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CargarLiquidacion(ctx, request.(CargarLiquidacionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CargarLiquidacion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CargarLiquidacionResponseObject); ok {
+		if err := validResponse.VisitCargarLiquidacionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -2769,6 +3092,37 @@ func (sh *strictHandler) StockParaReponer(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// CargarSaldoDelBanco operation middleware
+func (sh *strictHandler) CargarSaldoDelBanco(w http.ResponseWriter, r *http.Request) {
+	var request CargarSaldoDelBancoRequestObject
+
+	var body CargarSaldoDelBancoJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CargarSaldoDelBanco(ctx, request.(CargarSaldoDelBancoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CargarSaldoDelBanco")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CargarSaldoDelBancoResponseObject); ok {
+		if err := validResponse.VisitCargarSaldoDelBancoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // InicioVentasPorSucursal operation middleware
 func (sh *strictHandler) InicioVentasPorSucursal(w http.ResponseWriter, r *http.Request) {
 	var request InicioVentasPorSucursalRequestObject
@@ -2923,107 +3277,176 @@ func (sh *strictHandler) VentasPorMes(w http.ResponseWriter, r *http.Request, pa
 	}
 }
 
+// EstadoDelSistema operation middleware
+func (sh *strictHandler) EstadoDelSistema(w http.ResponseWriter, r *http.Request) {
+	var request EstadoDelSistemaRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EstadoDelSistema(ctx, request.(EstadoDelSistemaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EstadoDelSistema")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EstadoDelSistemaResponseObject); ok {
+		if err := validResponse.VisitEstadoDelSistemaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReintentarTrabajo operation middleware
+func (sh *strictHandler) ReintentarTrabajo(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request ReintentarTrabajoRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReintentarTrabajo(ctx, request.(ReintentarTrabajoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReintentarTrabajo")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReintentarTrabajoResponseObject); ok {
+		if err := validResponse.VisitReintentarTrabajoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

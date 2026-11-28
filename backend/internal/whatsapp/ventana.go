@@ -126,5 +126,23 @@ func EsPedidoDeBaja(texto string) bool {
 	return false
 }
 
+// reBajaEnFrase: la baja dicha dentro de una frase («Hola, no quiero recibir
+// más mensajes de ustedes. BAJA»). EsPedidoDeBaja es la del TS y pide el
+// mensaje solo; el WhatsApp también toma estas (M3S4-010).
+var (
+	reBajaMayuscula = regexp.MustCompile(`(^|[^\p{L}])(BAJA|STOP)([^\p{L}]|$)`)
+	reBajaEnFrase   = regexp.MustCompile(`\b(no (quiero|deseo) (recibir|que me (manden|envien|escriban)) mas (mensajes|avisos|nada)|no (me )?(manden|envien|escriban) mas (mensajes|avisos)|(darme|dame|denme) de baja de (los |sus )?(mensajes|avisos|whatsapp))\b`)
+)
+
+// PideLaBaja es EsPedidoDeBaja más la baja dentro de una frase: la palabra
+// BAJA o STOP en mayúsculas, o «no quiero recibir más mensajes». «¿Me das de
+// baja el pedido de ayer?» sigue sin ser una baja.
+func PideLaBaja(texto string) bool {
+	if EsPedidoDeBaja(texto) {
+		return true
+	}
+	return reBajaMayuscula.MatchString(texto) || reBajaEnFrase.MatchString(normalizar(texto))
+}
+
 // EsPedidoDeAlta: «ALTA» vuelve a habilitar los avisos.
 func EsPedidoDeAlta(texto string) bool { return reAlta.MatchString(normalizar(texto)) }

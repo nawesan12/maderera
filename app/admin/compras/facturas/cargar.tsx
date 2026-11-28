@@ -1,14 +1,23 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Calculator, FileText, Loader2, Plus } from "lucide-react";
+import { Calculator, FileText, Loader2, PackageMinus, Plus } from "lucide-react";
 import { BarraGuardar, Hoja, Seccion } from "@/components/admin/formulario";
-import { fechaCorta, formatearMonto, hoyEnArgentina, importeDelCampo, importeParaElCampo, importeIlegible } from "@/lib/formato";
+import {
+  cantidadConUnidad,
+  fechaCorta,
+  formatearMonto,
+  hoyEnArgentina,
+  importeDelCampo,
+  importeParaElCampo,
+  importeIlegible,
+} from "@/lib/formato";
 import { COMPROBANTES_DE_COMPRA, discriminaIva, ivaPropuesto } from "@/lib/fiscal/comprobantes-compra";
 import {
   cargarFacturaDeCompra,
   corregirFacturaDeCompra,
+  verDevolvibles,
   type DatosFacturaCompra,
   type EstadoFacturaCompra,
 } from "./actions";
@@ -107,6 +116,9 @@ export function CargarFactura({
     numeroRemito: string | null;
     fecha: Date;
     neto: number;
+    /** Lo que de su orden no llegó y su neto al costo pedido. */
+    faltantes?: { descripcion: string; cantidad: number; unidad: string | null }[];
+    faltanteNeto?: number;
   }[];
   /** Las facturas con saldo: a una de ellas se aplica una nota de crédito. */
   porPagar?: { id: string; supplierId: string; numero: string; saldo: number }[];
@@ -136,7 +148,15 @@ export function CargarFactura({
   const [neto, setNeto] = useState(texto(corregir?.neto ?? 0));
   const [iva21, setIva21] = useState(texto(corregir?.iva21 ?? 0));
   // Mientras no se toque ningún IVA, el 21 % sigue al neto (ivaPropuesto).
-  const [ivaTocado, setIvaTocado] = useState(Boolean(corregir));
+  // Al corregir, también si el IVA cargado era el 21 % del neto: cambiar el
+  // neto dejaba el IVA viejo y había que recalcularlo a mano (M2S3-054).
+  const [ivaTocado, setIvaTocado] = useState(
+    Boolean(corregir) &&
+      !(
+        corregir!.iva105 + corregir!.iva27 === 0 &&
+        Math.abs(corregir!.iva21 - ivaPropuesto(corregir!.neto, corregir!.tipo)) < 0.011
+      ),
+  );
   const [iva105, setIva105] = useState(texto(corregir?.iva105 ?? 0));
   const [iva27, setIva27] = useState(texto(corregir?.iva27 ?? 0));
   const [exento, setExento] = useState(texto(corregir?.exento ?? 0));
@@ -153,10 +173,42 @@ export function CargarFactura({
   );
   const [totalPapel, setTotalPapel] = useState("");
   const [motivo, setMotivo] = useState("");
+  const [faltaMotivo, setFaltaMotivo] = useState(false);
+  // Una diferencia grande contra lo recibido pide un segundo toque: un
+  // remito equivocado cargaba un ajuste de −$ 28 millones de un toque
+  // (M2S3-014).
+  const [diferenciaVista, setDiferenciaVista] = useState(false);
+  // Lo que una nota de crédito devuelve (M3S2-016): por renglón de las
+  // recepciones del proveedor, la cantidad que sale del stock.
+  const [devolviblesDe, setDevolviblesDe] = useState<{ de: string; filas: Awaited<ReturnType<typeof verDevolvibles>> }>({
+    de: "",
+    filas: [],
+  });
+  const [devuelve, setDevuelve] = useState<Record<string, string>>({});
 
   const proveedor = proveedores.find((p) => p.id === supplierId);
-  const delProveedor = corregir ? [] : recepciones.filter((r) => r.supplierId === supplierId);
+  // Los remitos en orden (venían desordenados, M2S1-127).
+  const delProveedor = corregir
+    ? []
+    : recepciones
+        .filter((r) => r.supplierId === supplierId)
+        .sort((a, b) => (a.numeroRemito ?? "").localeCompare(b.numeroRemito ?? "", "es", { numeric: true }));
   const esCredito = tipo.startsWith("nota_credito");
+  const esNota = tipo.startsWith("nota_");
+
+  const pideDevolvibles = esCredito && Boolean(supplierId) && !corregir;
+  useEffect(() => {
+    if (!pideDevolvibles) return;
+    let vivo = true;
+    void verDevolvibles(supplierId).then((filas) => {
+      if (vivo) setDevolviblesDe({ de: supplierId, filas });
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [pideDevolvibles, supplierId]);
+  // Los del proveedor elegido, solo en una nota de crédito.
+  const devolvibles = pideDevolvibles && devolviblesDe.de === supplierId ? devolviblesDe.filas : [];
   const aCorregir = corregir || !esCredito ? [] : porPagar.filter((f) => f.supplierId === supplierId);
   const netoRecibido =
     Math.round(delProveedor.filter((r) => remitos.includes(r.id)).reduce((s, r) => s + r.neto, 0) * 100) / 100;
@@ -175,13 +227,36 @@ export function CargarFactura({
    */
   function cambiarNeto(v: string, tipoDe: string = tipo) {
     setNeto(v);
+    setDiferenciaVista(false);
     if (!ivaTocado) {
       const iva = ivaPropuesto(importeDelCampo(v), tipoDe);
       setIva21(iva > 0 ? importeParaElCampo(iva) : "");
     }
+    // Sin remito tildado, el que tiene justo ese neto se marca solo
+    // (M2S3-014: el que daba diferencia 0 era el correcto).
+    if (!corregir && remitos.length === 0 && !tipoDe.startsWith("nota_")) {
+      const iguales = delProveedor.filter((r) => Math.abs(r.neto - importeDelCampo(v)) < 0.01);
+      if (iguales.length === 1) setRemitos([iguales[0].id]);
+    }
   }
   function cambiarTipo(t: Tipo) {
     setTipo(t);
+    // Una nota no cubre una recepción y los remitos no se ven: el que venía
+    // tildado solo (M2S1-112) quedaba marcado a escondidas, con su neto, y
+    // la carga decía «vinculá la factura» (mes 23, M2S3-016). Al pasar a
+    // nota se destilda, y el neto que había puesto el remito se vacía.
+    if (!corregir && t.startsWith("nota_") && remitos.length > 0) {
+      setRemitos([]);
+      setAjustarCosto(false);
+      cambiarNeto(n(neto) === netoRecibido ? "" : neto, t);
+      return;
+    }
+    // De vuelta a factura, el único remito del proveedor se vuelve a marcar.
+    if (!corregir && !t.startsWith("nota_") && tipo.startsWith("nota_") && remitos.length === 0 && delProveedor.length === 1 && neto === "") {
+      setRemitos([delProveedor[0].id]);
+      cambiarNeto(importeParaElCampo(delProveedor[0].neto), t);
+      return;
+    }
     cambiarNeto(neto, t);
   }
   function tocarIva(set: (v: string) => void) {
@@ -195,12 +270,44 @@ export function CargarFactura({
     discriminaIva(tipo) && n(neto) > 0 && n(iva21) + n(iva105) + n(iva27) + n(exento) === 0;
   // Lo que la factura cobra de más (o de menos) sobre lo recibido.
   const contraRecibido = remitos.length > 0 && neto !== "" ? Math.round((n(neto) - netoRecibido) * 100) / 100 : 0;
+  // Si la diferencia es justo lo que de la orden no llegó, cobra mercadería
+  // que no entró: no se pasa al costo (M3S3-009).
+  const tildados = delProveedor.filter((r) => remitos.includes(r.id));
+  const faltanteNeto = Math.round(tildados.reduce((s, r) => s + (r.faltanteNeto ?? 0), 0) * 100) / 100;
+  const porCantidad = faltanteNeto > 0 && Math.abs(contraRecibido - faltanteNeto) < 1;
+  const faltantes = tildados.flatMap((r) => r.faltantes ?? []);
+  const diferenciaGrande =
+    remitos.length > 0 && !porCantidad && Math.abs(contraRecibido) > Math.max(1, netoRecibido * 0.2);
+  const devoluciones = devolvibles
+    .map((r) => ({ itemId: r.id, cantidad: Number((devuelve[r.id] ?? "").replace(",", ".")) }))
+    .filter((d) => d.cantidad > 0);
 
   function elegirProveedor(id: string) {
     setSupplierId(id);
-    setRemitos([]);
     setAplicaA("");
-    cambiarTipo(tipoSegunCondicion(proveedores.find((p) => p.id === id)?.condicionIva));
+    setDevuelve({});
+    const segun = tipoSegunCondicion(proveedores.find((p) => p.id === id)?.condicionIva);
+    // Si ya se eligió una nota, sigue siendo nota (con la letra del
+    // proveedor): volvía a «Factura» y tildaba su remito.
+    const nota = esNota ? (`${tipo.slice(0, -1)}${segun.slice(-1)}` as Tipo) : null;
+    setTipo(nota ?? segun);
+    setDiferenciaVista(false);
+    if (!ivaTocado) {
+      const iva = ivaPropuesto(n(neto), nota ?? segun);
+      setIva21(iva > 0 ? importeParaElCampo(iva) : "");
+    }
+    // El único remito sin facturar del proveedor viene marcado (M2S1-112).
+    const suyos = corregir || nota ? [] : recepciones.filter((r) => r.supplierId === id);
+    if (suyos.length === 1) {
+      setRemitos([suyos[0].id]);
+      setNeto(importeParaElCampo(suyos[0].neto));
+      if (!ivaTocado) {
+        const iva = ivaPropuesto(suyos[0].neto, tipoSegunCondicion(proveedores.find((p) => p.id === id)?.condicionIva));
+        setIva21(iva > 0 ? importeParaElCampo(iva) : "");
+      }
+    } else {
+      setRemitos([]);
+    }
   }
 
   /*
@@ -215,6 +322,7 @@ export function CargarFactura({
     if (neto === "" || n(neto) === suma(remitos)) cambiarNeto(nuevos.length ? importeParaElCampo(suma(nuevos)) : "");
     setRemitos(nuevos);
     setAjustarCosto(false);
+    setDiferenciaVista(false);
   }
 
   function limpiar() {
@@ -234,9 +342,26 @@ export function CargarFactura({
     setAjustarCosto(false);
     setVence(null);
     setIvaTocado(false);
+    setDevuelve({});
+    setDiferenciaVista(false);
   }
 
   function guardar() {
+    // El motivo de la corrección: se marca y se dice, en vez de dejar el
+    // botón gris sin explicación (M2S3-054).
+    if (corregir && motivo.trim() === "") {
+      setFaltaMotivo(true);
+      setEstado({ error: "Poné el motivo de la corrección." });
+      document.getElementById("factura-motivo")?.focus();
+      return;
+    }
+    if (diferenciaGrande && !diferenciaVista) {
+      setDiferenciaVista(true);
+      setEstado({
+        error: `La factura da ${contraRecibido > 0 ? "+" : "−"}${formatearMonto(Math.abs(contraRecibido))} contra los remitos marcados: revisalos.`,
+      });
+      return;
+    }
     empezar(async () => {
       const datos: DatosFacturaCompra = {
         supplierId,
@@ -244,7 +369,7 @@ export function CargarFactura({
         puntoVenta: Number(puntoVenta || 0),
         numero: Number(numero || 0),
         fechaEmision,
-        fechaVencimiento: vence || undefined,
+        fechaVencimiento: esCredito ? undefined : vence || undefined,
         cae,
         neto: n(neto),
         iva21: n(iva21),
@@ -254,11 +379,14 @@ export function CargarFactura({
         percepciones,
         percepcionIva: n(percepcionIva),
         percepcionIibb: n(percepcionIibb),
-        receiptId: remitos[0],
-        receiptIds: remitos.slice(1),
+        receiptId: esNota ? undefined : remitos[0],
+        receiptIds: esNota ? [] : remitos.slice(1),
         aplicaA: esCredito && aplicaA ? aplicaA : undefined,
-        ajustarCosto: ajustarCosto && Math.abs(contraRecibido) > 0.01,
+        ajustarCosto: ajustarCosto && !porCantidad && Math.abs(contraRecibido) > 0.01,
+        ...(esCredito && devoluciones.length > 0 ? { devoluciones } : {}),
       };
+      // Una nota de crédito no vence (M2S2-084).
+      if (esCredito) datos.fechaVencimiento = undefined;
       const resultado = corregir
         ? await corregirFacturaDeCompra(corregir.id, { ...datos, motivo })
         : await cargarFacturaDeCompra(datos);
@@ -295,6 +423,20 @@ export function CargarFactura({
     <div className="space-y-3">
       <Hoja>
         <Seccion titulo="Comprobante" icono={FileText}>
+          {/* Al corregir, el motivo va arriba: al final del formulario el
+              botón quedaba gris lejos de lo que faltaba (M2S3-054). */}
+          {corregir && (
+            <label className="block md:col-span-2">
+              <span className="text-base font-medium">Motivo de la corrección</span>
+              <input
+                id="factura-motivo"
+                value={motivo}
+                aria-invalid={(faltaMotivo && motivo.trim() === "") || undefined}
+                onChange={(e) => setMotivo(e.target.value)}
+                className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+              />
+            </label>
+          )}
           <label className="block md:col-span-2">
             <span className="text-base font-medium">Proveedor</span>
             <select
@@ -329,8 +471,10 @@ export function CargarFactura({
             </select>
           </label>
 
-          <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3">
-            <Campo etiqueta="Punto de venta" valor={puntoVenta} onCambio={setPuntoVenta} numerico entero />
+          {/* «Pto. de venta» entra en un renglón: «Punto de venta» se partía
+              y su campo quedaba más abajo que el del número (M2S1-127). */}
+          <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-end gap-3">
+            <Campo etiqueta="Pto. de venta" valor={puntoVenta} onCambio={setPuntoVenta} numerico entero />
             <Campo etiqueta="Número" valor={numero} onCambio={setNumero} numerico entero />
           </div>
 
@@ -343,19 +487,22 @@ export function CargarFactura({
             />
           </label>
 
-          <label className="block">
-            <span className="text-base font-medium">Vence</span>
-            <CampoFecha
-              value={vence}
-              min={fechaEmision}
-              onChange={(e) => setVence(e.target.value || null)}
-              className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-            />
-          </label>
+          {/* Una nota de crédito no vence: resta (mes simulado, M2S1-126). */}
+          {!esCredito && (
+            <label className="block">
+              <span className="text-base font-medium">Vence</span>
+              <CampoFecha
+                value={vence}
+                min={fechaEmision}
+                onChange={(e) => setVence(e.target.value || null)}
+                className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+              />
+            </label>
+          )}
 
           <Campo etiqueta="CAE" valor={cae} onCambio={setCae} />
 
-          {delProveedor.length > 0 && !esCredito && (
+          {delProveedor.length > 0 && !esNota && (
             <fieldset className="md:col-span-2">
               <legend className="text-base font-medium">Remitos que cubre</legend>
               <div className="mt-1 grid gap-2 sm:grid-cols-2">
@@ -386,6 +533,48 @@ export function CargarFactura({
                 })}
               </div>
             </fieldset>
+          )}
+
+          {/* Lo que se devuelve: sale del stock y corrige el costo, atado a
+              la nota (M3S2-016). */}
+          {esCredito && devolvibles.length > 0 && (
+            <details className="md:col-span-2" open={devoluciones.length > 0 || undefined}>
+              <summary className="flex min-h-11 cursor-pointer items-center gap-2 text-base font-medium">
+                <PackageMinus className="h-4 w-4" aria-hidden="true" />
+                Devuelve mercadería
+                {devoluciones.length > 0 && (
+                  <span className="tabular text-muted-foreground">· {devoluciones.length}</span>
+                )}
+              </summary>
+              <ul className="mt-2 divide-y divide-linea-tenue">
+                {devolvibles.map((r) => {
+                  const queda = r.recibido - r.devuelto;
+                  const pedido = Number((devuelve[r.id] ?? "").replace(",", "."));
+                  return (
+                    <li key={r.id} className="flex items-center gap-3 py-2">
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-base">{r.descripcion}</span>
+                        <span className="block text-sm text-muted-foreground">
+                          {r.remito && <span className="codigo">{r.remito}</span>}
+                          {r.remito ? " · " : ""}
+                          <span className="tabular">
+                            {cantidadConUnidad(queda, r.unidad, r.descripcion)} · {formatearMonto(r.costoUnitario)}
+                          </span>
+                        </span>
+                      </span>
+                      <input
+                        inputMode="decimal"
+                        value={devuelve[r.id] ?? ""}
+                        aria-label={`Cuánto se devuelve de ${r.descripcion}${r.remito ? ` del remito ${r.remito}` : ""}`}
+                        aria-invalid={pedido > queda + 0.0001 || undefined}
+                        onChange={(e) => setDevuelve((p) => ({ ...p, [r.id]: e.target.value }))}
+                        className="tabular h-11 w-20 shrink-0 rounded-lg border border-linea bg-card px-2 text-right text-base"
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+            </details>
           )}
 
           {aCorregir.length > 0 && (
@@ -431,15 +620,26 @@ export function CargarFactura({
                   {contraRecibido > 0 ? "+" : "−"}
                   {formatearMonto(Math.abs(contraRecibido))} contra lo recibido
                 </span>
-                <label className="flex min-h-11 cursor-pointer items-center gap-2 text-base">
-                  <input
-                    type="checkbox"
-                    checked={ajustarCosto}
-                    onChange={(e) => setAjustarCosto(e.target.checked)}
-                    className="h-5 w-5 accent-[var(--accion)]"
-                  />
-                  Pasar al costo
-                </label>
+                {/* Por cantidad, lo que no llegó en lugar de la casilla: no
+                    es un aumento de precio (M3S3-009). */}
+                {porCantidad ? (
+                  <span className="block text-base">
+                    {faltantes
+                      .map((f) => `${cantidadConUnidad(f.cantidad, f.unidad, f.descripcion)} ${f.descripcion}`)
+                      .join(", ")}{" "}
+                    facturadas que no llegaron
+                  </span>
+                ) : (
+                  <label className="flex min-h-11 cursor-pointer items-center gap-2 text-base">
+                    <input
+                      type="checkbox"
+                      checked={ajustarCosto}
+                      onChange={(e) => setAjustarCosto(e.target.checked)}
+                      className="h-5 w-5 accent-[var(--accion)]"
+                    />
+                    Pasar al costo
+                  </label>
+                )}
               </span>
             )}
           </div>
@@ -473,16 +673,6 @@ export function CargarFactura({
               </span>
             )}
           </label>
-          {corregir && (
-            <label className="block md:col-span-2">
-              <span className="text-base font-medium">Motivo de la corrección</span>
-              <input
-                value={motivo}
-                onChange={(e) => setMotivo(e.target.value)}
-                className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-              />
-            </label>
-          )}
         </div>
       </Hoja>
 
@@ -490,18 +680,19 @@ export function CargarFactura({
         <button
           type="button"
           onClick={guardar}
-          disabled={
-            enCurso ||
-            total <= 0 ||
-            importeIlegible(neto) ||
-            importeIlegible(totalPapel) ||
-            !supplierId ||
-            (corregir !== undefined && motivo.trim() === "")
-          }
+          disabled={enCurso || total <= 0 || importeIlegible(neto) || importeIlegible(totalPapel) || !supplierId}
           className="boton-accion inline-flex h-12 items-center gap-2 rounded-xl px-5 text-base font-semibold disabled:opacity-50"
         >
           {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}
-          {corregir ? "Guardar la corrección" : "Cargar la factura"}
+          {corregir
+            ? "Guardar la corrección"
+            : diferenciaVista
+              ? "Cargar igual"
+              : esCredito
+                ? "Cargar la nota de crédito"
+                : tipo.startsWith("nota_debito")
+                  ? "Cargar la nota de débito"
+                  : "Cargar la factura"}
         </button>
         <button
           type="button"

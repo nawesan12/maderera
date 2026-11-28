@@ -47,6 +47,24 @@ type Servicio struct {
 	// SinCandado apaga el bloqueo del carrito al confirmar (solo para ver
 	// fallar la prueba de concurrencia).
 	SinCandado bool
+	// PagoOnline dice si hay con qué cobrar en línea (pagos.Config.Elegir);
+	// nil es que sí (las pruebas).
+	PagoOnline func() bool
+}
+
+// Los medios que la tienda no ofrece cuando falta con qué cobrarlos.
+const (
+	MsjSinPagoOnline     = "El pago online no está disponible. Elegí transferencia, débito o efectivo."
+	MsjSinDatosBancarios = "La transferencia no está disponible. Elegí otro medio de pago."
+)
+
+// HayDatosParaTransferir: la casa cargó un CBU o un alias en /admin/pagos.
+func HayDatosParaTransferir(ctx context.Context, c interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}) (bool, error) {
+	var hay bool
+	err := c.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM datos_bancarios WHERE coalesce(cbu, '') <> '' OR coalesce(alias, '') <> '')`).Scan(&hay)
+	return hay, err
 }
 
 // Nuevo arma el servicio.
@@ -401,7 +419,7 @@ func (s *Servicio) Agregar(ctx context.Context, q Quien, m map[string]any) (Resu
 			VALUES ($1, $2, $3, $4, $5::numeric, $6, $7::numeric, $8, $9)`,
 			cart, item.VariantID, item.Descripcion, item.Unidad, jsmath.Fijo2(item.Cantidad), item.Presentacion, precio,
 			item.Origen, item.Notas)
-		r.Ok = item.Descripcion + " va al presupuesto."
+		r.Ok = item.Descripcion + " va al carrito."
 		return err
 	})
 	return r, err
@@ -433,7 +451,7 @@ func (s *Servicio) AgregarVarios(ctx context.Context, q Quien, items []any) (Res
 			return r, nil
 		}
 	}
-	return Resultado{Ok: fmt.Sprintf("Se agregaron %d productos al presupuesto.", len(items)), TokenNuevo: token}, nil
+	return Resultado{Ok: fmt.Sprintf("Se agregaron %d productos al carrito.", len(items)), TokenNuevo: token}, nil
 }
 
 // CambiarCantidad es cambiarCantidad: cero o menos quita el renglón. Filtra

@@ -38,6 +38,8 @@ const (
 	AsientoSinCAE = "asiento_sin_cae"
 	// H019: el material de un corte por debajo de la media placa.
 	CorteChicoMaterial = "corte_chico_material"
+	// M3S4-016 (00391): el stock de la placa de la casa de ese corte.
+	CorteChicoStock = "corte_chico_stock"
 	// H037: cuándo la lista del cliente obliga a pagar de contado.
 	ContadoPorLista = "contado_por_lista"
 	// H168: si el descuento por medio de pago alcanza al flete.
@@ -58,6 +60,53 @@ const (
 	DatosFiscalesDelCliente = "datos_fiscales_del_cliente"
 	// H032: si la tarjeta en línea pide lote y cupón.
 	LoteYCupon = "lote_y_cupon"
+	// M2S2-018 (00351): si el descuento tipeado reemplaza al de la forma de
+	// pago o se suma.
+	DescuentoConEscala = "descuento_con_escala"
+	// M2S1-180 (00351): si lo que se paga todo en efectivo va sin centavos.
+	RedondeoEfectivo = "redondeo_efectivo"
+	// M2S2-039 (00362): si la factura de compra que da crédito fiscal (A, M)
+	// se carga sin CAE. «opcional» es lo de siempre; «exigido» la frena.
+	CaeEnCompras = "cae_en_compras"
+	// M3S3-002: la deuda cargada a mano en la cuenta de un cliente (el saldo
+	// del sistema anterior, una nota de débito sin comprobante): al circuito
+	// B, como hasta ahora, o al archivo del estudio contra Saldos iniciales.
+	DeudaSinComprobante = "deuda_sin_comprobante"
+	// Mes simulado 2 (M2S1-018): quién pide el PIN de un admin para soltar
+	// mercadería sin cobrar. «deposito»: solo el depósito, que no cobra;
+	// «fuera_de_la_cuenta»: también quien vende, si el cliente no tiene
+	// cuenta corriente o la deuda pasa su límite.
+	EntregarSinCobrar = "entregar_sin_cobrar"
+	// M2S1-145: si las retenciones practicadas también se bajan en el TXT
+	// de importación de SICORE (el diseño de registro lo confirma el
+	// estudio; hasta entonces, solo el CSV).
+	ExportarSicore = "exportar_sicore"
+	// M3S2-027: sobre qué se aplica la alícuota de la retención de IVA: el
+	// neto (como Ganancias) o el total con IVA (8,68 % = 10,5/121 es la
+	// mitad del IVA expresada sobre el total).
+	BaseRetencionIva = "base_retencion_iva"
+	// M2S1-093: quién carga la retención sufrida dentro de un cobro.
+	RetencionEnElCobro = "retencion_en_el_cobro"
+	// M3S3-020: si en la tienda el precio de la lista propia suma el
+	// descuento por medio de pago.
+	EscalaConLista = "escala_con_lista"
+	// M3S2-036 (00453): cómo arranca el interruptor «Activo» en el alta de
+	// un producto. «activo» es lo de siempre (apagado, tampoco lo encuentra
+	// el mostrador); «inactivo», para no publicar uno a medio cargar.
+	AltaDeProducto = "alta_de_producto"
+	// M2S3-020 (00454): qué pedido pasa solo a «listo» con su último corte
+	// terminado. «mostrador» es lo de siempre (los de otro origen los marca
+	// listos el depósito, que sabe qué más falta); «todos», cualquiera.
+	ListoConElCorte = "listo_con_el_corte"
+	// M2S2-040 (00456): el cheque de una venta con su factura esperando el
+	// CAE. «si» es lo de siempre: es blanco (su cobro ya está en Anticipos o
+	// en la transitoria) y se endosa a una factura A; «al_cae» lo deja en la
+	// cartera hasta que llegue el CAE.
+	EndosoEsperaCAE = "endoso_espera_cae"
+	// Mes 23 (00460): a qué redondea el precio que propone la lista del
+	// proveedor. «centavos» es lo de siempre (MDF $ 81.876,92); los demás
+	// suben al peso, a la decena o a la centena, como el ajuste masivo.
+	RedondeoListaProveedor = "redondeo_lista_proveedor"
 )
 
 // Opciones son los valores posibles de cada regla, el de arranque primero.
@@ -67,6 +116,7 @@ var Opciones = map[string][]string{
 	ExcedenteCuentaCorriente:    {"circuito_b", "anticipos"},
 	AsientoSinCAE:               {"al_cae", "transitoria"},
 	CorteChicoMaterial:          {"sin_cargo", "cobrar"},
+	CorteChicoStock:             {"no_mueve", "descuenta"},
 	ContadoPorLista:             {"con_ventaja", "siempre"},
 	DescuentoAlFlete:            {"no", "si"},
 	FacturaAlMonotributista:     {"a", "b"},
@@ -77,6 +127,19 @@ var Opciones = map[string][]string{
 	EtiquetaDelCircuito:         {"b", "sin_factura", "interno"},
 	DatosFiscalesDelCliente:     {"hasta_facturar", "ninguno"},
 	LoteYCupon:                  {"obligatorio", "opcional"},
+	DescuentoConEscala:          {"reemplaza", "suma"},
+	RedondeoEfectivo:            {"no", "al_peso"},
+	CaeEnCompras:                {"opcional", "exigido"},
+	DeudaSinComprobante:         {"circuito_b", "saldo_inicial"},
+	EntregarSinCobrar:           {"deposito", "fuera_de_la_cuenta"},
+	ExportarSicore:              {"no", "si"},
+	BaseRetencionIva:            {"neto", "total"},
+	RetencionEnElCobro:          {"admin", "quien_cobra"},
+	EscalaConLista:              {"si", "no"},
+	AltaDeProducto:              {"activo", "inactivo"},
+	ListoConElCorte:             {"mostrador", "todos"},
+	EndosoEsperaCAE:             {"si", "al_cae"},
+	RedondeoListaProveedor:      {"centavos", "peso", "decena", "centena"},
 }
 
 // Arranque es el valor de una regla cuando la fila no está o tiene algo que

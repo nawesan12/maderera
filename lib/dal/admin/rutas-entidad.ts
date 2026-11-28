@@ -51,6 +51,26 @@ const LISTADOS: Record<string, string> = {
   tienda: "/admin/contenido",
   vendedor: "/admin/clientes/vendedores",
   zona_envio: "/admin/envios",
+  campana: "/admin/campanas",
+  cierre: "/admin/cierre",
+  evento: "/admin/eventos",
+  libro_iva: "/admin/arca/libro-iva",
+  recibo: "/admin/pagos",
+  regla: "/admin/reglas",
+  resena: "/admin/contenido",
+  resena_producto: "/admin/contenido",
+  retencion: "/admin/arca/retenciones",
+  sitio: "/admin/contenido",
+  traslado: "/admin/stock",
+  whatsapp: "/admin/whatsapp",
+  documento: "/admin/documentacion",
+  usuario: "/admin/personal",
+  // El saldo del banco se carga en Cobros; la devolución vive en su pedido
+  // (la bitácora guarda el id de la devolución, no el del pedido); el
+  // trabajo automático, en Sistema.
+  banco: "/admin/pagos",
+  devolucion: "/admin/pedidos",
+  trabajo: "/admin/sistema",
 };
 
 export function rutaDeEntidad(
@@ -82,6 +102,7 @@ export function rutaDeEntidad(
  * las dos se noten en el mismo archivo.
  */
 const ETIQUETAS: Record<string, string> = {
+  banco: "Banco",
   banner: "Cartel del sitio",
   caja: "Caja",
   cheque: "Cheque",
@@ -113,6 +134,24 @@ const ETIQUETAS: Record<string, string> = {
   tienda: "Tienda online",
   vendedor: "Vendedor",
   zona_envio: "Zona de envío",
+  // Con su tilde: «Campana», «Resena» y «Retencion» salían como la clave
+  // (mes simulado, M2S2-088).
+  campana: "Campaña",
+  cierre: "Cierre del mes",
+  devolucion: "Devolución",
+  documento: "Documento",
+  evento: "Evento",
+  libro_iva: "Libro IVA",
+  recibo: "Recibo",
+  regla: "Regla del negocio",
+  resena: "Reseña del negocio",
+  resena_producto: "Reseña de producto",
+  retencion: "Retención",
+  sitio: "Textos del sitio",
+  trabajo: "Trabajo automático",
+  traslado: "Traslado",
+  usuario: "Usuario",
+  whatsapp: "WhatsApp",
 };
 
 /**

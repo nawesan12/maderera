@@ -269,6 +269,20 @@ func TestAjustesYResenas(t *testing.T) {
 	if _, b := pedir(t, adm, "GET", u+"admin/contenido/ajustes", nil); strings.Contains(string(b), "whatsapp_tope_mensajes") {
 		t.Errorf("el tope de mensajes tiene su pantalla: %s", b)
 	}
+	// El bot, el número humano y el umbral de candidatos se cambian en su
+	// pantalla, no como un texto del sitio (M2S1-043, M2S2-093).
+	_, _ = e.pool.Exec(ctx, `insert into site_settings (clave, valor) values ('whatsapp_bot', 'no'), ('whatsapp_numero_humano', ''), ('catalogo.meses_sin_vender_baja', '12') on conflict (clave) do nothing`)
+	if _, b := pedir(t, adm, "GET", u+"admin/contenido/ajustes", nil); strings.Contains(string(b), "whatsapp_bot") ||
+		strings.Contains(string(b), "whatsapp_numero_humano") || strings.Contains(string(b), "meses_sin_vender_baja") || !strings.Contains(string(b), "telefono") {
+		t.Errorf("los textos del sitio traen ajustes de otra pantalla: %s", b)
+	}
+	// Los de la tienda sí: la tarjeta «Qué muestra el sitio» los lee de acá, y
+	// sin ellos los daba por encendidos (mes 23).
+	_, _ = e.pool.Exec(ctx, `insert into site_settings (clave, valor) values ('tienda_activa', 'no'), ('stock_visible', 'no') on conflict (clave) do update set valor = 'no'`)
+	if _, b := pedir(t, adm, "GET", u+"admin/contenido/ajustes", nil); !strings.Contains(string(b), "tienda_activa") || !strings.Contains(string(b), "stock_visible") {
+		t.Errorf("los ajustes no traen los interruptores de la tienda: %s", b)
+	}
+	_, _ = e.pool.Exec(ctx, `update site_settings set valor = 'si' where clave in ('tienda_activa', 'stock_visible')`)
 
 	// Juan compró un fenólico y el pedido se entregó.
 	var producto, variante, categoria, orderID, clienteID string
@@ -278,6 +292,16 @@ func TestAjustesYResenas(t *testing.T) {
 	_ = e.pool.QueryRow(ctx, `select id from customers where email = 'juan@prueba.test'`).Scan(&clienteID)
 	_ = e.pool.QueryRow(ctx, `insert into orders (numero, contacto_nombre, customer_id, estado) values ('PED-1', 'Juan', $1, 'entregado') returning id`, clienteID).Scan(&orderID)
 	_, _ = e.pool.Exec(ctx, `insert into order_items (order_id, variant_id, descripcion, cantidad, precio_unitario, subtotal) values ($1, $2, 'Fenólico 18', 1, 100, 100)`, orderID, variante)
+
+	// Con el retiro sin firmar todavía no se lo llevó: no se reseña (mes 23).
+	_, _ = e.pool.Exec(ctx, `insert into deliveries (numero, order_id, tipo, estado, firma_token) values ('REM-1', $1, 'retiro', 'preparada', 'tok-resena')`, orderID)
+	if _, b := pedir(t, juan, "GET", u+"contenido/mis-resenas", nil); strings.Contains(string(b), `"numeroPedido":"PED-1"`) {
+		t.Errorf("ofrece reseñar con el remito sin firmar: %s", b)
+	}
+	if c, _ := pedir(t, juan, "POST", u+"contenido/mis-resenas", map[string]any{"productId": producto, "orderId": orderID, "estrellas": 5, "texto": "Antes"}); c == 201 {
+		t.Errorf("reseñó con el remito sin firmar")
+	}
+	_, _ = e.pool.Exec(ctx, `update deliveries set estado = 'entregada' where numero = 'REM-1'`)
 
 	_, b := pedir(t, juan, "GET", u+"contenido/mis-resenas", nil)
 	if !strings.Contains(string(b), `"yaResenado":false`) || !strings.Contains(string(b), `"numeroPedido":"PED-1"`) {
@@ -290,6 +314,16 @@ func TestAjustesYResenas(t *testing.T) {
 	if c, _ := pedir(t, juan, "POST", u+"contenido/mis-resenas", resena); c != 409 {
 		t.Errorf("la segunda reseña de la misma compra: %d", c)
 	}
+	// M3S4-032 y M2S3-077: la medida que compró y el estado de la reseña.
+	if _, b := pedir(t, juan, "GET", u+"contenido/mis-resenas", nil); !strings.Contains(string(b), `"estadoResena":"pendiente"`) ||
+		strings.Contains(string(b), `"medida":""`) {
+		t.Errorf("la medida y el estado: %s", b)
+	}
+	_, _ = e.pool.Exec(ctx, `update product_reviews set estado = 'rechazada' where order_id = $1`, orderID)
+	if _, b := pedir(t, juan, "GET", u+"contenido/mis-resenas", nil); !strings.Contains(string(b), `"estadoResena":"rechazada"`) {
+		t.Errorf("la rechazada: %s", b)
+	}
+	_, _ = e.pool.Exec(ctx, `update product_reviews set estado = 'pendiente' where order_id = $1`, orderID)
 	if c, _ := pedir(t, juan, "POST", u+"contenido/mis-resenas", map[string]any{"productId": producto, "orderId": orderID, "estrellas": 9}); c != 422 {
 		t.Errorf("nueve estrellas: %d", c)
 	}
@@ -417,8 +451,9 @@ func TestSitio(t *testing.T) {
 	u := e.srv.URL + "/api/v1/contenido/"
 
 	// Documentos: los reservados solo los ve un profesional activo.
-	_, _ = e.pool.Exec(ctx, `insert into technical_documents (titulo, url, solo_profesionales, orden) values
-		('Ficha del fenólico', '/d/1.pdf', false, 1), ('Tabla de cargas', '/d/2.pdf', true, 2), ('Viejo', '/d/3.pdf', false, 0)`)
+	// Con archivo subido (tamaño): sin él no se listan (M2S1-025).
+	_, _ = e.pool.Exec(ctx, `insert into technical_documents (titulo, url, solo_profesionales, orden, tamano_bytes) values
+		('Ficha del fenólico', '/d/1.pdf', false, 1, 100), ('Tabla de cargas', '/d/2.pdf', true, 2, 100), ('Viejo', '/d/3.pdf', false, 0, 100)`)
 	_, _ = e.pool.Exec(ctx, `update technical_documents set activo = false where titulo = 'Viejo'`)
 	juan := e.cliente(t, "juan@prueba.test", "cliente")
 	for _, c := range []struct {
@@ -471,7 +506,7 @@ func TestSitio(t *testing.T) {
 	if _, b := pedir(t, juan, "GET", u+"eventos/taller-de-melamina", nil); !strings.Contains(string(b), `"estado":"reservada"`) {
 		t.Errorf("la inscripción de quien mira: %s", b)
 	}
-	if _, b := pedir(t, anon, "GET", u+"eventos-visibles?limite=5", nil); string(b) != `["taller-de-melamina","el-de-ayer"]`+"\n" {
+	if _, b := pedir(t, anon, "GET", u+"eventos-visibles?limite=5", nil); string(b) != `["taller-de-melamina"]`+"\n" {
 		t.Errorf("slugs: %s", b)
 	}
 	if _, b := pedir(t, anon, "GET", u+"sitemap/eventos", nil); !strings.Contains(string(b), `"ruta":"/eventos/taller-de-melamina"`) || strings.Contains(string(b), "el-de-ayer") {
@@ -719,6 +754,34 @@ func TestPanelDeDocumentacion(t *testing.T) {
 		t.Errorf("abierto a todos y no se ve: %s", b)
 	}
 	baja("anónimo, abierto", anon, 200)
+	// M2S1-171: se guarda con el nombre del documento, no «archivo.pdf».
+	if r, err := anon.Get(archivo); err != nil {
+		t.Fatal(err)
+	} else {
+		_ = r.Body.Close()
+		if d := r.Header.Get("Content-Disposition"); d != `inline; filename="tabla-de-cargas.pdf"` {
+			t.Errorf("el nombre al bajarlo: %q", d)
+		}
+	}
+	// M2S1-025: uno sin archivo subido (los de la semilla, tamaño nulo) no
+	// se lista ni cuenta: daba 404 al tocarlo.
+	if _, err := e.pool.Exec(context.Background(), `insert into technical_documents (titulo, categoria, url, formato, solo_profesionales)
+		values ('Placa OSB estructural', 'Placas', '/fichas/ficha-tecnica-osb.pdf', 'pdf', false),
+		       ('Tirantería de pino', 'Estructura', '/fichas/tabla-de-cargas-tirantes.pdf', 'pdf', true)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, b := pedir(t, anon, "GET", e.srv.URL+"/api/v1/contenido/documentos", nil); strings.Contains(string(b), "OSB") {
+		t.Errorf("se lista un documento sin archivo: %s", b)
+	}
+	if _, b := pedir(t, pro, "GET", e.srv.URL+"/api/v1/contenido/documentos", nil); strings.Contains(string(b), "Tirantería") {
+		t.Errorf("se lista al profesional un documento sin archivo: %s", b)
+	}
+	if _, b := pedir(t, anon, "GET", e.srv.URL+"/api/v1/contenido/documentos/reservados", nil); string(b) != "0\n" {
+		t.Errorf("cuenta un reservado sin archivo: %s", b)
+	}
+	if _, err := e.pool.Exec(context.Background(), `delete from technical_documents where tamano_bytes is null`); err != nil {
+		t.Fatal(err)
+	}
 	if c, _ := pedir(t, adm, "POST", u+"/"+docs[0].ID+"/activo", map[string]bool{"activo": false}); c != 204 {
 		t.Fatal("baja")
 	}
@@ -729,5 +792,25 @@ func TestPanelDeDocumentacion(t *testing.T) {
 	baja("admin, de baja", adm, 200)
 	if _, b := pedir(t, adm, "GET", u+"/categorias", nil); string(b) != "[]\n" {
 		t.Errorf("categorías con todo de baja: %s", b)
+	}
+}
+
+// Un banner con «Desde» y «Hasta» de hoy está al aire todo el día, como una
+// promoción que vence hoy (mes simulado, M2S2-027).
+func TestBannerQueVenceHoySeVe(t *testing.T) {
+	e := armar(t)
+	adm := e.cliente(t, "admin@prueba.test", "admin")
+	u := e.srv.URL + "/api/v1/"
+	hoy := time.Now().In(argentina).Format("2006-01-02")
+	if c, b := pedir(t, adm, "POST", u+"admin/contenido/banners", armarFormulario(map[string]string{
+		"ubicacion": "catalogo", "titulo": "Vence hoy", "desde": hoy, "hasta": hoy, "activo": "on",
+	}, nil)); c != 204 {
+		t.Fatalf("crear banner: %d %s", c, b)
+	}
+	_, b := pedir(t, &http.Client{}, "GET", u+"contenido/banners?ubicacion=catalogo", nil)
+	var publicados []Banner
+	_ = json.Unmarshal(b, &publicados)
+	if len(publicados) != 1 {
+		t.Fatalf("un banner que vence hoy no se ve: %s", b)
 	}
 }

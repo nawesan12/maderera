@@ -19,6 +19,12 @@ export interface EstadoCheque {
 
 const campo = (formData: FormData, nombre: string) => (formData.get(nombre) as string | null) ?? undefined;
 
+/** Lo que debe hoy el cliente al que se le cobra con un cheque desde Cheques. */
+export async function deudaDelCliente(customerId: string): Promise<number> {
+  const r = await (await api()).GET("/api/v1/mostrador/clientes/{id}/saldo", { params: { path: { id: customerId } } });
+  return Math.max(0, r.data?.saldo ?? 0);
+}
+
 export async function cargarCheque(_previo: EstadoCheque, formData: FormData): Promise<EstadoCheque> {
   const r = await (await api()).POST("/api/v1/admin/cheques", {
     body: {

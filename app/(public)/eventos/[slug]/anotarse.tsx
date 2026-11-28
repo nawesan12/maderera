@@ -29,6 +29,7 @@ export function Anotarse({
   email,
   telefono,
   enVivo,
+  pagoOnline = true,
 }: {
   /** Número del negocio, en dígitos: es editable desde el panel. */
   whatsapp: string;
@@ -44,6 +45,11 @@ export function Anotarse({
   email?: string | null;
   telefono?: string | null;
   enVivo: boolean;
+  /**
+   * Hay con qué cobrar en línea. Sin eso un evento pago no se anota por acá:
+   * reservaba el lugar y no había forma de pagarlo (M2S2-016).
+   */
+  pagoOnline?: boolean;
 }) {
   const [estado, accion, enviando] = useActionState(anotarse, inicial);
 
@@ -111,6 +117,22 @@ export function Anotarse({
           className="mt-4 inline-flex h-11 items-center rounded-lg border px-5 font-medium transition-colors hover:bg-muted"
         >
           Avisenme si hay lugar
+        </a>
+      </div>
+    );
+  }
+
+  if (precio > 0 && !pagoOnline && !yaAnotado) {
+    return (
+      <div className="rounded-xl border bg-card p-5">
+        <p className="font-medium">{`Anotate por ${formatearMonto(precio)}`}</p>
+        <a
+          href={`https://wa.me/${whatsapp}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-4 inline-flex h-12 w-full items-center justify-center rounded-lg bg-whatsapp-boton text-base font-medium text-white transition-colors hover:bg-whatsapp-boton-hover"
+        >
+          Anotarme por WhatsApp
         </a>
       </div>
     );
@@ -206,7 +228,7 @@ function Campo({
     <div>
       <label htmlFor={nombre} className="block text-sm font-medium">
         {etiqueta}
-        {requerido && <span className="text-acento-texto" aria-label="obligatorio">
+        {requerido && <span className="text-acento-texto" aria-hidden="true">
             {" *"}
           </span>}
       </label>

@@ -3,6 +3,8 @@ import Link from "next/link";
 import { ArrowLeft, TriangleAlert } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { listarPerfiles } from "@/lib/dal/admin/cortes-exportacion";
+import { requireStaff } from "@/lib/dal/session";
+import { DECIDEN_EN_LA_COLA } from "@/lib/roles";
 import { EditorDeFormato } from "./editor";
 
 export const metadata: Metadata = { title: "Formato para la máquina" };
@@ -16,16 +18,19 @@ export const metadata: Metadata = { title: "Formato para la máquina" };
  * en el código haría falta un deploy por intento.
  */
 export default async function FormatoDeCortePage() {
-  const perfiles = await listarPerfiles();
+  const [perfiles, usuario] = await Promise.all([listarPerfiles(), requireStaff()]);
+  // El aserradero llega desde su taller y vuelve ahí (M2S4-042), como en la
+  // ficha del corte.
+  const decide = usuario.staffRole !== null && DECIDEN_EN_LA_COLA.includes(usuario.staffRole);
 
   return (
     <div className="space-y-6">
       <Link
-        href="/admin/cortes"
+        href={decide ? "/admin/cortes" : "/taller"}
         className="inline-flex items-center gap-2 text-base text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="h-5 w-5" />
-        Volver a cortes
+        {decide ? "Volver a cortes" : "Volver al taller"}
       </Link>
 
       <EncabezadoPanel

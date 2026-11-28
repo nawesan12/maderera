@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { Banknote, CalendarDays, Landmark, MapPin, Truck } from "lucide-react";
+import { Banknote, CalendarDays, Check, Landmark, MapPin, Truck } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { moneda, plural } from "@/components/admin/formato";
-import { cantidadConUnidad } from "@/lib/formato";
+import { cantidadConUnidad, diaConSemana } from "@/lib/formato";
 import { listarPedidos, type PedidoListado } from "@/lib/dal/admin/ventas";
 import { listarZonasDeEnvio } from "@/lib/dal/envios";
 import { requireStaff } from "@/lib/dal/session";
@@ -24,13 +24,6 @@ const MEDIO: Record<string, string> = {
   cheque: "Cheque",
 };
 
-/** «Vie 28/11», en hora argentina. */
-const diaCorto = new Intl.DateTimeFormat("es-AR", {
-  weekday: "short",
-  day: "2-digit",
-  month: "2-digit",
-  timeZone: "UTC",
-});
 
 /**
  * El reparto: lo que hay que llevar, por zona y por día.
@@ -52,8 +45,16 @@ export default async function RepartoPage() {
 
   // Solo las zonas de reparto configuradas agrupan: un texto suelto («Mar del
   // Plata», la ciudad) no le sirve al chofer para armar el recorrido.
+  // «Mar del Plata (flete a cotizar)» es la zona Mar del Plata: el
+  // paréntesis lo suma la tienda (mes simulado 2: caía en «Sin zona»).
   const deReparto = new Map(zonasDeEnvio.map((z) => [z.nombre.trim().toLowerCase(), z.nombre]));
-  const zonaDe = (p: PedidoListado) => deReparto.get(p.zonaEnvio?.trim().toLowerCase() ?? "") ?? SIN_ZONA;
+  const zonaDe = (p: PedidoListado) =>
+    deReparto.get(
+      (p.zonaEnvio ?? "")
+        .replace(/\s*\([^)]*\)\s*$/, "")
+        .trim()
+        .toLowerCase(),
+    ) ?? SIN_ZONA;
 
   const porZona = new Map<string, PedidoListado[]>();
   for (const p of pedidos) {
@@ -98,6 +99,13 @@ export default async function RepartoPage() {
                   aria-hidden="true"
                 />
                 {zona}
+                {/* El día comprometido más cercano de la zona, para armar el
+                    viaje por zona y día. */}
+                {ps[0]?.entregarEl && (
+                  <span className="inline-flex items-center gap-1 text-base font-semibold">
+                    · {diaConSemana.format(new Date(`${ps[0].entregarEl}T00:00:00Z`))}
+                  </span>
+                )}
                 <span className="text-base font-normal text-muted-foreground">
                   {plural(ps.length, "pedido")} · {moneda.format(ps.reduce((s, p) => s + p.total, 0))}
                 </span>
@@ -117,8 +125,11 @@ export default async function RepartoPage() {
 
 function FilaDeReparto({ pedido: p, cobra }: { pedido: PedidoListado; cobra: boolean }) {
   const efectivo = p.medioPago === "efectivo";
+  const enElCamion = p.enElCamion ?? [];
+  const aLlevar = p.aLlevar ?? [];
+  const aCuenta = p.medioPago === "cuenta_corriente" && p.estadoPago !== "pagado";
   return (
-    <li className={`space-y-2 border-b px-5 py-4 last:border-0 ${p.estado === "listo" ? "" : "opacity-80"}`}>
+    <li className={`space-y-2 border-b px-5 py-4 last:border-0 ${p.estado === "listo" || p.estado === "en-camino" ? "" : "opacity-80"}`}>
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
         <div className="min-w-0 flex-1 basis-56">
           <Link href={`/admin/pedidos/${p.id}`} className="text-base font-medium hover:text-brand-orange">
@@ -132,7 +143,7 @@ function FilaDeReparto({ pedido: p, cobra }: { pedido: PedidoListado; cobra: boo
         {p.entregarEl && (
           <span className="inline-flex items-center gap-1.5 text-base font-semibold">
             <CalendarDays className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            {diaCorto.format(new Date(`${p.entregarEl}T12:00:00Z`))}
+            {diaConSemana.format(new Date(`${p.entregarEl}T00:00:00Z`))}
           </span>
         )}
       </div>
@@ -141,43 +152,58 @@ function FilaDeReparto({ pedido: p, cobra }: { pedido: PedidoListado; cobra: boo
         <span className="codigo">{p.numero}</span>
         {p.sucursal && <span>Sale de {p.sucursal}</span>}
         <EtiquetaEstado estado={p.estado} contexto="pedido" />
+        {/* La zona «a cotizar» sin flete: se despachaba sin cotizarlo. */}
+        {p.fleteACotizar && (
+          <span className="estado-problema rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)]">
+            Flete sin cotizar
+          </span>
+        )}
       </p>
 
-      {/* Ya salió una parte: lo que lleva el próximo viaje. */}
-      {p.porEntregar.length > 0 && (
-        <ul className="space-y-0.5 rounded-md bg-hundida px-3 py-2 text-base">
-          {p.porEntregar.map((r, i) => (
-            <li key={i} className="flex justify-between gap-3">
-              <span className="min-w-0 truncate">{r.descripcion}</span>
-              <span className="tabular shrink-0 font-semibold">{cantidadConUnidad(r.pendiente, r.unidad, r.descripcion)}</span>
-            </li>
-          ))}
-        </ul>
+      {/* Lo que va en el camión, remito por remito (en camino decía lo que
+          quedó en el galpón), y si no salió, lo que hay que cargar: para
+          saberlo había que entrar al pedido (mes simulado 2). */}
+      {enElCamion.map((r) => (
+        <div key={r.numero} className="rounded-md bg-hundida px-3 py-2">
+          <p className="mb-0.5 text-sm text-muted-foreground">
+            <span className="codigo">{r.numero}</span>
+          </p>
+          <Renglones renglones={r.lineas.map((l) => ({ ...l }))} />
+        </div>
+      ))}
+      {aLlevar.length > 0 && (
+        <div className={enElCamion.length > 0 ? "px-3 text-muted-foreground" : "rounded-md bg-hundida px-3 py-2"}>
+          {enElCamion.length > 0 && <p className="text-sm">Falta llevar</p>}
+          <Renglones renglones={aLlevar} apagado={enElCamion.length > 0} />
+        </div>
       )}
 
       {/* Apilado en el teléfono y en un renglón desde sm, en todas las
           tarjetas: con flex-wrap, unas se partían y otras no según el ancho
           de los botones. */}
       <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-        {/* Un solo importe: lo que hay que traer de vuelta si falta cobrar,
-            con el medio al lado (el chofer vuelve con efectivo o no), y si
-            no, el total. Una transferencia informada no se reclama otra vez. */}
+        {/* Un solo importe, marcado: lo que hay que traer de vuelta si falta
+            cobrar (en rojo, con el medio), pagado, o a la cuenta. Antes se
+            leía igual un pedido pago que uno impago. */}
         {p.pagoEnRevision ? (
           <EtiquetaEstado estado="en_revision" contexto="pago" />
         ) : p.sinCobrar != null ? (
-          <span className={`inline-flex items-center gap-1.5 text-base font-semibold ${efectivo ? "estado-espera" : ""}`}>
-            {efectivo ? (
-              <Banknote className="h-5 w-5" aria-hidden="true" />
-            ) : (
-              <Landmark className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-            )}
-            <span className="tabular">{moneda.format(p.sinCobrar)}</span>
-            <span className="font-normal">{p.medioPago ? (MEDIO[p.medioPago] ?? p.medioPago) : "A cobrar"}</span>
+          <span className="estado-problema inline-flex items-center gap-1.5 text-base font-semibold text-[var(--estado-tinta)]">
+            {efectivo ? <Banknote className="h-5 w-5" aria-hidden="true" /> : <Landmark className="h-5 w-5" aria-hidden="true" />}
+            A cobrar <span className="tabular">{moneda.format(p.sinCobrar)}</span>
+            {p.medioPago && <span className="font-normal">· {MEDIO[p.medioPago] ?? p.medioPago}</span>}
           </span>
         ) : (
-          <span className="tabular text-base font-medium text-muted-foreground">
-            {moneda.format(p.total)}
-            {p.estadoPago === "pagado" && " · pagado"}
+          <span className="inline-flex items-center gap-1.5 text-base font-medium text-muted-foreground">
+            <span className="tabular">{moneda.format(p.total)}</span>
+            {p.estadoPago === "pagado" ? (
+              <span className="estado-ok inline-flex items-center gap-1 font-semibold text-[var(--estado-tinta)]">
+                <Check className="h-4 w-4" aria-hidden="true" />
+                Pagado
+              </span>
+            ) : aCuenta ? (
+              <span>· Cuenta corriente</span>
+            ) : null}
           </span>
         )}
         {/* Con `cobro`, el botón «Cobrar» de verdad y el diálogo de la
@@ -193,8 +219,34 @@ function FilaDeReparto({ pedido: p, cobra }: { pedido: PedidoListado; cobra: boo
           sinCobrar={p.sinCobrar != null ? { numero: p.numero, monto: p.sinCobrar } : null}
           cortesSinTerminar={p.cortesSinTerminar}
           porLlevar={p.porEntregar.length > 0}
+          firmar={
+            enElCamion[0]?.firmaToken
+              ? `/firmar/${enElCamion[0].firmaToken}?volver=${encodeURIComponent("/admin/reparto")}`
+              : null
+          }
         />
       </div>
     </li>
+  );
+}
+
+function Renglones({
+  renglones,
+  apagado = false,
+}: {
+  renglones: { descripcion: string; unidad: string; pendiente: number }[];
+  apagado?: boolean;
+}) {
+  return (
+    <ul className="space-y-0.5 text-base">
+      {renglones.map((r, i) => (
+        // Sin «…»: el espesor va al final y es lo que distingue una placa
+        // de otra (a 375 px «MDF — 1830 x 2600mm…» perdía el «18mm»).
+        <li key={i} className="flex items-baseline justify-between gap-3">
+          <span className="min-w-0 break-words leading-snug">{r.descripcion}</span>
+          <span className={`tabular shrink-0 ${apagado ? "" : "font-semibold"}`}>{cantidadConUnidad(r.pendiente, r.unidad, r.descripcion)}</span>
+        </li>
+      ))}
+    </ul>
   );
 }

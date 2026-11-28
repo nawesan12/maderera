@@ -228,7 +228,6 @@ export function FormularioRecepcion({
             <input
               value={numeroRemito}
               onChange={(e) => setNumeroRemito(e.target.value)}
-              placeholder="0002-00034512"
               className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
             />
           </label>
@@ -251,6 +250,7 @@ export function FormularioRecepcion({
             <input
               value={texto}
               onChange={(e) => setTexto(e.target.value)}
+              aria-label="Buscar mercadería"
               placeholder="Buscar mercadería por nombre, medida o código…"
               className="h-12 w-full rounded-lg border border-linea bg-background pl-9 pr-3 text-base"
             />
@@ -331,7 +331,7 @@ export function FormularioRecepcion({
                     <tr key={l.variantId}>
                       <td className="px-4 py-2.5">
                         <span className="block">{l.descripcion}</span>
-                        {l.costoActual !== null && (
+                        {l.costoActual !== null && l.costoActual > 0 && (
                           <span className="tabular block text-sm text-muted-foreground">
                             venía a {formatearMonto(l.costoActual)}
                           </span>
@@ -351,6 +351,7 @@ export function FormularioRecepcion({
                           onChange={(e) =>
                             cambiar(i, "cantidad", e.target.value)
                           }
+                          aria-label={`Cantidad de ${l.descripcion}`}
                           className="tabular h-10 w-24 rounded-lg border border-linea bg-background px-2 text-right text-base"
                         />
                       </td>
@@ -370,6 +371,7 @@ export function FormularioRecepcion({
                           onChange={(e) =>
                             cambiar(i, "alicuotaIva", e.target.value)
                           }
+                          aria-label={`IVA de ${l.descripcion}`}
                           className="tabular h-10 rounded-lg border border-linea bg-background px-2 text-base"
                         >
                           {["0.00", "10.50", "21.00", "27.00"].map((a) => (

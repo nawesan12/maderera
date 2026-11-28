@@ -2,6 +2,7 @@ package reportes
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -68,6 +69,10 @@ type Debo struct {
 	// Lo que el libro debe por encima de las facturas con saldo: el saldo
 	// inicial, los ajustes, lo recibido con remito y sin factura.
 	SinFactura float64 `json:"sinFactura"`
+	// La parte de SinFactura que es mercadería recibida con remito y sin
+	// factura; el resto son saldos iniciales y ajustes. Llamarlo todo «sin
+	// factura» hacía buscar remitos que no había (mes simulado, M3S1-029).
+	RemitosSinFactura float64 `json:"remitosSinFactura"`
 	// A cuántos proveedores se les debe.
 	Proveedores int `json:"proveedores"`
 }
@@ -118,8 +123,13 @@ type PlataHoy struct {
 	Cheques  Monto   `json:"cheques"`
 	// ChequesDepositados: salieron de la cartera y el banco todavía no los
 	// acreditó. Siguen siendo plata de la casa.
-	ChequesDepositados Monto   `json:"chequesDepositados"`
-	Total              float64 `json:"total"`
+	ChequesDepositados Monto `json:"chequesDepositados"`
+	// BancoSaldo: el último saldo cargado del banco más lo que entró y menos
+	// lo que salió desde BancoSaldoAl. Sin saldo cargado, nil: el banco no
+	// suma al total y se ve solo lo que se movió hoy.
+	BancoSaldo   *float64   `json:"bancoSaldo"`
+	BancoSaldoAl *time.Time `json:"bancoSaldoAl"`
+	Total        float64    `json:"total"`
 }
 
 // Resultado es ventas netas − lo vendido sin costo − costo − gastos de un
@@ -354,23 +364,26 @@ func (s *Servicio) Debo(ctx context.Context, ahora time.Time) (Debo, error) {
 	// (las 3 UTC), una factura que vencía hoy ya figuraba vencida.
 	hoy := DiaDeHoy(ahora)
 	rs, err := s.pool.Query(ctx, `
-		SELECT coalesce(l.saldo, 0)::float8,
+		SELECT coalesce(l.saldo, 0)::float8, coalesce(rm.monto, 0)::float8,
 		  coalesce(sum(x.saldo), 0)::float8, count(x.saldo)::int,
 		  coalesce(sum(x.saldo) FILTER (WHERE x.vence < $1), 0)::float8, (count(*) FILTER (WHERE x.vence < $1))::int,
 		  coalesce(sum(x.saldo) FILTER (WHERE x.vence >= $1 AND x.vence < $2), 0)::float8,
 		  (count(*) FILTER (WHERE x.vence >= $1 AND x.vence < $2))::int
 		FROM suppliers s
 		LEFT JOIN (SELECT supplier_id, sum(monto) AS saldo FROM supplier_movements GROUP BY supplier_id) l ON l.supplier_id = s.id
+		LEFT JOIN (SELECT m.supplier_id, sum(m.monto) AS monto FROM supplier_movements m JOIN goods_receipts g ON g.id = m.goods_receipt_id
+		      WHERE g.estado = 'confirmada' AND NOT EXISTS (`+compras.FacturaDeLaRecepcion("g")+`)
+		      GROUP BY m.supplier_id) rm ON rm.supplier_id = s.id
 		LEFT JOIN (SELECT f.supplier_id, `+saldoDeCompra+` AS saldo, f.fecha_vencimiento AS vence FROM purchase_invoices f
 		      WHERE f.tipo::text NOT LIKE 'nota_credito%' AND f.anulada_at IS NULL) x ON x.supplier_id = s.id AND x.saldo > 0.009
 		WHERE s.active
-		GROUP BY s.id, l.saldo`, hoy, hoy.AddDate(0, 0, 7))
+		GROUP BY s.id, l.saldo, rm.monto`, hoy, hoy.AddDate(0, 0, 7))
 	if err != nil {
 		return d, err
 	}
-	var libro, facturado, vencido, semana float64
+	var libro, remitos, facturado, vencido, semana float64
 	var facturas, vencidas, deLaSemana int
-	if _, err := pgx.ForEachRow(rs, []any{&libro, &facturado, &facturas, &vencido, &vencidas, &semana, &deLaSemana}, func() error {
+	if _, err := pgx.ForEachRow(rs, []any{&libro, &remitos, &facturado, &facturas, &vencido, &vencidas, &semana, &deLaSemana}, func() error {
 		r := DeudaConProveedor(libro, facturado, vencido, semana)
 		if !(r.Debe > 0) {
 			return nil
@@ -379,6 +392,7 @@ func (s *Servicio) Debo(ctx context.Context, ahora time.Time) (Debo, error) {
 		d.Proveedores++
 		d.Facturas += facturas
 		d.SinFactura += r.SinFactura
+		d.RemitosSinFactura += max(min(remitos, r.SinFactura), 0)
 		if r.Vencido > 0 {
 			d.Vencido += r.Vencido
 			d.FacturasVencidas += vencidas
@@ -393,6 +407,7 @@ func (s *Servicio) Debo(ctx context.Context, ahora time.Time) (Debo, error) {
 	}
 	d.Total, d.Vencido = jsmath.Redondear2(d.Total), jsmath.Redondear2(d.Vencido)
 	d.EstaSemana, d.SinFactura = jsmath.Redondear2(d.EstaSemana), jsmath.Redondear2(d.SinFactura)
+	d.RemitosSinFactura = jsmath.Redondear2(d.RemitosSinFactura)
 	return d, nil
 }
 
@@ -457,7 +472,11 @@ const RetiroAlBanco = `coalesce(m.destino = 'banco', m.motivo ~* '(banco|dep[oó
 // que no fue al banco se tomaba como de la caja fuerte, y se sigue tomando
 // así; el que dice «otro» (un pago en mano, el dueño que se lleva plata) no
 // es plata de la casa que esté en algún lado.
-const RetiroACajaFuerte = `coalesce(m.destino = 'caja_fuerte', NOT coalesce(m.motivo ~* '(banco|dep[oó]sit)', false))`
+//
+// La diferencia «entre turnos» sin destino no fue a la caja fuerte: era un
+// conteo mal hecho, y la caja fuerte sumaba plata que no existía (mes
+// simulado, M2S3-002).
+const RetiroACajaFuerte = `coalesce(m.destino = 'caja_fuerte', NOT coalesce(m.motivo ~* '(banco|dep[oó]sit)', false) AND coalesce(m.motivo, '') NOT LIKE 'Entre turnos:%')`
 
 // PlataHoy: las cajas (abiertas, o la de hoy ya cerrada), lo retirado hoy a
 // la caja fuerte, lo que entró y salió hoy del banco, lo cobrado por Mercado
@@ -516,9 +535,66 @@ func (s *Servicio) PlataHoy(ctx context.Context, ahora time.Time) (PlataHoy, err
 	}); err != nil {
 		return p, err
 	}
-	var cobradoBanco, mp, tarjetas, cheques, depositados, alBanco, cajaFuerte, acreditados, pagos, gastos, debitados jsmath.Num
+	var mp, tarjetas, cheques, depositados, cajaFuerte jsmath.Num
 	err = s.pool.QueryRow(ctx, `
-		WITH cobrado AS (
+		WITH cobrado AS (`+cobradoEntre+`)
+		SELECT coalesce(sum(importe) FILTER (WHERE donde = 'mp'), 0),
+		  coalesce(sum(importe) FILTER (WHERE donde = 'tarjeta'), 0),
+		  (SELECT coalesce(sum(importe), 0) FROM cheques WHERE sentido = 'recibido' AND estado = 'cartera'),
+		  (SELECT count(*)::int FROM cheques WHERE sentido = 'recibido' AND estado = 'cartera'),
+		  (SELECT coalesce(sum(importe), 0) FROM cheques WHERE sentido = 'recibido' AND estado = 'depositado'),
+		  (SELECT count(*)::int FROM cheques WHERE sentido = 'recibido' AND estado = 'depositado'),
+		  (SELECT coalesce(-sum(m.monto) FILTER (WHERE `+RetiroACajaFuerte+`), 0) FROM cash_movements m
+		    WHERE m.tipo = 'retiro' AND m.created_at >= $1 AND m.created_at < $2)
+		FROM cobrado`, hoy, manana).
+		Scan(&mp, &tarjetas, &cheques, &p.Cheques.Cantidad, &depositados, &p.ChequesDepositados.Cantidad, &cajaFuerte)
+	if err != nil {
+		return p, err
+	}
+	p.MercadoPago, p.Tarjetas = mp.F(), tarjetas.F()
+	p.Cheques.Total, p.ChequesDepositados.Total = cheques.F(), depositados.F()
+	p.CajaFuerte = jsmath.Redondear2(cajaFuerte.F())
+	if p.BancoEntro, p.BancoSalio, err = s.movimientosDelBanco(ctx, hoy, manana, true); err != nil {
+		return p, err
+	}
+	p.Banco = jsmath.Redondear2(p.BancoEntro - p.BancoSalio)
+	p.Efectivo = jsmath.Redondear2(p.Efectivo)
+	// El saldo del banco, si se cargó uno: lo que dijo el banco en ese
+	// momento más lo que entró y menos lo que salió desde entonces.
+	var saldo jsmath.Num
+	var al time.Time
+	switch err := s.pool.QueryRow(ctx, `SELECT monto, al FROM saldos_de_banco ORDER BY al DESC, created_at DESC LIMIT 1`).Scan(&saldo, &al); {
+	case errors.Is(err, pgx.ErrNoRows):
+	case err != nil:
+		return p, err
+	default:
+		entro, salio, err := s.movimientosDelBanco(ctx, al, manana, false)
+		if err != nil {
+			return p, err
+		}
+		b := jsmath.Redondear2(float64(saldo.F()+entro) - salio)
+		p.BancoSaldo, p.BancoSaldoAl = &b, &al
+	}
+	// Lo que hay: el efectivo, la caja fuerte, Mercado Pago, los cheques y,
+	// con un saldo cargado, el banco. Lo que se movió hoy en el banco es un
+	// movimiento, no plata que haya: va aparte y no suma (M2S2-100; el
+	// primer día, un pago por transferencia dejaba el total en negativo).
+	// Las tarjetas se liquidan días después: tampoco suman.
+	banco := 0.0
+	if p.BancoSaldo != nil {
+		banco = *p.BancoSaldo
+	}
+	p.Total = jsmath.Redondear2(float64(float64(float64(float64(p.Efectivo+p.CajaFuerte)+banco)+p.MercadoPago)+
+		p.Cheques.Total) + p.ChequesDepositados.Total)
+	return p, nil
+}
+
+// cobradoEntre son las partes de lo cobrado en [$1, $2), con a dónde fue
+// la plata (banco, mp o tarjeta): las de los recibos, los pagos de las
+// ventas del mostrador y los cobros en línea que ningún recibo nombra.
+// La venta del mostrador se cobra al crearse: cobrada_at solo lo lleva la
+// que llegó de la cola sin conexión (la hora en que se cobró de verdad).
+const cobradoEntre = `
 		  SELECT CASE WHEN rp.medio IN ('transferencia', 'deposito') THEN 'banco'
 		              WHEN rp.medio = 'mercado_pago' THEN 'mp'
 		              WHEN rp.medio IN ('tarjeta_debito', 'tarjeta_credito') THEN 'tarjeta' END AS donde, rp.importe
@@ -534,18 +610,29 @@ func (s *Servicio) PlataHoy(ctx context.Context, ahora time.Time) (PlataHoy, err
 		  SELECT CASE WHEN p.proveedor = 'transferencia' THEN 'banco' WHEN p.proveedor = 'mercado_pago' THEN 'mp' END, p.monto
 		  FROM payments p
 		  WHERE p.estado = 'aprobado' AND p.acreditado_at >= $1 AND p.acreditado_at < $2
-		    AND NOT EXISTS (SELECT 1 FROM receipt_parts rp WHERE rp.payment_id = p.id)
-		)
+		    AND NOT EXISTS (SELECT 1 FROM receipt_parts rp WHERE rp.payment_id = p.id)`
+
+// movimientosDelBanco es lo que entró y salió del banco en [desde, hasta).
+//
+// Entra lo cobrado por transferencia o depósito, los cheques recibidos
+// acreditados y los retiros de caja que fueron depósitos (RetiroAlBanco).
+// Sale lo pagado a proveedores que no fue en efectivo ni con cheque (el
+// efectivo sale de una caja; el cheque de un tercero, de la cartera; el
+// propio, cuando el banco lo debita, que es cuando se marca acreditado), los
+// gastos por transferencia o débito y los cheques propios debitados.
+//
+// Los gastos se guardan como día (a las 0 UTC). `diasEnteros` es para un
+// lapso de días argentinos (hoy); si no, del primer día entran solo los
+// gastos cargados después de `desde`: el saldo se carga a una hora, y lo
+// de esa mañana ya estaba en lo que dijo el banco.
+func (s *Servicio) movimientosDelBanco(ctx context.Context, desde, hasta time.Time, diasEnteros bool) (entro, salio float64, err error) {
+	primerDia := diaDeGasto(InicioDelDia(desde))
+	ultimoDia := diaDeGasto(InicioDelDia(hasta.Add(-time.Nanosecond))).AddDate(0, 0, 1)
+	var cobrado, alBanco, acreditados, pagos, gastos, debitados jsmath.Num
+	err = s.pool.QueryRow(ctx, `
+		WITH cobrado AS (`+cobradoEntre+`)
 		SELECT coalesce(sum(importe) FILTER (WHERE donde = 'banco'), 0),
-		  coalesce(sum(importe) FILTER (WHERE donde = 'mp'), 0),
-		  coalesce(sum(importe) FILTER (WHERE donde = 'tarjeta'), 0),
-		  (SELECT coalesce(sum(importe), 0) FROM cheques WHERE sentido = 'recibido' AND estado = 'cartera'),
-		  (SELECT count(*)::int FROM cheques WHERE sentido = 'recibido' AND estado = 'cartera'),
-		  (SELECT coalesce(sum(importe), 0) FROM cheques WHERE sentido = 'recibido' AND estado = 'depositado'),
-		  (SELECT count(*)::int FROM cheques WHERE sentido = 'recibido' AND estado = 'depositado'),
 		  (SELECT coalesce(-sum(m.monto) FILTER (WHERE `+RetiroAlBanco+`), 0) FROM cash_movements m
-		    WHERE m.tipo = 'retiro' AND m.created_at >= $1 AND m.created_at < $2),
-		  (SELECT coalesce(-sum(m.monto) FILTER (WHERE `+RetiroACajaFuerte+`), 0) FROM cash_movements m
 		    WHERE m.tipo = 'retiro' AND m.created_at >= $1 AND m.created_at < $2),
 		  (SELECT coalesce(sum(c.importe), 0) FROM cheque_estados e JOIN cheques c ON c.id = e.cheque_id
 		    WHERE c.sentido = 'recibido' AND e.hacia = 'acreditado' AND e.at >= $1 AND e.at < $2),
@@ -555,27 +642,29 @@ func (s *Servicio) PlataHoy(ctx context.Context, ahora time.Time) (PlataHoy, err
 		      WHEN p.medio IN ('efectivo', 'cheque', 'echeq') THEN 0 ELSE p.neto END), 0)
 		    FROM supplier_payments p WHERE p.anulado_at IS NULL AND p.fecha >= $1 AND p.fecha < $2),
 		  (SELECT coalesce(sum(importe), 0) FROM expenses
-		    WHERE medio IN ('transferencia', 'debito') AND fecha >= $3 AND fecha < $4 AND anulado_at IS NULL),
+		    WHERE medio IN ('transferencia', 'debito') AND fecha >= $3 AND fecha < $4 AND anulado_at IS NULL
+		      AND ($5 OR fecha > $3 OR created_at >= $1)),
 		  (SELECT coalesce(sum(c.importe), 0) FROM cheque_estados e JOIN cheques c ON c.id = e.cheque_id
 		    WHERE c.sentido = 'entregado' AND e.hacia = 'acreditado' AND e.at >= $1 AND e.at < $2)
-		FROM cobrado`, hoy, manana, diaDeGasto(hoy), diaDeGasto(hoy).AddDate(0, 0, 1)).
-		Scan(&cobradoBanco, &mp, &tarjetas, &cheques, &p.Cheques.Cantidad, &depositados, &p.ChequesDepositados.Cantidad,
-			&alBanco, &cajaFuerte, &acreditados, &pagos, &gastos, &debitados)
+		FROM cobrado`, desde, hasta, primerDia, ultimoDia, diasEnteros).
+		Scan(&cobrado, &alBanco, &acreditados, &pagos, &gastos, &debitados)
 	if err != nil {
-		return p, err
+		return 0, 0, err
 	}
-	p.MercadoPago, p.Tarjetas = mp.F(), tarjetas.F()
-	p.Cheques.Total, p.ChequesDepositados.Total = cheques.F(), depositados.F()
-	p.CajaFuerte = jsmath.Redondear2(cajaFuerte.F())
-	p.BancoEntro = jsmath.Redondear2(float64(cobradoBanco.F()+alBanco.F()) + acreditados.F())
-	p.BancoSalio = jsmath.Redondear2(float64(pagos.F()+gastos.F()) + debitados.F())
-	p.Banco = jsmath.Redondear2(p.BancoEntro - p.BancoSalio)
-	p.Efectivo = jsmath.Redondear2(p.Efectivo)
-	// Las tarjetas se liquidan días después: no son plata de hoy. Se muestran
-	// aparte, como lo que está por acreditarse, y no suman al total.
-	p.Total = jsmath.Redondear2(float64(float64(float64(float64(p.Efectivo+p.CajaFuerte)+p.Banco)+p.MercadoPago)+
-		p.Cheques.Total) + p.ChequesDepositados.Total)
-	return p, nil
+	entro = jsmath.Redondear2(float64(cobrado.F()+alBanco.F()) + acreditados.F())
+	salio = jsmath.Redondear2(float64(pagos.F()+gastos.F()) + debitados.F())
+	return entro, salio, nil
+}
+
+// CargarSaldoDelBanco anota lo que dice el banco ahora. Desde acá, «Plata
+// hoy» lleva el saldo con lo que entra y sale.
+func (s *Servicio) CargarSaldoDelBanco(ctx context.Context, monto float64, usuarioID string) (PlataHoy, error) {
+	ahora := s.ahora()
+	if _, err := s.pool.Exec(ctx, `INSERT INTO saldos_de_banco (monto, al, created_by_user_id) VALUES ($1, $2, $3)`,
+		jsmath.ToFixed(monto, 2), ahora, usuarioID); err != nil {
+		return PlataHoy{}, err
+	}
+	return s.PlataHoy(ctx, ahora)
 }
 
 // diaDeGasto es el día argentino como lo guarda un gasto: a las 0 UTC.
@@ -610,7 +699,11 @@ func (s *Servicio) ResultadoEntre(ctx context.Context, idesde, ihasta, ddesde, d
 	var neto, sinCosto, costo, gastos, envios jsmath.Num
 	sinIva := s.ajuste(ctx, "ganancia_gastos", "con_iva") == "sin_iva"
 	r.ConDescuento = s.ajuste(ctx, "ganancia_descuento", "no") == "si"
-	gasto := "e.importe"
+	// El IVA que da crédito fiscal (la factura A o M del gasto) no es gasto:
+	// se computa en el IVA del mes. Contarlo en los dos restaba el alquiler
+	// con su IVA y el asiento lo llevaba sin él (mes simulado, M2S2-003). Con
+	// «sin_iva», también el IVA de las demás facturas queda afuera.
+	gasto := "CASE WHEN f.total > 0 AND f.tipo::text IN ('factura_a', 'factura_m', 'nota_debito_a') THEN e.importe * (f.total - (f.iva21 + f.iva105 + f.iva27)) / f.total ELSE e.importe END"
 	if sinIva {
 		gasto = "CASE WHEN f.total > 0 THEN e.importe * (f.neto + f.exento) / f.total ELSE e.importe END"
 	}
@@ -628,6 +721,13 @@ func (s *Servicio) ResultadoEntre(ctx context.Context, idesde, ihasta, ddesde, d
 	if err != nil {
 		return r, err
 	}
+	// Lo facturado a mano, sin pedido, también es venta (M2S1-009); un
+	// servicio no tiene costo de mercadería, así que no es «sin costo».
+	m, err := s.facturasManuales(ctx, idesde, ihasta)
+	if err != nil {
+		return r, err
+	}
+	neto = jsmath.Num(float64(float64(neto.F()+m.conCae.Total) + m.sinCae.Total))
 	r.VentasNetas, r.VentasSinCosto = jsmath.Redondear2(neto.F()), jsmath.Redondear2(sinCosto.F())
 	r.Costo, r.Gastos = jsmath.Redondear2(costo.F()), jsmath.Redondear2(gastos.F())
 	r.Envios = jsmath.Redondear2(envios.F())

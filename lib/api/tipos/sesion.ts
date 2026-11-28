@@ -162,6 +162,8 @@ export interface components {
             /** @description para coordinar las entregas */
             telefono?: string;
             clave: string;
+            /** @description si quiere las campañas por correo (sin tildar */
+            novedades?: boolean;
         };
         CambioDeClave: {
             /** @description Vacía si la cuenta no tiene clave o si se entró con un link hace menos de media hora */

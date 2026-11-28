@@ -1,3 +1,5 @@
+import type { RenglonDelCierre } from "@/lib/mostrador/tipos";
+
 
 
 export interface Sucursal {
@@ -33,8 +35,37 @@ export interface Movimiento {
   motivo: string | null;
   createdAt: string;
   quien: string | null;
-  /** A dónde fue un retiro (null en los de antes y en los ingresos). */
+  /** A dónde fue un retiro, o de dónde vino un ingreso (null en los de antes). */
   destino?: "banco" | "caja_fuerte" | "otro" | null;
+  /** El gasto o el pago del renglón se anuló después: se ve tachado. */
+  anulado?: boolean;
+  /** Lo cargó alguien que no abrió el turno (un recibo desde el panel). */
+  otroPuesto?: boolean;
+  /** La venta del renglón, si es de una venta o de su devolución. */
+  orderId?: string | null;
+}
+
+/**
+ * Un turno ya cerrado, para reimprimir su papel desde la caja (M2S2-064):
+ * la cuenta del efectivo, lo contado, el Z y los movimientos.
+ */
+export interface TurnoCerradoDelMostrador {
+  id: string;
+  sucursal: string;
+  abiertaAt: string;
+  cerradaAt: string | null;
+  contado: number | null;
+  notas: string | null;
+  abiertaPor: string;
+  esperado: number;
+  fondo: number;
+  ventas: number;
+  otrosIngresos: number;
+  retiros: number;
+  devoluciones: number;
+  gastos: number;
+  cierre: RenglonDelCierre[];
+  movimientos: Movimiento[];
 }
 
 export interface VentaDeHoy {
@@ -95,4 +126,7 @@ export function papelDeLaVenta(u: UltimaVenta) {
 export interface Aviso {
   tipo: "ok" | "error";
   texto: string;
+  /** El vuelto de la venta en efectivo, a la vista hasta la próxima (M2S1-176). */
+  vuelto?: number;
 }
+

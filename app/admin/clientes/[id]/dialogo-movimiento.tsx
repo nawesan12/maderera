@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import {
   Banknote,
   FileMinus,
@@ -21,6 +22,9 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CampoFecha } from "@/components/ui/campo-fecha";
+import { hoyEnArgentina } from "@/lib/formato";
+import { aIso } from "@/lib/fecha-texto";
 import { Opciones, Seccion } from "@/components/admin/formulario";
 import { registrarMovimiento, type EstadoCliente } from "../actions";
 
@@ -51,6 +55,7 @@ export function DialogoMovimiento({
   nombre: string;
 }) {
   const [abierto, setAbierto] = useState(false);
+  const hoy = hoyEnArgentina();
   const [tipo, setTipo] = useState("nota_credito");
   const [, accion, pendiente] = useAccionDeDialogo(
     registrarMovimiento,
@@ -69,7 +74,23 @@ export function DialogoMovimiento({
           <DialogTitle>Movimiento de cuenta — {nombre}</DialogTitle>
         </DialogHeader>
 
-        <form action={accion} className="space-y-4">
+        <form
+          action={accion}
+          onSubmit={(e) => {
+            // Una fecha que no se manda (a medio escribir o de mañana en
+            // adelante) llegaba vacía y Go la guardaba como de hoy, sin
+            // avisar (M3S3-017): se frena acá, con el motivo.
+            const campo = e.currentTarget.elements.namedItem("fecha-movimiento") as HTMLInputElement | null;
+            const problema = problemaDeFecha(campo?.value ?? "", hoy);
+            if (problema) {
+              e.preventDefault();
+              toast.error(problema);
+              campo?.setAttribute("aria-invalid", "true");
+              campo?.focus();
+            }
+          }}
+          className="space-y-4"
+        >
           <input type="hidden" name="customerId" value={customerId} />
           <input type="hidden" name="tipo" value={tipo} />
 
@@ -90,23 +111,39 @@ export function DialogoMovimiento({
             </Seccion>
 
             <Seccion titulo="Importe" icono={Banknote} columnas={1}>
-              <div className="space-y-2">
-                <Label htmlFor="monto">Importe</Label>
-                <Input
-                  id="monto"
-                  name="monto"
-                  inputMode="decimal"
-                  placeholder="150000"
-                  required
-                  autoFocus
-                />
+              {/* La fecha junto al importe: una deuda vieja que se carga hoy
+                  lleva la suya, y el seguimiento la cuenta atrasada
+                  (M3S3-017). */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="min-w-0 space-y-2">
+                  <Label htmlFor="monto">Importe</Label>
+                  <Input
+                    id="monto"
+                    name="monto"
+                    inputMode="decimal"
+                    placeholder="150000"
+                    required
+                    autoFocus
+                  />
+                </div>
+                <div className="min-w-0 space-y-2">
+                  <Label htmlFor="fecha-movimiento">Fecha</Label>
+                  <CampoFecha
+                    id="fecha-movimiento"
+                    name="fecha"
+                    required
+                    defaultValue={hoy}
+                    max={hoy}
+                    Entrada={Input}
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="detalle">Detalle</Label>
                 <Input
                   id="detalle"
                   name="detalle"
-                  placeholder="Nota de crédito por devolución, factura 0001-00012847…"
+                  placeholder="Nota de crédito por devolución…"
                 />
               </div>
             </Seccion>
@@ -130,4 +167,12 @@ export function DialogoMovimiento({
       </DialogContent>
     </Dialog>
   );
+}
+
+/** Por qué no se puede registrar con la fecha escrita, o null si está bien. */
+function problemaDeFecha(escrita: string, hoy: string): string | null {
+  const iso = escrita.trim() ? aIso(escrita) : null;
+  if (!iso) return "Poné la fecha del movimiento.";
+  if (iso > hoy) return "La fecha no puede ser de mañana en adelante.";
+  return null;
 }

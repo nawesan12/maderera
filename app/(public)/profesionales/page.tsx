@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { laLista } from "@/lib/precios/nombre-de-lista";
 import { metadatosDePagina } from "@/lib/seo";
 import { ajustesDelSitio, tienda } from "@/lib/dal/contenido";
 import { preciosDelProfesional } from "@/lib/tienda";
@@ -31,6 +32,10 @@ import {
 } from "@/lib/dal/profesionales";
 import { fechaLarga, formatearMonto, telefonoParaMarcar } from "@/lib/formato";
 import { FormularioProfesional } from "./formulario";
+import { COOKIE_SOLICITUD } from "@/lib/profesionales/solicitud";
+import { cookies } from "next/headers";
+import { creditoDisponible } from "@/lib/dal/cuenta";
+import { ZonaSinFlotante } from "@/components/whatsapp/zona-sin-flotante";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
 import { DONDE_SE_CORTA } from "@/lib/sucursales";
 import {
@@ -104,7 +109,7 @@ export default async function ProfesionalesPage() {
   /* El teléfono estaba escrito a mano —"(0223) 474-3328"— y no era el de
      ninguna de las dos sucursales. Sale de `branches` como el resto del sitio. */
   const [casaCentral] = await listarSucursalesPublicas();
-  const [estado, sesion, cliente, eventos, documentos, laTienda, ajustes] =
+  const [estado, sesion, cliente, eventos, documentos, laTienda, ajustes, galletas] =
     await Promise.all([
       estadoProfesional(),
       getSession(),
@@ -113,7 +118,14 @@ export default async function ProfesionalesPage() {
       documentosVisibles(),
       tienda(),
       ajustesDelSitio(),
+      cookies(),
     ]);
+  // La solicitud que se mandó sin sesión desde este navegador (M2S3-102).
+  const pedidaSinSesion = galletas.get(COOKIE_SOLICITUD)?.value;
+  const fechaPedida = pedidaSinSesion && !Number.isNaN(Date.parse(pedidaSinSesion)) ? new Date(pedidaSinSesion) : null;
+  // La cuenta corriente con lo que debe y lo que le queda, no el límite
+  // (M3S2-059): es el número que mira todos los días.
+  const credito = estado.aprobado ? await creditoDisponible(0) : null;
 
   return (
     <div className="min-h-screen">
@@ -133,6 +145,8 @@ export default async function ProfesionalesPage() {
           <PanelDelProfesional
             nombreLista={estado.nombreLista}
             limiteCredito={estado.limiteCredito}
+            saldo={credito?.saldo ?? 0}
+            disponible={credito?.disponible ?? 0}
             documentos={documentos.length}
             tiendaActiva={laTienda.activa}
             conPrecios={preciosDelProfesional(
@@ -223,9 +237,14 @@ export default async function ProfesionalesPage() {
             {/* En el teléfono el formulario va primero: quedaba al final, después
                 de las preguntas frecuentes, y quien venía a pedir la cuenta no
                 lo encontraba. */}
-            <aside id="pedir" className="order-first lg:sticky lg:top-[96px] lg:order-none">
+            {/* El WhatsApp flotante tapaba el campo «Empresa» en el teléfono
+                (M2S1-107): se va mientras el formulario está a la vista. */}
+            <ZonaSinFlotante soloEnCelular className="order-first lg:sticky lg:top-[96px] lg:order-none">
+            <aside id="pedir">
               {estado.solicitud?.estado === "pendiente" ? (
                 <EstadoDeSolicitud fecha={estado.solicitud.createdAt} tiendaActiva={laTienda.activa} />
+              ) : !estado.solicitud && fechaPedida ? (
+                <EstadoDeSolicitud fecha={fechaPedida} tiendaActiva={laTienda.activa} />
               ) : estado.solicitud?.estado === "rechazada" ? (
                 <SolicitudRechazada motivo={estado.solicitud.motivoRechazo} />
               ) : (
@@ -235,11 +254,13 @@ export default async function ProfesionalesPage() {
                     <FormularioProfesional
                       emailSugerido={cliente?.email ?? sesion?.email}
                       nombreSugerido={cliente?.nombre ?? sesion?.name}
+                      telefonoSugerido={cliente?.telefono}
                     />
                   </div>
                 </div>
               )}
             </aside>
+            </ZonaSinFlotante>
           </div>
         )}
 
@@ -326,12 +347,16 @@ export default async function ProfesionalesPage() {
 function PanelDelProfesional({
   nombreLista,
   limiteCredito,
+  saldo,
+  disponible,
   documentos,
   tiendaActiva,
   conPrecios,
 }: {
   nombreLista: string | null;
   limiteCredito: number;
+  saldo: number;
+  disponible: number;
   documentos: number;
   /** Apagada, el presupuesto espera. */
   tiendaActiva: boolean;
@@ -344,7 +369,7 @@ function PanelDelProfesional({
       icono: Percent,
       titulo: "Tus precios en el catálogo",
       detalle: nombreLista
-        ? `Estás viendo la lista ${nombreLista}.`
+        ? `Estás viendo ${laLista(nombreLista).antes}${laLista(nombreLista).nombre}.`
         : "Los precios que ves ya son los tuyos.",
     },
     {
@@ -353,14 +378,14 @@ function PanelDelProfesional({
       titulo: "Cuenta corriente",
       detalle:
         limiteCredito > 0
-          ? `Tu límite es de ${formatearMonto(limiteCredito)}.`
+          ? `${saldo > 0 ? `Debés ${formatearMonto(saldo)}` : saldo < 0 ? `${formatearMonto(-saldo)} a favor` : "Al día"} · ${formatearMonto(disponible)} disponibles`
           : "Consultanos para habilitarla.",
     },
     {
       href: "/carrito",
       icono: Clock,
       titulo: "Presupuesto express",
-      detalle: "Mandá la lista de la obra y contestamos en 24 horas hábiles.",
+      detalle: "Mandá la lista de la obra.",
     },
     {
       href: "/documentacion",
@@ -387,21 +412,25 @@ function PanelDelProfesional({
   );
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    // En el teléfono, filas compactas con el ícono a la izquierda: cada
+    // tarjeta medía 340 px y entraban dos por pantalla (M2S2-126).
+    <div className="grid gap-2.5 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
       {accesos.map((a) => (
         <Link
           key={a.href}
           href={a.href}
-          className="group flex flex-col rounded-2xl superficie p-6 transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md"
+          className="group flex items-center gap-4 rounded-2xl superficie p-4 transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md sm:flex-col sm:items-start sm:gap-0 sm:p-6"
         >
-          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-naranja-claro text-acento-texto">
-            <a.icono className="h-6 w-6" />
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-naranja-claro text-acento-texto sm:h-12 sm:w-12">
+            <a.icono className="h-5 w-5 sm:h-6 sm:w-6" />
           </span>
-          <span className="mt-4 flex items-center gap-2 text-[20px] font-bold tracking-[-0.02em]">
-            {a.titulo}
-            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-2 text-[17px] font-bold tracking-[-0.02em] sm:mt-4 sm:text-[20px]">
+              {a.titulo}
+              <ArrowRight className="hidden h-4 w-4 transition-transform group-hover:translate-x-1 sm:block" />
+            </span>
+            <span className="mt-0.5 block text-[15px] text-texto-2 sm:mt-1 sm:text-base">{a.detalle}</span>
           </span>
-          <span className="mt-1 text-base text-texto-2">{a.detalle}</span>
         </Link>
       ))}
     </div>

@@ -16,7 +16,14 @@ import {
  * con las flechas y se entra con Enter, para no tener que soltar el teclado
  * mientras se carga mercadería.
  */
-export function BuscadorGlobal() {
+export function BuscadorGlobal({
+  // Corto: a 375 px la promesa larga se cortaba en «Buscar cliente, ped»
+  // (M2S4-050).
+  queBusca = "Buscar",
+}: {
+  /** Lo que de verdad encuentra para el rol: el aserradero solo cortes (M2S4-041). */
+  queBusca?: string;
+} = {}) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const resaltadoRef = useRef<HTMLButtonElement>(null);
@@ -110,7 +117,7 @@ export function BuscadorGlobal() {
         // El retardo deja que el clic sobre un resultado llegue antes de que
         // el panel se cierre; sin él, el blur lo desmonta primero.
         onBlur={() => setTimeout(() => setCerrado(true), 150)}
-        placeholder="Buscar cliente, pedido, comprobante, producto…"
+        placeholder={queBusca}
         aria-label="Buscar en el panel"
         className="h-10 w-full rounded-lg border border-linea bg-card pl-10 pr-14 text-[15px] outline-none transition-colors placeholder:text-texto-3 focus:border-accion/50"
       />

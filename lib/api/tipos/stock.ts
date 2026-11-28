@@ -133,6 +133,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/stock/traslados/{id}/anular": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AnularTraslado"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/sucursales": {
         parameters: {
             query?: never;
@@ -247,33 +263,60 @@ export interface components {
             sucursales: components["schemas"]["StockEnSucursal"][];
             /**
              * Format: double
-             * @description la suma de lo disponible de cada sucursal
+             * @description la suma de lo disponible de las sucursales que tienen (un negativo no resta)
              */
             total: number;
+            /**
+             * Format: double
+             * @description lo vendido de más
+             */
+            faltante: number;
             paraReponer: boolean;
         };
         Traslado: {
             id: string;
             codigo: string;
+            origenId: string;
             origen: string;
             destino: string;
             nota: string | null;
             /** @enum {string} */
-            estado: "en-camino" | "recibido";
+            estado: "en-camino" | "recibido" | "anulado";
             creadoPor: string | null;
             /** Format: date-time */
             createdAt: string;
             recibidoPor: string | null;
             /** Format: date-time */
             recibidoAt: string | null;
+            /**
+             * @description Qué pasó con lo que no llegó
+             * @enum {string|null}
+             */
+            faltante: "origen" | "perdido" | null;
+            anuladoPor: string | null;
+            /** Format: date-time */
+            anuladoAt: string | null;
             renglones: {
                 variantId: string;
                 producto: string;
                 medida: string;
                 sku: string;
                 unidad: string;
-                /** Format: double */
+                /**
+                 * Format: double
+                 * @description Lo que se mandó
+                 */
                 cantidad: number;
+                /**
+                 * Format: double
+                 * @description Lo que llegó
+                 */
+                recibido: number | null;
+                /**
+                 * @description Qué pasó con lo que no llegó de esta medida
+                 * @enum {string|null}
+                 */
+                faltante: "origen" | "perdido" | null;
             }[];
         };
     };
@@ -303,6 +346,8 @@ export interface operations {
                 estado?: "todas" | "sin-stock" | "reponer" | "con-stock";
                 marca?: string;
                 proveedor?: string;
+                /** @description El slug de una sucursal; los grupos miran solo esa */
+                sucursal?: string;
                 limite?: number;
                 desplazamiento?: number;
             };
@@ -404,6 +449,18 @@ export interface operations {
                         note: string | null;
                         /** Format: date-time */
                         createdAt: string;
+                        /** @description Quién lo hizo */
+                        usuario: string | null;
+                        /**
+                         * Format: double
+                         * @description El stock de la sucursal antes de un ajuste o un conteo
+                         */
+                        antes: number | null;
+                        /**
+                         * Format: double
+                         * @description Y después
+                         */
+                        despues: number | null;
                     }[];
                 };
             };
@@ -570,9 +627,51 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @description Lo que llegó de cada medida. Sin renglones, llegó todo lo del comprobante */
+                    renglones?: {
+                        variantId: string;
+                        cantidad: string;
+                        /**
+                         * @description Lo que no llegó de esta medida; sin esto
+                         * @enum {string}
+                         */
+                        faltante?: "origen" | "perdido";
+                    }[];
+                    /**
+                     * @description Lo que no llegó vuelve al origen o se perdió
+                     * @enum {string}
+                     */
+                    faltante?: "origen" | "perdido";
+                };
+            };
+        };
         responses: {
             /** @description Recibido; el destino suma lo que llegó */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    AnularTraslado: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Anulado; todo vuelve al origen */
             204: {
                 headers: {
                     [name: string]: unknown;

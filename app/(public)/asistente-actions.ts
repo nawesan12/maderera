@@ -1,8 +1,14 @@
 "use server";
 
 import { z } from "zod";
-import { listarCategorias, listarProductos } from "@/lib/dal/catalog";
+import {
+  listarCategorias,
+  listarProductos,
+  obtenerProductoPublico,
+  preciosPropiosPorVariante,
+} from "@/lib/dal/catalog";
 import { listarSucursalesPublicas, listarZonasDeEnvio } from "@/lib/dal/envios";
+import { promosVigentes, tienda } from "@/lib/dal/contenido";
 import { apiPublica, datos as cuerpo } from "@/lib/api/servidor";
 import { responderLocal, type Entendido } from "@/lib/asistente/respuestas";
 
@@ -98,8 +104,18 @@ export interface DatoDelAsistente {
 }
 
 export async function datosDelAsistente(
-  cual: "sucursales" | "envios" | "pagos",
+  cual: "sucursales" | "envios" | "pagos" | "promociones",
 ): Promise<DatoDelAsistente[]> {
+  if (cual === "promociones") {
+    // Las de la portada (cuotas, bancos): a «¿puedo pagar con cuotas?» el
+    // asistente no las mencionaba (mes simulado, M2S1-200).
+    const promos = await promosVigentes();
+    return promos.map((p) => ({
+      titulo: p.medio ? `${p.titulo} · ${p.medio}` : p.titulo,
+      detalle: [p.detalle, p.dias, p.vigenciaHasta ? `hasta ${p.vigenciaHasta}` : null].filter(Boolean).join(" · "),
+    }));
+  }
+
   if (cual === "sucursales") {
     const sucursales = await listarSucursalesPublicas();
 
@@ -114,9 +130,11 @@ export async function datosDelAsistente(
 
     return zonas.map((z) => ({
       titulo: z.nombre,
+      // La zona que se cotiza caso por caso no es «Sin cargo»: así se le
+      // prometía flete gratis a 170 km (mes simulado, M2S1-104).
       detalle: [
-        z.costo > 0 ? `Flete ${moneda(z.costo)}` : "Sin cargo",
-        z.envioGratisDesde > 0
+        z.aCotizar ? "A cotizar" : z.costo > 0 ? `Flete ${moneda(z.costo)}` : "Sin cargo",
+        !z.aCotizar && z.envioGratisDesde > 0
           ? `sin cargo desde ${moneda(z.envioGratisDesde)}`
           : null,
         z.demoraEstimada,
@@ -132,18 +150,38 @@ export async function datosDelAsistente(
    * lugares. Se deja así porque llevarlas a la base para tres renglones que
    * cambian una vez por año sería más máquina que problema.
    */
+  // «Online» solo con la tienda prendida (M2S1-200).
+  const { activa } = await tienda();
   return [
     { titulo: "Efectivo", detalle: "Al retirar o contra entrega" },
     { titulo: "Transferencia", detalle: "Te pasamos los datos al confirmar" },
     {
       titulo: "Tarjeta",
-      detalle: "Débito y crédito, en el mostrador y online",
+      detalle: activa ? "Débito y crédito, en el mostrador y online" : "Débito y crédito, en el mostrador",
     },
     {
       titulo: "Cuenta corriente",
       detalle: "Para clientes profesionales aprobados",
     },
   ];
+}
+
+/**
+ * El precio de la medida que muestra la tarjeta. El listado trae el «desde»
+ * del producto, que es el de la medida más barata: la Melamina de 18 mm salía
+ * con el precio de la de 15 (mes simulado, M2S3-009). Con la tienda apagada
+ * el listado no trae precio, y la medida tampoco.
+ */
+async function precioDeLaMedida(
+  p: ProductoDelAsistente,
+  medida: string | null,
+  propios: Record<string, string>,
+): Promise<string | null> {
+  if (!p.precioDesde || !medida || p.medidas.length < 2) return p.precioDesde;
+  const ficha = await obtenerProductoPublico(p.slug);
+  const variante = ficha?.variantes.find((v) => v.label === medida);
+  if (!variante) return p.precioDesde;
+  return propios[variante.id] ?? variante.precio ?? p.precioDesde;
 }
 
 function moneda(valor: number): string {
@@ -163,6 +201,7 @@ export interface EquipajeDelAsistente {
   sucursales: DatoDelAsistente[];
   envios: DatoDelAsistente[];
   pagos: DatoDelAsistente[];
+  promociones: DatoDelAsistente[];
 }
 
 /**
@@ -179,14 +218,15 @@ export interface EquipajeDelAsistente {
  * el precio de un profesional.
  */
 export async function equipajeDelAsistente(): Promise<EquipajeDelAsistente> {
-  const [rubros, sucursales, envios, pagos] = await Promise.all([
+  const [rubros, sucursales, envios, pagos, promociones] = await Promise.all([
     rubrosDelAsistente(),
     datosDelAsistente("sucursales"),
     datosDelAsistente("envios"),
     datosDelAsistente("pagos"),
+    datosDelAsistente("promociones"),
   ]);
 
-  return { rubros, sucursales, envios, pagos };
+  return { rubros, sucursales, envios, pagos, promociones };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -258,14 +298,16 @@ export async function preguntarAlAsistente(
     // hay" a quien preguntó por un fenólico, teniendo fenólicos en otros
     // espesores, es perder una venta que el mostrador no perdería.
     // Y la tarjeta muestra la medida que pidieron, no la primera del producto.
-    if (conEsaMedida.length > 0)
-      productos = conEsaMedida.map((p) => ({
-        ...p,
-        medida:
-          p.medidas.find((m) =>
-            new RegExp(`\\b${espesor}\\s*mm`, "i").test(m),
-          ) ?? p.medida,
-      }));
+    if (conEsaMedida.length > 0) {
+      const propios = await preciosPropiosPorVariante();
+      productos = await Promise.all(
+        conEsaMedida.map(async (p) => {
+          const medida =
+            p.medidas.find((m) => new RegExp(`\\b${espesor}\\s*mm`, "i").test(m)) ?? p.medida;
+          return { ...p, medida, precioDesde: await precioDeLaMedida(p, medida, propios) };
+        }),
+      );
+    }
   }
 
   if (productos.length === 0 && leido.rubro) {
@@ -280,6 +322,27 @@ export async function preguntarAlAsistente(
       aPersona: true,
       sugerencias: [{ texto: "Ver los rubros", va: "rubros" }],
     };
+  }
+
+  // Lo que se buscó y se encontró no se dice «no lo encontré» (M2S1-199):
+  // si alguno de los del rubro coincide con lo escrito, la respuesta es
+  // la de una búsqueda, con los que coinciden primero y sin los demás.
+  if (porRubro) {
+    const comunes = new Set(["necesito", "para", "quiero", "tengo", "busco", "hacer", "como", "tienen", "hay"]);
+    const palabras = `${leido.consulta} ${leido.texto}`
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .split(/\s+/)
+      .filter((w) => w.length >= 4 && !comunes.has(w));
+    const coinciden = productos.filter((p) => {
+      const nombre = p.nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      return palabras.some((w) => nombre.includes(w.replace(/s$/, "")));
+    });
+    if (coinciden.length > 0) {
+      productos = coinciden;
+      porRubro = false;
+    }
   }
 
   const cantidad = leido.cantidad

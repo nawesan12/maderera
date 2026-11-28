@@ -29,6 +29,7 @@ import (
 	"mjbj/internal/email"
 	"mjbj/internal/entregas"
 	"mjbj/internal/facturacion"
+	"mjbj/internal/fiscal"
 	"mjbj/internal/formato"
 	"mjbj/internal/pagos"
 	"mjbj/internal/pdf"
@@ -82,6 +83,7 @@ func (s *Servicio) Registrar(c *cola.Cola) {
 	c.Registrar(checkout.TrabajoPedidoRecibido, porID("orderId", s.PedidoRecibido))
 	c.Registrar(checkout.TrabajoPresupuestoRecibido, porID("quoteId", s.PresupuestoRecibido))
 	c.Registrar(pedidos.TrabajoPresupuestoEnviado, porID("quoteId", s.PresupuestoEnviado))
+	c.Registrar(pedidos.TrabajoPresupuestoPorCorreo, porID("quoteId", s.PresupuestoPorCorreo))
 	c.Registrar(entregas.TrabajoRemitoParaFirmar, porID("deliveryId", s.RemitoParaFirmar))
 	c.Registrar(entregas.TrabajoRemitoFirmado, porID("deliveryId", s.RemitoFirmado))
 	c.Registrar(pedidos.TrabajoCambioDeEstado, s.manejador(func(ctx context.Context, crudo json.RawMessage) error {
@@ -112,13 +114,37 @@ func (s *Servicio) Registrar(c *cola.Cola) {
 	}))
 	c.Registrar(cobros.TrabajoChequeRechazado, s.manejador(func(ctx context.Context, crudo json.RawMessage) error {
 		var carga struct {
-			ChequeID   string `json:"chequeId"`
-			PorElBanco bool   `json:"porElBanco"`
+			ChequeID        string `json:"chequeId"`
+			PorElBanco      bool   `json:"porElBanco"`
+			Devuelto        bool   `json:"devuelto"`
+			VolvioALaCuenta bool   `json:"volvioALaCuenta"`
 		}
 		if err := json.Unmarshal(crudo, &carga); err != nil {
 			return err
 		}
+		if carga.Devuelto {
+			return s.ChequeDevuelto(ctx, carga.ChequeID, carga.VolvioALaCuenta)
+		}
 		return s.ChequeRechazado(ctx, carga.ChequeID, carga.PorElBanco)
+	}))
+	c.Registrar(facturacion.TrabajoAvisoDeRenumerada, s.manejador(func(ctx context.Context, crudo json.RawMessage) error {
+		var carga struct {
+			InvoiceID string `json:"invoiceId"`
+			Anterior  string `json:"anterior"`
+		}
+		if err := json.Unmarshal(crudo, &carga); err != nil {
+			return err
+		}
+		return s.FacturaRenumerada(ctx, carga.InvoiceID, carga.Anterior)
+	}))
+	c.Registrar(facturacion.TrabajoAvisoDeBaja, s.manejador(func(ctx context.Context, crudo json.RawMessage) error {
+		var carga struct {
+			BajaID string `json:"bajaId"`
+		}
+		if err := json.Unmarshal(crudo, &carga); err != nil {
+			return err
+		}
+		return s.FacturaDadaDeBaja(ctx, carga.BajaID)
 	}))
 	c.Registrar(facturacion.TrabajoAvisoDeFactura, s.manejador(func(ctx context.Context, crudo json.RawMessage) error {
 		var carga struct {
@@ -244,11 +270,16 @@ func (s *Servicio) ChequeRechazado(ctx context.Context, id string, porElBanco bo
 			paraWa = "lo rechazó el banco"
 		}
 	}
-	s.wa.AvisarPorWhatsapp(ctx, whatsapp.OpcionesAviso{
-		Evento: "cheque_rechazado", Telefono: telefono, Nombre: &nombre,
-		Valores: map[string]string{"cheque": cheque, "importe": formato.Importe(importe), "motivo": paraWa},
-		Entidad: &whatsapp.Entidad{Tipo: "cheque", ID: id},
-	})
+	// La plantilla de WhatsApp de este evento dice que el importe volvió a
+	// la cuenta: de un cheque que no se aceptó es falso (M2S4-017). Ese va
+	// solo por correo.
+	if porElBanco {
+		s.wa.AvisarPorWhatsapp(ctx, whatsapp.OpcionesAviso{
+			Evento: "cheque_rechazado", Telefono: telefono, Nombre: &nombre,
+			Valores: map[string]string{"cheque": whatsapp.ChequeEnLaPlantilla(tipo, banco, numero), "importe": formato.Importe(importe), "motivo": paraWa},
+			Entidad: &whatsapp.Entidad{Tipo: "cheque", ID: id},
+		})
+	}
 	if correo == nil || *correo == "" {
 		return nil
 	}
@@ -258,7 +289,36 @@ func (s *Servicio) ChequeRechazado(ctx context.Context, id string, porElBanco bo
 	}
 	s.correo.Despachar(ctx, avisos.Despacho{
 		Evento: "cheque_rechazado", Para: *correo, EntidadTipo: "cheque", EntidadID: id,
-		Correo: avisos.ChequeRechazado(s.sitio, primerNombre(nombre), cheque, importe, sinRecortar, porElBanco),
+		Correo:       avisos.ChequeRechazado(s.sitio, primerNombre(nombre), cheque, importe, sinRecortar, porElBanco),
+		AsuntoPropio: !porElBanco,
+	})
+	return nil
+}
+
+// ChequeDevuelto avisa por correo que se le devolvió al cliente un cheque de
+// la cartera. Por WhatsApp no sale solo: la plantilla de cheque_rechazado
+// dice que no se pudo acreditar (M2S4-017); a mano, el botón arma el texto
+// de la devolución.
+func (s *Servicio) ChequeDevuelto(ctx context.Context, id string, volvioALaCuenta bool) error {
+	var tipo, numero, nombre string
+	var banco, correo *string
+	var importe float64
+	err := s.pool.QueryRow(ctx, `SELECT ch.tipo::text, ch.numero, ch.banco, ch.importe::float8, c.nombre, c.email
+		FROM cheques ch JOIN customers c ON c.id = ch.customer_id WHERE ch.id = $1`, id).
+		Scan(&tipo, &numero, &banco, &importe, &nombre, &correo)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if correo == nil || *correo == "" {
+		return nil
+	}
+	s.correo.Despachar(ctx, avisos.Despacho{
+		Evento: "cheque_rechazado", Para: *correo, EntidadTipo: "cheque", EntidadID: id,
+		Correo:       avisos.ChequeDevuelto(s.sitio, primerNombre(nombre), cobros.NombreDelCheque(tipo, banco, numero), importe, volvioALaCuenta),
+		AsuntoPropio: true,
 	})
 	return nil
 }
@@ -272,6 +332,18 @@ func (s *Servicio) Factura(ctx context.Context, id string) error {
 	}
 	if c.CustomerID == nil {
 		return nil
+	}
+	// Sin CAE el número todavía no es definitivo: una baja anterior lo corre
+	// y el cliente se quedaba con el PDF de un número que ya no existe (mes
+	// simulado 2). Sale con el CAE (AvisarFactura, al autorizar). La
+	// excepción es el cliente que ya lo tiene (se lo mandaron por WhatsApp
+	// desde el panel): si se le corrigen los datos, le llega el corregido
+	// (mes 23, FLUJO-F092). Antes la corrección encolaba este aviso y no
+	// salía nada.
+	if c.Cae == nil || *c.Cae == "" {
+		if recibio, err := s.loRecibio(ctx, id); err != nil || !recibio {
+			return err
+		}
 	}
 	cl, err := s.cliente(ctx, *c.CustomerID)
 	if err != nil || cl == nil || cl.email == nil || *cl.email == "" {
@@ -291,6 +363,88 @@ func (s *Servicio) Factura(ctx context.Context, id string) error {
 		Evento: "factura_emitida", Para: *cl.email, EntidadTipo: "invoice", EntidadID: id,
 		Correo:   avisos.FacturaEmitida(s.sitio, nombre, etiqueta, total, c.Cae != nil && *c.Cae != ""),
 		Adjuntos: []email.Adjunto{{Nombre: nombreArchivo, Contenido: archivo, Tipo: "application/pdf"}},
+	})
+	return nil
+}
+
+// FacturaRenumerada le reenvía al cliente el comprobante sin CAE que cambió
+// de número por una baja, con el PDF nuevo (M2S1-010). Solo a quien tenía el
+// número viejo: «Tu comprobante X ahora es Y» le llegaba a un cliente que
+// nunca recibió X (mes 23).
+func (s *Servicio) FacturaRenumerada(ctx context.Context, id, anterior string) error {
+	c, err := s.facturacion.Obtener(ctx, id)
+	if err != nil || c == nil || c.CustomerID == nil {
+		if errors.Is(err, facturacion.ErrNoEsta) {
+			return nil
+		}
+		return err
+	}
+	if recibio, err := s.loRecibio(ctx, id); err != nil || !recibio {
+		return err
+	}
+	cl, err := s.cliente(ctx, *c.CustomerID)
+	if err != nil || cl == nil || cl.email == nil || *cl.email == "" {
+		return err
+	}
+	archivo, nombreArchivo, err := s.facturacion.Pdf(ctx, c)
+	if err != nil {
+		return err
+	}
+	nuevo := fiscal.NombreComprobante(c.Tipo) + " " + fiscal.NumeroFormateado(c.PuntoVenta, c.Numero)
+	nombre := primerNombre(c.ReceptorNombre)
+	if nombre == "" {
+		nombre = "cliente"
+	}
+	total, _ := strconv.ParseFloat(c.Total, 64)
+	s.correo.Despachar(ctx, avisos.Despacho{
+		Evento: "comprobante_renumerado", Para: *cl.email, EntidadTipo: "invoice", EntidadID: id,
+		Correo:   avisos.ComprobanteRenumerado(s.sitio, nombre, anterior, nuevo, total),
+		Adjuntos: []email.Adjunto{{Nombre: nombreArchivo, Contenido: archivo, Tipo: "application/pdf"}},
+	})
+	return nil
+}
+
+// loRecibio: el comprobante ya le llegó al cliente por algún canal (el
+// correo, el WhatsApp automático o el que se manda desde el panel).
+func (s *Servicio) loRecibio(ctx context.Context, id string) (bool, error) {
+	var hay bool
+	err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM notifications_log WHERE entidad_id = $1::uuid
+		AND estado IN ('enviada', 'simulada'))`, id).Scan(&hay)
+	return hay, err
+}
+
+// FacturaDadaDeBaja le avisa al cliente que el comprobante que recibió se
+// dio de baja y no vale (M3S4-009). El motivo es interno: no va. Solo a
+// quien lo recibió: sin CAE no se le manda, y «quedó sin efecto» le llegaba
+// por un comprobante que nunca vio (mes 23).
+func (s *Servicio) FacturaDadaDeBaja(ctx context.Context, bajaID string) error {
+	var tipo, receptor, invoiceID string
+	var pv, numero int64
+	var cliente *string
+	var total float64
+	err := s.pool.QueryRow(ctx, `SELECT invoice_id::text, tipo::text, punto_venta, numero, customer_id, receptor_nombre, total::float8
+		FROM invoices_dadas_de_baja WHERE id = $1`, bajaID).Scan(&invoiceID, &tipo, &pv, &numero, &cliente, &receptor, &total)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && cliente == nil) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if recibio, err := s.loRecibio(ctx, invoiceID); err != nil || !recibio {
+		return err
+	}
+	cl, err := s.cliente(ctx, *cliente)
+	if err != nil || cl == nil || cl.email == nil || *cl.email == "" {
+		return err
+	}
+	nombre := primerNombre(receptor)
+	if nombre == "" {
+		nombre = "cliente"
+	}
+	etiqueta := fiscal.NombreComprobante(tipo) + " " + fiscal.NumeroFormateado(pv, numero)
+	s.correo.Despachar(ctx, avisos.Despacho{
+		Evento: "comprobante_dado_de_baja", Para: *cl.email, EntidadTipo: "baja", EntidadID: bajaID,
+		Correo: avisos.ComprobanteDadoDeBaja(s.sitio, nombre, etiqueta, total),
 	})
 	return nil
 }

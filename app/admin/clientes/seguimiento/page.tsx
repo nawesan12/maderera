@@ -6,7 +6,7 @@ import { Vacio } from "@/components/admin/vacio";
 import { requireStaff } from "@/lib/dal/session";
 import { listarGestiones } from "@/lib/dal/admin/seguimiento";
 import { TableroDeSeguimiento } from "./vista";
-import { obtenerCliente } from "@/lib/dal/admin/clientes";
+import { listarClientes, obtenerCliente } from "@/lib/dal/admin/clientes";
 import { esUuid } from "@/lib/uuid";
 import { formatearMonto, plural } from "@/lib/formato";
 
@@ -41,10 +41,26 @@ export default async function SeguimientoPage({
   // El cliente de una gestión nueva se busca escribiendo
   // (components/admin/elegir-cliente.tsx): antes esta pantalla se bajaba la
   // cartera entera para filtrarla en el navegador.
-  const gestiones = await listarGestiones({ incluirCerradas: true });
+  const [gestiones, cartera] = await Promise.all([listarGestiones({ incluirCerradas: true }), listarClientes({})]);
 
   const abiertas = gestiones.filter((g) => g.etapa !== "cerrado");
-  const vencidas = abiertas.filter((g) => g.vencida).length;
+  // Los que deben, del de más prioridad al de menos: el atraso de cada
+  // gestión, y a quién llamar primero aunque nadie le haya abierto una
+  // (mes simulado 2: Taller Bosque debía y no figuraba).
+  const conGestion = new Set(abiertas.map((g) => g.customerId));
+  const deudores = cartera.porCobrar.map((c) => ({
+    id: c.id,
+    nombre: c.razonSocial || c.nombre,
+    saldo: c.saldo,
+    vencido: c.deuda?.vencido ?? 0,
+    // Desde el vencimiento, no desde la compra (mes 23): los días de crédito
+    // no son atraso, como en Clientes.
+    dias: c.deuda?.prioridad.diasVencida ?? null,
+    razonSocial: c.razonSocial,
+    cuit: c.cuit,
+    seguido: conGestion.has(c.id),
+  }));
+  const vencidas = abiertas.filter((g) => g.vencida || g.paraHoy).length;
 
   return (
     <div className="space-y-6">
@@ -65,7 +81,7 @@ export default async function SeguimientoPage({
         }
       />
 
-      {gestiones.length === 0 ? (
+      {gestiones.length === 0 && deudores.length === 0 ? (
         <section className="tarjeta overflow-hidden">
           <Vacio
             icono={ClipboardList}
@@ -78,6 +94,7 @@ export default async function SeguimientoPage({
 
       <TableroDeSeguimiento
         gestiones={gestiones}
+        deudores={deudores}
         nueva={
           deudor
             ? {

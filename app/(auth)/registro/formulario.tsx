@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,14 @@ const estadoInicial: EstadoRegistro = {};
 
 export function FormularioRegistro({ volver }: { volver?: string }) {
   const [estado, accion, pendiente] = useActionState(registrarse, estadoInicial);
+  const clave = useRef<HTMLInputElement>(null);
+  const noCoinciden = estado.error === "Las dos contraseñas tienen que coincidir.";
+
+  // `autoFocus` solo actúa al montar: al volver con el error el foco quedaba
+  // en el cuerpo de la página (mes 23). Cada respuesta es un objeto nuevo.
+  useEffect(() => {
+    if (noCoinciden) clave.current?.focus();
+  }, [estado, noCoinciden]);
 
   return (
     <form action={accion} className="space-y-4">
@@ -22,7 +30,7 @@ export function FormularioRegistro({ volver }: { volver?: string }) {
           id="nombre"
           name="nombre"
           autoComplete="name"
-          placeholder="Juan Pérez"
+          defaultValue={estado.valores?.nombre}
           required
         />
       </div>
@@ -34,7 +42,7 @@ export function FormularioRegistro({ volver }: { volver?: string }) {
           name="email"
           type="email"
           autoComplete="email"
-          placeholder="juan@ejemplo.com"
+          defaultValue={estado.valores?.email}
           required
         />
       </div>
@@ -46,7 +54,7 @@ export function FormularioRegistro({ volver }: { volver?: string }) {
           name="telefono"
           type="tel"
           autoComplete="tel"
-          placeholder="223 590-3118"
+          defaultValue={estado.valores?.telefono}
           required
         />
         <p className="text-xs text-muted-foreground">
@@ -63,6 +71,8 @@ export function FormularioRegistro({ volver }: { volver?: string }) {
             type="password"
             autoComplete="new-password"
             minLength={8}
+            ref={clave}
+            aria-invalid={noCoinciden || undefined}
             required
           />
         </div>
@@ -79,10 +89,21 @@ export function FormularioRegistro({ volver }: { volver?: string }) {
         </div>
       </div>
 
+      {/* Destildada: las novedades por correo son con permiso (M2S2-050). */}
+      <label className="flex items-center gap-3 text-[15px]">
+        <input
+          type="checkbox"
+          name="novedades"
+          defaultChecked={estado.valores?.novedades ?? false}
+          className="h-5 w-5 shrink-0 accent-[var(--accion)]"
+        />
+        Quiero recibir novedades y promociones por correo
+      </label>
+
       {estado.error && (
         <p
           role="alert"
-          className="flex items-center gap-2 rounded-lg bg-brand-red/10 px-3 py-2 text-sm text-brand-red"
+          className="estado-problema flex items-center gap-2 rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-sm font-medium text-[var(--estado-tinta)]"
         >
           <AlertCircle className="h-4 w-4 shrink-0" />
           {estado.error}

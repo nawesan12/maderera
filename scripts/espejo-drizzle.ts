@@ -29,8 +29,16 @@ import * as schema from "../lib/db/schema";
 const SOLO_EN_GO = new Set([
   "goose_db_version",
   "bases_de_retencion",
+  // Lo que sale de la caja fuerte al banco (00350): lo escribe solo Go.
+  "caja_fuerte_movimientos",
+
   "purchase_invoice_receipts",
   "supplier_payment_cheques",
+  // Los ajustes que paga un pago y lo que cubría un pago anulado (00401).
+  "supplier_payment_ajustes",
+  "supplier_payment_anulado_items",
+  // Lo que una nota de crédito le devuelve al proveedor (00403).
+  "purchase_return_items",
   "cheque_estados",
   "consultas_corte",
   "consultas_corte_grupos",
@@ -50,6 +58,8 @@ const SOLO_EN_GO = new Set([
   // Copia de respaldo que dejó la 00150 al normalizar los rubros.
   "product_images_rubro_00150",
   "receipt_refunds",
+  // El saldo del banco que se carga desde el inicio (00450): solo Go.
+  "saldos_de_banco",
   // Los traslados entre sucursales (00270): los escribe solo Go.
   "stock_traslado_items",
   "stock_traslados",

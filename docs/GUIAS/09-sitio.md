@@ -2,6 +2,7 @@
 titulo: El sitio y sus textos
 resumen: Qué del sitio público se edita desde el panel, sin llamar a nadie.
 orden: 9
+para: admin
 ---
 
 ## Lo que se edita solo

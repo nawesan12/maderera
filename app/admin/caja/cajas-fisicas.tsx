@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Loader2, Monitor, Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ChevronDown, Loader2, Monitor, Plus } from "lucide-react";
 import { Confirmar } from "@/components/admin/confirmar";
 import { crearCaja, darDeBajaCaja, type EstadoCajas } from "./actions";
 
@@ -37,8 +38,11 @@ export function CajasFisicas({
   cajas: CajaFisica[];
   sucursales: { id: string; nombre: string }[];
 }) {
+  const router = useRouter();
   const [abierto, setAbierto] = useState(false);
   const [estado, setEstado] = useState<EstadoCajas>({});
+  // La baja se ve en el acto, sin esperar a que vuelva la página.
+  const [dadas, setDadas] = useState<string[]>([]);
   const [enCurso, empezar] = useTransition();
   const [porDarDeBaja, setPorDarDeBaja] = useState<{
     id: string;
@@ -57,8 +61,73 @@ export function CajasFisicas({
         setCodigo("");
         setNombre("");
         setAbierto(false);
+        router.refresh();
       }
     });
+  }
+
+  const todas = cajas.map((c) => (dadas.includes(c.id) ? { ...c, activo: false } : c));
+  const activas = todas.filter((c) => c.activo);
+  const bajas = todas.filter((c) => !c.activo);
+
+  function renglon(c: CajaFisica) {
+    return (
+      <li key={c.id} className="flex flex-wrap items-center gap-3 px-5 py-3.5">
+        <span
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+            c.activo
+              ? "bg-hundida text-muted-foreground"
+              : "bg-muted text-muted-foreground opacity-50"
+          }`}
+        >
+          <Monitor className="h-4.5 w-4.5" />
+        </span>
+
+        <div className="min-w-0 flex-1">
+          <p className="text-base font-semibold">
+            {c.codigo}
+            {c.nombre && (
+              <span className="ml-2 font-normal text-muted-foreground">
+                {c.nombre}
+              </span>
+            )}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {c.sucursal ?? "Sin sucursal"} ·{" "}
+            {c.cuando}
+          </p>
+        </div>
+
+        {c.pendientes > 0 && (
+          <span className="estado-espera inline-flex shrink-0 items-center rounded-lg bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-semibold">
+            {c.pendientes} sin subir
+          </span>
+        )}
+
+        {c.activo && (
+          <button
+            type="button"
+            onClick={() => {
+              // La guarda de verdad está en el servidor; esto evita ir y
+              // volver por algo que ya se ve en pantalla.
+              if (c.pendientes > 0) {
+                setEstado({
+                  error: `${c.codigo} tiene ${c.pendientes} ${
+                    c.pendientes === 1 ? "venta" : "ventas"
+                  } sin subir. Conectá la caja y esperá a que suban.`,
+                });
+                return;
+              }
+              setPorDarDeBaja({ id: c.id, codigo: c.codigo });
+            }}
+            disabled={enCurso}
+            className="inline-flex h-11 shrink-0 items-center rounded-lg border border-linea px-3.5 text-base font-medium transition-colors hover:bg-hundida disabled:opacity-60"
+          >
+            Dar de baja
+          </button>
+        )}
+      </li>
+    );
   }
 
   return (
@@ -143,70 +212,20 @@ export function CajasFisicas({
           Todavía no hay ninguna caja. Sin caja, el mostrador no puede cobrar.
         </p>
       ) : (
-        <ul className="divide-y divide-linea">
-          {cajas.map((c) => (
-            <li key={c.id} className="flex flex-wrap items-center gap-3 px-5 py-3.5">
-              <span
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                  c.activo
-                    ? "bg-hundida text-muted-foreground"
-                    : "bg-muted text-muted-foreground opacity-50"
-                }`}
-              >
-                <Monitor className="h-4.5 w-4.5" />
-              </span>
-
-              <div className="min-w-0 flex-1">
-                <p className="text-base font-semibold">
-                  {c.codigo}
-                  {c.nombre && (
-                    <span className="ml-2 font-normal text-muted-foreground">
-                      {c.nombre}
-                    </span>
-                  )}
-                  {!c.activo && (
-                    <span className="ml-2 text-sm font-normal text-muted-foreground">
-                      (dada de baja)
-                    </span>
-                  )}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {c.sucursal ?? "Sin sucursal"} ·{" "}
-                  {c.cuando}
-                </p>
-              </div>
-
-              {c.pendientes > 0 && (
-                <span className="estado-espera inline-flex shrink-0 items-center rounded-lg bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-semibold">
-                  {c.pendientes} sin subir
-                </span>
-              )}
-
-              {c.activo && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    // La guarda de verdad está en el servidor; esto evita ir y
-                    // volver por algo que ya se ve en pantalla.
-                    if (c.pendientes > 0) {
-                      setEstado({
-                        error: `${c.codigo} tiene ${c.pendientes} ${
-                          c.pendientes === 1 ? "venta" : "ventas"
-                        } sin subir. Conectá la caja y esperá a que suban.`,
-                      });
-                      return;
-                    }
-                    setPorDarDeBaja({ id: c.id, codigo: c.codigo });
-                  }}
-                  disabled={enCurso}
-                  className="inline-flex h-11 shrink-0 items-center rounded-lg border border-linea px-3.5 text-base font-medium transition-colors hover:bg-hundida disabled:opacity-60"
-                >
-                  Dar de baja
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="divide-y divide-linea">{activas.map(renglon)}</ul>
+          {/* Las dadas de baja, juntas al final y plegadas: con cada baja la
+              lista de todos los días crecía (mes simulado, M3S1-036). */}
+          {bajas.length > 0 && (
+            <details className="group border-t border-linea">
+              <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-3 text-sm text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+                <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" aria-hidden="true" />
+                Dadas de baja <span className="tabular">{bajas.length}</span>
+              </summary>
+              <ul className="divide-y divide-linea opacity-70">{bajas.map(renglon)}</ul>
+            </details>
+          )}
+        </>
       )}
 
       <Confirmar
@@ -221,8 +240,13 @@ export function CajasFisicas({
           const caja = porDarDeBaja;
           if (!caja) return;
           empezar(async () => {
-            setEstado(await darDeBajaCaja(caja.id));
+            const r = await darDeBajaCaja(caja.id);
+            setEstado(r);
             setPorDarDeBaja(null);
+            if (r.ok) {
+              setDadas((d) => [...d, caja.id]);
+              router.refresh();
+            }
           });
         }}
       />

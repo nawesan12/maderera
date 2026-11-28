@@ -3,6 +3,7 @@ package reportes
 import (
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -50,13 +51,52 @@ var Cuentas = struct {
 	// DiferenciasDeCaja: el faltante o sobrante del arqueo. La cuenta la
 	// tiene que definir el contador; mientras tanto va acá, a la vista.
 	DiferenciasDeCaja string
+	// MovimientosAImputar: la plata que entra o sale sin que el sistema sepa
+	// contra qué (el retiro de caja «otro», la devolución «por otro medio»,
+	// el cheque cargado sin cobro). Transitoria, a la vista del estudio hasta
+	// que diga a qué cuenta va (mes simulado, M2S3-003, M3S1-052, M3S2-004).
+	MovimientosAImputar string
+	// SaldosIniciales: la contrapartida de lo que entra a una cuenta sin
+	// comprobante (el saldo inicial que vino del sistema anterior, un ajuste
+	// a mano del libro de un proveedor), a definir por el estudio
+	// (M3S1-019, M3S4-006).
+	SaldosIniciales string
+	// TarjetasAAcreditar: lo cobrado con tarjeta hasta que la tarjeta
+	// liquida (liquidaciones_tarjeta, M2S1-058).
+	TarjetasAAcreditar string
+	// AjustesConProveedores: un ajuste anotado a mano en la cuenta de un
+	// proveedor (una bonificación, un redondeo). No tenía asiento y
+	// Proveedores del archivo no coincidía con la ficha (M3S2-028). Como las
+	// diferencias de caja, la cuenta la define el contador.
+	AjustesConProveedores string
+	// DiferenciasDeInventario: la baja (o el alta) de mercadería sin venta
+	// —rotura, faltante, conteo, consumo del taller—, contra Mercaderías
+	// (M3S3-013). La cuenta la define el contador; mientras tanto va acá.
+	DiferenciasDeInventario string
 }{"1.1.01", "1.1.02", "1.1.03", "1.1.05", "1.1.06", "1.2.01", "2.1.01", "2.1.03", "2.1.04", "2.1.05", "4.1.01", "5.1.01", "1.1.04",
 	"2.1.06", "4.1.02",
 	"1.1.07", "1.1.08", "1.1.09", "1.1.10", "1.1.11", "1.1.12",
 	"2.1.07",
 	"2.1.08", "2.1.09", "2.1.10", "2.1.11",
 	"5.1.11",
-	"5.2.01", "2.1.12", "5.1.12"}
+	"5.2.01", "2.1.12", "5.1.12", "2.1.13", "3.1.01", "1.1.13",
+	"5.1.13",
+	"5.1.14"}
+
+// AsientoDeAjusteDeProveedor es el de un ajuste a mano en la cuenta de un
+// proveedor: el que baja la deuda, Proveedores contra Ajustes; el que la
+// sube, al revés.
+func AsientoDeAjusteDeProveedor(fecha time.Time, proveedor, detalle string, monto float64) Asiento {
+	concepto := "Ajuste con " + proveedor
+	if detalle != "" {
+		concepto += ": " + detalle
+	}
+	m := redondear(math.Abs(monto))
+	if monto < 0 {
+		return asiento(fecha, concepto, []RenglonDeAsiento{renglon(Cuentas.Proveedores, m, 0), renglon(Cuentas.AjustesConProveedores, 0, m)})
+	}
+	return asiento(fecha, concepto, []RenglonDeAsiento{renglon(Cuentas.AjustesConProveedores, m, 0), renglon(Cuentas.Proveedores, 0, m)})
+}
 
 // CuentaDeRetencionSufrida es la cuenta del crédito por una retención que
 // nos practicaron, según el impuesto ("" o desconocido: 1.1.06).
@@ -109,7 +149,10 @@ var nombresDeCuenta = map[string]string{
 	"5.1.06": "Sueldos y cargas", "5.1.07": "Mantenimiento", "5.1.08": "Impuestos y tasas", "5.1.09": "Librería y oficina",
 	"5.1.10": "Publicidad", "5.1.11": "Comisiones y gastos bancarios",
 	"5.2.01": "Costo de mercaderías vendidas", "2.1.12": "Cobros a imputar (facturas sin CAE)",
-	"5.1.12": "Diferencias de caja (a definir)",
+	"5.1.12": "Diferencias de caja (a definir)", "2.1.13": "Movimientos de fondos a imputar (a definir)",
+	"3.1.01": "Saldos iniciales y ajustes (a definir)", "1.1.13": "Tarjetas a acreditar",
+	"5.1.13": "Ajustes con proveedores (a definir)",
+	"5.1.14": "Diferencias de inventario (a definir)",
 }
 
 // RenglonDeAsiento es RenglonDeAsiento.
@@ -234,9 +277,17 @@ func cuentaDeCobro(medio string) string {
 		return Cuentas.ValoresADepositar
 	case "retencion":
 		return Cuentas.RetencionesSufridas
+	case MedioAImputar:
+		return Cuentas.MovimientosAImputar
+	case "tarjeta", "tarjeta_debito", "tarjeta_credito", "debito", "credito":
+		return Cuentas.TarjetasAAcreditar
 	}
 	return cuentaDeMedio(medio)
 }
+
+// MedioAImputar es el de la plata que salió por un medio que el sistema no
+// conoce (la devolución «por otro medio»): va a Movimientos a imputar.
+const MedioAImputar = "a_imputar"
 
 // AsientoDeCobro es asientoDeCobro. Pasar una factura a cuenta corriente no
 // es un cobro (no entra plata: la deuda sigue en Deudores), así que no se
@@ -647,6 +698,16 @@ type ChequeAAsentar struct {
 	DelMostradorEnB bool
 }
 
+// LeyendaDelCheque es lo que el asiento dice que le pasó al cheque: el
+// recibido que vuelve de la cartera se le devolvió al cliente (el banco nunca
+// lo tuvo), y el asiento decía «rechazado» (mes 23).
+func LeyendaDelCheque(c ChequeAAsentar) string {
+	if c.Sentido == "recibido" && c.Hacia == "rechazado" && c.Desde == "cartera" {
+		return "devuelto al cliente"
+	}
+	return c.Hacia
+}
+
 // AsientoDeCheque es el asiento de un cambio de estado de un cheque, cada uno
 // en su circuito, y false si ese cambio no mueve cuentas:
 //
@@ -678,10 +739,14 @@ func AsientoDeCheque(c ChequeAAsentar) (Asiento, bool) {
 		}
 		r = []RenglonDeAsiento{renglon(debe, c.Importe, 0), renglon(Cuentas.Proveedores, 0, c.Importe)}
 	case c.Sentido == "recibido" && c.Hacia == "rechazado" && (c.Desde == "cartera" || c.Desde == "depositado") && c.ADeudores:
+		// El de una venta B del mostrador da vuelta su cobro en el B (Valores a
+		// depositar contra Ventas sin factura): la deuda vuelve a la cuenta
+		// con la nota de débito y su cobro se reparte como cualquier recibo.
+		debe := Cuentas.Deudores
 		if c.DelMostradorEnB && c.Circuito == CircuitoNegro {
-			return Asiento{}, false
+			debe = Cuentas.VentasSinFactura
 		}
-		r = []RenglonDeAsiento{renglon(Cuentas.Deudores, c.Importe, 0), renglon(Cuentas.ValoresADepositar, 0, c.Importe)}
+		r = []RenglonDeAsiento{renglon(debe, c.Importe, 0), renglon(Cuentas.ValoresADepositar, 0, c.Importe)}
 	case c.Sentido == "entregado" && c.Hacia == "acreditado" && c.Diferido:
 		r = []RenglonDeAsiento{renglon(Cuentas.ChequesDiferidos, c.Importe, 0), renglon(Cuentas.Banco, 0, c.Importe)}
 	case c.Sentido == "entregado" && c.Hacia == "rechazado":
@@ -693,7 +758,7 @@ func AsientoDeCheque(c ChequeAAsentar) (Asiento, bool) {
 	default:
 		return Asiento{}, false
 	}
-	a := asiento(c.Fecha, nombre+" "+c.Hacia, r)
+	a := asiento(c.Fecha, nombre+" "+LeyendaDelCheque(c), r)
 	a.Instante = true
 	if c.Circuito == CircuitoNegro {
 		a.Circuito = CircuitoNegro
@@ -718,8 +783,9 @@ func AsientoDeGasto(g GastoAAsentar) Asiento {
 	if !ok {
 		cuenta = Cuentas.Gastos
 	}
+	concepto := ConceptoDeGasto(g.Categoria, g.Descripcion)
 	if g.Iva == 0 && g.Percepciones == 0 {
-		return asiento(g.Fecha, g.Categoria+" · "+g.Descripcion, []RenglonDeAsiento{
+		return asiento(g.Fecha, concepto, []RenglonDeAsiento{
 			renglon(cuenta, g.Importe, 0), renglon(cuentaDeMedio(g.Medio), 0, g.Importe)})
 	}
 	r := []RenglonDeAsiento{renglon(cuenta, redondear(float64(g.Importe-g.Iva)-g.Percepciones), 0)}
@@ -729,7 +795,21 @@ func AsientoDeGasto(g GastoAAsentar) Asiento {
 	if g.Percepciones != 0 {
 		r = append(r, renglon(Cuentas.RetencionesSufridas, g.Percepciones, 0))
 	}
-	return asiento(g.Fecha, g.Categoria+" · "+g.Descripcion, append(r, renglon(cuentaDeMedio(g.Medio), 0, g.Importe)))
+	return asiento(g.Fecha, concepto, append(r, renglon(cuentaDeMedio(g.Medio), 0, g.Importe)))
+}
+
+// ConceptoDeGasto es «Fletes · Flete a Mar del Plata»: la categoría con el
+// nombre de su cuenta, no la clave («flete · …»; mes simulado, M2S1-126).
+func ConceptoDeGasto(categoria, descripcion string) string {
+	nombre := categoria
+	if c, ok := CuentaPorCategoria[categoria]; ok {
+		nombre = nombresDeCuenta[c]
+	} else if categoria == "" || categoria == "otros" || categoria == "varios" {
+		nombre = nombresDeCuenta[Cuentas.Gastos]
+	} else if categoria != "" {
+		nombre = strings.ToUpper(categoria[:1]) + categoria[1:]
+	}
+	return nombre + " · " + descripcion
 }
 
 // NombreComprobante es nombreComprobante de lib/fiscal/comprobantes.ts.
@@ -756,11 +836,35 @@ func NumeroFormateado(puntoVenta, numero int64) string {
 // (una factura del 31 a las 22 es del 31, y ARCA la autorizó con esa fecha),
 // un día tal como se guardó (a las 0 UTC).
 func fechaCsv(a Asiento) string {
-	t := a.Fecha.UTC()
-	if a.Instante {
-		t = a.Fecha.In(Argentina)
-	}
+	t := diaDelAsiento(a)
 	return fmt.Sprintf("%02d/%02d/%d", t.Day(), int(t.Month()), t.Year())
+}
+
+// diaDelAsiento es el día con el que el asiento va al CSV (fechaCsv).
+func diaDelAsiento(a Asiento) time.Time {
+	if a.Instante {
+		return a.Fecha.In(Argentina)
+	}
+	return a.Fecha.UTC()
+}
+
+// OrdenarAsientos los deja en el orden del libro diario: por el día con el
+// que salen en el CSV y, dentro del día, por el momento. Ordenados por el
+// instante, la factura de compra del 27 (a las 0 UTC, el 26 a las 21 en hora
+// argentina) quedaba entre los asientos del 26 y el diario salía 26, 27, 26,
+// 27 (mes simulado, M3S1-009). Los días sin hora van primero en su día.
+func OrdenarAsientos(asientos []Asiento) {
+	sort.SliceStable(asientos, func(i, j int) bool {
+		di, dj := diaDelAsiento(asientos[i]), diaDelAsiento(asientos[j])
+		ki, kj := di.Year()*10000+int(di.Month())*100+di.Day(), dj.Year()*10000+int(dj.Month())*100+dj.Day()
+		if ki != kj {
+			return ki < kj
+		}
+		if asientos[i].Instante != asientos[j].Instante {
+			return !asientos[i].Instante
+		}
+		return asientos[i].Fecha.Before(asientos[j].Fecha)
+	})
 }
 
 // CsvAsientos es app/admin/cierre/exportar: un renglón por línea con el
@@ -844,6 +948,17 @@ func AsientoDeCosto(fecha time.Time, concepto string, costo float64) Asiento {
 	return asiento(fecha, "Costo de lo vendido · "+concepto, r)
 }
 
+// AsientoDeInventario es una baja (importe negativo) o un alta de
+// mercadería sin venta, al costo congelado en el movimiento: la baja va al
+// debe de `cuenta` y sale de Mercaderías; el alta, al revés (M3S3-013).
+func AsientoDeInventario(fecha time.Time, concepto, cuenta string, importe float64) Asiento {
+	r := []RenglonDeAsiento{renglon(Cuentas.Mercaderias, importe, 0), renglon(cuenta, 0, importe)}
+	if importe < 0 {
+		r = []RenglonDeAsiento{renglon(cuenta, -importe, 0), renglon(Cuentas.Mercaderias, 0, -importe)}
+	}
+	return asiento(fecha, concepto, r)
+}
+
 // AsientoDeDiferenciaDeCaja es el faltante (negativo) o el sobrante del
 // arqueo de un turno contra Diferencias de caja.
 func AsientoDeDiferenciaDeCaja(fecha time.Time, concepto string, diferencia float64) Asiento {
@@ -863,6 +978,9 @@ type TramoDeCobro struct {
 	// por el banco); Entero: el reintegro de todo lo que quedaba, que lleva la
 	// comisión si no hubo tramos antes.
 	Devolucion, Entero bool
+	// Rechazo: el cheque del cobro rebotó (y la deuda volvió a la cuenta con
+	// la nota de débito). Sale de Valores a depositar, no del banco.
+	Rechazo bool
 }
 
 // CobroAntesDeLaFactura es el cobro sin recibo de un pedido que, el día que
@@ -870,19 +988,30 @@ type TramoDeCobro struct {
 // va contra `Contra` (Ventas sin factura en el circuito B, Anticipos de
 // clientes o Cobros a imputar) y, si después sale la factura con CAE, se le
 // imputa ese día por lo que no se devolvió antes.
+//
+// Pase: el cobro que quedó en el B y cuyo pedido se facturó después pasa al
+// archivo del estudio el día que se emite la factura, contra ContraDelPase
+// (Anticipos de clientes, o Cobros a imputar con «asiento_sin_cae» en
+// «transitoria»), y de ahí se imputa a Deudores cuando llega el CAE (mes
+// simulado, M2S2-006): antes quedaba en el B como venta sin factura hasta el
+// CAE, con la factura ya emitida, y el cobro de la conciliación y el del
+// recibo iban por dos caminos distintos.
 type CobroAntesDeLaFactura struct {
 	CobroAAsentar
 	Contra, Circuito string
 	// Factura: la fecha de la factura con CAE del pedido, si ya salió, y su
 	// nombre («Factura B 0003-00000201 (pedido M-0001)») para la imputación.
-	Factura     *time.Time
-	DeLaFactura string
-	Tramos      []TramoDeCobro
+	Factura       *time.Time
+	DeLaFactura   string
+	Tramos        []TramoDeCobro
+	Pase          *time.Time
+	ContraDelPase string
 }
 
-// AsientosDelCobroAntesDeLaFactura son los del cobro, sus devoluciones y la
-// imputación a la factura, cada uno en su fecha (H160): ninguno cambia un
-// mes ya cerrado cuando la factura sale más tarde.
+// AsientosDelCobroAntesDeLaFactura son los del cobro, sus devoluciones, el
+// pase al archivo del estudio y la imputación a la factura, cada uno en su
+// fecha (H160): ninguno cambia un mes ya cerrado cuando la factura sale más
+// tarde.
 func AsientosDelCobroAntesDeLaFactura(c CobroAntesDeLaFactura) []Asiento {
 	var out []Asiento
 	enCircuito := func(a Asiento, circuito string) Asiento {
@@ -891,7 +1020,20 @@ func AsientosDelCobroAntesDeLaFactura(c CobroAntesDeLaFactura) []Asiento {
 	}
 	out = append(out, enCircuito(asiento(c.Fecha, "Cobro "+c.Comprobante+" · "+c.Cliente,
 		append(renglonesDeEntrada(cuentaDeCobro(c.Medio), c.Importe, c.Comision), renglon(c.Contra, 0, c.Importe))), c.Circuito))
-	devueltoAntes := 0.0
+	pase := c.Pase
+	// La factura que sale con CAE en el acto no pasa por Anticipos: el cobro
+	// entra directo contra Deudores, como siempre.
+	if pase != nil && (c.Circuito != CircuitoNegro || c.ContraDelPase == "" || (c.Factura != nil && !pase.Before(*c.Factura))) {
+		pase = nil
+	}
+	// Dónde está el cobro en cada momento: contra qué cuenta y en qué archivo.
+	contraEn := func(t time.Time) (string, string) {
+		if pase != nil && !t.Before(*pase) {
+			return c.ContraDelPase, ""
+		}
+		return c.Contra, c.Circuito
+	}
+	devueltoAntes, devueltoAntesDelPase := 0.0, 0.0
 	huboTramos := false
 	for _, t := range c.Tramos {
 		medio := c.Medio
@@ -907,11 +1049,18 @@ func AsientosDelCobroAntesDeLaFactura(c CobroAntesDeLaFactura) []Asiento {
 		if !t.Entero {
 			concepto = "Reintegro parcial "
 		}
+		if t.Rechazo {
+			medio, concepto = c.Medio, "Cheque rechazado · cobro "
+		}
 		concepto += c.Comprobante + " · " + c.Cliente
 		if c.Factura == nil || t.Fecha.Before(*c.Factura) {
 			devueltoAntes = float64(devueltoAntes + t.Importe)
-			out = append(out, enCircuito(asiento(t.Fecha, concepto, append([]RenglonDeAsiento{renglon(c.Contra, t.Importe, 0)},
-				invertir(renglonesDeEntrada(cuentaDeCobro(medio), t.Importe, comision))...)), c.Circuito))
+			if pase == nil || t.Fecha.Before(*pase) {
+				devueltoAntesDelPase = float64(devueltoAntesDelPase + t.Importe)
+			}
+			contra, circuito := contraEn(t.Fecha)
+			out = append(out, enCircuito(asiento(t.Fecha, concepto, append([]RenglonDeAsiento{renglon(contra, t.Importe, 0)},
+				invertir(renglonesDeEntrada(cuentaDeCobro(medio), t.Importe, comision))...)), circuito))
 			continue
 		}
 		// Después de la factura es el reintegro de siempre, contra Deudores y
@@ -925,6 +1074,24 @@ func AsientosDelCobroAntesDeLaFactura(c CobroAntesDeLaFactura) []Asiento {
 		a.Instante = true
 		out = append(out, a)
 	}
+	if pase != nil {
+		neto := jsmath.Redondear2(c.Importe - devueltoAntesDelPase)
+		if neto > toleranciaAsiento {
+			comision := 0.0
+			if devueltoAntesDelPase == 0 {
+				comision = c.Comision
+			}
+			donde := c.DeLaFactura
+			if donde == "" {
+				donde = "la factura del pedido"
+			}
+			out = append(out,
+				enCircuito(asiento(*pase, "Pasa al archivo del estudio · "+c.Comprobante+" · "+c.Cliente,
+					append([]RenglonDeAsiento{renglon(c.Contra, neto, 0)}, invertir(renglonesDeEntrada(cuentaDeCobro(c.Medio), neto, comision))...)), CircuitoNegro),
+				enCircuito(asiento(*pase, "Cobro "+c.Comprobante+" · "+c.Cliente+" · facturado",
+					append(renglonesDeEntrada(cuentaDeCobro(c.Medio), neto, comision), renglon(c.ContraDelPase, 0, neto))), ""))
+		}
+	}
 	if c.Factura == nil {
 		return out
 	}
@@ -933,9 +1100,9 @@ func AsientosDelCobroAntesDeLaFactura(c CobroAntesDeLaFactura) []Asiento {
 		return out
 	}
 	concepto := "Imputa cobro " + c.DeLaFactura + " · " + c.Cliente
-	if c.Circuito != CircuitoNegro {
+	if contra, circuito := contraEn(*c.Factura); circuito != CircuitoNegro {
 		return append(out, enCircuito(asiento(*c.Factura, concepto,
-			[]RenglonDeAsiento{renglon(c.Contra, neto, 0), renglon(Cuentas.Deudores, 0, neto)}), ""))
+			[]RenglonDeAsiento{renglon(contra, neto, 0), renglon(Cuentas.Deudores, 0, neto)}), ""))
 	}
 	// Del B al archivo del estudio: sale del B como se había asentado y entra
 	// al blanco contra la factura.
@@ -948,4 +1115,117 @@ func AsientosDelCobroAntesDeLaFactura(c CobroAntesDeLaFactura) []Asiento {
 	// En el archivo del estudio es el cobro de la factura de siempre.
 	return append(out, enCircuito(asiento(*c.Factura, "Cobro "+c.DeLaFactura+" · "+c.Cliente,
 		append(renglonesDeEntrada(cuentaDeCobro(c.Medio), neto, comision), renglon(Cuentas.Deudores, 0, neto))), ""))
+}
+
+// AsientosDePase son los de lo que un recibo había mandado al B y pasa a
+// Anticipos de clientes el día que se factura su pedido (cobros.Pase): sale
+// del B como se había asentado, por las partes que siguen en el orden del
+// reparto (BlancoDeCadaParte), y entra al archivo del estudio contra
+// Anticipos, de donde se aplica a la factura cuando llega el CAE.
+func AsientosDePase(p cobros.Pase, numero, cliente, factura string) []Asiento {
+	despues := redondear(p.BlancoAntes + p.Importe)
+	if p.AlB {
+		despues = redondear(p.BlancoAntes - p.Importe)
+	}
+	antes := cobros.BlancoDeCadaParte(p.Partes, p.BlancoAntes)
+	luego := cobros.BlancoDeCadaParte(p.Partes, despues)
+	var mueve []RenglonDeAsiento
+	for i, x := range p.Partes {
+		if pasa := redondear(luego[i] - antes[i]); pasa > toleranciaAsiento || pasa < -toleranciaAsiento {
+			mueve = append(mueve, renglon(cuentaDeCobro(x.Medio), math.Abs(pasa), 0))
+		}
+	}
+	if len(mueve) == 0 {
+		return nil
+	}
+	if p.AlB {
+		// La vuelta: sale de Anticipos del estudio y entra al B como venta sin
+		// factura del pedido entregado.
+		a := asiento(p.Fecha, "Recibo "+numero+" · "+p.Nombre+" entregado sin factura · "+cliente,
+			append([]RenglonDeAsiento{renglon(Cuentas.AnticiposDeClientes, p.Importe, 0)}, invertir(mueve)...))
+		a.Instante = true
+		b := asiento(p.Fecha, "Recibo "+numero+" · "+p.Nombre+" entregado sin factura · "+cliente,
+			append(mueve, renglon(Cuentas.VentasSinFactura, 0, p.Importe)))
+		b.Circuito, b.Instante = CircuitoNegro, true
+		return []Asiento{a, b}
+	}
+	b := asiento(p.Fecha, "Pasa al archivo del estudio · recibo "+numero+" · "+factura+" · "+cliente,
+		append([]RenglonDeAsiento{renglon(Cuentas.VentasSinFactura, p.Importe, 0)}, invertir(mueve)...))
+	b.Circuito, b.Instante = CircuitoNegro, true
+	a := asiento(p.Fecha, "Recibo "+numero+" · "+factura+" · "+cliente, append(mueve, renglon(Cuentas.AnticiposDeClientes, 0, p.Importe)))
+	a.Instante = true
+	return []Asiento{b, a}
+}
+
+// AsientosDeChequeDeRecibo son la acreditación o el rechazo de un cheque
+// cobrado con un recibo, en cada archivo por lo que entró en cada uno:
+// `blanco` al del estudio (y del rechazo, `rechazo` dice cuánto sale de
+// Anticipos y cuánto de Deudores) y el resto al B, donde el rechazo da
+// vuelta la venta sin factura que había cobrado.
+func AsientosDeChequeDeRecibo(c ChequeAAsentar, blanco float64, rechazo cobros.Reparto) []Asiento {
+	nombre := "Cheque N° " + c.Numero
+	if c.Banco != "" {
+		nombre += " · " + c.Banco
+	}
+	blanco = redondear(min(max(blanco, 0), c.Importe))
+	enB := redondear(c.Importe - blanco)
+	var out []Asiento
+	agregar := func(r []RenglonDeAsiento, circuito string) {
+		a := asiento(c.Fecha, nombre+" "+LeyendaDelCheque(c), r)
+		a.Instante, a.Circuito = true, circuito
+		out = append(out, a)
+	}
+	if c.Hacia == "acreditado" {
+		if blanco > toleranciaAsiento {
+			agregar([]RenglonDeAsiento{renglon(Cuentas.Banco, blanco, 0), renglon(Cuentas.ValoresADepositar, 0, blanco)}, "")
+		}
+		if enB > toleranciaAsiento {
+			agregar([]RenglonDeAsiento{renglon(Cuentas.Banco, enB, 0), renglon(Cuentas.ValoresADepositar, 0, enB)}, CircuitoNegro)
+		}
+		return out
+	}
+	if !c.ADeudores {
+		return nil
+	}
+	if blanco > toleranciaAsiento {
+		var r []RenglonDeAsiento
+		anticipo := redondear(min(rechazo.Anticipo, blanco))
+		if anticipo > toleranciaAsiento {
+			r = append(r, renglon(Cuentas.AnticiposDeClientes, anticipo, 0))
+		}
+		if d := redondear(blanco - anticipo); d > toleranciaAsiento {
+			r = append(r, renglon(Cuentas.Deudores, d, 0))
+		}
+		agregar(append(r, renglon(Cuentas.ValoresADepositar, 0, blanco)), "")
+	}
+	if enB > toleranciaAsiento {
+		agregar([]RenglonDeAsiento{renglon(Cuentas.VentasSinFactura, enB, 0), renglon(Cuentas.ValoresADepositar, 0, enB)}, CircuitoNegro)
+	}
+	return out
+}
+
+// ConPase es el reparto de un recibo con lo que pasó del B al archivo del
+// estudio (o volvió, en negativo) desde que se emitió (cobros.Pase): lo que
+// pasó está en Anticipos.
+func ConPase(rep cobros.Reparto, pasado float64) cobros.Reparto {
+	if pasado > toleranciaAsiento || pasado < -toleranciaAsiento {
+		rep.Anticipo, rep.B = redondear(rep.Anticipo+pasado), redondear(rep.B-pasado)
+	}
+	return rep
+}
+
+// AsientoDeLiquidacion es lo que liquida la tarjeta: entra al Banco el neto,
+// la comisión a su cuenta, contra Tarjetas a acreditar por el bruto.
+func AsientoDeLiquidacion(fecha time.Time, referencia string, bruto, comision float64) Asiento {
+	r := []RenglonDeAsiento{renglon(Cuentas.Banco, redondear(bruto-comision), 0)}
+	if comision > toleranciaAsiento {
+		r = append(r, renglon(Cuentas.Comisiones, comision, 0))
+	}
+	concepto := "Liquidación de tarjetas"
+	if referencia != "" {
+		concepto += " · " + referencia
+	}
+	a := asiento(fecha, concepto, append(r, renglon(Cuentas.TarjetasAAcreditar, 0, bruto)))
+	a.Instante = true
+	return a
 }

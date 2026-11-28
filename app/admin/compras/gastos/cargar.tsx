@@ -29,6 +29,7 @@ import { useEtiquetasDelCircuito } from "@/components/admin/circuito";
 import { formatearMonto, hoyEnArgentina, importeDelCampo, importeIlegible, importeParaElCampo } from "@/lib/formato";
 import { Hoja, Interruptor, Opciones, Seccion } from "@/components/admin/formulario";
 import { cargarGasto, type EstadoGasto } from "./actions";
+import { DialogoProveedor } from "@/app/admin/proveedores/dialogo";
 import { CampoFecha } from "@/components/ui/campo-fecha";
 
 const CATEGORIAS = {
@@ -126,6 +127,7 @@ export function CargarGasto({
   const [tipo, setTipo] = useState("factura_a");
   const [puntoVenta, setPuntoVenta] = useState("");
   const [numero, setNumero] = useState("");
+  const [cae, setCae] = useState("");
   const [alicuota, setAlicuota] = useState("21");
   const [iva, setIva] = useState("");
 
@@ -191,21 +193,39 @@ export function CargarGasto({
           />
         </label>
 
-        <label className="block md:col-span-2">
-          <span className="text-sm font-medium">A quién se le pagó</span>
-          <select
-            value={supplierId}
-            onChange={(e) => setSupplierId(e.target.value)}
-            className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-          >
-            <option value="">{conFactura ? "Elegí el proveedor" : "—"}</option>
-            {proveedores.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nombre}
-              </option>
-            ))}
-          </select>
-        </label>
+        {/* Con factura, el proveedor es obligatorio: se marca, y se puede
+            dar de alta ahí mismo (un locador, M2S2-025). El botón quedaba
+            gris sin decir qué faltaba. */}
+        <div className="md:col-span-2">
+          <label htmlFor="gasto-proveedor" className="text-sm font-medium">
+            A quién se le pagó
+            {conFactura && (
+              <span className="text-saldo-debe" aria-hidden="true">
+                {" *"}
+              </span>
+            )}
+          </label>
+          <div className="mt-1 flex gap-2">
+            <select
+              id="gasto-proveedor"
+              aria-required={conFactura || undefined}
+              value={supplierId}
+              aria-invalid={(conFactura && !supplierId) || undefined}
+              onChange={(e) => setSupplierId(e.target.value)}
+              className={`h-11 min-w-0 flex-1 rounded-lg border border-linea bg-card px-3 text-base ${
+                conFactura && !supplierId ? "ring-2 ring-saldo-debe" : ""
+              }`}
+            >
+              <option value="">{conFactura ? "Elegí el proveedor" : "—"}</option>
+              {proveedores.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre}
+                </option>
+              ))}
+            </select>
+            <DialogoProveedor alCrear={setSupplierId} />
+          </div>
+        </div>
 
         <div className="md:col-span-2">
           <Interruptor etiqueta="Con factura" icono={FileText} marcado={conFactura} alCambiar={setConFactura} />
@@ -231,6 +251,18 @@ export function CargarGasto({
                 inputMode="numeric"
                 value={numero}
                 onChange={(e) => setNumero(e.target.value.replace(/\D/g, ""))}
+                className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+              />
+            </label>
+            {/* El CAE, como en la factura de compra: entraba al libro IVA
+                compras sin él (M2S2-039). */}
+            <label className="block sm:col-span-3">
+              <span className="text-sm font-medium">CAE</span>
+              <input
+                inputMode="numeric"
+                maxLength={14}
+                value={cae}
+                onChange={(e) => setCae(e.target.value.replace(/\D/g, ""))}
                 className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
               />
             </label>
@@ -370,6 +402,7 @@ export function CargarGasto({
                         tipo,
                         puntoVenta: Number(puntoVenta || 0),
                         numero: Number(numero || 0),
+                        cae: cae || undefined,
                         iva21: tipo === "factura_a" && alicuota === "21" ? ivaFinal : 0,
                         iva105: tipo === "factura_a" && alicuota === "10.5" ? ivaFinal : 0,
                         iva27: tipo === "factura_a" && alicuota === "27" ? ivaFinal : 0,
@@ -381,6 +414,7 @@ export function CargarGasto({
                   setDescripcion("");
                   setImporte("");
                   setNumero("");
+                  setCae("");
                   setIva("");
                   router.refresh();
                 }

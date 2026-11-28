@@ -11,6 +11,7 @@ export const OPCIONES_DE_REGLAS = {
   excedente_cuenta_corriente: ["circuito_b", "anticipos"],
   asiento_sin_cae: ["al_cae", "transitoria"],
   corte_chico_material: ["sin_cargo", "cobrar"],
+  corte_chico_stock: ["no_mueve", "descuenta"],
   contado_por_lista: ["con_ventaja", "siempre"],
   descuento_al_flete: ["no", "si"],
   factura_al_monotributista: ["a", "b"],
@@ -21,7 +22,21 @@ export const OPCIONES_DE_REGLAS = {
   etiqueta_del_circuito: ["b", "sin_factura", "interno"],
   datos_fiscales_del_cliente: ["hasta_facturar", "ninguno"],
   lote_y_cupon: ["obligatorio", "opcional"],
+  descuento_con_escala: ["reemplaza", "suma"],
+  redondeo_efectivo: ["no", "al_peso"],
+  cae_en_compras: ["opcional", "exigido"],
+  deuda_sin_comprobante: ["circuito_b", "saldo_inicial"],
+  entregar_sin_cobrar: ["deposito", "fuera_de_la_cuenta"],
+  exportar_sicore: ["no", "si"],
+  base_retencion_iva: ["neto", "total"],
+  retencion_en_el_cobro: ["admin", "quien_cobra"],
+  escala_con_lista: ["si", "no"],
+  alta_de_producto: ["activo", "inactivo"],
+  listo_con_el_corte: ["mostrador", "todos"],
+  endoso_espera_cae: ["si", "al_cae"],
+  redondeo_lista_proveedor: ["centavos", "peso", "decena", "centena"],
 } as const;
+
 
 export type ReglaPendiente = keyof typeof OPCIONES_DE_REGLAS;
 export type ValorDeRegla<R extends ReglaPendiente> = (typeof OPCIONES_DE_REGLAS)[R][number];

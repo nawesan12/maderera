@@ -71,6 +71,14 @@ func (s *Servicio) PasarAPedido(ctx context.Context, ses *auth.Sesion, id string
 			return err
 		}
 		total := totalDe(lineas)
+		// El corte que ya salió de la máquina es todo lo que lleva el pedido:
+		// nace «listo», como la venta del mostrador con un corte terminado.
+		// Nacía «Sin preparar» y entregarlo pedía Preparar, Marcar listo y
+		// Marcar entregado (mes simulado, M3S4-040).
+		estadoPedido := "pendiente"
+		if estado == "terminado" || estado == "retirado" {
+			estadoPedido = "listo"
+		}
 		// Un corte cargado sin sucursal se retira donde se corta: el
 		// aserradero (Casa Central no corta; decisión del 19/11). El pedido
 		// sin sucursal decía «Retira en» y nada más, y su efectivo no sabía a
@@ -79,16 +87,16 @@ func (s *Servicio) PasarAPedido(ctx context.Context, ses *auth.Sesion, id string
 			INSERT INTO orders (numero, customer_id, contacto_nombre, contacto_telefono, branch_id, estado, origen,
 			                    subtotal, total, created_by_user_id, tipo_entrega, entregar_el)
 			VALUES ($1, $2, $3, $4, coalesce($5::uuid, (SELECT id FROM branches WHERE slug = 'aserradero' AND active)),
-			        'pendiente', 'telefono', $6::numeric, $6::numeric, $7, 'retiro', $8::date)
+			        $9::estado_pedido, 'telefono', $6::numeric, $6::numeric, $7, 'retiro', $8::date)
 			RETURNING id::text`,
-			numero, c.CustomerID, c.Cliente, c.Telefono, c.BranchID, jsmath.Fijo2(total), ses.UserID, c.RetiraEl).Scan(&pedido); err != nil {
+			numero, c.CustomerID, c.Cliente, c.Telefono, c.BranchID, jsmath.Fijo2(total), ses.UserID, c.RetiraEl, estadoPedido).Scan(&pedido); err != nil {
 			return err
 		}
 		if err := insertarRenglones(ctx, tx, pedido, nil, lineas, 0); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, 'pendiente', $2, $3)`,
-			pedido, "Generado desde el corte "+c.Numero, ses.UserID); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, $4::estado_pedido, $2, $3)`,
+			pedido, "Generado desde el corte "+c.Numero, ses.UserID, estadoPedido); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE cutting_orders SET order_id = $2, updated_at = now() WHERE id = $1`, id, pedido); err != nil {

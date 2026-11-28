@@ -56,8 +56,10 @@ export function FiltrosStock({
   }, [texto]);
 
   return (
-    <div className="flex gap-3 mb-6">
-      <div className="flex-1 relative">
+    // A 375 el buscador va a lo ancho y la categoría abajo: lado a lado, el
+    // campo quedaba en «Buscar prc» (mes simulado, M2S4-029).
+    <div className="mb-6 flex flex-col gap-3 sm:flex-row">
+      <div className="relative min-w-0 flex-1">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="Buscar producto..."
@@ -75,7 +77,7 @@ export function FiltrosStock({
           ...Object.fromEntries(categorias.map((c) => [c.slug, c.name])),
         }}
       >
-        <SelectTrigger className="w-48" aria-label="Categoría">
+        <SelectTrigger className="w-full sm:w-48" aria-label="Categoría">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

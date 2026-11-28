@@ -188,6 +188,8 @@ paths:
       responses:
         "204": { description: Cargadas }
         "404": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/cortes/{id}/acomodo:
     put:
       operationId: GuardarAcomodo
@@ -359,10 +361,11 @@ paths:
                 type: array
                 items:
                   type: object
-                  required: [id, numero, material, estado, urgente, createdAt, variantId, placasEnteras, sinCargo]
+                  required: [id, numero, material, estado, urgente, createdAt, variantId, placasEnteras, sinCargo, piezas]
                   properties:
                     id: { type: string }
                     numero: { type: string }
+                    piezas: { type: integer, description: "las piezas del despiece (el ticket dice «Corte CRT-16 · 6 piezas»)" }
                     material: { type: string }
                     estado: { type: string }
                     urgente: { type: integer }
@@ -446,6 +449,8 @@ paths:
                 fijadas: { type: array, maxItems: 5000, items: { $ref: "#/components/schemas/PiezaFijada" } }
                 busqueda: { type: boolean }
                 hoja: { type: boolean, description: Solo para el staff, la hoja de la máquina y lo que se lleva la sierra por placa }
+                variantId: { type: string, maxLength: 40, description: "Solo para el staff: la placa del catálogo, para devolver el precio de la pasada" }
+                customerId: { type: string, maxLength: 40, description: Con variantId, la lista de este cliente }
                 presupuesto:
                   type: object
                   required: [precioPorPlaca, fraccion]
@@ -466,6 +471,7 @@ paths:
                   plano: { $ref: "#/components/schemas/Plano" }
                   placasACobrar: { type: integer, description: "Las placas enteras que se cobran: con piezas acomodadas a mano, las del plano libre salvo que el manual gaste más" }
                   pasadasACobrar: { type: integer, description: Las pasadas del plano que se cobra }
+                  precioPorPasada: { type: number, format: double, description: "Con variantId (staff): la pasada con la tarifa de la placa y la lista del cliente" }
                   placasParciales: { type: integer, description: "Las placas del plano que se cobra que no pasan la mitad: no se venden, se cobra su corte" }
                   cuenta: { $ref: "#/components/schemas/Presupuesto" }
                   hoja: { $ref: "#/components/schemas/HojaDeCorte" }
@@ -513,6 +519,23 @@ paths:
                   token: { type: string }
         "422": { $ref: "#/components/responses/Problema" }
         "429": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/cortes/consulta/{token}/contacto:
+    get:
+      operationId: ContactoDeLaConsulta
+      description: |
+        Quién mandó la consulta por WhatsApp: el cliente vinculado a la
+        conversación, su nombre y su teléfono (M2S3-024). Para el alta del
+        corte; quien entra a /admin/cortes/nuevo.
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string, maxLength: 40 } }
+      responses:
+        "200":
+          description: El contacto, o todo nulo si no salió de una conversación
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContactoDeLaConsulta" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
   /api/v1/cortes/consulta/{token}:
     get:
       operationId: ConsultaDeCorte
@@ -556,12 +579,14 @@ components:
     CorteListado:
       type: object
       required: [id, numero, cliente, material, placas, pasadas, estado, urgente, sucursal, notas, piezas, metrosCuadrados, createdAt,
-        mitad, sinCargo, branchId, salioAt]
+        mitad, sinCargo, branchId, salioAt, cobrado]
       properties:
+        cobrado: { type: boolean, description: El pedido del corte no debe nada }
         mitad: { type: string, nullable: true, description: Las placas son medias }
         sinCargo: { type: boolean }
         branchId: { type: string, nullable: true }
         salioAt: { type: string, format: date-time, nullable: true, description: Cuándo salió de la máquina }
+        orderId: { type: string, nullable: true, description: "El pedido del corte: se entrega desde ahí" }
         id: { type: string }
         numero: { type: string }
         cliente: { type: string }
@@ -731,6 +756,7 @@ components:
             estadoPago: { type: string }
             cobrado: { type: number, format: double }
             placasDelPedido: { type: number, format: double }
+            placasDeOtrosCortes: { type: number, format: double }
             lineas:
               type: array
               items:
@@ -743,6 +769,7 @@ components:
                   subtotal: { type: number, format: double }
         retalesDelCliente: { type: boolean }
         sinPlata: { type: boolean }
+        totalTomado: { type: number, format: double, nullable: true, description: "Lo que se le dijo al cliente al tomar el corte suelto" }
         corte: { $ref: "#/components/schemas/Corte" }
         tarifa: { allOf: [{ $ref: "#/components/schemas/TarifaDeCorte" }], nullable: true }
         cargo: { type: number, format: double }
@@ -1031,6 +1058,14 @@ components:
           properties:
             grandis: { $ref: "#/components/schemas/MedidaDeTabla" }
             pvc: { $ref: "#/components/schemas/MedidaDeTabla" }
+    ContactoDeLaConsulta:
+      type: object
+      required: [clienteId, nombre, telefono, chat]
+      properties:
+        clienteId: { type: string, nullable: true }
+        nombre: { type: string, nullable: true }
+        telefono: { type: string, nullable: true }
+        chat: { type: string, nullable: true, description: La conversación de donde salió }
     ConsultaDeCorte:
       type: object
       required: [token, variantId, material, placaLargoMm, placaAnchoMm, mitad, cantoDescripcion, piezas, anchoSierraMm, sucursal, metrosCanto, plano, corteId, createdAt, grupos]
@@ -1088,6 +1123,7 @@ components:
         precioMediaPct: { type: number, format: double }
         precioPorPasada: { type: number, format: double }
         precioPorMetroCanto: { type: number, format: double }
+        hayStock: { type: boolean, description: Hay alguna disponible en alguna sucursal }
     CorteCotizado:
       type: object
       required: [variantId, materialDescripcion, placaLargoMm, placaAnchoMm, mitad, cantoDescripcion, piezas, placas, pasadas, total]

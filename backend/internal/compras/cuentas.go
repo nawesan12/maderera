@@ -404,10 +404,21 @@ func revisarSumas(total, neto float64, imputaciones, partes []float64) error {
 	if hay {
 		sumaPartes := jsmath.Redondear2(vivas)
 		if math.Abs(sumaPartes-neto) > 0.01 {
-			return fallo(fmt.Sprintf("Las partes del pago suman $%s y el neto a pagar es $%s.", jsmath.Fijo2(sumaPartes), jsmath.Fijo2(neto)))
+			return fallo(MensajeDeLasPartes(sumaPartes, neto))
 		}
 	}
 	return nil
+}
+
+// MensajeDeLasPartes es el error de unos medios que no suman lo que sale,
+// con los importes en pesos: decía «$1195766.55» (M2S2-076, M3S2-054).
+func MensajeDeLasPartes(suman, neto float64) string {
+	dif := jsmath.Redondear2(neto - suman)
+	cola := "sobran " + formato.Importe(-dif)
+	if dif > 0 {
+		cola = "faltan " + formato.Importe(dif)
+	}
+	return "Los medios suman " + formato.Importe(suman) + " y salen " + formato.Importe(neto) + ": " + cola + "."
 }
 
 // NormalizarNumeroDeCheque deja solo los dígitos (lib/cheques/numero.ts).
@@ -714,5 +725,6 @@ func diaDeHoy(ahora time.Time) time.Time {
 func AplicadoA(f string) string {
 	return `(coalesce((SELECT sum(a.importe) FROM supplier_payment_allocations a WHERE a.purchase_invoice_id = ` + f + `.id), 0)
 	  + coalesce((SELECT sum(n.total) FROM purchase_invoices n WHERE n.aplica_a_id = ` + f + `.id AND n.anulada_at IS NULL), 0)
+	  + coalesce((SELECT sum(-m.monto) FROM supplier_movements m WHERE m.aplica_a_id = ` + f + `.id), 0)
 	  + CASE WHEN EXISTS (SELECT 1 FROM expenses e WHERE e.purchase_invoice_id = ` + f + `.id) THEN ` + f + `.total ELSE 0 END)`
 }

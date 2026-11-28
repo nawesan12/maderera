@@ -5,6 +5,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { formatearMonto, importeParaElCampo, parsearImporte } from "@/lib/formato";
 import { NOMBRE_DEL_MEDIO, esCheque, type MedioDeCobro } from "@/lib/cobros/partes";
 import { CampoFecha } from "@/components/ui/campo-fecha";
+import { revisarNumeroDeCheque, tieneLetras as conLetras } from "@/lib/cheques/numero";
 
 /**
  * Con qué paga el cliente, renglón por renglón.
@@ -33,7 +34,17 @@ type Renglon = {
   numero: string;
   fechaPago: string;
   librador: string;
+  /** El impuesto de una retención sufrida; el certificado va en la referencia. */
+  impuesto: string;
 };
+
+/** Los impuestos de una retención sufrida, como se escriben (M2S3-061). */
+const IMPUESTOS = [
+  { valor: "ganancias", texto: "Ganancias" },
+  { valor: "iva", texto: "IVA" },
+  { valor: "iibb", texto: "IIBB" },
+  { valor: "suss", texto: "SUSS" },
+];
 
 const MEDIOS_POR_OMISION: MedioDeCobro[] = [
   "efectivo",
@@ -50,6 +61,7 @@ function pideReferencia(medio: MedioDeCobro): string | null {
   if (medio === "transferencia" || medio === "deposito") return "N° de operación";
   if (medio === "tarjeta_debito" || medio === "tarjeta_credito") return "Lote y cupón";
   if (medio === "mercado_pago") return "N° de operación";
+  if (medio === "retencion") return "N° de certificado";
   return null;
 }
 
@@ -65,6 +77,7 @@ function renglonNuevo(medio: MedioDeCobro, importe: number): Renglon {
     numero: "",
     fechaPago: "",
     librador: "",
+    impuesto: "iibb",
   };
 }
 
@@ -98,6 +111,8 @@ export function CobroMultimedio({
   ]);
   /** El renglón recién agregado recibe el foco: «Otro medio» y se sigue tipeando. */
   const [recienAgregado, setRecienAgregado] = useState<number | null>(null);
+  /** Los renglones de cheque que se quisieron registrar sin fecha. */
+  const [sinFecha, setSinFecha] = useState<number[]>([]);
 
   const disponibles = medios.filter((m) => !(m === "echeq" && circuito === "negro"));
   const total = renglones.reduce((s, r) => s + (parsearImporte(r.importe) || 0), 0);
@@ -135,6 +150,7 @@ export function CobroMultimedio({
       medio: r.medio,
       importe: r.importe,
       referencia: r.referencia || null,
+      ...(r.medio === "retencion" ? { impuesto: r.impuesto } : {}),
       cheque: esCheque(r.medio)
         ? { numero: r.numero, banco: r.banco, librador: r.librador || null, fechaPago: r.fechaPago }
         : null,
@@ -171,6 +187,15 @@ export function CobroMultimedio({
                   <input
                     value={r.importe}
                     onChange={(e) => cambiar(r.clave, "importe", e.target.value)}
+                    // Al salir, con los miles como la suma de abajo: «500000»
+                    // quedaba al lado de «Suma $ 800.000» (M3S1-044).
+                    onBlur={(e) => {
+                      const n = parsearImporte(e.target.value);
+                      if (n && n > 0) {
+                        const prolijo = importeParaElCampo(n);
+                        if (prolijo !== e.target.value) cambiar(r.clave, "importe", prolijo);
+                      }
+                    }}
                     inputMode="decimal"
                     required
                     aria-label={`Importe del medio ${i + 1}`}
@@ -198,28 +223,38 @@ export function CobroMultimedio({
                       onChange={(e) => cambiar(r.clave, "banco", e.target.value)}
                       required
                       list={`${id}-bancos`}
-                      placeholder="Banco Nación"
                       className="mt-1 block h-11 w-full rounded-lg border border-linea bg-background px-3 text-base text-foreground"
                     />
                   </label>
-                  <label className="text-sm text-muted-foreground">
+                  {/* Con una letra («E0055502») se marca en el campo: el cobro
+                      no se registraba y el aviso quedaba lejos, abajo (mes 23). */}
+                  <label className={`text-sm ${conLetras(r.numero) ? "font-semibold text-saldo-debe" : "text-muted-foreground"}`}>
                     N° de cheque
                     <input
                       value={r.numero}
                       onChange={(e) => cambiar(r.clave, "numero", e.target.value)}
                       required
                       inputMode="numeric"
-                      placeholder="00012345"
-                      className="tabular mt-1 block h-11 w-full rounded-lg border border-linea bg-background px-3 text-base text-foreground"
+                      aria-invalid={conLetras(r.numero) || undefined}
+                      title={conLetras(r.numero) ? (revisarNumeroDeCheque(r.numero) ?? undefined) : undefined}
+                      className={`tabular mt-1 block h-11 w-full rounded-lg border border-linea bg-background px-3 text-base text-foreground ${
+                        conLetras(r.numero) ? "ring-2 ring-saldo-debe" : ""
+                      }`}
                     />
                   </label>
-                  <label className="text-sm text-muted-foreground">
+                  {/* Vacía al registrar, se marca: «Registrar» no hacía nada y no
+                      decía qué faltaba (M2S1-057). */}
+                  <label className={`text-sm ${sinFecha.includes(r.clave) && !r.fechaPago ? "font-semibold text-saldo-debe" : "text-muted-foreground"}`}>
                     Fecha de pago
                     <CampoFecha
                       value={r.fechaPago}
                       onChange={(e) => cambiar(r.clave, "fechaPago", e.target.value)}
+                      onInvalid={() => setSinFecha((p) => (p.includes(r.clave) ? p : [...p, r.clave]))}
                       required
-                      className="tabular mt-1 block h-11 w-full rounded-lg border border-linea bg-background px-3 text-base text-foreground"
+                      aria-invalid={(sinFecha.includes(r.clave) && !r.fechaPago) || undefined}
+                      className={`tabular mt-1 block h-11 w-full rounded-lg border border-linea bg-background px-3 text-base text-foreground ${
+                        sinFecha.includes(r.clave) && !r.fechaPago ? "ring-2 ring-saldo-debe" : ""
+                      }`}
                     />
                   </label>
                   <label className="text-sm text-muted-foreground sm:col-span-3">
@@ -233,7 +268,38 @@ export function CobroMultimedio({
                 </div>
               )}
 
-              {referencia && (
+              {/* La retención sufrida: el impuesto y el certificado, como el
+                  papel que entrega el cliente (M2S1-093). */}
+              {r.medio === "retencion" && (
+                <div className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-2.5">
+                  <label className="text-sm text-muted-foreground">
+                    Impuesto
+                    <select
+                      value={r.impuesto}
+                      onChange={(e) => cambiar(r.clave, "impuesto", e.target.value)}
+                      className="mt-1 block h-11 w-full rounded-lg border border-linea bg-background px-2.5 text-base text-foreground"
+                    >
+                      {IMPUESTOS.map((x) => (
+                        <option key={x.valor} value={x.valor}>
+                          {x.texto}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-sm text-muted-foreground">
+                    N° de certificado
+                    <input
+                      value={r.referencia}
+                      onChange={(e) => cambiar(r.clave, "referencia", e.target.value)}
+                      required
+                      maxLength={40}
+                      className="tabular mt-1 block h-11 w-full rounded-lg border border-linea bg-background px-3 text-base text-foreground"
+                    />
+                  </label>
+                </div>
+              )}
+
+              {referencia && r.medio !== "retencion" && (
                 <label className="block text-sm text-muted-foreground">
                   {referencia} <span className="font-normal">(opcional)</span>
                   <input

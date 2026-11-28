@@ -27,3 +27,18 @@ func TestDevolucionesJuntasPorMedio(t *testing.T) {
 		t.Errorf("la venta: %+v", rs[0])
 	}
 }
+
+// Las anulaciones nombran sus pedidos como las parciales: «Efectivo ·
+// PED-1127, PED-1134 (6)» eran 2 parciales de 6 devoluciones y se leía como
+// si esos dos sumaran todo (mes 23, M2S1-081). Una venta en los dos grupos
+// sale una vez.
+func TestDevolucionesNombranTodosLosPedidos(t *testing.T) {
+	anuladas, parciales := "PED-1127, PED-999", "PED-1127, PED-1134"
+	rs := juntarDevoluciones([]RenglonDelCierre{
+		{MedioPago: "efectivo", Cantidad: 2, Total: -500, Devolucion: true, Pedidos: &anuladas},
+		{MedioPago: "efectivo", Cantidad: 2, Total: -100, Devolucion: true, Pedidos: &parciales},
+	})
+	if len(rs) != 1 || rs[0].Pedidos == nil || *rs[0].Pedidos != "PED-999, PED-1127, PED-1134" {
+		t.Fatalf("filas: %+v", rs)
+	}
+}

@@ -63,7 +63,7 @@ test("carrito → confirmar → pago de demostración, acreditado una sola vez",
   const item = await algoParaComprar(page.request);
   const agregado = await page.request.post("/api/v1/carrito/items", { data: { ...item, cantidad: 2 } });
   expect(agregado.ok()).toBeTruthy();
-  expect((await agregado.json()).ok).toContain("va al presupuesto");
+  expect((await agregado.json()).ok).toContain("va al carrito");
   const cookies = await page.context().cookies();
   expect(cookies.some((c) => c.name === "mjbj_carrito" && c.httpOnly)).toBeTruthy();
 

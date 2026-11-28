@@ -27,6 +27,11 @@ func TestBuscarDelMesSimulado(t *testing.T) {
 	if err != nil || len(r) == 0 || r[0].VariantID != diez {
 		t.Fatalf("mdf 18: %+v %v", r, err)
 	}
+	// El código sin la familia (M3S1-067).
+	r, err = e.svc.Buscar(ctx, "MDF-018", e.central, nil)
+	if err != nil || len(r) == 0 || r[0].VariantID != diez {
+		t.Fatalf("MDF-018: %+v %v", r, err)
+	}
 
 	// 100 placas en la sucursal, 40 reservadas para un acopio: hay 60.
 	pedido := e.txt(t, `insert into orders (numero, contacto_nombre, branch_id, origen) values ('PED-9000', 'Obra', $1, 'mostrador') returning id::text`, e.central)
@@ -62,5 +67,60 @@ func TestPedidosSinCobrarDelCliente(t *testing.T) {
 	ps, err := e.svc.PedidosSinCobrar(ctx, e.cliente)
 	if err != nil || len(ps) != 1 || ps[0].Numero != "PED-1107" || ps[0].Monto != 824440 {
 		t.Fatalf("sin cobrar: %+v %v", ps, err)
+	}
+}
+
+// M2S3-028: «2x4», «tirante 2x4» y «pino 2x4» encuentran el tirante de
+// 2" x 4": la medida se tipea de corrido.
+func TestBuscarMedidaDeCorrido(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	cat := e.txt(t, `select id::text from categories limit 1`)
+	prod := e.txt(t, `insert into products (slug, name, category_id, description, unit) values ('tirante', 'Tirante Pino Tratado', $1, '', 'unidad') returning id::text`, cat)
+	v := e.txt(t, `insert into product_variants (product_id, sku, label, sort_order) values ($1, 'TIR-2X4', '2" x 4" x 3.60m', 1) returning id::text`, prod)
+	if _, err := e.pool.Exec(ctx, `insert into price_list_items (price_list_id, variant_id, price) values ($1, $2, 1000)`, e.general, v); err != nil {
+		t.Fatal(err)
+	}
+	// Mes 23: el machimbre de 1/2" x 4" salía primero con «2x4».
+	mach := e.txt(t, `insert into products (slug, name, category_id, description, unit) values ('machimbre', 'Machimbre Pino', $1, '', 'unidad') returning id::text`, cat)
+	mv := e.txt(t, `insert into product_variants (product_id, sku, label, sort_order) values ($1, 'MAC-12X4', '1/2" x 4"', 1) returning id::text`, mach)
+	if _, err := e.pool.Exec(ctx, `insert into price_list_items (price_list_id, variant_id, price) values ($1, $2, 500)`, e.general, mv); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{"2x4", "tirante 2x4", "pino 2x4"} {
+		r, err := e.svc.Buscar(ctx, q, e.central, nil)
+		if err != nil || len(r) != 1 || r[0].VariantID != v {
+			t.Errorf("%q: %+v %v", q, r, err)
+		}
+	}
+	// M2S2-030: la oferta vigente trae el precio de antes para tacharlo.
+	if _, err := e.pool.Exec(ctx, `update price_list_items set price = 800, precio_anterior = 1000, oferta_hasta = now() + interval '2 days' where variant_id = $1`, v); err != nil {
+		t.Fatal(err)
+	}
+	if r, err := e.svc.Buscar(ctx, "tirante", e.central, nil); err != nil || len(r) != 1 || r[0].Precio != 800 || r[0].PrecioAnterior == nil || *r[0].PrecioAnterior != 1000 {
+		t.Errorf("en oferta: %+v %v", r, err)
+	}
+	// Y la copia local también, que es de donde busca la caja.
+	copia, err := e.svc.Copia(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enOferta := false
+	for _, p := range copia.Precios {
+		if p.VariantID == v && p.PrecioAnterior != nil && *p.PrecioAnterior == 1000 && p.OfertaHasta != nil {
+			enOferta = true
+		}
+	}
+	if !enOferta {
+		t.Error("la copia local no trae la oferta")
+	}
+	if _, err := e.pool.Exec(ctx, `update price_list_items set oferta_hasta = now() - interval '1 minute' where variant_id = $1`, v); err != nil {
+		t.Fatal(err)
+	}
+	if r, err := e.svc.Buscar(ctx, "tirante", e.central, nil); err != nil || len(r) != 1 || r[0].PrecioAnterior != nil {
+		t.Errorf("vencida: %+v %v", r, err)
+	}
+	if r, err := e.svc.Buscar(ctx, "2x6", e.central, nil); err != nil || len(r) != 0 {
+		t.Errorf("2x6 trajo %+v %v", r, err)
 	}
 }

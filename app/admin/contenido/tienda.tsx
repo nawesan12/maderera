@@ -29,7 +29,9 @@ const INTERRUPTORES: {
     clave: "stock_visible",
     campo: "stockVisible",
     titulo: "Disponibilidad en el sitio",
-    alEncender: "Con el stock sin cargar, el sitio va a decir «sin stock» en todo.",
+    // Avisaba del stock sin cargar con el stock ya cargado (M4-063): dice
+    // lo que cambia, como los demás.
+    alEncender: "Cada producto muestra si hay, sucursal por sucursal.",
     alApagar: "El sitio deja de mostrar si hay stock.",
   },
 ];

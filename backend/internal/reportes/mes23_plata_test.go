@@ -59,3 +59,22 @@ func TestLaMedidaEnNegativoVaUnaVezEnElCsvDeReposicion(t *testing.T) {
 		t.Errorf("la del negativo no va arriba:\n%s", csv)
 	}
 }
+
+// M2S1-144 (mes 23): el remito sin factura que el cierre avisa va en Cuentas
+// a pagar aunque otro movimiento del libro lo tape y la diferencia dé cero.
+func TestElRemitoSinFacturaVaEnCuentasAPagar(t *testing.T) {
+	e := armar(t)
+	prov := e.id(t, `insert into suppliers (nombre) values ('Aserradero El Ombú') returning id`)
+	g := e.id(t, `insert into goods_receipts (supplier_id, branch_id, numero_remito, estado, fecha) values ($1, $2, '0002-00034512', 'confirmada', '2026-11-07') returning id`,
+		prov, e.central)
+	e.exec(t, `insert into supplier_movements (supplier_id, tipo, monto, goods_receipt_id) values ($1, 'factura', 1856355.30, $2)`, prov, g)
+	e.exec(t, `insert into supplier_movements (supplier_id, tipo, monto, detalle) values ($1, 'pago', -1856355.30, 'Pago a cuenta')`, prov)
+	c, err := e.s.CsvCuentasAPagar(context.Background(), time.Date(2026, 11, 27, 12, 0, 0, 0, Argentina))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(c, "Remito 0002-00034512 sin factura") || !strings.Contains(c, "1856355,30") || !strings.Contains(c, "-1856355,30") ||
+		!strings.HasSuffix(strings.TrimSpace(c), ";0,00") {
+		t.Errorf("cuentas a pagar:\n%s", c)
+	}
+}

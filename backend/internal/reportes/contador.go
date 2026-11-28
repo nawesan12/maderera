@@ -354,7 +354,10 @@ func (s *Servicio) CsvCuentasAPagar(ctx context.Context, ahora time.Time) (strin
 	if _, err := pgx.ForEachRow(rs, []any{&id, &proveedor, &cuit, &libro}, func() error {
 		debe := max(libro, 0)
 		dif := jsmath.Redondear2(debe - facturado[id])
-		if !(dif > 0.009 || dif < -0.009) {
+		// Con remitos sin factura o ajustes, van renglón por renglón aunque
+		// la diferencia dé cero (un pago a cuenta que tapa un remito): el
+		// remito que el cierre avisa no aparecía en el archivo (M2S1-144).
+		if !(dif > 0.009 || dif < -0.009) && len(detalle[id]) == 0 {
 			return nil
 		}
 		for _, r := range detalle[id] {

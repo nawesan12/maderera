@@ -30,6 +30,7 @@ const {
   quoteItems,
   quotes,
   shippingZones,
+  supplierMovements,
   suppliers,
   variantCosts,
 } = schema;
@@ -302,6 +303,10 @@ async function main() {
       .returning({ id: goodsReceipts.id });
 
     let orden = 0;
+    // Lo recibido con IVA: la deuda que nace con el remito, como la confirma
+    // compras (LaDeudaNaceConElRemito). Sin el movimiento, el cierre avisaba
+    // el remito sin factura y Cuentas a pagar no lo traía (mes 23).
+    let conIva = 0;
 
     for (const v of variantes) {
       const precio = Number(v.precio ?? 0);
@@ -334,9 +339,21 @@ async function main() {
           costoResultante: costo.toFixed(4),
           orden,
         });
+        conIva += 10 * costo * 1.21;
       }
 
       orden += 1;
+    }
+
+    if (recepcion && conIva > 0) {
+      await db.insert(supplierMovements).values({
+        supplierId: proveedor.id,
+        tipo: "factura",
+        monto: conIva.toFixed(2),
+        referencia: "0002-00034512",
+        detalle: "Recepción de mercadería",
+        goodsReceiptId: recepcion.id,
+      });
     }
   }
 

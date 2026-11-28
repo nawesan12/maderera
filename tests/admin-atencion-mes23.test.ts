@@ -21,3 +21,13 @@ describe("el camino de pago del seguimiento (M2S3-051)", () => {
     expect(caminoDelPago("transferencia", true, true)).toBe("transferencia");
   });
 });
+
+describe("los resúmenes concuerdan con 1 (Ndueña-admin-4 y 5)", () => {
+  it("«1 creado · 1 quedó afuera», con puntos de miles", async () => {
+    const { contar } = await import("@/lib/formato");
+    expect(contar(1, "creado")).toBe("1 creado");
+    expect(contar(1250, "creado")).toBe("1.250 creados");
+    expect(contar(1, "quedó afuera", "quedaron afuera")).toBe("1 quedó afuera");
+    expect(contar(0, "quedó afuera", "quedaron afuera")).toBe("0 quedaron afuera");
+  });
+});

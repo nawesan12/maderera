@@ -104,7 +104,7 @@ async function Contenido({
             Etiquetas del corte {corte.numero} · {corte.cliente}
           </h1>
           <p style={{ fontSize: "13px", color: "#666" }}>
-            {recortadas.length} etiquetas — una por pieza. El lado grueso del
+            {recortadas.length === 1 ? "1 etiqueta" : `${recortadas.length} etiquetas — una por pieza`}. El lado grueso del
             croquis es el que lleva tapacanto
             {corte.cantoDescripcion ? ` (${corte.cantoDescripcion})` : ""}.
             {/* La flecha estaba dibujada y sin explicar: quien mira la etiqueta

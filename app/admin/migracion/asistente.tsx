@@ -32,6 +32,7 @@ import {
   type VistaPrevia,
 } from "./actions";
 import { PasoMapeo } from "./paso-mapeo";
+import { contar } from "@/lib/formato";
 
 /**
  * Asistente de migración.
@@ -555,8 +556,8 @@ export function AsistenteMigracion({
 
         <p className="tabular mt-2 text-base text-muted-foreground">
           {avance.toLocaleString("es-AR")} de {filas.length.toLocaleString("es-AR")} filas ·{" "}
-          {totales.creados} creados · {totales.actualizados} actualizados
-          {totales.conError > 0 && ` · ${totales.conError} con problemas`}
+          {contar(totales.creados, "creado")} · {contar(totales.actualizados, "actualizado")}
+          {totales.conError > 0 && ` · ${contar(totales.conError, "con problemas", "con problemas")}`}
         </p>
       </div>
     );
@@ -586,10 +587,9 @@ export function AsistenteMigracion({
             : "Migración terminada, con cosas para revisar"}
         </p>
         <p className="tabular mt-1.5 text-base">
-          {totales.creados.toLocaleString("es-AR")} creados ·{" "}
-          {totales.actualizados.toLocaleString("es-AR")} actualizados ·{" "}
+          {contar(totales.creados, "creado")} · {contar(totales.actualizados, "actualizado")} ·{" "}
           {totales.omitidos.toLocaleString("es-AR")} sin cambios ·{" "}
-          {totales.conError.toLocaleString("es-AR")} quedaron afuera
+          {contar(totales.conError, "quedó afuera", "quedaron afuera")}
         </p>
       </div>
 

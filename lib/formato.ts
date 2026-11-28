@@ -449,6 +449,11 @@ export function plural(
   return `${cantidad} ${cantidad === 1 ? singular : (pluralForma ?? singular + "s")}`;
 }
 
+/** `plural` con el número con puntos de miles: «1 creado», «1.250 creados». */
+export function contar(cantidad: number, singular: string, pluralForma?: string): string {
+  return `${cantidad.toLocaleString("es-AR")} ${cantidad === 1 ? singular : (pluralForma ?? singular + "s")}`;
+}
+
 /**
  * Fecha sin hora, formateada en UTC.
  *

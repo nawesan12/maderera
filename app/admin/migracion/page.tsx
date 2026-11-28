@@ -1,6 +1,7 @@
 import { DatabaseZap } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { fechaHora } from "@/components/admin/formato";
+import { contar } from "@/lib/formato";
 import { requireStaffRole } from "@/lib/dal/session";
 import {
   definicionesDeMigracion,
@@ -116,8 +117,7 @@ export default async function MigracionPage({
                   </p>
 
                   <p className="tabular mt-1.5 text-base">
-                    {corrida.creados.toLocaleString("es-AR")} creados ·{" "}
-                    {corrida.actualizados.toLocaleString("es-AR")} actualizados
+                    {contar(corrida.creados, "creado")} · {contar(corrida.actualizados, "actualizado")}
                     {corrida.conError > 0 && (
                       <span className="text-brand-orange-dark">
                         {" "}

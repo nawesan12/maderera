@@ -126,6 +126,17 @@ export async function cajaDelCobro(pedidoId: string | null): Promise<Pick<Estado
 }
 
 /**
+ * Los cheques que el cliente informó desde el portal y nadie aceptó todavía.
+ * El cobro los muestra al abrirse: la deuda se cobraba en efectivo y los
+ * cheques quedaban «en revisión» para siempre (M4-065).
+ */
+export async function chequesInformadosDe(customerId: string): Promise<{ cantidad: number; total: number }> {
+  const r = await (await api()).GET("/api/v1/admin/cheques", { params: { query: { estado: "vivos" } } });
+  const de = (r.data ?? []).filter((c) => c.estado === "informado" && c.customerId === customerId);
+  return { cantidad: de.length, total: de.reduce((s, c) => s + Number(c.importe), 0) };
+}
+
+/**
  * Anula un recibo, con motivo (quien maneja plata): la deuda vuelve a la
  * cuenta. Go lo frena si una devolución ya le reintegró plata o si un cheque
  * suyo ya salió de la cartera, y el mensaje se muestra tal cual.

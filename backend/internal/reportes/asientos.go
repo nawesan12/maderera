@@ -698,6 +698,16 @@ type ChequeAAsentar struct {
 	DelMostradorEnB bool
 }
 
+// LeyendaDelCheque es lo que el asiento dice que le pasó al cheque: el
+// recibido que vuelve de la cartera se le devolvió al cliente (el banco nunca
+// lo tuvo), y el asiento decía «rechazado» (mes 23).
+func LeyendaDelCheque(c ChequeAAsentar) string {
+	if c.Sentido == "recibido" && c.Hacia == "rechazado" && c.Desde == "cartera" {
+		return "devuelto al cliente"
+	}
+	return c.Hacia
+}
+
 // AsientoDeCheque es el asiento de un cambio de estado de un cheque, cada uno
 // en su circuito, y false si ese cambio no mueve cuentas:
 //
@@ -748,7 +758,7 @@ func AsientoDeCheque(c ChequeAAsentar) (Asiento, bool) {
 	default:
 		return Asiento{}, false
 	}
-	a := asiento(c.Fecha, nombre+" "+c.Hacia, r)
+	a := asiento(c.Fecha, nombre+" "+LeyendaDelCheque(c), r)
 	a.Instante = true
 	if c.Circuito == CircuitoNegro {
 		a.Circuito = CircuitoNegro
@@ -1161,7 +1171,7 @@ func AsientosDeChequeDeRecibo(c ChequeAAsentar, blanco float64, rechazo cobros.R
 	enB := redondear(c.Importe - blanco)
 	var out []Asiento
 	agregar := func(r []RenglonDeAsiento, circuito string) {
-		a := asiento(c.Fecha, nombre+" "+c.Hacia, r)
+		a := asiento(c.Fecha, nombre+" "+LeyendaDelCheque(c), r)
 		a.Instante, a.Circuito = true, circuito
 		out = append(out, a)
 	}

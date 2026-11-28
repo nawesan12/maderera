@@ -114,11 +114,16 @@ func (s *Servicio) Registrar(c *cola.Cola) {
 	}))
 	c.Registrar(cobros.TrabajoChequeRechazado, s.manejador(func(ctx context.Context, crudo json.RawMessage) error {
 		var carga struct {
-			ChequeID   string `json:"chequeId"`
-			PorElBanco bool   `json:"porElBanco"`
+			ChequeID        string `json:"chequeId"`
+			PorElBanco      bool   `json:"porElBanco"`
+			Devuelto        bool   `json:"devuelto"`
+			VolvioALaCuenta bool   `json:"volvioALaCuenta"`
 		}
 		if err := json.Unmarshal(crudo, &carga); err != nil {
 			return err
+		}
+		if carga.Devuelto {
+			return s.ChequeDevuelto(ctx, carga.ChequeID, carga.VolvioALaCuenta)
 		}
 		return s.ChequeRechazado(ctx, carga.ChequeID, carga.PorElBanco)
 	}))
@@ -286,6 +291,34 @@ func (s *Servicio) ChequeRechazado(ctx context.Context, id string, porElBanco bo
 		Evento: "cheque_rechazado", Para: *correo, EntidadTipo: "cheque", EntidadID: id,
 		Correo:       avisos.ChequeRechazado(s.sitio, primerNombre(nombre), cheque, importe, sinRecortar, porElBanco),
 		AsuntoPropio: !porElBanco,
+	})
+	return nil
+}
+
+// ChequeDevuelto avisa por correo que se le devolvió al cliente un cheque de
+// la cartera. Por WhatsApp no sale solo: la plantilla de cheque_rechazado
+// dice que no se pudo acreditar (M2S4-017); a mano, el botón arma el texto
+// de la devolución.
+func (s *Servicio) ChequeDevuelto(ctx context.Context, id string, volvioALaCuenta bool) error {
+	var tipo, numero, nombre string
+	var banco, correo *string
+	var importe float64
+	err := s.pool.QueryRow(ctx, `SELECT ch.tipo::text, ch.numero, ch.banco, ch.importe::float8, c.nombre, c.email
+		FROM cheques ch JOIN customers c ON c.id = ch.customer_id WHERE ch.id = $1`, id).
+		Scan(&tipo, &numero, &banco, &importe, &nombre, &correo)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if correo == nil || *correo == "" {
+		return nil
+	}
+	s.correo.Despachar(ctx, avisos.Despacho{
+		Evento: "cheque_rechazado", Para: *correo, EntidadTipo: "cheque", EntidadID: id,
+		Correo:       avisos.ChequeDevuelto(s.sitio, primerNombre(nombre), cobros.NombreDelCheque(tipo, banco, numero), importe, volvioALaCuenta),
+		AsuntoPropio: true,
 	})
 	return nil
 }

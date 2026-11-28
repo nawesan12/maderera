@@ -54,6 +54,33 @@ type baseAviso struct {
 	valores          map[string]string
 	enlace           *Enlace
 	pdf              *string
+	// cuerpo, si no es nil, va en lugar del de la plantilla.
+	cuerpo *string
+}
+
+// Lo que le pasó a un cheque terminado, para el aviso manual: la plantilla de
+// cheque_rechazado es la del banco.
+const (
+	cuerpoChequeNoTomado          = "Hola {{nombre}}, el cheque {{cheque}} por {{importe}} que nos informaste no lo pudimos tomar. Tu cuenta no cambió: el importe sigue pendiente. Escribinos por acá para ver cómo lo resolvemos."
+	cuerpoChequeDevuelto          = "Hola {{nombre}}, te devolvimos el cheque {{cheque}} por {{importe}} sin depositarlo. El importe volvió a tu cuenta corriente. Escribinos por acá para ver cómo lo reponés."
+	cuerpoChequeDevueltoSinCuenta = "Hola {{nombre}}, te devolvimos el cheque {{cheque}} por {{importe}} sin depositarlo. Tu cuenta no cambió."
+)
+
+// CuerpoDelChequeTerminado elige el texto del aviso manual de un cheque
+// rechazado según de dónde venía: el informado que no se tomó, el de la
+// cartera que se le devolvió (con la cuenta subida o no) o el del banco
+// (nil: la plantilla).
+func CuerpoDelChequeTerminado(desde string, volvioALaCuenta bool) *string {
+	switch desde {
+	case "informado":
+		return ptr(cuerpoChequeNoTomado)
+	case "cartera":
+		if volvioALaCuenta {
+			return ptr(cuerpoChequeDevuelto)
+		}
+		return ptr(cuerpoChequeDevueltoSinCuenta)
+	}
+	return nil
 }
 
 func (s *Servicio) urlBase() string { return s.cfg.URLBase }
@@ -131,11 +158,15 @@ func (s *Servicio) cargarAviso(ctx context.Context, evento, tipo, id string) (*b
 		return &baseAviso{nombre: nombre, telefono: tel, valores: map[string]string{"importe": formato.Importe(total), "recibo": numero,
 			"saldo": formato.Importe(saldo), "documento": "el recibo " + numero}, pdf: ptr("/api/recibos/" + id + "/pdf")}, nil
 	case "cheque":
-		var tipoCheque, numero string
+		var tipoCheque, numero, desde string
 		var banco, motivo, nombre, tel *string
 		var importe float64
-		ok, err := fila(`select ch.tipo::text, ch.numero, ch.banco, ch.importe::float8, ch.motivo_rechazo, c.nombre, c.telefono
-			from cheques ch left join customers c on c.id = ch.customer_id where ch.id = $1`, &tipoCheque, &numero, &banco, &importe, &motivo, &nombre, &tel)
+		var volvio bool
+		ok, err := fila(`select ch.tipo::text, ch.numero, ch.banco, ch.importe::float8, ch.motivo_rechazo, c.nombre, c.telefono,
+				coalesce((select e.desde::text from cheque_estados e where e.cheque_id = ch.id and e.hacia = 'rechazado' order by e.at desc limit 1), ''),
+				exists (select 1 from account_movements m where m.cheque_id = ch.id and m.tipo = 'nota_debito' and m.monto > 0)
+			from cheques ch left join customers c on c.id = ch.customer_id where ch.id = $1`,
+			&tipoCheque, &numero, &banco, &importe, &motivo, &nombre, &tel, &desde, &volvio)
 		if !ok {
 			return nil, err
 		}
@@ -143,8 +174,10 @@ func (s *Servicio) cargarAviso(ctx context.Context, evento, tipo, id string) (*b
 		if m == "" {
 			m = "lo rechazó el banco"
 		}
-		return &baseAviso{nombre: nombre, telefono: tel, valores: map[string]string{"cheque": NombreDelCheque(tipoCheque, banco, numero),
-			"importe": formato.Importe(importe), "motivo": m}}, nil
+		// «el cheque Banco Nación N° …», sin «Cheque» repetido, como el
+		// automático (ChequeEnLaPlantilla).
+		return &baseAviso{nombre: nombre, telefono: tel, valores: map[string]string{"cheque": ChequeEnLaPlantilla(tipoCheque, banco, numero),
+			"importe": formato.Importe(importe), "motivo": m}, cuerpo: CuerpoDelChequeTerminado(desde, volvio)}, nil
 	case "customer":
 		var nombre string
 		var tel *string
@@ -324,7 +357,7 @@ func (s *Servicio) AvisoManual(ctx context.Context, evento, tipo, id string, ext
 	for k, v := range extra {
 		valores[k] = v
 	}
-	a := ArmarAvisoManual(evento, datos.nombre, datos.telefono, valores, datos.enlace)
+	a := armarConCuerpo(evento, datos.cuerpo, datos.nombre, datos.telefono, valores, datos.enlace)
 	return &AvisoManualListo{
 		Evento: evento, EntidadTipo: tipo, EntidadID: id, Titulo: am.Titulo, Texto: a.Texto, Href: a.Href, Motivo: a.Motivo, Telefono: a.Telefono,
 		Para: datos.nombre,

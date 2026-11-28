@@ -161,3 +161,68 @@ func TestCarteraConElChequeQueEsperaElCAE(t *testing.T) {
 		}
 	}
 }
+
+// M2S3-088: el cheque de la cartera que entró con un recibo y se le devuelve
+// al cliente encola su propio aviso, con la cuenta que cambió; el informado
+// que no se tomó sigue con el suyo.
+func TestElChequeDevueltoEncolaSuAviso(t *testing.T) {
+	b := armarBase(t)
+	ctx := context.Background()
+	_, _ = b.pool.Exec(ctx, `insert into "user" (id, name, email, email_verified, created_at, updated_at) values ('admin', 'Admin', 'admin@prueba.test', true, now(), now())`)
+	_, _ = b.pool.Exec(ctx, `insert into account_movements (customer_id, tipo, monto) values ($1, 'compra', 300000)`, b.cliente)
+	s := Nuevo(b.pool, silencio)
+	ses := &auth.Sesion{UserID: "admin"}
+	if _, err := emitir(t, b, Cobro{CustomerID: &b.cliente, Origen: "panel", Partes: []Parte{
+		{Medio: "cheque", Importe: 300000, Cheque: &ChequeNuevo{Numero: "00061001", Banco: "Santander", FechaPago: time.Now()}},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	var id string
+	_ = b.pool.QueryRow(ctx, `select id from cheques where numero = '00061001'`).Scan(&id)
+	r, err := s.CambiarEstado(ctx, ses, id, "rechazado", "Lo pidió de vuelta")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(r.Ok, "Devuelto al cliente") {
+		t.Errorf("mensaje: %q", r.Ok)
+	}
+	var carga string
+	_ = b.pool.QueryRow(ctx, `select carga::text from trabajos where tipo = $1`, TrabajoChequeRechazado).Scan(&carga)
+	if !strings.Contains(carga, `"devuelto": true`) || !strings.Contains(carga, `"volvioALaCuenta": true`) || !strings.Contains(carga, `"porElBanco": false`) {
+		t.Errorf("carga: %s", carga)
+	}
+	if s := saldo(t, b); s != 300000 {
+		t.Errorf("la deuda vuelve: %v", s)
+	}
+}
+
+// Mes 23: anular el pago que endosaba un cheque lo devuelve a la cartera, y
+// su tarjeta ya no dice «entregado a» ese proveedor.
+func TestElChequeDeUnPagoAnuladoNoFiguraEntregado(t *testing.T) {
+	b := armarBase(t)
+	ctx := context.Background()
+	var cheque, prov, pago string
+	_ = b.pool.QueryRow(ctx, `insert into cheques (sentido, tipo, numero, fecha_pago, importe, estado, circuito, customer_id)
+		values ('recibido', 'fisico', '00077001', now(), 362000, 'cartera', 'blanco', $1) returning id`, b.cliente).Scan(&cheque)
+	_ = b.pool.QueryRow(ctx, `insert into suppliers (nombre) values ('V3 Placas Costa') returning id`).Scan(&prov)
+	_ = b.pool.QueryRow(ctx, `insert into supplier_payments (supplier_id, total, neto, medio, anulado_at) values ($1, 362000, 362000, 'cheque', now()) returning id`, prov).Scan(&pago)
+	if _, err := b.pool.Exec(ctx, `insert into supplier_payment_parts (payment_id, medio, importe, cheque_id) values ($1, 'cheque', 362000, $2)`, pago, cheque); err != nil {
+		t.Fatal(err)
+	}
+	cs, err := Cheques(ctx, b.pool, "vivos", "")
+	if err != nil || len(cs) != 1 {
+		t.Fatalf("%v %d", err, len(cs))
+	}
+	if cs[0].Proveedor != nil {
+		t.Errorf("sigue entregado a %s", *cs[0].Proveedor)
+	}
+	// Endosado de nuevo en un pago vivo, sí.
+	var otro string
+	_ = b.pool.QueryRow(ctx, `insert into supplier_payments (supplier_id, total, neto, medio) values ($1, 362000, 362000, 'cheque') returning id`, prov).Scan(&otro)
+	_, _ = b.pool.Exec(ctx, `insert into supplier_payment_parts (payment_id, medio, importe, cheque_id) values ($1, 'cheque', 362000, $2)`, otro, cheque)
+	_, _ = b.pool.Exec(ctx, `update cheques set estado = 'entregado' where id = $1`, cheque)
+	cs, _ = Cheques(ctx, b.pool, "vivos", "")
+	if len(cs) != 1 || cs[0].Proveedor == nil || *cs[0].Proveedor != "V3 Placas Costa" {
+		t.Errorf("endosado: %+v", cs)
+	}
+}

@@ -716,7 +716,12 @@ func (s *Servicio) CambiarEstado(ctx context.Context, ses *auth.Sesion, id, nuev
 		// Devuelto desde la cartera, el cliente lo tiene en la mano: el aviso
 		// no dice que lo rechazó el banco.
 		if hacia == "rechazado" && cheque.Sentido == sqlc.SentidoChequeRecibido {
-			if _, err := cola.Encolar(ctx, q, TrabajoChequeRechazado, map[string]any{"chequeId": id, "porElBanco": desde != "informado" && !devuelto}, time.Time{}); err != nil {
+			// «devuelto» y «volvioALaCuenta»: el que se le devolvió de la
+			// cartera tiene su propio aviso, y la cuenta cambió solo si la
+			// nota de débito subió la deuda (mes 23: decía «Tu cuenta no
+			// cambió» con la deuda $ 300.000 más alta).
+			if _, err := cola.Encolar(ctx, q, TrabajoChequeRechazado, map[string]any{"chequeId": id, "porElBanco": desde != "informado" && !devuelto,
+				"devuelto": devuelto, "volvioALaCuenta": debitado}, time.Time{}); err != nil {
 				return err
 			}
 		}

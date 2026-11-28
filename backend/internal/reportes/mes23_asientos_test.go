@@ -96,7 +96,7 @@ func TestElRechazoSaleDeAnticipos(t *testing.T) {
 	e.exec(t, `insert into account_movements (customer_id, tipo, monto, cheque_id, created_at) values ($1, 'nota_debito', 500000, $2, '2026-11-13T15:00:00Z')`, cli, ch)
 
 	nov := DelCircuito(e.asientosDe(t, "2026-11"), "")
-	if x := buscarAsiento(nov, "Cheque N° 93001 · Ciudad rechazado"); x == nil || cuenta([]Asiento{*x}, Cuentas.AnticiposDeClientes) != 500000 ||
+	if x := buscarAsiento(nov, "Cheque N° 93001 · Ciudad devuelto al cliente"); x == nil || cuenta([]Asiento{*x}, Cuentas.AnticiposDeClientes) != 500000 ||
 		cuenta([]Asiento{*x}, Cuentas.Deudores) != 0 {
 		t.Errorf("el rechazo: %+v", x)
 	}

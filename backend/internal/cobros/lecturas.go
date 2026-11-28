@@ -59,7 +59,10 @@ const EstadosVivos = `('informado', 'cartera', 'depositado', 'entregado')`
 
 // columnasDeCheque: el proveedor es el del último pago que lo nombra y no
 // se anuló (un cheque de un pago anulado vuelve a la cartera y puede salir
-// en otro: un JOIN directo lo repetía una vez por pago).
+// en otro: un JOIN directo lo repetía una vez por pago). Uno recibido que
+// volvió a la cartera por un pago anulado no fue entregado a nadie: su
+// tarjeta seguía diciendo «entregado a V3 Placas Costa» (mes 23). El propio
+// de un pago anulado conserva a quién iba.
 var columnasDeCheque = `
 		SELECT ch.id, ch.sentido::text, ch.tipo::text, ch.numero, ch.banco, ch.librador, ch.fecha_pago, ch.importe::float8,
 		  ch.estado::text, cu.nombre, ch.customer_id, ` + fragmentos.CircuitoDelCheque("ch") + `, pr.nombre, pr.id, ch.notas, ch.receipt_id, r.numero, ch.motivo_rechazo,
@@ -73,7 +76,8 @@ var columnasDeCheque = `
 		LEFT JOIN LATERAL (
 		  SELECT su.id, su.nombre FROM supplier_payment_parts spp
 		  JOIN supplier_payments sp ON sp.id = spp.payment_id JOIN suppliers su ON su.id = sp.supplier_id
-		  WHERE spp.cheque_id = ch.id ORDER BY (sp.anulado_at IS NULL) DESC, sp.fecha DESC LIMIT 1) pr ON true
+		  WHERE spp.cheque_id = ch.id AND (sp.anulado_at IS NULL OR ch.sentido = 'entregado')
+		  ORDER BY (sp.anulado_at IS NULL) DESC, sp.fecha DESC LIMIT 1) pr ON true
 		LEFT JOIN receipts r ON r.id = ch.receipt_id`
 
 func leerCheques(filas pgx.Rows) ([]ChequeListado, error) {

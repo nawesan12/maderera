@@ -66,6 +66,25 @@ func ChequeRechazado(sitio, nombre, cheque string, importe float64, motivo strin
 	})
 }
 
+// ChequeDevuelto es el correo del cheque de la cartera que se le devolvió al
+// cliente sin depositarlo (mes 23): salía el de «no pudimos tomar», que dice
+// «Tu cuenta no cambió», con la deuda ya subida por la nota de débito. El
+// motivo es de la casa y no va (DetalleParaElCliente).
+func ChequeDevuelto(sitio, nombre, cheque string, importe float64, volvioALaCuenta bool) Correo {
+	parrafo := "Te devolvimos este cheque sin depositarlo. Tu cuenta no cambió."
+	if volvioALaCuenta {
+		parrafo = "Te devolvimos este cheque sin depositarlo, así que su importe volvió a tu cuenta corriente. Escribinos para ver cómo lo reponés."
+	}
+	return armar(sitio, "Te devolvimos un cheque · "+cheque, email.Opciones{
+		Titulo:   "Te devolvimos un cheque",
+		Adelanto: cheque + " por " + formato.Precio(importe) + ".",
+		Saludo:   nombre,
+		Parrafos: []string{parrafo},
+		Datos:    []email.Bloque{{Etiqueta: "Cheque", Valor: cheque}, {Etiqueta: "Importe", Valor: formato.Precio(importe)}},
+		CTA:      &email.Enlace{Texto: "Ver mi cuenta", URL: base(sitio) + "/mi-cuenta/movimientos"},
+	})
+}
+
 // TransferenciaRechazada es el correo de una transferencia informada que no
 // se pudo acreditar (M2S1-053): el rechazo de un cheque mandaba aviso y el
 // de una transferencia, no.

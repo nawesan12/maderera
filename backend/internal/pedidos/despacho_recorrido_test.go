@@ -84,3 +84,22 @@ func TestDespachoDelEnvioSinCobrar(t *testing.T) {
 		t.Errorf("sin PIN no firma nadie: %q", quien)
 	}
 }
+
+// M4-096: el margen de la ficha descuenta la parte del descuento del pedido
+// (PED-1010: −10 % por transferencia; el neto es el de su factura).
+func TestMargenConElDescuentoDelPedido(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	_, ven := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	id := e.pedido(t, ven, 1)
+	e.exec(t, `update order_items set subtotal = 82280, precio_unitario = 82280, costo_unitario = 43806 where order_id = $1`, id)
+	// Dos renglones de $ 82.280 (los del alta de prueba): $ 164.560 − 10 %.
+	e.exec(t, `update orders set subtotal = 164560, descuento = 16456, total = 148104 where id = $1`, id)
+	f, err := e.s.Pedido(ctx, id, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Margen == nil || f.Margen.Neto < 122399.99 || f.Margen.Neto > 122400.01 || f.Margen.Costo != 2*43806 {
+		t.Fatalf("margen: %+v", f.Margen)
+	}
+}

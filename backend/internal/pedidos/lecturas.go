@@ -1181,10 +1181,21 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 		if err := filas.Err(); err != nil {
 			return nil, err
 		}
+		// El neto de cada renglón con su parte del descuento del pedido
+		// (M4-096: PED-1010, −10 % por transferencia, daba $ 68.000 netos y
+		// 35,6 % cuando su factura dice $ 61.200).
+		netos, err := netosDeLosRenglones(ctx, s.pool, id)
+		if err != nil {
+			return nil, err
+		}
 		lineas := make([]LineaConCosto, len(p.Items))
 		for i, it := range p.Items {
 			d := devueltos[it.ID]
-			lineas[i] = LineaConCosto{Subtotal: it.Subtotal, Cantidad: it.Cantidad, AlicuotaIva: it.AlicuotaIva, CostoUnitario: it.CostoUnitario,
+			sub := it.Subtotal
+			if n, ok := netos[it.ID]; ok {
+				sub = jsmath.Fijo2(n)
+			}
+			lineas[i] = LineaConCosto{Subtotal: sub, Cantidad: it.Cantidad, AlicuotaIva: it.AlicuotaIva, CostoUnitario: it.CostoUnitario,
 				DevueltoCantidad: d.cantidad, DevueltoImporte: d.importe}
 		}
 		p.Margen = MargenDelPedido(lineas)

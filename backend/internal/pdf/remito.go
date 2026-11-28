@@ -4,6 +4,8 @@ import (
 	"encoding/base64"
 	"strings"
 	"time"
+
+	"mjbj/internal/formato"
 )
 
 // El remito en PDF (lib/pdf/remito.ts). Sin importes: documenta qué salió
@@ -300,13 +302,14 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 
 	cursor -= altoCaja2 + Mm(6)
 
-	// Detalle, sin precios.
-	colCantidad := derecha - Mm(30)
-	anchoDescripcion := colCantidad - Mm(18) - Margen
+	// Detalle, sin precios. La cantidad con su unidad en una sola columna
+	// («3 placas»), como el remito impreso: en dos, «1» y «media» quedaban
+	// separados (mes 23).
+	anchoCantidad := Mm(44)
+	anchoDescripcion := derecha - anchoCantidad - Mm(4) - Margen
 	encabezarDetalle := func() {
 		h.Escribir("DESCRIPCIÓN", Opciones{X: Margen, Y: cursor, Tamano: 6, Fuente: Negrita, Color: TintaSuave})
-		h.Escribir("CANTIDAD", Opciones{X: colCantidad, Y: cursor, Tamano: 6, Fuente: Negrita, Color: TintaSuave, Derecha: true})
-		h.Escribir("UNIDAD", Opciones{X: derecha, Y: cursor, Tamano: 6, Fuente: Negrita, Color: TintaSuave, Derecha: true})
+		h.Escribir("CANTIDAD", Opciones{X: derecha, Y: cursor, Tamano: 6, Fuente: Negrita, Color: TintaSuave, Derecha: true})
 
 		cursor -= 6
 		h.Raya(cursor, 1, Tinta)
@@ -346,8 +349,8 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 		}
 		espacio(maximo(float64(len(Renglones(item.Descripcion, Helvetica, 9, anchoDescripcion)))*9*1.35, 12)+4+altoCorte, true)
 		alto := h.EscribirParrafo(item.Descripcion, Parrafo{Opciones: Opciones{X: Margen, Y: cursor, Tamano: 9}, Ancho: anchoDescripcion})
-		h.EscribirNumero(numeroJS(item.Cantidad), Opciones{X: colCantidad, Y: cursor, Tamano: 9, Fuente: Mono, Derecha: true}, Mm(16))
-		h.EscribirEnAncho(UnidadPara(item.Unidad, item.Cantidad, item.Descripcion), Opciones{X: derecha, Y: cursor, Tamano: 8.5, Derecha: true}, Mm(26))
+		h.EscribirEnAncho(formato.Cantidad(item.Cantidad)+" "+UnidadPara(item.Unidad, item.Cantidad, item.Descripcion),
+			Opciones{X: derecha, Y: cursor, Tamano: 9, Fuente: Mono, Derecha: true}, anchoCantidad)
 		if item.Corte != "" {
 			alto += 2 + h.EscribirParrafo(item.Corte, Parrafo{Opciones: Opciones{X: Margen, Y: cursor - maximo(alto, 12) + 1, Tamano: 7.5, Color: TintaSuave},
 				Ancho: anchoDescripcion})
@@ -370,7 +373,7 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 		cursor -= 12
 		anchoUtil := AnchoA4 - Margen*2
 		for _, p := range r.Pendientes {
-			texto := numeroJS(p.Pendiente) + " " + UnidadPara(p.Unidad, p.Pendiente, p.Descripcion) + " · " + p.Descripcion
+			texto := formato.Cantidad(p.Pendiente) + " " + UnidadPara(p.Unidad, p.Pendiente, p.Descripcion) + " · " + p.Descripcion
 			espacio(float64(len(Renglones(texto, Helvetica, 8, anchoUtil)))*8*1.35, false)
 			cursor -= h.EscribirParrafo(texto, Parrafo{Opciones: Opciones{X: Margen, Y: cursor, Tamano: 8}, Ancho: anchoUtil, Interlineado: 11})
 		}

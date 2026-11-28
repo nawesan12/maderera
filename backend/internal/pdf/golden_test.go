@@ -325,6 +325,9 @@ func diferencia(a, b string) (float64, error) {
 //     «Cód. cliente» vacío y vende la lata por unidad; la lista dice «a
 //     consultar» en lugar de «$0», y el encabezado no repite el nombre de
 //     fantasía que ya está en la razón social.
+//   - remito (27/11, mes 23): la cantidad con su unidad en una sola
+//     columna («3 placas», «120,5 m»), como el remito impreso, y con coma
+//     decimal.
 func TestActualizarGolden(t *testing.T) {
 	pedido := os.Getenv("PDF_ACTUALIZAR")
 	if pedido == "" {

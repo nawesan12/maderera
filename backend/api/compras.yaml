@@ -1166,6 +1166,8 @@ components:
         lineas: { type: integer }
         neto: { type: number, format: double }
         facturada: { type: boolean, description: Si ya hay una factura de compra vinculada }
+        ordenNumero: { type: string, nullable: true }
+        confirmadaAt: { type: string, format: date-time, nullable: true }
     Recepcion:
       type: object
       required: [id, numeroRemito, fecha, estado, gastos, notas, confirmadaAt, supplierId, proveedor, branchId, sucursal, items]

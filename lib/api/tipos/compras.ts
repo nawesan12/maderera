@@ -1134,6 +1134,9 @@ export interface components {
             neto: number;
             /** @description Si ya hay una factura de compra vinculada */
             facturada: boolean;
+            ordenNumero?: string | null;
+            /** Format: date-time */
+            confirmadaAt?: string | null;
         };
         Recepcion: {
             id: string;

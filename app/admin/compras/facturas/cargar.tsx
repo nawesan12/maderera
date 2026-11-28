@@ -7,6 +7,7 @@ import { BarraGuardar, Hoja, Seccion } from "@/components/admin/formulario";
 import {
   cantidadConUnidad,
   fechaCorta,
+  hora,
   formatearMonto,
   hoyEnArgentina,
   importeDelCampo,
@@ -116,6 +117,9 @@ export function CargarFactura({
     numeroRemito: string | null;
     fecha: Date;
     neto: number;
+    /** La orden de la que vino y cuándo se confirmó: separan los remitos sin número. */
+    ordenNumero?: string | null;
+    confirmadaAt?: string | null;
     /** Lo que de su orden no llegó y su neto al costo pedido. */
     faltantes?: { descripcion: string; cantidad: number; unidad: string | null }[];
     faltanteNeto?: number;
@@ -555,7 +559,18 @@ export function CargarFactura({
                         <span className="codigo block truncate text-base font-medium">
                           {r.numeroRemito ?? "Sin remito"}
                         </span>
-                        <span className="tabular block text-sm text-muted-foreground">{fechaCorta.format(r.fecha)}</span>
+                        {/* Sin número, dos remitos del mismo día eran dos
+                            renglones iguales: la orden y la hora los separan
+                            (recorrido 2). */}
+                        <span className="tabular block truncate text-sm text-muted-foreground">
+                          {[
+                            fechaCorta.format(r.fecha),
+                            r.numeroRemito ? null : r.ordenNumero,
+                            !r.numeroRemito && r.confirmadaAt ? hora.format(new Date(r.confirmadaAt)) : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
                       </span>
                       <span className="tabular shrink-0 text-base">{formatearMonto(r.neto)}</span>
                     </label>

@@ -246,10 +246,13 @@ func (s *Servicio) MarcarAsistencia(ctx context.Context, id, estado string) erro
 
 // BorrarEvento borra un borrador sin nadie anotado (un evento de prueba no
 // tenía cómo irse, M2S1-119). Con gente anotada o publicado, no: se cierra o
-// se cancela.
+// se cancela. Los que se quitaron no cuentan (se van con el evento), salvo
+// que hayan pasado por un pago: el cobro sigue apuntando a su inscripción
+// (recorrido, M4-059).
 func (s *Servicio) BorrarEvento(ctx context.Context, id string) error {
 	r, err := s.pool.Exec(ctx, `delete from events e where e.id = $1 and e.estado = 'borrador'
-		and not exists (select 1 from event_registrations er where er.event_id = e.id)`, id)
+		and not exists (select 1 from event_registrations er where er.event_id = e.id
+		  and (er.estado <> 'cancelada' or er.payment_id is not null))`, id)
 	if err != nil {
 		return err
 	}

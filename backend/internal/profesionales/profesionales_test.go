@@ -487,6 +487,18 @@ func TestBorrarYRecordarUnEvento(t *testing.T) {
 	if n, _ := e.s.RecordarEvento(ctx, conGente); n != 0 {
 		t.Fatalf("se repitió: %d", n)
 	}
+	// Recorrido M4-059: quitado el único anotado, el borrador se borra.
+	prueba := e.uno(t, `insert into events (slug, titulo, inicia, cupo, estado) values ('p', 'P', now() + interval '9 days', 3, 'borrador') returning id`)
+	anotado := e.uno(t, `insert into event_registrations (event_id, nombre, email, estado) values ($1, 'Ana', 'ana@x.test', 'confirmada') returning id`, prueba)
+	if err := e.s.BorrarEvento(ctx, prueba); err == nil {
+		t.Fatal("borró un borrador con un anotado")
+	}
+	if err := e.s.MarcarAsistencia(ctx, anotado, "cancelada"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.s.BorrarEvento(ctx, prueba); err != nil {
+		t.Fatalf("sin anotados no se borra: %v", err)
+	}
 }
 
 // M2S2-016: con el cobro en línea apagado, un evento pago no reserva lugar;

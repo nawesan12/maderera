@@ -58,8 +58,10 @@ export function AccionesEvento({
     startTransition(() => cambiar(datos));
   }
 
+  // Sin caja propia: los botones van en la fila de la tarjeta, con Editar y
+  // Recordar (M4-075).
   return (
-    <div className="flex flex-wrap items-center justify-end gap-2">
+    <div className="contents">
       {opciones.map((opcion) => (
         <button
           key={opcion.valor}
@@ -118,12 +120,12 @@ export function AccionesEvento({
       />
 
       {resultado.ok && (
-        <p className="w-full text-right text-base text-muted-foreground">
+        <p className="w-full text-base text-muted-foreground sm:text-right">
           {resultado.ok}
         </p>
       )}
       {resultado.error && (
-        <p className="w-full text-right text-base text-destructive">
+        <p className="w-full text-base text-destructive sm:text-right">
           {resultado.error}
         </p>
       )}

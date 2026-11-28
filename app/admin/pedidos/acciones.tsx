@@ -39,6 +39,7 @@ export function AccionesPedido({
   enLaFicha = false,
   porLlevar = false,
   firmar = null,
+  remitoAFirmar = null,
   sinAvance = false,
 }: {
   id: string;
@@ -95,6 +96,11 @@ export function AccionesPedido({
   porLlevar?: boolean;
   /** La firma del remito de envío que está en la calle (la ficha la tiene). */
   firmar?: string | null;
+  /**
+   * El número de ese remito: el diálogo de entregar lo nombra en el botón
+   * de firmar (venía sin decir qué remito faltaba, mes 23).
+   */
+  remitoAFirmar?: string | null;
   /**
    * En la ficha, cuando lo que sigue es el remito (que va arriba con su
    * «Preparar remito»): el encabezado deja solo el cobro.
@@ -297,7 +303,13 @@ export function AccionesPedido({
                   className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium"
                 >
                   <PenLine className="h-5 w-5" aria-hidden="true" />
-                  Firmar el remito
+                  {remitoAFirmar ? (
+                    <>
+                      Firmar <span className="tabular whitespace-nowrap">{remitoAFirmar}</span>
+                    </>
+                  ) : (
+                    "Firmar el remito"
+                  )}
                 </Link>
               </div>
             ) : (

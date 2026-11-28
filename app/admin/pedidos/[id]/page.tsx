@@ -448,6 +448,7 @@ export default async function FichaPedidoPage({
               secundario={listoEnAcopio}
               porLlevar={porEntregar.length > 0}
               firmar={firmaEnLaCalle}
+              remitoAFirmar={remitoEnLaCalle?.numero ?? null}
               enLaFicha
             />
           </>

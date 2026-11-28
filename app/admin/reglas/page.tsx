@@ -326,6 +326,14 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
         ],
       },
       {
+        clave: "retenciones_al_pagar",
+        pregunta: "Al pagarle a un proveedor, arrancan tildadas",
+        opciones: [
+          { valor: "con_base", texto: "Las que ya le retuvieron este mes" },
+          { valor: "las_que_corresponden", texto: "Las que le corresponden" },
+        ],
+      },
+      {
         clave: "exportar_sicore",
         pregunta: "Las retenciones del mes también en TXT para SICORE",
         opciones: [

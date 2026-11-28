@@ -36,6 +36,7 @@ export const OPCIONES_DE_REGLAS = {
   endoso_espera_cae: ["si", "al_cae"],
   redondeo_lista_proveedor: ["centavos", "peso", "decena", "centena"],
   deposito_de_efectivo: ["estudio", "lo_que_hay"],
+  retenciones_al_pagar: ["con_base", "las_que_corresponden"],
 } as const;
 
 

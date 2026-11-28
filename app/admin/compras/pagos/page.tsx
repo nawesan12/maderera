@@ -129,10 +129,12 @@ export default async function PagosPage({
           nombre: r.nombre,
           impuesto: r.impuesto,
           alicuota: Number(r.alicuota),
+          alicuotaNoInscripto: Number(r.alicuotaNoInscripto),
           minimoNoImponible: Number(r.minimoNoImponible),
         }))}
         sucursales={sucursales}
         ivaSobreTotal={valorDeRegla(ajustes, "base_retencion_iva") === "total"}
+        tildarLasQueCorresponden={valorDeRegla(ajustes, "retenciones_al_pagar") === "las_que_corresponden"}
         proveedorInicial={proveedorInicial}
         facturaInicial={facturaInicial}
         chequeInicial={chequeInicial}
@@ -177,6 +179,36 @@ function Medios({ p }: { p: Pago }) {
         </span>
       ))}
     </span>
+  );
+}
+
+/**
+ * Los medios en el teléfono: uno por renglón, el medio y la referencia a la
+ * izquierda y el monto a la derecha, y lo retenido igual. En chips, el monto
+ * de una transferencia con referencia larga bajaba solo a otro renglón
+ * (M4-048).
+ */
+function MediosEnFilas({ p }: { p: Pago }) {
+  const partes = p.partes.length > 0 ? p.partes : [{ medio: p.medio, importe: p.neto, referencia: p.referencia }];
+  const conMontos = partes.length > 1 || p.retenido > 0;
+  return (
+    <dl className="tabular space-y-0.5 text-sm">
+      {partes.map((x, i) => (
+        <div key={i} className="flex items-baseline justify-between gap-3">
+          <dt className="min-w-0">
+            <span className="font-medium">{NOMBRE_DEL_MEDIO[x.medio] ?? x.medio}</span>
+            {x.referencia && <span className="codigo break-all text-muted-foreground"> {x.referencia}</span>}
+          </dt>
+          {conMontos && <dd className="shrink-0">{formatearMonto(x.importe)}</dd>}
+        </div>
+      ))}
+      {p.retenido > 0 && (
+        <div className="flex items-baseline justify-between gap-3 text-muted-foreground">
+          <dt>Retenido</dt>
+          <dd className="shrink-0">{formatearMonto(p.retenido)}</dd>
+        </div>
+      )}
+    </dl>
   );
 }
 
@@ -272,13 +304,8 @@ function TablaDePagos({ pagos }: { pagos: Pago[] }) {
             <Link href={`/admin/proveedores/${p.supplierId}`} className="block text-base font-semibold hover:underline">
               {p.proveedor}
             </Link>
-            <Medios p={p} />
+            <MediosEnFilas p={p} />
             <Aplicado p={p} />
-            {p.retenido > 0 && (
-              <p className="tabular text-sm text-muted-foreground">
-                Retenido {formatearMonto(p.retenido)} · salió {formatearMonto(p.neto)}
-              </p>
-            )}
             <Certificados p={p} />
           </li>
         ))}

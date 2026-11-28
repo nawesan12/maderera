@@ -113,6 +113,11 @@ const (
 	// «lo_que_hay» la saca de esa Caja hasta lo que tiene y el resto, de la
 	// Caja del B contra Movimientos a imputar.
 	DepositoDeEfectivo = "deposito_de_efectivo"
+	// Recorrido (00463, M4-004): qué retenciones arrancan tildadas al pagarle
+	// a un proveedor. «con_base» es lo de siempre (las que ya tuvieron base
+	// en el mes); «las_que_corresponden» también la única de cada impuesto
+	// que le corresponde y retiene algo.
+	RetencionesAlPagar = "retenciones_al_pagar"
 )
 
 // Opciones son los valores posibles de cada regla, el de arranque primero.
@@ -147,6 +152,7 @@ var Opciones = map[string][]string{
 	EndosoEsperaCAE:             {"si", "al_cae"},
 	RedondeoListaProveedor:      {"centavos", "peso", "decena", "centena"},
 	DepositoDeEfectivo:          {"estudio", "lo_que_hay"},
+	RetencionesAlPagar:          {"con_base", "las_que_corresponden"},
 }
 
 // Arranque es el valor de una regla cuando la fila no está o tiene algo que

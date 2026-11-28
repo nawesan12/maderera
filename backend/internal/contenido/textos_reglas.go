@@ -43,6 +43,7 @@ var textoDeRegla = map[string]struct {
 	"endoso_espera_cae":        {"El cheque de una factura sin CAE se endosa", map[string]string{"si": "Sí, como blanco", "al_cae": "Recién con el CAE"}},
 	"redondeo_lista_proveedor": {"El precio que propone la lista del proveedor", map[string]string{"centavos": "Con centavos", "peso": "Al peso", "decena": "A la decena", "centena": "A la centena"}},
 	"deposito_de_efectivo":     {"El efectivo que va al banco sale de", map[string]string{"estudio": "La Caja del estudio", "lo_que_hay": "La del estudio hasta lo que tiene; el resto, del circuito sin factura"}},
+	"retenciones_al_pagar":     {"Al pagarle a un proveedor, arrancan tildadas", map[string]string{"con_base": "Las que ya le retuvieron este mes", "las_que_corresponden": "Las que le corresponden"}},
 }
 
 // DescripcionDeRegla es el renglón de la bitácora del cambio de una regla.

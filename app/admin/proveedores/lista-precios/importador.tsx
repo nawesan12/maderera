@@ -106,8 +106,11 @@ export function ImportadorDeLista({
     (f) => f.precioSugerido > 0 && (f.precioActual === null || Math.round(f.precioActual * 100) !== Math.round(f.precioSugerido * 100)),
   ).length;
   const soloCosto = aAplicar.length - conPrecio;
+  // Sin nada tildado, el botón apagado no cuenta «0 costos» (mes 23).
   const textoAplicar =
-    conPrecio === 0
+    aAplicar.length === 0
+      ? "Aplicar"
+      : conPrecio === 0
       ? `Guardar ${soloCosto === 1 ? "1 costo" : `${soloCosto} costos`}`
       : `Aplicar ${conPrecio === 1 ? "1 precio" : `${conPrecio} precios`}${soloCosto > 0 ? ` y ${soloCosto === 1 ? "1 costo" : `${soloCosto} costos`}` : ""}`;
 

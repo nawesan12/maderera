@@ -771,6 +771,14 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   letter-spacing: -0.01em;
 }
 
+/* Lo que se tipea va en mono; lo que el campo sugiere es texto («El de cada
+   producto», «N.º de remito»), en la letra del texto (mes 23). */
+.tabular::placeholder,
+.codigo::placeholder {
+  font-family: var(--font-sans);
+  letter-spacing: normal;
+}
+
 /* Los controles del panel crecen a 40px, el mínimo que se acierta con el dedo
    o con un pulso poco firme. */
 .panel :is(input, select, textarea):not([type="checkbox"]):not([type="radio"]),

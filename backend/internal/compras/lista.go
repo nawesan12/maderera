@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"mjbj/internal/jsmath"
 	"mjbj/internal/planilla"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/reglas"
 	"mjbj/internal/sqlc"
 )
 
@@ -185,6 +187,22 @@ func precioConMargenActual(actual, costoAnterior, costoNuevo float64) float64 {
 	return jsmath.Redondear2(float64(actual*costoNuevo) / costoAnterior)
 }
 
+// RedondearSugerido es el precio propuesto según la regla
+// «redondeo_lista_proveedor»: a centavos (lo de siempre) o hacia arriba al
+// peso, la decena o la centena, como el ajuste masivo.
+func RedondearSugerido(p float64, modo string) float64 {
+	if !(p > 0) {
+		return p
+	}
+	c := jsmath.Redondear2(p)
+	paso := map[string]float64{"peso": 1, "decena": 10, "centena": 100}[modo]
+	if paso == 0 {
+		return c
+	}
+	// Al centavo antes de subir: 81.877,00000001 no es 81.878.
+	return math.Ceil(jsmath.Redondear2(c/paso)-1e-9) * paso
+}
+
 // mismoCosto compara al centavo, que es lo que trae la lista.
 func mismoCosto(a, b float64) bool { return jsmath.Redondear2(a) == jsmath.Redondear2(b) }
 
@@ -304,6 +322,10 @@ func (s *Servicio) PrevisualizarLista(ctx context.Context, archivo []byte, form 
 		return VistaPreviaProveedor{}, err
 	}
 	mantener := margenEnBlanco(form)
+	redondeo, err := reglas.Valor(ctx, s.pool, reglas.RedondeoListaProveedor)
+	if err != nil {
+		return VistaPreviaProveedor{}, err
+	}
 	vista := VistaPreviaProveedor{Filas: []FilaPreviaProveedor{}, Problemas: problemas, Columnas: columnas}
 	for _, f := range filas {
 		x := FilaPreviaProveedor{FilaDeProveedor: f, CostoNeto: netoDeLaLista(f)}
@@ -321,6 +343,7 @@ func (s *Servicio) PrevisualizarLista(ctx context.Context, archivo []byte, form 
 					x.PrecioSugerido = precioConMargenActual(*x.PrecioActual, *x.CostoAnterior, x.CostoNeto)
 				}
 			}
+			x.PrecioSugerido = RedondearSugerido(x.PrecioSugerido, redondeo)
 			x.Cambio = cambioDelPrecio(x.PrecioActual, x.PrecioSugerido)
 			if (x.Cambio == CambioIgual || x.Cambio == CambioSinSugerido) && x.CostoAnterior != nil && mismoCosto(*x.CostoAnterior, x.CostoNeto) {
 				vista.SinCambios++
@@ -411,6 +434,10 @@ func (s *Servicio) AplicarLista(ctx context.Context, ses *auth.Sesion, form map[
 	if !hay {
 		return "", "", fallo("No hay una lista de precios general.")
 	}
+	redondeo, err := reglas.Valor(ctx, s.pool, reglas.RedondeoListaProveedor)
+	if err != nil {
+		return "", "", err
+	}
 	precios, costos := 0, 0
 	// Lo que cambió, para la bitácora: qué producto, de cuánto a cuánto
 	// (M2S2-005).
@@ -464,7 +491,7 @@ func (s *Servicio) AplicarLista(ctx context.Context, ses *auth.Sesion, form map[
 			// El precio, con su renglón en el historial como cualquier
 			// importación (M2S2-042): sin eso «Últimos cambios» no lo
 			// mostraba y el deshacer no tenía de dónde volver.
-			precio := jsmath.Fijo2(f.PrecioSugerido)
+			precio := jsmath.Fijo2(RedondearSugerido(f.PrecioSugerido, redondeo))
 			var anterior *string
 			var sku string
 			err := tx.QueryRow(ctx, `SELECT (SELECT price::text FROM price_list_items WHERE price_list_id = $1 AND variant_id = $2 FOR UPDATE),

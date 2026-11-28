@@ -103,6 +103,10 @@ const (
 	// en la transitoria) y se endosa a una factura A; «al_cae» lo deja en la
 	// cartera hasta que llegue el CAE.
 	EndosoEsperaCAE = "endoso_espera_cae"
+	// Mes 23 (00460): a qué redondea el precio que propone la lista del
+	// proveedor. «centavos» es lo de siempre (MDF $ 81.876,92); los demás
+	// suben al peso, a la decena o a la centena, como el ajuste masivo.
+	RedondeoListaProveedor = "redondeo_lista_proveedor"
 )
 
 // Opciones son los valores posibles de cada regla, el de arranque primero.
@@ -135,6 +139,7 @@ var Opciones = map[string][]string{
 	AltaDeProducto:              {"activo", "inactivo"},
 	ListoConElCorte:             {"mostrador", "todos"},
 	EndosoEsperaCAE:             {"si", "al_cae"},
+	RedondeoListaProveedor:      {"centavos", "peso", "decena", "centena"},
 }
 
 // Arranque es el valor de una regla cuando la fila no está o tiene algo que

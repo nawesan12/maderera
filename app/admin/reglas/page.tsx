@@ -265,6 +265,16 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
           { valor: "inactivo", texto: "Inactivo, hasta prenderlo" },
         ],
       },
+      {
+        clave: "redondeo_lista_proveedor",
+        pregunta: "El precio que propone la lista del proveedor",
+        opciones: [
+          { valor: "centavos", texto: "Con centavos" },
+          { valor: "peso", texto: "Al peso" },
+          { valor: "decena", texto: "A la decena" },
+          { valor: "centena", texto: "A la centena" },
+        ],
+      },
     ],
   },
   {

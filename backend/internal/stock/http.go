@@ -222,7 +222,11 @@ func (a *API) RecibirTraslado(ctx context.Context, r stockapi.RecibirTrasladoReq
 		if b.Renglones != nil {
 			rec.Renglones = []RenglonDeTraslado{}
 			for _, x := range *b.Renglones {
-				rec.Renglones = append(rec.Renglones, RenglonDeTraslado{VariantID: x.VariantId, Cantidad: x.Cantidad})
+				r := RenglonDeTraslado{VariantID: x.VariantId, Cantidad: x.Cantidad}
+				if x.Faltante != nil {
+					r.Faltante = string(*x.Faltante)
+				}
+				rec.Renglones = append(rec.Renglones, r)
 			}
 		}
 	}

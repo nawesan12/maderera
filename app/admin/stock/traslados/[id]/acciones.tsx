@@ -179,7 +179,9 @@ function Recepcion({
       texto: formatearCantidad(r.cantidad).replace(/\./g, ""),
     }));
   const [llegadas, setLlegadas] = useState<Llegada[]>(inicial);
-  const [faltante, setFaltante] = useState<"origen" | "perdido">("origen");
+  // Lo que no llegó, por medida: una se pudo perder y otra quedar en el
+  // galpón (mes 23: era una sola elección para todo).
+  const [faltantes, setFaltantes] = useState<Record<string, "origen" | "perdido">>({});
   const [error, setError] = useState("");
   const campos = useRef(new Map<string, HTMLInputElement>());
 
@@ -188,7 +190,6 @@ function Recepcion({
     const mal = !Number.isFinite(n) || n < 0 || (!admiteDecimales(l.unidad) && !Number.isInteger(n));
     return { ...l, n, mal };
   });
-  const falta = revisadas.some((l) => !l.mal && l.n < l.mandado);
   const distinto = revisadas.some((l) => !l.mal && l.n !== l.mandado);
   const listo = !pendiente && revisadas.every((l) => !l.mal);
 
@@ -216,8 +217,12 @@ function Recepcion({
     if (!listo) return;
     startTransition(async () => {
       const r = await recibirTraslado(id, {
-        renglones: revisadas.map((l) => ({ variantId: l.variantId, cantidad: String(l.n) })),
-        faltante,
+        renglones: revisadas.map((l) => ({
+          variantId: l.variantId,
+          cantidad: String(l.n),
+          ...(l.n < l.mandado ? { faltante: faltantes[l.variantId] ?? "origen" } : {}),
+        })),
+        faltante: "origen",
       });
       // Con error también se refresca: si lo recibió otra pestaña o el
       // celular, la pantalla pasa a «Recibido» y el aviso dice por qué.
@@ -239,6 +244,7 @@ function Recepcion({
         if (!a) {
           alCerrar();
           setLlegadas(inicial());
+          setFaltantes({});
           setError("");
         }
       }}
@@ -269,6 +275,10 @@ function Recepcion({
                       : l.mandado > 0
                         ? `Mandaron ${formatearCantidad(l.mandado)}`
                         : "No figuraba"}
+                    {/* Lo que llegó de más sale del origen en el acto: se
+                        dice acá, no después (mes 23: 3 de 2 restaba sin
+                        avisar). */}
+                    {mas && <span className="block">{`${formatearCantidad(l.n - l.mandado)} sale de ${origen}`}</span>}
                   </p>
                   <label
                     htmlFor={`llego-cant-${l.variantId}`}
@@ -313,6 +323,38 @@ function Recepcion({
                     <span className="w-11 shrink-0" aria-hidden="true" />
                   )}
                 </div>
+                {menos && (
+                  <div
+                    className="mt-2 flex rounded-md bg-hundida p-0.5 text-base"
+                    role="group"
+                    aria-label={`Lo que no llegó de ${nombre}`}
+                  >
+                    {/* A 375 «Vuelve a Aserradero» se partía en dos
+                        renglones: ahí dice «Vuelve» y el origen va en el
+                        nombre accesible. */}
+                    {(
+                      [
+                        ["origen", "Vuelve", ` a ${origen}`],
+                        ["perdido", "Se perdió", ""],
+                      ] as const
+                    ).map(([valor, texto, resto]) => {
+                      const elegida = (faltantes[l.variantId] ?? "origen") === valor;
+                      return (
+                        <button
+                          key={valor}
+                          type="button"
+                          aria-pressed={elegida}
+                          aria-label={texto + resto}
+                          onClick={() => setFaltantes((f) => ({ ...f, [l.variantId]: valor }))}
+                          className={`h-10 min-w-0 flex-1 whitespace-nowrap rounded px-2 ${elegida ? "bg-card font-medium shadow-sm" : "text-muted-foreground"}`}
+                        >
+                          {texto}
+                          {resto && <span className="max-sm:hidden">{resto}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </li>
             );
           })}
@@ -325,30 +367,6 @@ function Recepcion({
           origen={origenId}
           autoFocus={false}
         />
-
-        {falta && (
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-muted-foreground">Lo que no llegó</p>
-            <div className="flex rounded-md bg-hundida p-0.5 text-base" role="group" aria-label="Lo que no llegó">
-              {(
-                [
-                  ["origen", `Vuelve a ${origen}`],
-                  ["perdido", "Se perdió"],
-                ] as const
-              ).map(([valor, texto]) => (
-                <button
-                  key={valor}
-                  type="button"
-                  aria-pressed={faltante === valor}
-                  onClick={() => setFaltante(valor)}
-                  className={`h-10 min-w-0 flex-1 rounded px-2 ${faltante === valor ? "bg-card font-medium shadow-sm" : "text-muted-foreground"}`}
-                >
-                  {texto}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         {error && (
           <p role="alert" className="text-base text-saldo-debe">

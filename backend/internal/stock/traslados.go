@@ -33,7 +33,12 @@ import (
 // id del traslado en transfer_group.
 
 // RenglonDeTraslado es una medida y cuánto se manda, como texto («2,5»).
-type RenglonDeTraslado struct{ VariantID, Cantidad string }
+type RenglonDeTraslado struct {
+	VariantID, Cantidad string
+	// Faltante: qué pasa con lo que no llegó de esta medida, al recibir
+	// (vacío: el de todo el traslado).
+	Faltante string
+}
 
 // FormTraslado es lo que manda la pantalla.
 type FormTraslado struct {
@@ -231,9 +236,11 @@ func (s *Servicio) RecibirTraslado(ctx context.Context, ses *auth.Sesion, id str
 	if faltante != FaltanteAlOrigen && faltante != FaltantePerdido {
 		return plataforma.Invalido(map[string]string{"faltante": "Elegí qué pasa con lo que no llegó."})
 	}
-	// Lo que llegó, sumado por medida.
+	// Lo que llegó, sumado por medida, y qué pasa con lo que no llegó de
+	// cada una (mes 23: una sola elección para todas).
 	var llegado map[string]float64
 	var ordenLlegado []string
+	faltantePor := map[string]string{}
 	if rec.Renglones != nil {
 		if len(rec.Renglones) > MaxRenglonesDeTraslado {
 			return plataforma.Invalido(map[string]string{"renglones": fmt.Sprintf("Un traslado lleva hasta %d medidas.", MaxRenglonesDeTraslado)})
@@ -252,6 +259,12 @@ func (s *Servicio) RecibirTraslado(ctx context.Context, ses *auth.Sesion, id str
 				if err := s.revisarCantidad(ctx, r.VariantID, c); err != nil {
 					return err
 				}
+			}
+			if r.Faltante != "" {
+				if r.Faltante != FaltanteAlOrigen && r.Faltante != FaltantePerdido {
+					return plataforma.Invalido(map[string]string{campo: "Elegí qué pasa con lo que no llegó."})
+				}
+				faltantePor[r.VariantID] = r.Faltante
 			}
 			if _, ya := llegado[r.VariantID]; !ya {
 				ordenLlegado = append(ordenLlegado, r.VariantID)
@@ -319,7 +332,12 @@ func (s *Servicio) RecibirTraslado(ctx context.Context, ses *auth.Sesion, id str
 			}
 		}
 		entra := "Traslado " + codigo + " de " + origen
+		usados := map[string]bool{}
 		for i, v := range todas {
+			faltante := faltante
+			if f, ok := faltantePor[v]; ok {
+				faltante = f
+			}
 			llego, salio := llegado[v], mandado[v]
 			diferencia := Cantidad(salio - llego)
 			if diferencia < 0 {
@@ -372,7 +390,12 @@ func (s *Servicio) RecibirTraslado(ctx context.Context, ses *auth.Sesion, id str
 						return err
 					}
 				}
-				diferencias = append(diferencias, fmt.Sprintf("%s: llegó %s de %s", nombreDeMedida(ctx, tx, v), formato.Cantidad(llego), formato.Cantidad(salio)))
+				usados[faltante] = true
+				que := "vuelve a " + origen
+				if faltante == FaltantePerdido {
+					que = "se perdió"
+				}
+				diferencias = append(diferencias, fmt.Sprintf("%s: llegó %s de %s, %s", nombreDeMedida(ctx, tx, v), formato.Cantidad(llego), formato.Cantidad(salio), que))
 			} else if diferencia < 0 {
 				diferencias = append(diferencias, fmt.Sprintf("%s: llegó %s de %s", nombreDeMedida(ctx, tx, v), formato.Cantidad(llego), formato.Cantidad(salio)))
 			}
@@ -387,9 +410,13 @@ func (s *Servicio) RecibirTraslado(ctx context.Context, ses *auth.Sesion, id str
 				}
 			}
 			if _, ok := mandado[v]; ok {
+				var suyo *string
+				if diferencia > 0 {
+					suyo = &faltante
+				}
 				if _, err := tx.Exec(ctx, `UPDATE stock_traslado_items SET recibido = CASE WHEN id = (SELECT id FROM stock_traslado_items
-					WHERE traslado_id = $1 AND variant_id = $2 ORDER BY orden, id LIMIT 1) THEN $3::numeric ELSE 0 END
-					WHERE traslado_id = $1 AND variant_id = $2`, id, v, jsmath.Texto(llego)); err != nil {
+					WHERE traslado_id = $1 AND variant_id = $2 ORDER BY orden, id LIMIT 1) THEN $3::numeric ELSE 0 END, faltante = $4
+					WHERE traslado_id = $1 AND variant_id = $2`, id, v, jsmath.Texto(llego), suyo); err != nil {
 					return err
 				}
 			} else if _, err := tx.Exec(ctx, `INSERT INTO stock_traslado_items (traslado_id, variant_id, cantidad, recibido, orden)
@@ -397,9 +424,17 @@ func (s *Servicio) RecibirTraslado(ctx context.Context, ses *auth.Sesion, id str
 				return err
 			}
 		}
+		// El del traslado, si todo lo que faltó fue por el mismo lado; mezclado,
+		// lo dice cada renglón.
 		var falta *string
-		if len(diferencias) > 0 {
-			falta = &faltante
+		switch {
+		case usados[FaltanteAlOrigen] && usados[FaltantePerdido]:
+		case usados[FaltantePerdido]:
+			p := FaltantePerdido
+			falta = &p
+		case len(diferencias) > 0:
+			o := FaltanteAlOrigen
+			falta = &o
 		}
 		_, err = tx.Exec(ctx, `UPDATE stock_traslados SET estado = 'recibido', recibido_at = now(), recibido_por_user_id = $2, faltante = $3 WHERE id = $1`,
 			id, ses.UserID, falta)
@@ -520,6 +555,8 @@ type RenglonDeTrasladoVisto struct {
 	Unidad    string   `json:"unidad"`
 	Cantidad  float64  `json:"cantidad"`
 	Recibido  *float64 `json:"recibido"`
+	// Faltante: qué pasó con lo que no llegó de esta medida.
+	Faltante *string `json:"faltante"`
 }
 
 // Traslado es el comprobante.
@@ -572,7 +609,7 @@ func (s *Servicio) VerTraslado(ctx context.Context, id string) (Traslado, error)
 	if err != nil {
 		return t, err
 	}
-	rs, err := s.pool.Query(ctx, `SELECT v.id, p.name, v.label, v.sku, p.unit::text, it.cantidad::float8, it.recibido::float8
+	rs, err := s.pool.Query(ctx, `SELECT v.id, p.name, v.label, v.sku, p.unit::text, it.cantidad::float8, it.recibido::float8, it.faltante
 		FROM stock_traslado_items it JOIN product_variants v ON v.id = it.variant_id JOIN products p ON p.id = v.product_id
 		WHERE it.traslado_id = $1 ORDER BY it.orden, it.id`, id)
 	if err != nil {
@@ -580,7 +617,7 @@ func (s *Servicio) VerTraslado(ctx context.Context, id string) (Traslado, error)
 	}
 	t.Renglones, err = pgx.CollectRows(rs, func(r pgx.CollectableRow) (RenglonDeTrasladoVisto, error) {
 		var x RenglonDeTrasladoVisto
-		return x, r.Scan(&x.VariantID, &x.Producto, &x.Medida, &x.SKU, &x.Unidad, &x.Cantidad, &x.Recibido)
+		return x, r.Scan(&x.VariantID, &x.Producto, &x.Medida, &x.SKU, &x.Unidad, &x.Cantidad, &x.Recibido, &x.Faltante)
 	})
 	return t, err
 }

@@ -312,6 +312,11 @@ export interface components {
                  * @description Lo que llegó
                  */
                 recibido: number | null;
+                /**
+                 * @description Qué pasó con lo que no llegó de esta medida
+                 * @enum {string|null}
+                 */
+                faltante: "origen" | "perdido" | null;
             }[];
         };
     };
@@ -629,6 +634,11 @@ export interface operations {
                     renglones?: {
                         variantId: string;
                         cantidad: string;
+                        /**
+                         * @description Lo que no llegó de esta medida; sin esto
+                         * @enum {string}
+                         */
+                        faltante?: "origen" | "perdido";
                     }[];
                     /**
                      * @description Lo que no llegó vuelve al origen o se perdió

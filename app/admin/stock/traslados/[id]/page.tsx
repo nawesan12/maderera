@@ -102,6 +102,13 @@ export default async function TrasladoPage({ params }: { params: Promise<{ id: s
                   >
                     {formatearCantidad(r.recibido ?? 0)}{" "}
                     <span className="text-base font-normal text-muted-foreground">{unidad(r.recibido ?? 0, r)}</span>
+                    {/* Mezclado (una medida se perdió y otra volvió), lo dice
+                        cada renglón; si no, la línea de abajo. */}
+                    {!t.faltante && r.faltante && (
+                      <span className="block text-sm font-normal text-muted-foreground">
+                        {r.faltante === "perdido" ? "se perdió" : `volvió a ${t.origen}`}
+                      </span>
+                    )}
                   </td>
                 )}
               </tr>

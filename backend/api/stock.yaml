@@ -235,6 +235,7 @@ paths:
                     properties:
                       variantId: { type: string }
                       cantidad: { type: string, maxLength: 20 }
+                      faltante: { type: string, enum: [origen, perdido], description: Lo que no llegó de esta medida; sin esto, el de todo el traslado }
                 faltante: { type: string, enum: [origen, perdido], description: Lo que no llegó vuelve al origen o se perdió }
       responses:
         "204": { description: Recibido; el destino suma lo que llegó }
@@ -391,7 +392,7 @@ components:
           type: array
           items:
             type: object
-            required: [variantId, producto, medida, sku, unidad, cantidad, recibido]
+            required: [variantId, producto, medida, sku, unidad, cantidad, recibido, faltante]
             properties:
               variantId: { type: string }
               producto: { type: string }
@@ -400,3 +401,4 @@ components:
               unidad: { type: string }
               cantidad: { type: number, format: double, description: Lo que se mandó }
               recibido: { type: number, format: double, nullable: true, description: Lo que llegó }
+              faltante: { type: string, nullable: true, enum: [origen, perdido], description: Qué pasó con lo que no llegó de esta medida }

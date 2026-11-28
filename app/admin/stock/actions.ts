@@ -16,6 +16,8 @@ import { listarStock } from "@/lib/dal/admin/inventory";
 export interface RenglonDeTraslado {
   variantId: string;
   cantidad: string;
+  /** Al recibir: qué pasa con lo que no llegó de esta medida. */
+  faltante?: "origen" | "perdido";
 }
 
 export interface EstadoTraslado {

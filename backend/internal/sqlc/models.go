@@ -6398,6 +6398,7 @@ type StockTrasladoItem struct {
 	Cantidad   jsmath.Num  `json:"cantidad"`
 	Orden      int32       `json:"orden"`
 	Recibido   *jsmath.Num `json:"recibido"`
+	Faltante   *string     `json:"faltante"`
 }
 
 type Subcategory struct {

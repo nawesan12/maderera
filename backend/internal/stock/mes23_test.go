@@ -238,3 +238,41 @@ func TestBuscar2x4TraeElTirante(t *testing.T) {
 		t.Fatalf("orden: %+v", g.Filas)
 	}
 }
+
+// Mes 23, tercera prueba: lo que no llegó se elige por medida. De 12
+// tornillos llegan 10 y los 2 vuelven; de 3 placas llegan 2 y la que falta
+// se perdió: vuelve y sale como faltante, solo esa.
+func TestTrasladoFaltantePorRenglon(t *testing.T) {
+	e := armar(t)
+	dep := e.staff(t, "deposito@prueba.test", "deposito")
+	u := e.srv.URL + "/api/v1/admin/stock/traslados"
+	e.exec(t, `insert into inventory (variant_id, branch_id, qty) values ($1, $2, 20)`, e.tornillo, e.central)
+	c, b := pedir(t, dep, "POST", u, map[string]any{"origenId": e.central, "destinoId": e.aserradero,
+		"renglones": []map[string]string{{"variantId": e.tornillo, "cantidad": "12"}, {"variantId": e.placa, "cantidad": "3"}}})
+	if c != 201 {
+		t.Fatalf("traslado: %d %s", c, b)
+	}
+	var tr TrasladoCreado
+	_ = json.Unmarshal([]byte(b), &tr)
+	if c, b := pedir(t, dep, "POST", u+"/"+tr.ID+"/recibir", map[string]any{"renglones": []map[string]string{
+		{"variantId": e.tornillo, "cantidad": "10", "faltante": "origen"}, {"variantId": e.placa, "cantidad": "2", "faltante": "nada"}}}); c != 400 {
+		t.Fatalf("faltante mal: %d %s", c, b)
+	}
+	if c, b := pedir(t, dep, "POST", u+"/"+tr.ID+"/recibir", map[string]any{"faltante": "origen", "renglones": []map[string]string{
+		{"variantId": e.tornillo, "cantidad": "10", "faltante": "origen"}, {"variantId": e.placa, "cantidad": "2", "faltante": "perdido"}}}); c != 204 {
+		t.Fatalf("recibir: %d %s", c, b)
+	}
+	if e.qty(t, e.tornillo, e.central) != 10 || e.qty(t, e.placa, e.central) != 7 || e.qty(t, e.placa, e.aserradero) != 4 {
+		t.Fatalf("stock: tornillo %v placa %v/%v", e.qty(t, e.tornillo, e.central), e.qty(t, e.placa, e.central), e.qty(t, e.placa, e.aserradero))
+	}
+	if n := e.uno(t, `select count(*)::text from inventory_movements where type = 'egreso' and transfer_group = $1`, tr.ID); n != "1" {
+		t.Errorf("faltantes: %s", n)
+	}
+	_, b = pedir(t, dep, "GET", u+"/"+tr.ID, nil)
+	var visto Traslado
+	_ = json.Unmarshal([]byte(b), &visto)
+	if visto.Faltante != nil || len(visto.Renglones) != 2 || visto.Renglones[0].Faltante == nil || *visto.Renglones[0].Faltante != "origen" ||
+		visto.Renglones[1].Faltante == nil || *visto.Renglones[1].Faltante != "perdido" {
+		t.Fatalf("comprobante: %s", b)
+	}
+}

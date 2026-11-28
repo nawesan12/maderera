@@ -4,6 +4,7 @@ import { PackageOpen } from "lucide-react";
 import { TarjetaPedido } from "@/components/cuenta/tarjeta-pedido";
 import { misPedidos } from "@/lib/dal/cuenta";
 import { formatearMonto, plural } from "@/lib/formato";
+import { resumenDeMisPedidos } from "@/lib/cuenta/portal";
 
 export const metadata: Metadata = { title: "Pedidos" };
 
@@ -17,10 +18,7 @@ export default async function MisPedidosPage() {
     (p) => p.estado === "entregado" || p.estado === "cancelado",
   );
 
-  // La cuenta y el total, de lo mismo: los cancelados no suman a ninguno
-  // (M4-066: «5 pedidos · $ 990.550» con el cancelado contado y no sumado).
-  const comprados = pedidos.filter((p) => p.estado !== "cancelado");
-  const totalComprado = comprados.reduce((s, p) => s + p.total, 0);
+  const { cantidad: comprados, total: totalComprado } = resumenDeMisPedidos(pedidos);
 
   if (pedidos.length === 0) {
     return (
@@ -46,7 +44,7 @@ export default async function MisPedidosPage() {
       <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h1 className="text-2xl font-bold tracking-tight">Mis pedidos</h1>
         <p className="text-sm text-muted-foreground">
-          {plural(comprados.length, "pedido")} ·{" "}
+          {plural(comprados, "pedido")} ·{" "}
           <span className="tabular">{formatearMonto(totalComprado)}</span> en
           total
         </p>

@@ -12,6 +12,7 @@ import {
   sumaAlNombre,
   saludoDelCliente,
   unaPorProducto,
+  resumenDeMisPedidos,
 } from "@/lib/cuenta/portal";
 
 /** Lo que encontró el mes simulado en «Mi cuenta» (noviembre de 2026). */
@@ -212,5 +213,18 @@ describe("los remitos del pedido en el portal (mes simulado, tanda 23)", () => {
     expect(tituloDeRemitos([{ tipo: "envio" }])).toBe("1 envío");
     expect(tituloDeRemitos([{ tipo: "retiro" }, { tipo: "retiro" }])).toBe("2 retiros");
     expect(tituloDeRemitos([{ tipo: "retiro" }, { tipo: "envio" }])).toBe("2 remitos");
+  });
+});
+
+describe("resumenDeMisPedidos (M4-066)", () => {
+  it("cuenta y suma lo mismo: sin los cancelados", () => {
+    const r = resumenDeMisPedidos([
+      { estado: "entregado", total: 826800 },
+      { estado: "entregado", total: 4200 },
+      { estado: "en-camino", total: 44350 },
+      { estado: "pendiente", total: 115200 },
+      { estado: "cancelado", total: 455200 },
+    ]);
+    expect(r).toEqual({ cantidad: 4, total: 990550 });
   });
 });

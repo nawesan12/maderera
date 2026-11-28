@@ -35,6 +35,7 @@ import { usePlano } from "@/lib/cortes/en-vivo";
 import { PlanoEnVivo } from "@/components/cortes/plano-en-vivo";
 import { metrosDeTapacanto } from "@/lib/cortes/tarifa";
 import { formatearDecimal } from "@/lib/unidades";
+import { avisoDePlacasDelPedido } from "@/lib/cortes/placas-del-pedido";
 import { formatearSierra, leerAnchoDeSierra } from "@/lib/cortes/sierra";
 import {
   BarraGuardar,
@@ -95,13 +96,6 @@ export interface PlacaDelPedido extends PlacaElegida {
   vendidas?: number;
   /** Las que ya usan los otros cortes vivos del pedido. */
   enOtrosCortes?: number;
-}
-
-/** «1 placa», «media placa», «2,5 placas», como lo dice Go. */
-function placasEnTexto(n: number): string {
-  if (n === 0.5) return "media placa";
-  if (n === 1) return "1 placa";
-  return `${String(n).replace(".", ",")} placas`;
 }
 
 export function FormularioCorte({
@@ -393,13 +387,13 @@ export function FormularioCorte({
   const delPedidoElegida = placa ? placasDelPedidoLista.find((p) => p.variantId === placa.variantId) : undefined;
   const avisoDelPedido = (() => {
     if (!desdePedido || !delPedidoElegida?.vendidas || sinCargo || plano.placas.length === 0) return null;
-    const usadas = plano.placas.length / (mitad ? 2 : 1);
-    const otras = delPedidoElegida.enOtrosCortes ?? 0;
-    const total = usadas + otras;
-    if (Math.abs(total - delPedidoElegida.vendidas) < 1e-6) return null;
-    return otras > 0
-      ? `Los cortes de ${desdePedido.numero} usan ${placasEnTexto(total)} y el pedido vende ${placasEnTexto(delPedidoElegida.vendidas)}.`
-      : `El plano usa ${placasEnTexto(usadas)} y el pedido ${desdePedido.numero} vende ${placasEnTexto(delPedidoElegida.vendidas)}.`;
+    // Solo si usan más de las que vende, como la ficha (M3S3-051).
+    return avisoDePlacasDelPedido({
+      numero: desdePedido.numero,
+      usadas: plano.placas.length / (mitad ? 2 : 1),
+      otras: delPedidoElegida.enOtrosCortes ?? 0,
+      vendidas: delPedidoElegida.vendidas,
+    });
   })();
 
   // El pedido vende todas las placas que usan sus cortes: se venden enteras

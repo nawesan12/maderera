@@ -15,6 +15,7 @@ import { PlanoSimple } from "@/components/cortes/plano-simple";
 import { nombreDeLaMitad } from "@/lib/cortes/placa";
 import { formatearMonto, telefonoLegible } from "@/lib/formato";
 import { formatearDecimal } from "@/lib/unidades";
+import { placasDeLasDelPedido } from "@/lib/cortes/placas-del-pedido";
 import { AccionesCorte, VolverUnPaso } from "../acciones";
 import { CargarPasadas } from "../pasadas";
 import { SierraDelTrabajo } from "./sierra";
@@ -297,8 +298,11 @@ export default async function FichaCortePage({
                         no un aviso en rojo (mes simulado, M3S3-051). */}
                     {pedido.placasDelPedido > 0 && (
                       <span className="tabular">
-                        {formatearDecimal((media ? nPlacas / 2 : nPlacas) + (pedido.placasDeOtrosCortes ?? 0))} de{" "}
-                        {formatearDecimal(pedido.placasDelPedido)}{" "}
+                        {placasDeLasDelPedido(
+                          (media ? nPlacas / 2 : nPlacas) + (pedido.placasDeOtrosCortes ?? 0),
+                          pedido.placasDelPedido,
+                          (n) => formatearDecimal(n),
+                        )}{" "}
                       </span>
                     )}
                     en{" "}
@@ -562,7 +566,11 @@ export default async function FichaCortePage({
                 cambian lo que se cobra. */}
             {cobra && !sinPlata && (modo === "suelto" || modo === "pedido") && !anulado && (
               <div className="mt-3 border-t pt-3">
+                {/* La clave con las pasadas guardadas: el acomodo manual
+                    las cambia y el campo seguía con las de antes hasta
+                    recargar (mes 23). */}
                 <CargarPasadas
+                  key={corte.pasadas}
                   id={corte.id}
                   actuales={corte.pasadas}
                   sugeridas={plano.pasadasCobrables}

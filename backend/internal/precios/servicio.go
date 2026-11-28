@@ -108,6 +108,9 @@ type ConteosDePrecios struct {
 	// más que nadie veía hasta que el cliente se quejaba (mes simulado: los
 	// tirantes TEC-TIR-PIN). La grilla ya lo marcaba fila por fila.
 	ProfesionalCaro int `json:"profesionalCaro"`
+	// Inactivos: las medidas de productos apagados, que también se pueden
+	// dejar con precio antes de publicarlos (M4-016). No suman a Todas.
+	Inactivos int `json:"inactivos"`
 }
 
 // BajoCostoDe es, sobre las filas `v` y `p`, que el precio dado (con IVA) sin
@@ -146,7 +149,6 @@ func (s *Servicio) grilla(ctx context.Context, f listado.Filtros, ahora time.Tim
 		return out, err
 	}
 	var c listado.Consulta
-	c.Y("p.active")
 	c.Y("v.active")
 	c.Comunes(f, "v.id")
 	c.Busqueda(f.Busqueda, []string{"p.name", "v.sku", "v.label", "p.brand", "c.name"})
@@ -172,17 +174,23 @@ func (s *Servicio) grilla(ctx context.Context, f listado.Filtros, ahora time.Tim
 		JOIN products p ON p.id = v.product_id
 		JOIN categories c ON c.id = p.category_id `
 	k := &out.Conteos
-	if err := s.pool.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE `+estados["sin-precio"]+`),
-		count(*) FILTER (WHERE `+estados["para-revisar"]+`), count(*) FILTER (WHERE `+estados["al-dia"]+`),
-		count(*) FILTER (WHERE `+estados["bajo-costo"]+`), count(*) FILTER (WHERE `+estados["profesional-caro"]+`)`+desde+c.Donde(),
-		c.Args()...).Scan(&k.Todas, &k.SinPrecio, &k.ParaRevisar, &k.AlDia, &k.BajoCosto, &k.ProfesionalCaro); err != nil {
+	activo := func(cond string) string { return `count(*) FILTER (WHERE p.active AND ` + cond + `)` }
+	if err := s.pool.QueryRow(ctx, `SELECT count(*) FILTER (WHERE p.active), `+activo(estados["sin-precio"])+`,
+		`+activo(estados["para-revisar"])+`, `+activo(estados["al-dia"])+`,
+		`+activo(estados["bajo-costo"])+`, `+activo(estados["profesional-caro"])+`, count(*) FILTER (WHERE NOT p.active)`+desde+c.Donde(),
+		c.Args()...).Scan(&k.Todas, &k.SinPrecio, &k.ParaRevisar, &k.AlDia, &k.BajoCosto, &k.ProfesionalCaro, &k.Inactivos); err != nil {
 		return out, err
 	}
 	out.Total = map[string]int{"sin-precio": k.SinPrecio, "para-revisar": k.ParaRevisar, "al-dia": k.AlDia, "bajo-costo": k.BajoCosto,
-		"profesional-caro": k.ProfesionalCaro}[f.Estado]
+		"profesional-caro": k.ProfesionalCaro, "inactivos": k.Inactivos}[f.Estado]
+	if f.Estado == "inactivos" {
+		c.Y("NOT p.active")
+	} else {
+		c.Y("p.active")
+	}
 	if cond, ok := estados[f.Estado]; ok {
 		c.Y(cond)
-	} else {
+	} else if f.Estado != "inactivos" {
 		out.Total = k.Todas
 	}
 	pagina := ""

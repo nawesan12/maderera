@@ -478,6 +478,18 @@ func TestGrillaPorEstadoYPaginas(t *testing.T) {
 	if r := leer("?limite=2&desplazamiento=2"); len(r.Filas) != 1 || r.Total != 3 {
 		t.Errorf("segunda página: %+v", r)
 	}
+	// Un producto apagado no está en «Todas», pero sí en «Inactivos», para
+	// dejarle el precio antes de publicarlo (M4-016).
+	if _, err := e.pool.Exec(ctx, `update products set active = false where id = (select product_id from product_variants where id = $1)`, e.fen18); err != nil {
+		t.Fatal(err)
+	}
+	if r := leer("?estado=inactivos"); r.Conteos.Inactivos == 0 || r.Total != r.Conteos.Inactivos || len(r.Filas) != r.Total || r.Conteos.Todas+r.Conteos.Inactivos != 3 {
+		t.Errorf("inactivos: %+v", r)
+	}
+	if r := leer(""); r.Conteos.Todas == 3 || r.Total != r.Conteos.Todas {
+		t.Errorf("el inactivo sigue en Todas: %+v", r.Conteos)
+	}
+	_, _ = e.pool.Exec(ctx, `update products set active = true`)
 	todo, err := Nuevo(e.pool, silencio).ListarTodo(ctx, listado.Filtros{}, time.Now())
 	if err != nil || len(todo) != 3 {
 		t.Errorf("exportar: %d %v", len(todo), err)

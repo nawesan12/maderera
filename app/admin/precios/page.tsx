@@ -112,8 +112,8 @@ export default async function PreciosPage({
           href={urlExportar}
           className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
         >
-          <Download className="h-5 w-5" />
-          Exportar
+          <Download className="h-5 w-5" aria-hidden="true" />
+          <span className="sr-only sm:not-sr-only">Exportar</span>
         </a>
         {/* El PDF es el que se le manda a un cliente: lleva membrete y fecha
             de vigencia. El CSV es para trabajarlo y volver a subirlo. */}
@@ -123,8 +123,8 @@ export default async function PreciosPage({
           rel="noopener noreferrer"
           className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
         >
-          <FileText className="h-5 w-5" />
-          Lista en PDF
+          <FileText className="h-5 w-5" aria-hidden="true" />
+          <span className="sr-only sm:not-sr-only">Lista en PDF</span>
         </a>
         <DialogoImportar />
         {/* Formas de pago y Listas son ajustes, no acciones de todos los
@@ -132,7 +132,7 @@ export default async function PreciosPage({
             «Ajustar precios» manda (comité final). */}
         <Link
           href="/admin/precios/formas-de-pago"
-          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg px-3 text-base font-medium text-texto-2 transition-colors hover:bg-muted hover:text-foreground"
+          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg px-2 text-sm font-medium text-texto-2 transition-colors hover:bg-muted hover:text-foreground sm:px-3 sm:text-base"
         >
           {/* La tarjeta y no el %: el % es de «Ajustar precios», a dos
               botones, y el mismo ícono para dos cosas hacía dudar. */}
@@ -141,7 +141,7 @@ export default async function PreciosPage({
         </Link>
         <Link
           href="/admin/precios/listas"
-          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg px-3 text-base font-medium text-texto-2 transition-colors hover:bg-muted hover:text-foreground"
+          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg px-2 text-sm font-medium text-texto-2 transition-colors hover:bg-muted hover:text-foreground sm:px-3 sm:text-base"
         >
           <Tags className="h-5 w-5" />
           Listas
@@ -153,12 +153,16 @@ export default async function PreciosPage({
             deshacibles={ultimo.deshacibles}
           />
         )}
-        <DialogoAjuste
-          categorias={categorias.map((c) => ({ slug: c.slug, name: c.name }))}
-          categoriaActual={params.cat ?? "todos"}
-          rubros={rubros}
-          proveedores={proveedores.map((p) => ({ id: p.id, nombre: p.nombre }))}
-        />
+        {/* En el teléfono, «Ajustar precios» va primero y a lo ancho, y
+            exportar, el PDF e importar quedan en íconos (M4-061). */}
+        <div className="order-first w-full sm:order-none sm:w-auto [&>button]:w-full sm:[&>button]:w-auto">
+          <DialogoAjuste
+            categorias={categorias.map((c) => ({ slug: c.slug, name: c.name }))}
+            categoriaActual={params.cat ?? "todos"}
+            rubros={rubros}
+            proveedores={proveedores.map((p) => ({ id: p.id, nombre: p.nombre }))}
+          />
+        </div>
       </EncabezadoPanel>
 
       {/* «Para revisar» son los que no se tocan hace más de DIAS_PARA_REVISAR
@@ -183,6 +187,11 @@ export default async function PreciosPage({
             : []),
           ...(conteos.profesionalCaro > 0 || estado === "profesional-caro"
             ? [{ valor: "profesional-caro", texto: "Profesional más caro", cantidad: conteos.profesionalCaro, atencion: true }]
+            : []),
+          // Los productos apagados, para dejarles el precio antes de
+          // publicarlos (M4-016).
+          ...(conteos.inactivos > 0 || estado === "inactivos"
+            ? [{ valor: "inactivos", texto: "Inactivos", cantidad: conteos.inactivos }]
             : []),
         ]}
       />

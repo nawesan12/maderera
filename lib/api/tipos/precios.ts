@@ -369,7 +369,7 @@ export interface operations {
             query?: {
                 busqueda?: string;
                 categoria?: string;
-                estado?: "todas" | "sin-precio" | "para-revisar" | "al-dia" | "bajo-costo" | "profesional-caro";
+                estado?: "todas" | "sin-precio" | "para-revisar" | "al-dia" | "bajo-costo" | "profesional-caro" | "inactivos";
                 marca?: string;
                 proveedor?: string;
                 limite?: number;
@@ -392,6 +392,7 @@ export interface operations {
                         total: number;
                         conteos: {
                             todas: number;
+                            inactivos: number;
                             sinPrecio: number;
                             bajoCosto: number;
                             profesionalCaro: number;

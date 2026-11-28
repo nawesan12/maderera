@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { FileText, Lock, Unlock } from "lucide-react";
+import { FileText, FileWarning, Lock, Unlock } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { fechaCorta, formatearPeso } from "@/lib/formato";
 import {
@@ -7,7 +7,7 @@ import {
   listarDocumentos,
 } from "@/lib/dal/admin/documentacion";
 import { SubirDocumento } from "./subir";
-import { AccionesDocumento, RestaurarDocumento } from "./acciones";
+import { AccionesDocumento, RestaurarDocumento, SubirArchivoDocumento } from "./acciones";
 import { DestinosDocumento } from "./destinos";
 import { listarCategorias } from "@/lib/dal/catalog";
 
@@ -31,8 +31,12 @@ export default async function DocumentacionAdminPage() {
   const todasLasCategorias = delCatalogo.map((c) => ({ id: c.id, nombre: c.name }));
 
   const activos = documentos.filter((d) => d.activo);
-  const reservados = activos.filter((d) => d.soloProfesionales);
-  const publicos = activos.filter((d) => !d.soloProfesionales);
+  // Sin archivo el sitio no lo muestra: figuraba entre los públicos mientras
+  // /documentacion decía que no había nada (recorrido, M4-052).
+  const sinArchivo = activos.filter((d) => !d.tamanoBytes);
+  const conArchivo = activos.filter((d) => d.tamanoBytes);
+  const reservados = conArchivo.filter((d) => d.soloProfesionales);
+  const publicos = conArchivo.filter((d) => !d.soloProfesionales);
   const bajas = documentos.filter((d) => !d.activo);
 
   return (
@@ -52,6 +56,15 @@ export default async function DocumentacionAdminPage() {
         </section>
       ) : (
         <>
+          {sinArchivo.length > 0 && (
+            <Grupo
+              titulo="Falta el archivo"
+              icono={FileWarning}
+              documentos={sinArchivo}
+              peso={peso}
+              todasLasCategorias={todasLasCategorias}
+            />
+          )}
           {reservados.length > 0 && (
             <Grupo
               titulo="Solo para profesionales"
@@ -136,14 +149,18 @@ function Grupo({
             className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3"
           >
             <div className="min-w-[16rem] flex-1">
-              <a
-                href={doc.url}
-                target="_blank"
-                rel="noreferrer"
-                className="text-base font-medium hover:text-brand-orange-dark hover:underline"
-              >
-                {doc.titulo}
-              </a>
+              {doc.tamanoBytes ? (
+                <a
+                  href={doc.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-base font-medium hover:text-brand-orange-dark hover:underline"
+                >
+                  {doc.titulo}
+                </a>
+              ) : (
+                <p className="text-base font-medium">{doc.titulo}</p>
+              )}
               {doc.descripcion && (
                 <p className="text-base text-muted-foreground">
                   {doc.descripcion}
@@ -154,12 +171,6 @@ function Grupo({
                 {doc.tamanoBytes ? ` · ${peso(doc.tamanoBytes)}` : ""} ·{" "}
                 {fechaCorta.format(doc.createdAt)}
               </p>
-              {/* Sin archivo subido no se publica en el sitio: daba 404. */}
-              {!doc.tamanoBytes && (
-                <span className="estado-problema mt-1 inline-flex rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium text-[var(--estado-tinta)]">
-                  Sin archivo
-                </span>
-              )}
             </div>
 
             <DestinosDocumento
@@ -170,6 +181,7 @@ function Grupo({
               categorias={doc.categorias}
               todasLasCategorias={todasLasCategorias}
             />
+            {!doc.tamanoBytes && <SubirArchivoDocumento id={doc.id} />}
             <AccionesDocumento
               id={doc.id}
               titulo={doc.titulo}

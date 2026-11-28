@@ -1,12 +1,13 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Loader2, Lock, RotateCcw, Trash2, Unlock } from "lucide-react";
+import { FileUp, Loader2, Lock, RotateCcw, Trash2, Unlock } from "lucide-react";
 import { Confirmar } from "@/components/admin/confirmar";
 import {
   borrarDocumento,
   cambiarVisibilidad,
   restaurarDocumento,
+  subirArchivoDeDocumento,
   type EstadoDocumento,
 } from "./actions";
 
@@ -135,6 +136,35 @@ export function RestaurarDocumento({ id }: { id: string }) {
         )}
         Volver a publicar
       </button>
+    </form>
+  );
+}
+
+/**
+ * Subir el archivo que le falta a un documento: elegido, se manda solo
+ * (recorrido, M4-052).
+ */
+export function SubirArchivoDocumento({ id }: { id: string }) {
+  const [estado, subir, subiendo] = useActionState(subirArchivoDeDocumento, inicial);
+
+  return (
+    <form action={subir} className="flex flex-col items-end gap-1.5">
+      <input type="hidden" name="id" value={id} />
+      <label className="boton-accion inline-flex h-11 cursor-pointer items-center gap-1.5 rounded-lg px-3.5 text-base font-medium focus-within:ring-2 focus-within:ring-ring has-[:disabled]:opacity-60">
+        {subiendo ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
+        Subir el archivo
+        <input
+          type="file"
+          name="archivo"
+          disabled={subiendo}
+          accept="application/pdf,image/jpeg,image/png,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          className="sr-only"
+          onChange={(e) => {
+            if (e.currentTarget.files?.length) e.currentTarget.form?.requestSubmit();
+          }}
+        />
+      </label>
+      {estado.error && <p className="estado-problema text-right text-base font-medium">{estado.error}</p>}
     </form>
   );
 }

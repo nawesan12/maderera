@@ -779,7 +779,38 @@ func TestPanelDeDocumentacion(t *testing.T) {
 	if _, b := pedir(t, anon, "GET", e.srv.URL+"/api/v1/contenido/documentos/reservados", nil); string(b) != "0\n" {
 		t.Errorf("cuenta un reservado sin archivo: %s", b)
 	}
-	if _, err := e.pool.Exec(context.Background(), `delete from technical_documents where tamano_bytes is null`); err != nil {
+	// Subirle el archivo que le falta lo pone en el sitio (recorrido, M4-052).
+	var osb string
+	_ = e.pool.QueryRow(context.Background(), `select id from technical_documents where titulo = 'Placa OSB estructural'`).Scan(&osb)
+	soloArchivo := func(tipo string, datos []byte) formulario {
+		var b bytes.Buffer
+		w := multipart.NewWriter(&b)
+		p, _ := w.CreatePart(map[string][]string{
+			"Content-Disposition": {`form-data; name="archivo"; filename="x"`}, "Content-Type": {tipo},
+		})
+		_, _ = p.Write(datos)
+		_ = w.Close()
+		return formulario{b.Bytes(), w.FormDataContentType()}
+	}
+	if c, _ := pedir(t, dep, "POST", u+"/"+osb+"/archivo", soloArchivo("application/pdf", pdf)); c != 403 {
+		t.Errorf("el depósito subió un archivo: %d", c)
+	}
+	if c, b := pedir(t, adm, "POST", u+"/"+osb+"/archivo", soloArchivo("application/pdf", []byte("MZ"))); c != 422 {
+		t.Errorf("un ejecutable como archivo nuevo: %d %s", c, b)
+	}
+	if c, b := pedir(t, adm, "POST", u+"/00000000-0000-0000-0000-000000000000/archivo", soloArchivo("application/pdf", pdf)); c != 404 {
+		t.Errorf("documento inexistente: %d %s", c, b)
+	}
+	if c, b := pedir(t, adm, "POST", u+"/"+osb+"/archivo", soloArchivo("application/pdf", pdf)); c != 204 {
+		t.Fatalf("subir el archivo que faltaba: %d %s", c, b)
+	}
+	if _, b := pedir(t, anon, "GET", e.srv.URL+"/api/v1/contenido/documentos", nil); !strings.Contains(string(b), "OSB") {
+		t.Errorf("con el archivo y no se lista: %s", b)
+	}
+	if c, b := pedir(t, anon, "GET", e.srv.URL+URLDelDocumento(osb), nil); c != 200 || string(b) != string(pdf) {
+		t.Errorf("el archivo subido: %d", c)
+	}
+	if _, err := e.pool.Exec(context.Background(), `delete from technical_documents where tamano_bytes is null or id = $1`, osb); err != nil {
 		t.Fatal(err)
 	}
 	if c, _ := pedir(t, adm, "POST", u+"/"+docs[0].ID+"/activo", map[string]bool{"activo": false}); c != 204 {

@@ -558,6 +558,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/documentos/{id}/archivo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Le pone o le cambia el archivo a un documento que ya está. */
+        post: operations["ArchivoNuevoDeDocumento"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/documentos/{id}/destinos": {
         parameters: {
             query?: never;
@@ -1886,6 +1903,35 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["Problema"];
+        };
+    };
+    ArchivoNuevoDeDocumento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    archivo?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Hecho */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
         };
     };
     DestinosDeDocumento: {

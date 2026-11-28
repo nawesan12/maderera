@@ -15,7 +15,13 @@ export interface EstadoDocumento {
   ok?: string;
 }
 
+/**
+ * La ficha del producto sale de la caché del catálogo y dice cuántos
+ * documentos tiene y para quién: hacerlo público, reservarlo o darlo de baja
+ * la dejaba con lo de antes (recorrido, M4-050). Va siempre con la etiqueta.
+ */
 function refrescar() {
+  updateTag(ETIQUETAS.catalogo);
   revalidatePath("/admin/documentacion");
   revalidatePath("/documentacion");
   revalidatePath("/profesionales");
@@ -33,6 +39,18 @@ export async function subirDocumento(_previo: EstadoDocumento, formData: FormDat
   // (mes 23).
   const reservado = formData.get("soloProfesionales") != null;
   return { ok: reservado ? "Publicado: solo lo ven los profesionales." : "Publicado: lo ve cualquiera." };
+}
+
+/** El archivo de un documento que se cargó sin él, o uno nuevo en su lugar. */
+export async function subirArchivoDeDocumento(_previo: EstadoDocumento, formData: FormData): Promise<EstadoDocumento> {
+  const r = await (await api()).POST("/api/v1/admin/documentos/{id}/archivo", {
+    params: { path: { id: String(formData.get("id") ?? "") } },
+    body: soloCampos(formData, "id") as never,
+    ...comoFormulario,
+  });
+  if (r.error) return { error: mensajeDe(r.error as Problema, "No se pudo subir el archivo.") };
+  refrescar();
+  return { ok: "Archivo subido." };
 }
 
 export async function cambiarVisibilidad(_previo: EstadoDocumento, formData: FormData): Promise<EstadoDocumento> {
@@ -70,7 +88,7 @@ export async function restaurarDocumento(_previo: EstadoDocumento, formData: For
 
 /**
  * A qué productos y categorías se ata un documento: la ficha de cada uno lo
- * muestra. La ficha sale de la caché del catálogo, así que se invalida.
+ * muestra.
  */
 export async function guardarDestinos(
   id: string,
@@ -83,7 +101,6 @@ export async function guardarDestinos(
   });
   if (!r.response.ok) return { error: mensajeDe(r.error as Problema | undefined, "No se pudo guardar.") };
   refrescar();
-  updateTag(ETIQUETAS.catalogo);
   return { ok: "Guardado." };
 }
 

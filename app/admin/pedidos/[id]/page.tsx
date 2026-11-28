@@ -171,7 +171,15 @@ export default async function FichaPedidoPage({
   // Devuelto entero, no queda nada para devolver ni anular: seguía
   // ofreciendo las dos cosas con el pedido en $ 0 (mes 23).
   const quedaAlgo = pedido.items.some((i) => Number(i.cantidad) - (i.devuelto ?? 0) > 0.0001);
-  const devolvible = manejaPlata && !cancelado && !pedido.facturado && quedaAlgo;
+  const tocable = manejaPlata && !cancelado && !pedido.facturado && quedaAlgo;
+  // Devolver es de lo que salió (o de lo cobrado, que vuelve): en un pedido
+  // sin preparar ni cobrar aparecía al lado de «Corregir», que es lo que
+  // corresponde (mes 23, PED-1123 y PED-1134).
+  const salioAlgo =
+    pedido.origen === "mostrador" ||
+    ["en-camino", "entregado"].includes(pedido.estado) ||
+    remitos.some((r) => r.estado !== "anulada");
+  const devolvible = tocable && (salioAlgo || pedido.cobrado > 0.005);
   // Facturado: la devolución sale del pedido con su nota de crédito mientras
   // no saque plata (H279); lo cobrado vuelve desde la factura.
   const devolucionFacturada =
@@ -183,7 +191,7 @@ export default async function FichaPedidoPage({
     devolucionFacturada.renglones.some((r) => r.queda > 0);
   // Entregado no se corrige: lo que falta va en otro pedido y lo que vuelve,
   // con una devolución (mes simulado 2).
-  const corregible = devolvible && pedido.origen !== "mostrador" && pedido.cobrado < 0.005 && pedido.estado !== "entregado";
+  const corregible = tocable && pedido.origen !== "mostrador" && pedido.cobrado < 0.005 && pedido.estado !== "entregado";
   // «Le faltó algo»: la reposición sin cargo es un ajuste del Stock, de quien
   // entra ahí (M3S3-021).
   const reponible = !cancelado && puedeEntrar("/admin/stock", usuario.staffRole);

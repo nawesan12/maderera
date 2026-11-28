@@ -8,6 +8,7 @@ import {
   guardarTextoAviso,
   type EstadoAviso,
 } from "./acciones";
+import { sinResetear } from "@/lib/acciones/sin-resetear";
 
 const estadoInicial: EstadoAviso = {};
 
@@ -114,7 +115,7 @@ export function FilaAviso({ aviso }: { aviso: AvisoConfigurable }) {
         </div>
 
         {editando ? (
-          <form action={accionTexto} className="mt-2 space-y-2">
+          <form onSubmit={sinResetear(accionTexto)} className="mt-2 space-y-2">
             <input type="hidden" name="id" value={aviso.id} />
             <textarea
               name="textoLibre"

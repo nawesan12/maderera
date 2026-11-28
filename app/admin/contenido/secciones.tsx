@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { Check, Loader2 } from "lucide-react";
 import { guardarAjuste, type EstadoContenido } from "./actions";
+import { sinResetear } from "@/lib/acciones/sin-resetear";
 import type { listarAjustes } from "@/lib/dal/admin/contenido";
 
 type SiteSetting = Awaited<ReturnType<typeof listarAjustes>>[number];
@@ -28,7 +29,7 @@ function FilaAjuste({ ajuste: a }: { ajuste: SiteSetting }) {
   const [estado, guardar, guardando] = useActionState(guardarAjuste, inicial);
 
   return (
-    <form action={guardar} className="flex flex-wrap items-end gap-2">
+    <form onSubmit={sinResetear(guardar)} className="flex flex-wrap items-end gap-2">
       <input type="hidden" name="clave" value={a.clave} />
 
       <div className="min-w-0 flex-[1_1_16rem]">

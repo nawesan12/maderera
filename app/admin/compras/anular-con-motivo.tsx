@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { startTransition, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Ban, Loader2 } from "lucide-react";
 import {
@@ -112,10 +112,15 @@ export function AnularConMotivo({
                     setError(r.error);
                     return;
                   }
-                  setAbierto(false);
-                  setMotivo("");
-                  router.refresh();
-                  alTerminar?.(r.ok ?? "");
+                  // En la misma transición que la página revalidada: el
+                  // diálogo se cerraba antes y en el teléfono la ficha
+                  // seguía «En cola» un par de segundos (mes 23).
+                  startTransition(() => {
+                    setAbierto(false);
+                    setMotivo("");
+                    router.refresh();
+                    alTerminar?.(r.ok ?? "");
+                  });
                 })
               }
               className="inline-flex h-11 items-center gap-2 rounded-lg bg-destructive px-4 text-base font-medium text-white disabled:opacity-50"

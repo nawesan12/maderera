@@ -47,6 +47,7 @@ import {
   type RetencionSimulada,
 } from "./actions";
 import { CampoFecha } from "@/components/ui/campo-fecha";
+import { alicuotaPara, leCorresponde, tildadosAlArrancar, type Regimen } from "./regimenes";
 
 interface Proveedor {
   id: string;
@@ -55,43 +56,6 @@ interface Proveedor {
   condicionIva: string;
   condicionGanancias: string | null;
   exentoGananciasHasta: string | null;
-}
-
-/**
- * Si el régimen le corresponde al proveedor: la misma regla que Go
- * (compras.SujetoARetencion), para no ofrecer lo que después se rechaza.
- * Ganancias sin condición cargada se ofrece igual: el rechazo dice qué
- * cargar.
- */
-function leCorresponde(r: Regimen, p: Proveedor | undefined, hoy: string): boolean {
-  if (!p) return true;
-  if (r.impuesto === "iva") return p.condicionIva === "responsable_inscripto";
-  if (r.impuesto === "ganancias") {
-    if (p.condicionIva === "monotributista") return false;
-    if (p.condicionGanancias === "exento" && p.exentoGananciasHasta && hoy <= p.exentoGananciasHasta) return false;
-  }
-  return true;
-}
-
-/**
- * La alícuota con la que se le retendría: la de no inscripto en Ganancias si
- * lo es. Un régimen en 0 % para el proveedor no retiene nada y no se ofrece
- * (M4-004: eran 4 de 6 renglones).
- */
-function alicuotaPara(r: Regimen, p: Proveedor | undefined): number {
-  if (r.impuesto === "ganancias" && p?.condicionGanancias === "no_inscripto") return r.alicuotaNoInscripto;
-  return r.alicuota;
-}
-
-interface Regimen {
-  id: string;
-  /** El código («IIBB-MI»): no se muestra, el acumulado del mes viene por él. */
-  codigo: string;
-  nombre: string;
-  impuesto: string;
-  alicuota: number;
-  alicuotaNoInscripto: number;
-  minimoNoImponible: number;
 }
 
 interface Sucursal {
@@ -256,17 +220,9 @@ export function FormularioPago({
       // impuesto que le corresponde y retiene algo (M4-004). Si hay dos
       // (bienes y servicios), elegir es de quien paga.
       const delProveedor = proveedores.find((p) => p.id === supplierId);
-      const hoyAca = hoyEnArgentina();
-      const posibles = regimenes.filter(
-        (r) => leCorresponde(r, delProveedor, hoyAca) && alicuotaPara(r, delProveedor) > 0,
-      );
-      const unicas = tildarLasQueCorresponden
-        ? posibles.filter((r) => posibles.filter((x) => x.impuesto === r.impuesto).length === 1)
-        : [];
+      const tildados = tildadosAlArrancar(regimenes, delProveedor, hoyEnArgentina(), conBase, tildarLasQueCorresponden);
       setRetener((prev) => ({
-        ...Object.fromEntries(
-          regimenes.filter((r) => conBase.has(r.codigo) || unicas.includes(r)).map((r) => [r.id, true]),
-        ),
+        ...Object.fromEntries(tildados.map((id) => [id, true])),
         ...prev,
       }));
     });
@@ -891,7 +847,7 @@ export function FormularioPago({
                 return (
                   <div key={r.id} className="space-y-2">
                     <Interruptor
-                      etiqueta={`${r.nombre} · ${r.alicuota.toLocaleString("es-AR")}%`}
+                      etiqueta={`${r.nombre} · ${alicuotaPara(r, proveedor).toLocaleString("es-AR")}%`}
                       icono={Landmark}
                       marcado={Boolean(retener[r.id])}
                       alCambiar={(v) => setRetener((prev) => ({ ...prev, [r.id]: v }))}

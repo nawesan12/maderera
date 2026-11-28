@@ -519,9 +519,14 @@ export async function saldoDeCuenta(customerId: string): Promise<number> {
  */
 export async function cuentaDelCliente(
   customerId: string,
-): Promise<{ saldo: number; sinCobrar: { id: string; numero: string; monto: number }[] }> {
+): Promise<{
+  saldo: number;
+  sinCobrar: { id: string; numero: string; monto: number }[];
+  /** Los cheques que informó desde el portal y nadie aceptó todavía. */
+  informados: { cantidad: number; total: number };
+}> {
   const r = datos(await (await api()).GET("/api/v1/mostrador/clientes/{id}/saldo", { params: { path: { id: customerId } } }));
-  return { saldo: r.saldo, sinCobrar: r.sinCobrar ?? [] };
+  return { saldo: r.saldo, sinCobrar: r.sinCobrar ?? [], informados: r.informados ?? { cantidad: 0, total: 0 } };
 }
 
 export interface EstadoCobroDeCuenta {

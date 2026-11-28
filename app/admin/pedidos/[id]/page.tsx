@@ -269,7 +269,7 @@ export default async function FichaPedidoPage({
       titulo: sinCambio.has(h.id) ? (
         <p className="text-base font-medium">{h.nota}</p>
       ) : (
-        <EtiquetaEstado estado={h.estado} contexto="pedido" />
+        <EtiquetaEstado estado={h.estado} contexto="pedido" retiro={pedido.tipoEntrega === "retiro"} />
       ),
       nota: sinCambio.has(h.id) ? null : h.nota,
       quien: h.quien,
@@ -318,7 +318,7 @@ export default async function FichaPedidoPage({
         cuando: r.createdAt,
         titulo: <p className="text-base font-medium">{r.tipo === "envio" ? "Salió" : "Retiro"}</p>,
         nota: `${r.numero}${r.receptorNombre ? ` · ${r.receptorNombre}` : ""}${r.estado === "anulada" ? " · anulado" : ""}`,
-        quien: null,
+        quien: r.quien ?? null,
       })),
   ].sort((a, b) => b.cuando.getTime() - a.cuando.getTime());
 

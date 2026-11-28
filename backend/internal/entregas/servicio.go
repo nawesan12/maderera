@@ -1216,6 +1216,9 @@ type RemitoListado struct {
 	// Final: completa un pedido que ya había salido en parte (decía
 	// «Entrega total» con 2 juegos, mes simulado 2).
 	Final bool `json:"final"`
+	// Quien hizo el remito: en el historial del pedido «Salió · REM-0016»
+	// era el único renglón sin nombre (recorrido 2).
+	Quien *string `json:"quien"`
 }
 
 // RemitosDelPedido son los remitos de un pedido, los más nuevos primero.
@@ -1229,9 +1232,10 @@ func (s *Servicio) RemitosDelPedido(ctx context.Context, pedido string) ([]Remit
 		  s.transportista, s.numero_seguimiento,
 		  CASE WHEN d.cutting_order_id IS NULL THEN (SELECT count(*) FROM delivery_items di WHERE di.delivery_id = d.id)
 		       ELSE (SELECT count(*) FROM cutting_items ci WHERE ci.cutting_order_id = d.cutting_order_id) END::int,
-		  CASE WHEN co.sin_cargo THEN co.numero END
+		  CASE WHEN co.sin_cargo THEN co.numero END, u.name
 		FROM deliveries d LEFT JOIN shipments s ON s.delivery_id = d.id
 		LEFT JOIN cutting_orders co ON co.id = d.cutting_order_id
+		LEFT JOIN "user" u ON u.id = d.created_by_user_id
 		WHERE d.order_id = $1 ORDER BY d.created_at DESC`, pedido)
 	if err != nil {
 		return nil, err
@@ -1240,7 +1244,7 @@ func (s *Servicio) RemitosDelPedido(ctx context.Context, pedido string) ([]Remit
 	for filas.Next() {
 		var r RemitoListado
 		if err := filas.Scan(&r.ID, &r.Numero, &r.Tipo, &r.Estado, &r.ReceptorNombre, &r.FirmadoAt, &r.FirmaToken, &r.CreatedAt,
-			&r.Transportista, &r.NumeroSeguimiento, &r.CantidadLineas, &r.Reposicion); err != nil {
+			&r.Transportista, &r.NumeroSeguimiento, &r.CantidadLineas, &r.Reposicion, &r.Quien); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

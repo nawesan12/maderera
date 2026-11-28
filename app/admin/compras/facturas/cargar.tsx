@@ -7,6 +7,7 @@ import { BarraGuardar, Hoja, Seccion } from "@/components/admin/formulario";
 import {
   cantidadConUnidad,
   fechaCorta,
+  hora,
   formatearMonto,
   hoyEnArgentina,
   importeDelCampo,
@@ -116,6 +117,9 @@ export function CargarFactura({
     numeroRemito: string | null;
     fecha: Date;
     neto: number;
+    /** La orden de la que vino y cuándo se confirmó: separan los remitos sin número. */
+    ordenNumero?: string | null;
+    confirmadaAt?: string | null;
     /** Lo que de su orden no llegó y su neto al costo pedido. */
     faltantes?: { descripcion: string; cantidad: number; unidad: string | null }[];
     faltanteNeto?: number;
@@ -142,6 +146,10 @@ export function CargarFactura({
    * quincena) y la factura a la que se aplica una nota de crédito.
    */
   const [remitos, setRemitos] = useState<string[]>([]);
+  // Go frena una vez la factura sin remitos de un proveedor que tiene remitos
+  // sin facturar (la deuda quedaba dos veces); la segunda vez va diciendo que
+  // no cubre ninguno (recorrido 2).
+  const [sinRemitosAvisado, setSinRemitosAvisado] = useState(false);
   const [aplicaA, setAplicaA] = useState("");
   const [ajustarCosto, setAjustarCosto] = useState(false);
   const [cae, setCae] = useState(corregir?.cae ?? "");
@@ -305,6 +313,7 @@ export function CargarFactura({
 
   function elegirProveedor(id: string) {
     setSupplierId(id);
+    setSinRemitosAvisado(false);
     setAplicaA("");
     setDevuelve({});
     const segun = tipoSegunCondicion(proveedores.find((p) => p.id === id)?.condicionIva);
@@ -404,6 +413,7 @@ export function CargarFactura({
         receiptIds: esNota ? [] : remitos.slice(1),
         aplicaA: esCredito && aplicaA ? aplicaA : undefined,
         ajustarCosto: ajustarCosto && !porCantidad && Math.abs(contraRecibido) > 0.01,
+        sinRemitos: !esNota && remitos.length === 0 && sinRemitosAvisado,
         ...(esCredito && devoluciones.length > 0 ? { devoluciones } : {}),
       };
       // Una nota de crédito no vence (M2S2-084).
@@ -412,6 +422,9 @@ export function CargarFactura({
         ? await corregirFacturaDeCompra(corregir.id, { ...datos, motivo })
         : await cargarFacturaDeCompra(datos);
       setEstado(resultado);
+      if (!corregir && resultado.campo === "receiptIds" && remitos.length === 0) {
+        setSinRemitosAvisado(true);
+      }
       if (resultado.ok) {
         if (corregir) {
           router.refresh();
@@ -546,7 +559,18 @@ export function CargarFactura({
                         <span className="codigo block truncate text-base font-medium">
                           {r.numeroRemito ?? "Sin remito"}
                         </span>
-                        <span className="tabular block text-sm text-muted-foreground">{fechaCorta.format(r.fecha)}</span>
+                        {/* Sin número, dos remitos del mismo día eran dos
+                            renglones iguales: la orden y la hora los separan
+                            (recorrido 2). */}
+                        <span className="tabular block truncate text-sm text-muted-foreground">
+                          {[
+                            fechaCorta.format(r.fecha),
+                            r.numeroRemito ? null : r.ordenNumero,
+                            !r.numeroRemito && r.confirmadaAt ? hora.format(new Date(r.confirmadaAt)) : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
                       </span>
                       <span className="tabular shrink-0 text-base">{formatearMonto(r.neto)}</span>
                     </label>

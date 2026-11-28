@@ -36,6 +36,11 @@ type RecepcionListada struct {
 	// precio y no se pasa al costo (M3S3-009).
 	Faltantes    []Faltante `json:"faltantes"`
 	FaltanteNeto float64    `json:"faltanteNeto"`
+	// OrdenNumero y ConfirmadaAt distinguen al facturar los remitos sin
+	// número: eran dos renglones iguales, «Sin remito · 28/11/26 · $ 10.000»
+	// (recorrido 2).
+	OrdenNumero  *string    `json:"ordenNumero"`
+	ConfirmadaAt *time.Time `json:"confirmadaAt"`
 }
 
 // FacturaDeLaRecepcion es, para EXISTS, la factura de compra viva que cubre
@@ -54,10 +59,11 @@ func FacturaDeLaRecepcion(g string) string {
 func (s *Servicio) ListarRecepciones(ctx context.Context, limite int) ([]RecepcionListada, error) {
 	filas, err := s.pool.Query(ctx, `
 		SELECT r.id, r.numero_remito, r.fecha, r.estado::text, r.gastos::text, s.nombre, r.supplier_id, b.name, coalesce(t.lineas, 0), t.neto, r.gastos,
-		  EXISTS (`+FacturaDeLaRecepcion("r")+`)
+		  EXISTS (`+FacturaDeLaRecepcion("r")+`), o.numero, r.confirmada_at
 		FROM goods_receipts r
 		JOIN suppliers s ON s.id = r.supplier_id
 		LEFT JOIN branches b ON b.id = r.branch_id
+		LEFT JOIN purchase_orders o ON o.id = r.purchase_order_id
 		LEFT JOIN (SELECT receipt_id, count(*)::int AS lineas, sum(cantidad * costo_unitario) AS neto FROM goods_receipt_items GROUP BY receipt_id) t
 		  ON t.receipt_id = r.id
 		ORDER BY r.fecha DESC LIMIT $1`, limite)
@@ -68,7 +74,7 @@ func (s *Servicio) ListarRecepciones(ctx context.Context, limite int) ([]Recepci
 		var x RecepcionListada
 		var neto *jsmath.Num
 		var gastos jsmath.Num
-		err := r.Scan(&x.ID, &x.NumeroRemito, &x.Fecha, &x.Estado, &x.Gastos, &x.Proveedor, &x.SupplierID, &x.Sucursal, &x.Lineas, &neto, &gastos, &x.Facturada)
+		err := r.Scan(&x.ID, &x.NumeroRemito, &x.Fecha, &x.Estado, &x.Gastos, &x.Proveedor, &x.SupplierID, &x.Sucursal, &x.Lineas, &neto, &gastos, &x.Facturada, &x.OrdenNumero, &x.ConfirmadaAt)
 		x.Neto = numOCero(neto) + float64(gastos)
 		x.Faltantes = []Faltante{}
 		return x, err

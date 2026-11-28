@@ -584,6 +584,7 @@ export default async function FichaComprobantePage({
                           numero={cobro.recibo ?? ""}
                           importe={Number(cobro.monto)}
                           cliente={comprobante.receptorNombre}
+                          sinCuenta={!comprobante.customerId}
                         />
                       )}
                     </span>

@@ -719,7 +719,7 @@ export default async function DetallePedidoPage({
                 <p
                   className={`flex flex-wrap items-center gap-2 ${i < pedido.historial.length - 1 ? "pb-4" : ""}`}
                 >
-                  <EtiquetaEstado estado={paso.estado} contexto="pedido" />
+                  <EtiquetaEstado estado={paso.estado} contexto="pedido" retiro={pedido.tipoEntrega === "retiro"} />
                   <span className="tabular text-sm text-muted-foreground">
                     {fechaHora.format(paso.createdAt)}
                   </span>

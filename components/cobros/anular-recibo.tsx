@@ -33,12 +33,18 @@ export function AnularRecibo({
   numero,
   importe,
   cliente,
+  sinCuenta = false,
 }: {
   id: string;
   numero: string;
   /** Lo que vuelve a deber, en positivo. */
   importe?: number;
   cliente?: string;
+  /**
+   * Quien pagó no tiene ficha (una factura manual): no hay cuenta adonde
+   * volver, vuelve a deberse la factura (recorrido 2).
+   */
+  sinCuenta?: boolean;
 }) {
   const [abierto, setAbierto] = useState(false);
   const [motivo, setMotivo] = useState("");
@@ -78,8 +84,9 @@ export function AnularRecibo({
     enviar();
   }
 
-  const consecuencia =
-    importe && importe > 0
+  const consecuencia = sinCuenta
+    ? `La factura vuelve a deber ${importe && importe > 0 ? PESOS.format(importe) : "lo que se pagó"}. No se puede deshacer.`
+    : importe && importe > 0
       ? `${PESOS.format(importe)} vuelven a la cuenta${cliente ? ` de ${cliente}` : ""}. No se puede deshacer.`
       : "Lo que pagó vuelve a la cuenta. No se puede deshacer.";
 

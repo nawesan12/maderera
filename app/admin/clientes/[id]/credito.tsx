@@ -67,9 +67,12 @@ export function CreditoDelCliente({
             maxLength={3}
             value={dias}
             onChange={(e) => setDias(e.target.value.replace(/\D/g, ""))}
+            // El nombre entero, «Paga a 30 días»: con solo la etiqueta un
+            // lector decía «Paga a» y la unidad quedaba suelta (recorrido 2).
+            aria-label={`Paga a ${dias || "…"} días`}
             className="tabular h-10 w-20 rounded-lg bg-hundida px-2.5 text-right text-base"
           />
-          <span className="text-base">días</span>
+          <span className="text-base" aria-hidden="true">días</span>
           {dias !== "" && Number(dias) !== plazo && (
             <button
               type="button"

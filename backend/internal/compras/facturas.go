@@ -3,6 +3,7 @@ package compras
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"strings"
 	"time"
@@ -477,6 +478,28 @@ func revisarCae(ctx context.Context, tx pgx.Tx, tipo string, cae *string, exclui
 	return &limpio, nil
 }
 
+// remitosSinFactura cuenta las recepciones confirmadas del proveedor que
+// cargaron deuda y todavía no tienen una factura que las cubra.
+func remitosSinFactura(ctx context.Context, tx pgx.Tx, proveedor string) (int, error) {
+	var n int
+	err := tx.QueryRow(ctx, `
+		SELECT count(*)::int FROM goods_receipts g
+		WHERE g.supplier_id = $1 AND g.estado = 'confirmada'
+		  AND coalesce((SELECT sum(m.monto) FROM supplier_movements m WHERE m.goods_receipt_id = g.id), 0) > 0.005
+		  AND NOT EXISTS (SELECT 1 FROM purchase_invoice_receipts x JOIN purchase_invoices f ON f.id = x.purchase_invoice_id
+		                  WHERE x.goods_receipt_id = g.id AND f.anulada_at IS NULL)`, proveedor).Scan(&n)
+	return n, err
+}
+
+// RemitosSinMarcar es el aviso de la factura cargada sin remitos cuando el
+// proveedor tiene remitos sin facturar.
+func RemitosSinMarcar(n int) string {
+	if n == 1 {
+		return "Tiene un remito sin factura que ya está en la deuda: marcalo si esta lo cubre, o guardá de nuevo."
+	}
+	return fmt.Sprintf("Tiene %d remitos sin factura que ya están en la deuda: marcá los que cubre, o guardá de nuevo.", n)
+}
+
 // errorDeFactura traduce los índices únicos a lo que se le dice a quien carga.
 func errorDeFactura(err error) error {
 	switch {
@@ -586,6 +609,19 @@ func (s *Servicio) CargarFactura(ctx context.Context, ses *auth.Sesion, m map[st
 				yaCargado = float64(yaCargado + *cargado)
 			}
 			netoRecibido = float64(netoRecibido + neto.F())
+		}
+		// Una factura sin remitos de un proveedor con remitos sin facturar
+		// suma su total a la deuda que esos remitos ya cargaron: Techos Pampa
+		// quedó debiendo los $ 20.000 dos veces y nadie lo vio (recorrido 2).
+		// Se frena una vez; si de verdad no cubre ninguno, se guarda de nuevo.
+		if len(recepciones) == 0 && strings.HasPrefix(d.Tipo, "factura") && !d.SinRemitos {
+			n, err := remitosSinFactura(ctx, tx, d.SupplierID)
+			if err != nil {
+				return err
+			}
+			if n > 0 {
+				return plataforma.Invalido(map[string]string{"receiptIds": RemitosSinMarcar(n)})
+			}
 		}
 		var aplicaA *string
 		if d.AplicaA != nil {

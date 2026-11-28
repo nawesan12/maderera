@@ -309,6 +309,11 @@ export function NuevaGestion({
   const [cliente, setCliente] = useState<ClienteElegido | null>(clienteInicial ?? null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [sinAsunto, setSinAsunto] = useState(false);
+  // Controlado: la acción del formulario lo vaciaba al rechazar un
+  // seguimiento repetido, y el error quedaba al pie, lejos del campo
+  // (recorrido 2).
+  const [textoAsunto, setTextoAsunto] = useState(asunto ?? "");
+  const [errorAsunto, setErrorAsunto] = useState<string | null>(null);
   const [trabajando, empezar] = useTransition();
   const router = useRouter();
   const campoAsunto = useRef<HTMLInputElement>(null);
@@ -345,8 +350,12 @@ export function NuevaGestion({
         }
         empezar(async () => {
           const r = await crearGestion({}, formData);
-          setAviso(r.error ?? r.ok ?? null);
+          const delAsunto = r.error && r.campo === "asunto" ? r.error : null;
+          setErrorAsunto(delAsunto);
+          setAviso(delAsunto ? null : (r.error ?? r.ok ?? null));
+          if (delAsunto) campoAsunto.current?.focus();
           if (!r.error) {
+            setTextoAsunto("");
             setAbierto(false);
             if (!fijo) setCliente(null);
             // El tablero se vuelve a pedir ya: quedaba con el formulario y
@@ -375,13 +384,23 @@ export function NuevaGestion({
             ref={campoAsunto}
             name="asunto"
             required
-            aria-invalid={sinAsunto || undefined}
-            onChange={() => setSinAsunto(false)}
+            aria-invalid={sinAsunto || Boolean(errorAsunto) || undefined}
+            aria-describedby={errorAsunto ? "asunto-error" : undefined}
+            value={textoAsunto}
+            onChange={(e) => {
+              setTextoAsunto(e.target.value);
+              setSinAsunto(false);
+              setErrorAsunto(null);
+            }}
             autoFocus={Boolean(clienteInicial) && !asunto}
-            defaultValue={asunto}
             placeholder="Cobrar la factura"
             className="mt-1 h-10 w-full rounded-lg border border-linea bg-background px-3 text-base"
           />
+          {errorAsunto && (
+            <span id="asunto-error" role="alert" className="mt-1 block text-sm text-saldo-debe">
+              {errorAsunto}
+            </span>
+          )}
         </label>
 
         <label className="block">

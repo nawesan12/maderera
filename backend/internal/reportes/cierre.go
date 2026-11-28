@@ -1388,6 +1388,29 @@ func (s *Servicio) pendientesDeLosCircuitos(ctx context.Context, desde, hasta ti
 	return append(out, mas...), nil
 }
 
+// parteDeFacturasSinCae es lo que de la bolsa le toca a las facturas que
+// esperan el CAE cuando la bolsa también nombra un pedido abierto: hasta lo
+// que valen esas facturas (y lo descuenta de su cupo); lo demás es la seña
+// del pedido. Sin pedido abierto, la bolsa entera es cobranza, como antes.
+func parteDeFacturasSinCae(b cobros.Bolsa, esperaCae, facturado map[string]bool, cupo map[string]float64) float64 {
+	abierto := false
+	for _, d := range b.Destinos {
+		abierto = abierto || (strings.HasPrefix(d, "o:") && !facturado[d[2:]])
+	}
+	if !abierto {
+		return b.Monto
+	}
+	queda := b.Monto
+	for _, d := range b.Destinos {
+		if strings.HasPrefix(d, "i:") && esperaCae[d[2:]] {
+			t := jsmath.Redondear2(min(queda, max(cupo[d[2:]], 0)))
+			cupo[d[2:]] = jsmath.Redondear2(cupo[d[2:]] - t)
+			queda = jsmath.Redondear2(queda - t)
+		}
+	}
+	return jsmath.Redondear2(b.Monto - queda)
+}
+
 // pendientesDeAnticiposYBanco son los que el reparto no puede resolver solo
 // y le tocan al estudio:
 //
@@ -1473,6 +1496,11 @@ func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, desde, hasta
 	// la factura ya autorizada, el aviso le asignaba $ 589.700 de «cobros de
 	// facturas sin CAE» a un cliente sin ninguna (recorrido M4-116).
 	esperaCae := map[string]bool{}
+	// Lo que cada una de esas facturas puede absorber de las bolsas: su total.
+	// Sin certificado de ARCA ninguna factura tiene CAE, y la seña de 589.700
+	// que nombraba la factura de 48.400 y el pedido abierto se iba entera a
+	// «Cobros de facturas sin CAE» (recorrido 2, M4-116).
+	cupoCae := map[string]float64{}
 	var facturasDeDestinos []string
 	for _, b := range reparto.Bolsas {
 		if entre(b.Fecha, idesde, ihasta) {
@@ -1484,15 +1512,17 @@ func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, desde, hasta
 		}
 	}
 	if len(facturasDeDestinos) > 0 {
-		rs, err := s.pool.Query(ctx, `SELECT f.id::text FROM invoices f WHERE f.id = ANY($1::uuid[]) AND f.estado <> 'anulada'
+		rs, err := s.pool.Query(ctx, `SELECT f.id::text, f.total::float8 FROM invoices f WHERE f.id = ANY($1::uuid[]) AND f.estado <> 'anulada'
 			AND (f.cae IS NULL OR coalesce((SELECT max(l.created_at) FROM arca_log l WHERE l.invoice_id = f.id AND l.exito
 			  AND l.operacion IN ('FECAESolicitar', 'FECompConsultar')), f.fecha_emision) > $2)`, facturasDeDestinos, ihasta)
 		if err != nil {
 			return nil, err
 		}
 		var id string
-		if _, err := pgx.ForEachRow(rs, []any{&id}, func() error {
+		var total float64
+		if _, err := pgx.ForEachRow(rs, []any{&id, &total}, func() error {
 			esperaCae[id] = true
+			cupoCae[id] = total
 			return nil
 		}); err != nil {
 			return nil, err
@@ -1539,15 +1569,23 @@ func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, desde, hasta
 			continue // un saldo a favor, no una seña (abajo)
 		}
 		if entre(b.Fecha, idesde, ihasta) {
+			aFacturas, aSenas := 0.0, b.Monto
 			if soloFacturas(b) {
-				deFacturas = float64(deFacturas + b.Monto)
+				aFacturas, aSenas = b.Monto, 0
+				if p := parteDeFacturasSinCae(b, esperaCae, facturado, cupoCae); p < b.Monto-0.005 {
+					aFacturas, aSenas = p, jsmath.Redondear2(b.Monto-p)
+				}
+			}
+			if aFacturas > 0.005 {
+				deFacturas = float64(deFacturas + aFacturas)
 				recibosDeFacturas++
-				montoFacturas[b.Clave] = float64(montoFacturas[b.Clave] + b.Monto)
-			} else {
-				delMes = float64(delMes + b.Monto)
+				montoFacturas[b.Clave] = float64(montoFacturas[b.Clave] + aFacturas)
+			}
+			if aSenas > 0.005 {
+				delMes = float64(delMes + aSenas)
 				recibosDelMes++
 				clientesDeSenas[b.Clave] = true
-				montoSenas[b.Clave] = float64(montoSenas[b.Clave] + b.Monto)
+				montoSenas[b.Clave] = float64(montoSenas[b.Clave] + aSenas)
 			}
 		}
 		for _, d := range b.Destinos {

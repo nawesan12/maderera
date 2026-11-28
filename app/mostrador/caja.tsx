@@ -395,7 +395,11 @@ export function PanelDeCaja({
               {!enLinea && (
                 // Las ventas sin conexión entran al turno cuando vuelve.
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Sin conexión no se puede abrir la caja; sí se puede seguir vendiendo.
+                  {/* Sin vincular, tampoco se vende sin conexión: un solo
+                      mensaje, el que dice qué hacer (M4-035). */}
+                  {cajaId
+                    ? "Sin conexión no se puede abrir la caja; sí se puede seguir vendiendo."
+                    : "Conectate para vincular esta PC a una caja."}
                 </p>
               )}
             </div>

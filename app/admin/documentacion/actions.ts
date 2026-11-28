@@ -28,7 +28,11 @@ export async function subirDocumento(_previo: EstadoDocumento, formData: FormDat
   });
   if (r.error) return { error: mensajeDe(r.error as Problema, "Revisá los datos.") };
   refrescar();
-  return { ok: "Documento publicado." };
+  // Quién lo ve, dicho en la confirmación: el interruptor viene prendido y dos
+  // documentos que iban para todos quedaron reservados sin que se notara
+  // (mes 23).
+  const reservado = formData.get("soloProfesionales") != null;
+  return { ok: reservado ? "Publicado: solo lo ven los profesionales." : "Publicado: lo ve cualquiera." };
 }
 
 export async function cambiarVisibilidad(_previo: EstadoDocumento, formData: FormData): Promise<EstadoDocumento> {

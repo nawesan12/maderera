@@ -31,6 +31,10 @@ export function SubirDocumento({ categorias }: { categorias: string[] }) {
     if (!estado.ok) return;
     toast.success(estado.ok);
     formulario.current?.reset();
+    // La categoría queda vacía, no en la primera de la lista: después de
+    // publicar mostraba «Estructura» como si fuera la elegida (mes 23).
+    const categoria = formulario.current?.elements.namedItem("categoria");
+    if (categoria instanceof HTMLInputElement) categoria.value = "";
   }, [estado]);
 
   return (

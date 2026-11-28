@@ -406,17 +406,22 @@ export default async function ReportesPage({
                 <tr className="font-normal text-muted-foreground">
                   <td className="px-5 py-2.5">Facturas sin pedido</td>
                   <td className="hidden sm:table-cell" />
-                  <td className="hidden sm:table-cell" />
                   {hayMargen ? (
                     <>
+                      <td className="hidden sm:table-cell" />
                       <td data-label="Neto con costo" className="tabular px-3 py-2.5 text-right">{formatearMonto(manuales)}</td>
                       <td className="hidden sm:table-cell" />
                       <td className="hidden sm:table-cell" />
+                      <td className="hidden sm:table-cell" />
                     </>
-                  ) : null}
-                  <td className={hayMargen ? "hidden sm:table-cell" : "tabular px-3 py-2.5 text-right"}>
-                    {hayMargen ? null : formatearMonto(manuales)}
-                  </td>
+                  ) : (
+                    // Sin margen, el importe ocupa las dos últimas columnas:
+                    // con una sola, en el teléfono la tabla apilada le ponía
+                    // el rótulo «Participación» (recorrido, M4-099).
+                    <td colSpan={2} className="tabular px-3 py-2.5 text-right">
+                      {formatearMonto(manuales)}
+                    </td>
+                  )}
                 </tr>
               )}
               <tr>

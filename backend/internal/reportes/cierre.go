@@ -1381,7 +1381,7 @@ func (s *Servicio) pendientesDeLosCircuitos(ctx context.Context, desde, hasta ti
 		p.Donde = dondeDeLosCasos(p)
 		out = append(out, p)
 	}
-	mas, err := s.pendientesDeAnticiposYBanco(ctx, idesde, ihasta, reparto)
+	mas, err := s.pendientesDeAnticiposYBanco(ctx, desde, hasta, reparto)
 	if err != nil {
 		return nil, err
 	}
@@ -1400,7 +1400,8 @@ func (s *Servicio) pendientesDeLosCircuitos(ctx context.Context, desde, hasta ti
 //   - **Banco en el circuito B**: lo bancarizado que queda en el archivo B
 //     (un recibo cuya parte B no alcanza a salir del efectivo, un pago o un
 //     gasto en negro por transferencia): el extracto no va a conciliar.
-func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihasta time.Time, reparto cobros.ResultadoDelReparto) ([]PendienteDelCierre, error) {
+func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, desde, hasta time.Time, reparto cobros.ResultadoDelReparto) ([]PendienteDelCierre, error) {
+	idesde, ihasta := instantes(desde, hasta)
 	out := []PendienteDelCierre{}
 	// La bolsa que espera facturas ya emitidas (destinos «i:») no es una
 	// seña: es la cobranza de una factura que espera el CAE, y queda en
@@ -1702,7 +1703,30 @@ func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihas
 		) x`, idesde, ihasta).Scan(&pagos, &nPagos); err != nil {
 		return nil, err
 	}
-	if total := jsmath.Redondear2(float64(enBanco + pagos)); cuantos+nPagos > 0 {
+	// Las ventas del B cobradas sin recibo por el banco, Mercado Pago o con
+	// tarjeta (la venta interna del mostrador por transferencia): su cobro
+	// entra al Banco del archivo B y el extracto tampoco va a conciliar
+	// (recorrido M4-118). Neto de lo que pasó al estudio en el mes.
+	periodo, err := s.asientosDelPeriodoCon(ctx, desde, hasta, reparto)
+	if err != nil {
+		return nil, err
+	}
+	for _, a := range DelCircuito(periodo, CircuitoNegro) {
+		if !strings.HasPrefix(a.Concepto, "Cobro ") && !strings.HasPrefix(a.Concepto, "Pasa al archivo del estudio · ") &&
+			!strings.HasPrefix(a.Concepto, "Reintegro") {
+			continue
+		}
+		if strings.Contains(a.Concepto, " recibo ") {
+			continue
+		}
+		x := float64(SaldoDeCuenta([]Asiento{a}, Cuentas.Banco) + SaldoDeCuenta([]Asiento{a}, Cuentas.TarjetasAAcreditar))
+		if x > toleranciaAsiento {
+			cuantos++
+		}
+		enBanco = float64(enBanco + x)
+	}
+	enBanco = max(jsmath.Redondear2(enBanco), 0)
+	if total := jsmath.Redondear2(float64(enBanco + pagos)); cuantos+nPagos > 0 && total > toleranciaAsiento {
 		// «Resolver» lleva a lo que lo genera: los cobros del mes (los recibos)
 		// o, si son solo pagos y gastos, a los pagos. Antes llevaba a esta
 		// misma pantalla (H378).

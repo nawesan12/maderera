@@ -300,3 +300,22 @@ func TestDeudoresElPedidoSinEntregarNoEsDelB(t *testing.T) {
 		t.Errorf("es la seña del pedido abierto: %s", cuerpo)
 	}
 }
+
+// Recorrido M4-118: la venta interna del mostrador cobrada por
+// transferencia entra al Banco del archivo B; el aviso del banco en el B la
+// cuenta.
+func TestElAvisoDelBancoEnElBCuentaLasVentasPorTransferencia(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	venta := e.pedido(t, "PED-1012", e.central, "entregado", "mostrador", time.Date(2026, 11, 4, 12, 0, 0, 0, Argentina), nil)
+	e.exec(t, `insert into payments (order_id, tipo, proveedor, medio, monto, estado, created_at)
+		values ($1, 'pedido', 'mostrador', 'transferencia', 71280, 'aprobado', '2026-11-04T15:00:00Z')`, venta)
+	if n := cuenta(DelCircuito(e.asientosDe(t, "2026-11"), CircuitoNegro), Cuentas.Banco); n != 71280 {
+		t.Fatalf("el Banco del B: %v", n)
+	}
+	_, cuerpo, _ := pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-11")
+	p, ok := pendientesDe(t, cuerpo)["banco-b"]
+	if !ok || p.Cantidad != 1 || !strings.Contains(p.Detalle, "71.280") {
+		t.Errorf("el aviso: %+v (%s)", p, cuerpo)
+	}
+}
